@@ -18,7 +18,7 @@ public class TestHelper extends BaseTestObject  {
     private String baseURI;
 
     public void serviceSetUp()  {
-        baseURI = urlData.get("PharmacyServices.host");
+        baseURI = urlData.get("PharmacyServices.url");
         APIBaseClass.headers = new Headers(
                 StaticHeaders.CONTENT_TYPE_JSON,
                 StaticHeaders.X_GROUP,
