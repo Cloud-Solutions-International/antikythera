@@ -11,6 +11,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.Headers;
 import io.restassured.http.Method;
 import io.restassured.response.Response;
+import org.testng.asserts.SoftAssert;
 
 import java.util.concurrent.TimeUnit;
 
@@ -18,7 +19,7 @@ public class TestHelper extends BaseTestObject  {
     private String baseURI;
 
     public void serviceSetUp()  {
-        baseURI = urlData.get("PharmacyServices.url");
+        baseURI = urlData.get("PharmacyServices.host") + urlData.get("PharmacyServices.version");
         APIBaseClass.headers = new Headers(
                 StaticHeaders.CONTENT_TYPE_JSON,
                 StaticHeaders.X_GROUP,
