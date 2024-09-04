@@ -1,4 +1,4 @@
-package com.csi.phr;
+package com.cloud.api.tests;
 
 import com.cloud.api.base.APIBaseClass;
 import com.cloud.api.base.BaseTestObject;
@@ -51,7 +51,8 @@ public class TestHelper extends BaseTestObject  {
         return response;
     }
 
-    protected Response makeGet(String body, Headers headers, String relativeUrl)  {
+    protected Response makeGet( Headers headers, String relativeUrl)  {
+
         APIRequester.setBaseURI(baseURI);
         APIRequester.setBasePath(relativeUrl);
 
