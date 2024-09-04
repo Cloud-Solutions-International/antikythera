@@ -157,7 +157,7 @@ public class RestControllerParser extends ClassProcessor {
         output.println("public class " + cu.getTypes().get(0).getName() + "Test extends TestHelper {");
         output.println("\tAPIBaseService apiBaseService = new APIBaseService();\n");
         output.println("\tprotected static final ObjectMapper objectMapper = new ObjectMapper();");
-        output.println("\t@BeforeClass");
+        output.println("\n\t@BeforeClass");
         output.println("\tpublic void serviceSetUp() {");
         output.println("\t\tsuper.serviceSetUp();");
         output.println("\t}");
@@ -330,7 +330,7 @@ public class RestControllerParser extends ClassProcessor {
         private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
             if(md.getParameters().isEmpty()) {
                 generatedCode.append("""
-                        \t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
+                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
                         \tpublic void %sTest() {
                         \t\tResponse response = makeGet(headers, "%s");
@@ -355,6 +355,7 @@ public class RestControllerParser extends ClassProcessor {
                 Parameter param = md.getParameter(0);
                 String className = param.getTypeAsString();
                 generatedCode.append("""
+                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
                         \tpublic void %sTest() {
                         \t\tResponse response = makeGet(headers, "%s");
@@ -391,6 +392,7 @@ public class RestControllerParser extends ClassProcessor {
                 }
 
                 generatedCode.append("""
+                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
                         \tpublic void %sTest() throws JsonProcessingException {
                         \t\t%s
