@@ -133,9 +133,7 @@ public class RestControllerParser extends ClassProcessor {
         output.println("import com.cloud.api.tests.TestHelper;");
         output.println("import com.cloud.api.base.APIBaseService;");
         output.println("import com.fasterxml.jackson.databind.ObjectMapper;\n");
-
-        output.println("import org.testng.annotations.Test;");
-        output.println("import org.testng.Assert;\n");
+        output.println("import org.testng.annotations.Test;\n");
 
         output.println("import com.fasterxml.jackson.core.JsonProcessingException;");
         output.println("import io.restassured.http.Method;");
@@ -334,7 +332,8 @@ public class RestControllerParser extends ClassProcessor {
                         \t@Test
                         \tpublic void %sTest() {
                         \t\tResponse response = makeGet(headers, "%s");
-                        \t\tAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\tsoftAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\tsoftAssert.assertAll();
                         \t}\n
                         """.formatted(md.getName(),
                         getPath(annotation).replace("\"", "")));
@@ -359,7 +358,8 @@ public class RestControllerParser extends ClassProcessor {
                         \t@Test
                         \tpublic void %sTest() {
                         \t\tResponse response = makeGet(headers, "%s");
-                        \t\tAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\tsoftAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\tsoftAssert.assertAll();
                         \t}\n
                         """.formatted(md.getName(), path));
             }
@@ -397,7 +397,8 @@ public class RestControllerParser extends ClassProcessor {
                         \tpublic void %sTest() throws JsonProcessingException {
                         \t\t%s
                         \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
-                        \t\tAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\tsoftAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\tsoftAssert.assertAll(); 
                         """.formatted(md.getName(),
                         assignment,
                         body, getPath(annotation).replace("\"", "")));
