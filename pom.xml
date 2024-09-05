@@ -4,6 +4,11 @@
     <groupId>com.cloud.api</groupId>
     <artifactId>code-generator</artifactId>
     <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <api-framework-version>2.0.0</api-framework-version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.github.javaparser</groupId>
@@ -30,6 +35,47 @@
             <artifactId>lombok</artifactId>
             <version>1.18.30</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.17.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>7.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.csi.qe.framework</groupId>
+            <artifactId>FrameworkAPI</artifactId>
+            <version>${api-framework-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.csi.qe.empi</groupId>
+            <artifactId>EMPI_Support</artifactId>
+            <version>1.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.csi.qe.billing</groupId>
+            <artifactId>BILLING_Support</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.csi.qe.ehr</groupId>
+            <artifactId>EHR_Support</artifactId>
+            <version>1.1.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.csi.general.api</groupId>
+            <artifactId>General_API_Support</artifactId>
+            <version>1.0.0</version>
         </dependency>
     </dependencies>
     <build>
