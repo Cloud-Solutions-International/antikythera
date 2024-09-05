@@ -3,15 +3,12 @@ package com.cloud.api.tests;
 import com.cloud.api.base.APIBaseClass;
 import com.cloud.api.base.BaseTestObject;
 import com.cloud.api.constants.StaticHeaders;
-import com.cloud.api.exceptions.InvalidJsonStructureException;
-import com.cloud.api.exceptions.ResponseTypeConversionException;
 import com.cloud.api.rest.APIRequester;
 import com.cloud.core.reporting.ExtentLogger;
 import io.restassured.RestAssured;
 import io.restassured.http.Headers;
 import io.restassured.http.Method;
 import io.restassured.response.Response;
-import org.testng.asserts.SoftAssert;
 
 import java.util.concurrent.TimeUnit;
 

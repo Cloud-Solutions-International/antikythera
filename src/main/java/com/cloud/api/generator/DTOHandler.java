@@ -107,11 +107,7 @@ public class DTOHandler extends  ClassProcessor{
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
 
-        Path destinationPath = Paths.get("src/main/java", relativePath);
-        Files.createDirectories(destinationPath.getParent());
-        try (FileOutputStream out = new FileOutputStream(destinationPath.toFile())) {
-            out.write(cu.toString().getBytes());
-        }
+        ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
         resolved.add(cu.toString());
 
         for(String dependency : dependencies) {
