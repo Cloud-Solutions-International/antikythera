@@ -332,7 +332,9 @@ public class RestControllerParser extends ClassProcessor {
                         \t@Test
                         \tpublic void %sTest() {
                         \t\tResponse response = makeGet(headers, "%s");
-                        \t\tsoftAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
+                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
+                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
                         \t\tsoftAssert.assertAll();
                         \t}\n
                         """.formatted(md.getName(),
@@ -358,7 +360,9 @@ public class RestControllerParser extends ClassProcessor {
                         \t@Test
                         \tpublic void %sTest() {
                         \t\tResponse response = makeGet(headers, "%s");
-                        \t\tsoftAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
+                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
+                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
                         \t\tsoftAssert.assertAll();
                         \t}\n
                         """.formatted(md.getName(), path));
@@ -397,7 +401,9 @@ public class RestControllerParser extends ClassProcessor {
                         \tpublic void %sTest() throws JsonProcessingException {
                         \t\t%s
                         \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
-                        \t\tsoftAssert.assertEquals(response.getStatusCode(), 200);
+                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
+                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
+                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
                         \t\tsoftAssert.assertAll(); 
                         """.formatted(md.getName(),
                         assignment,
