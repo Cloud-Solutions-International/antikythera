@@ -218,7 +218,12 @@ public class DTOHandler extends  ClassProcessor{
      * @param annotations the existing annotations (which will probably be empty)
      */
     private void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
-        String[] annotationsToAdd = {"Getter", "NoArgsConstructor", "AllArgsConstructor", "Setter"};
+        String[] annotationsToAdd;
+        if (classDecl.getFields().size()<=255) {
+            annotationsToAdd = new String[]{"Getter", "NoArgsConstructor", "AllArgsConstructor", "Setter"};
+        } else {
+            annotationsToAdd = new String[]{"Getter", "NoArgsConstructor", "Setter"};
+        }
 
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
