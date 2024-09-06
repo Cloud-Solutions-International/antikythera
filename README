@@ -1,1 +1,6 @@
-Uses parse trees of the controllers and their related DTOs to generate Rest Assured tests.
+Builds a parse tree of each controller using Java Parser. Then the dependencies are identified and copied across as needed. A design decision was made that dependency DTOs are copied rather than relying on their presence in a jar file.
+The reason being that this approach will result in the code throwing an exception when a DTO in the Application Under Test get's changed.
+
+In the context of Antikythera, AUT means Application Under Test rather than the name of the bitbucket project of which this is a part of.
+
+
