@@ -8,6 +8,7 @@ import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -28,16 +29,32 @@ public class RestControllerParserTest {
 
     private RestControllerParser parser;
     private Path path;
+    private static String basePath;
+    private static String controllers;
+    private static String outputPath;
+
+    @BeforeClass
+    public static void loadConfigMapAtStart() throws IOException {
+
+        try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
+            props.load(fis);
+            basePath = props.getProperty("BASE_PATH");
+            controllers = props.getProperty("CONTROLLERS");
+            outputPath = props.getProperty("OUTPUT_PATH");
+        }
+    }
 
     @BeforeMethod
     void setUp() throws IOException {
         loadConfigMap();
+        System.out.println(controllers);
         String s = props.getProperty("CONTROLLERS");
         if (s.endsWith(SUFFIX)) {
-            path = Paths.get(basePath, s.replace(".", "/").replace("/java", SUFFIX));
+            path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
         } else {
-            path = Paths.get(basePath, s.replace(".", "/"));
+            path = Paths.get(basePath, controllers.replace(".", "/"));
         }
+
         parser = new RestControllerParser(path.toFile());
     }
 
@@ -46,14 +63,15 @@ public class RestControllerParserTest {
     void start_processesRestControllerSuccessfully() throws IOException {
         parser.start();
 
-        File srcDirectory = new File("src/main/java/" + basePackage.replace(".", "/"));
-        File testDirectory = new File("src/test/java/" + basePackage.replace(".", "/"));
+        File srcDirectory = new File(outputPath + "/src/main/java/");
+        File testDirectory = new File(outputPath + "/src/test/java/");
         assertTrue(srcDirectory.exists() && srcDirectory.isDirectory());
         assertTrue(testDirectory.exists() && testDirectory.isDirectory());
     }
 
     @Test
-    void start_throwsIOExceptionWhenProcessingFails() {
+    void start_throwsIOExceptionWhenProcessingFails() throws IOException {
+        System.out.println(basePath);
         Path invalidPath = Paths.get(basePath, "invalid/path", path.toString());
         RestControllerParser invalidParser = new RestControllerParser(invalidPath.toFile());
         assertThrows(IOException.class, invalidParser::start);
