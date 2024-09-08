@@ -52,7 +52,7 @@ public class ProjectGenerator {
         };
 
         for (String dir : directories) {
-            Files.createDirectories(Paths.get(dir));
+            Files.  createDirectories(Paths.get(dir));
         }
     }
 
