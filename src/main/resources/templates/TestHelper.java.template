@@ -47,15 +47,6 @@ public abstract class TestHelper extends APIBaseTest {
         authorizationHeader = new Header("authorization", TokenDataProvider.getInstance().tokenGenerate(loginProperties.get("username"), loginProperties.get("password")));
     }
 
-    @BeforeMethod
-    public void beforeMethod() throws Exception {
-        try {
-            softAssert = new SoftAssert();
-        } catch (Exception e) {
-            throw new Exception("Failed : beforeMethod()" + e.getLocalizedMessage());
-        }
-    }
-
     @BeforeClass
     public void serviceSetUp()  {
         baseURI = urlProperties.get("PharmacyServices.host") + urlProperties.get("PharmacyServices.version");
@@ -68,6 +59,15 @@ public abstract class TestHelper extends APIBaseTest {
                 StaticHeaders.ACCEPT_ALL,
                 authorizationHeader
         );
+    }
+
+    @BeforeMethod
+    public void beforeMethod() throws Exception {
+        try {
+            softAssert = new SoftAssert();
+        } catch (Exception e) {
+            throw new Exception("Failed : beforeMethod()" + e.getLocalizedMessage());
+        }
     }
 
     protected Response checkTiming(Response response) {
