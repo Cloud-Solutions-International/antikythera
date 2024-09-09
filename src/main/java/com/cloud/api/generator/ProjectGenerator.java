@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Objects;
 import java.util.Properties;
 
 public class ProjectGenerator {
@@ -89,9 +88,13 @@ public class ProjectGenerator {
     }
 
     private void copyBaseFiles(String outputPath) throws IOException {
-        Path pathToCopy = Paths.get(outputPath, "src", "test", "java", "com", "cloud", "api");
+        Path pathToCopy = Paths.get(outputPath, "src","test","java","com","cloud","api","base");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","test","java", "com", "cloud", "api"), pathToCopy);
+        copyFolder(Paths.get("src","test","java","com","cloud","api","base"), pathToCopy);
+
+        pathToCopy = Paths.get(outputPath, "src","test","java","com","cloud","api","tests");
+        Files.createDirectories(pathToCopy);
+        copyFolder(Paths.get("src","test","java","com","cloud","api","tests"), pathToCopy);
 
         pathToCopy = Paths.get(outputPath, "src", "test", "resources");
         Files.createDirectories(pathToCopy);
