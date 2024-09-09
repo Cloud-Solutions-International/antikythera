@@ -1,4 +1,4 @@
-package com.cloud.api.tests;
+package com.cloud.api.base;
 
 import com.cloud.api.base.APIBaseClass;
 import com.cloud.api.base.BaseTestObject;
