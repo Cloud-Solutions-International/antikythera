@@ -91,7 +91,6 @@ public class ProjectGenerator {
 
     private void copyBaseFiles(String outputPath) throws IOException {
         copyTemplate("pom.xml");
-        copyTemplate("BaseTestObject.java", "src", "test", "java", "com", "cloud", "api", "base");
         copyTemplate("TestHelper.java", "src", "test", "java", "com", "cloud", "api", "base");
 
         Path pathToCopy = Paths.get(outputPath, "src", "test", "resources");

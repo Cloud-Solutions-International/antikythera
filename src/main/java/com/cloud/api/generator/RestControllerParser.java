@@ -118,7 +118,6 @@ public class RestControllerParser extends ClassProcessor {
         fileContent.append("import com.fasterxml.jackson.core.JsonProcessingException;").append("\n");
         fileContent.append("import io.restassured.http.Method;").append("\n");
         fileContent.append("import io.restassured.response.Response;").append("\n");
-        fileContent.append("import org.testng.annotations.BeforeClass;").append("\n");
         fileContent.append("import com.cloud.core.annotations.TestCaseType;").append("\n");
         fileContent.append("import com.cloud.core.enums.TestType;").append("\n");
 
@@ -131,14 +130,8 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         fileContent.append("\n").append("\n");
-
         fileContent.append("public class " + cu.getTypes().get(0).getName() + "Test extends TestHelper {").append("\n");
-        fileContent.append("\tAPIBaseService apiBaseService = new APIBaseService();\n").append("\n");
-        fileContent.append("\tprotected static final ObjectMapper objectMapper = new ObjectMapper();").append("\n");
-        fileContent.append("\t@BeforeClass").append("\n");
-        fileContent.append("\tpublic void serviceSetUp() {").append("\n");
-        fileContent.append("\t\tsuper.serviceSetUp();").append("\n");
-        fileContent.append("\t}").append("\n");
+
         fileContent.append(generatedCode).append("\n");
 
         fileContent.append("}").append("\n");
