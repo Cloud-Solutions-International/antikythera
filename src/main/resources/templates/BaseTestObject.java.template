@@ -44,16 +44,6 @@ public abstract class BaseTestObject extends APIBaseTest {
 
         try {
             softAssert = new SoftAssert();
-
-//            String bearerToken = TokenDataProvider.getInstance().tokenGenerate(loginData.get("username"),loginData.get("password"));
-//            List<Header> updatedHeaders = new ArrayList<>();
-//            headers.asList().forEach(header -> {
-//                if (!header.getName().equalsIgnoreCase("authorization"))
-//                    updatedHeaders.add(header);
-//            });
-//            updatedHeaders.add(new Header("authorization", bearerToken));
-//            headers = new Headers(updatedHeaders);
-
         } catch (Exception e) {
             throw new Exception("Failed : beforeMethod()" + e.getLocalizedMessage());
         }

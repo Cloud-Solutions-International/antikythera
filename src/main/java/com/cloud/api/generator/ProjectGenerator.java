@@ -55,10 +55,12 @@ public class ProjectGenerator {
         }
     }
 
-    private void copyPomTemplate(String path) throws IOException {
-        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/pom.xml.template");
-             FileOutputStream destStream = new FileOutputStream(new File(path + File.separator + "pom.xml"));
-             FileChannel destChannel = destStream.getChannel()) {
+    private void copyTemplate(String filename, String... subPath) throws IOException {
+        Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
+        Files.createDirectories(destinationPath);
+        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/"+filename+".template");
+            FileOutputStream destStream = new FileOutputStream(new File(destinationPath + File.separator + filename));
+            FileChannel destChannel = destStream.getChannel()) {
             if (sourceStream == null) {
                 throw new IOException("Template file not found");
             }
@@ -88,26 +90,21 @@ public class ProjectGenerator {
     }
 
     private void copyBaseFiles(String outputPath) throws IOException {
-        Path pathToCopy = Paths.get(outputPath, "src","test","java","com","cloud","api","base");
-        Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","test","java","com","cloud","api","base"), pathToCopy);
+        copyTemplate("pom.xml");
+        copyTemplate("BaseTestObject.java", "src", "test", "java", "com", "cloud", "api", "base");
+        copyTemplate("TestHelper.java", "src", "test", "java", "com", "cloud", "api", "base");
 
-        pathToCopy = Paths.get(outputPath, "src","test","java","com","cloud","api","tests");
+        Path pathToCopy = Paths.get(outputPath, "src", "test", "resources");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","test","java","com","cloud","api","tests"), pathToCopy);
-
-        pathToCopy = Paths.get(outputPath, "src", "test", "resources");
-        Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","test","resources"), pathToCopy);
+        copyFolder(Paths.get("src","test", "resources"), pathToCopy);
 
         pathToCopy = Paths.get(outputPath, "src", "main", "java", "com", "cloud", "api", "constants");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","main","java", "com", "cloud", "api", "constants"), pathToCopy);
+        copyFolder(Paths.get("src","main", "java", "com", "cloud", "api", "constants"), pathToCopy);
     }
 
     public void generate() throws IOException {
         createMavenProjectStructure(basePackage, outputPath);
-        copyPomTemplate(outputPath);
         copyBaseFiles(outputPath);
         if (controllers.endsWith(SUFFIX)) {
             Path path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
