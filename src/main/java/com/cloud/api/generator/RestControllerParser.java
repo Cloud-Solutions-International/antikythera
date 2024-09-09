@@ -109,8 +109,6 @@ public class RestControllerParser extends ClassProcessor {
         fileContent.append("package " + pd.getName() + ";").append("\n");
         fileContent.append("\n").append("\n");
         fileContent.append("import com.cloud.api.base.TestHelper;").append("\n");
-        fileContent.append("import com.cloud.api.base.APIBaseService;").append("\n");
-        fileContent.append("import com.fasterxml.jackson.databind.ObjectMapper;\n").append("\n");
 
         fileContent.append("import org.testng.annotations.Test;").append("\n");
         fileContent.append("import org.testng.Assert;\n").append("\n");
