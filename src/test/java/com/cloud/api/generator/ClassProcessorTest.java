@@ -1,11 +1,6 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.generator.ClassProcessor;
 import com.github.javaparser.ast.*;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.printer.Printer;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
-import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-public class ClassProcessorTest {
+class ClassProcessorTest {
 
     private NodeList<ImportDeclaration> imports;
     private ClassProcessor classProcessor;
@@ -101,10 +96,10 @@ public class ClassProcessorTest {
     void findImport_findsMatchingImport() {
         CompilationUnit cu = mock(CompilationUnit.class);
         ImportDeclaration importDeclaration = mock(ImportDeclaration.class);
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        imports.add(importDeclaration);
+        NodeList<ImportDeclaration> imp = new NodeList<>();
+        imp.add(importDeclaration);
 
-        when(cu.getImports()).thenReturn(imports);
+        when(cu.getImports()).thenReturn(imp);
         when(importDeclaration.getNameAsString()).thenReturn("com.example.SomeClass");
 
         boolean result = classProcessor.findImport(cu, "SomeClass");
@@ -117,10 +112,10 @@ public class ClassProcessorTest {
     void findImport_doesNotFindNonMatchingImport() {
         CompilationUnit cu = mock(CompilationUnit.class);
         ImportDeclaration importDeclaration = mock(ImportDeclaration.class);
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        imports.add(importDeclaration);
+        NodeList<ImportDeclaration> imp = new NodeList<>();
+        imp.add(importDeclaration);
 
-        when(cu.getImports()).thenReturn(imports);
+        when(cu.getImports()).thenReturn(imp);
         when(importDeclaration.getNameAsString()).thenReturn("com.example.OtherClass");
 
         boolean result = classProcessor.findImport(cu, "SomeClass");
@@ -132,9 +127,9 @@ public class ClassProcessorTest {
     @Test
     void findImport_handlesEmptyImports() {
         CompilationUnit cu = mock(CompilationUnit.class);
-        NodeList<ImportDeclaration> imports = new NodeList<>();
+        NodeList<ImportDeclaration> imp = new NodeList<>();
 
-        when(cu.getImports()).thenReturn(imports);
+        when(cu.getImports()).thenReturn(imp);
 
         boolean result = classProcessor.findImport(cu, "SomeClass");
 
