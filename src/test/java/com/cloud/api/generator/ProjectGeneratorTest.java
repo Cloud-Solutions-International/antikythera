@@ -73,11 +73,12 @@ class ProjectGeneratorTest {
 
         String outputPath = Settings.getProperty("OUTPUT_PATH");
 
+        String basePackage = Settings.getProperty("BASE_PACKAGE").replace(".", File.separator);
         File mainJavaDir = new File(outputPath + File.separator + "src" + File.separator
-                + "main" + File.separator + "java" + File.separator + Settings.getProperty("BASE_PACKAGE").replace(".", File.separator));
+                + "main" + File.separator + "java" + File.separator + basePackage);
         File mainResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "resources");
         File testJavaDir = new File(outputPath + File.separator + "src" + File.separator +
-                "test" + File.separator + "java" + File.separator + Settings.getProperty("BASE_PACKAGE").replace(".", File.separator));
+                "test" + File.separator + "java" + File.separator + basePackage);
         File testResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "test" + File.separator + "resources");
         File pomFile = new File(outputPath + File.separator + "pom.xml");
         File mainJavaConstantsDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "java" + File.separator + "com" + File.separator + "cloud" + File.separator + "api" + File.separator + "constants");
