@@ -66,8 +66,18 @@ public class ClassProcessor {
     protected static void loadConfigMap() throws IOException {
         try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
             props.load(fis);
+            String userDir = System.getProperty("user.home");
             basePath = props.getProperty("BASE_PATH");
+            if (basePath != null) {
+                basePath = basePath.replace("{$USERDIR}", userDir);
+                props.setProperty("BASE_PATH", basePath);
+            }
             basePackage = props.getProperty("BASE_PACKAGE");
+            if (props.getProperty("OUTPUT_PATH") != null) {
+                props.setProperty("OUTPUT_PATH",
+                        props.getProperty("OUTPUT_PATH").replace("{$USERDIR}", userDir));
+
+            }
         }
     }
 
