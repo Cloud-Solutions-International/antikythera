@@ -120,17 +120,6 @@ public class ProjectGenerator {
         }
     }
 
-    public void writeFile(String belongingPackage, String filename, String content) throws IOException {
-        String filePath = outputPath + File.separator + "src" + File.separator + "main" + File.separator + "java"
-                + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
-        File file = new File(filePath);
-        File parentDir = file.getParentFile();
-        Files.createDirectories(parentDir.toPath());
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(content);
-        }
-    }
-
     public void writeFile(String relativePath, String content) throws IOException {
         String filePath = outputPath + File.separator + "src" + File.separator + "main" + File.separator + "java" +
                 File.separator + relativePath;
