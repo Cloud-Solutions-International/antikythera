@@ -12,10 +12,10 @@ import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
 public class ProjectGenerator {
-    private String basePackage;
-    private String basePath;
-    private String controllers;
-    private String outputPath;
+    private final String basePackage;
+    private final String basePath;
+    private final String controllers;
+    private final String outputPath;
     private static final String SUFFIX = ".java";
 
     private static ProjectGenerator instance;
