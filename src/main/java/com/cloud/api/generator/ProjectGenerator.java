@@ -58,7 +58,7 @@ public class ProjectGenerator {
     private void copyTemplate(String filename, String... subPath) throws IOException {
         Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
         Files.createDirectories(destinationPath);
-        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/"+filename+".template");
+        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/"+filename);
             FileOutputStream destStream = new FileOutputStream(new File(destinationPath + File.separator + filename));
             FileChannel destChannel = destStream.getChannel()) {
             if (sourceStream == null) {
@@ -100,6 +100,10 @@ public class ProjectGenerator {
         pathToCopy = Paths.get(outputPath, "src", "main", "java", "com", "cloud", "api", "constants");
         Files.createDirectories(pathToCopy);
         copyFolder(Paths.get("src","main", "java", "com", "cloud", "api", "constants"), pathToCopy);
+
+        pathToCopy = Paths.get(outputPath, "src", "main", "java", "com", "cloud", "api", "configurations");
+        Files.createDirectories(pathToCopy);
+        copyFolder(Paths.get("src","main", "java", "com", "cloud", "api", "configurations"), pathToCopy);
     }
 
     public void generate() throws IOException {
