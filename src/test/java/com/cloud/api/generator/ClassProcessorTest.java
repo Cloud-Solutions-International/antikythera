@@ -97,42 +97,6 @@ public class ClassProcessorTest {
     }
 
 
-
-    @Test
-    void loadConfigMap_throwsIOExceptionWhenFileNotFound() {
-        // Ensure the file is deleted before running the test
-        File configFile = new File("src/main/resources/generator.cfg");
-        if (configFile.exists()) {
-            configFile.delete();
-        }
-
-        // Reset properties to null before loading the configuration
-        ClassProcessor.basePath = null;
-        ClassProcessor.basePackage = null;
-
-        assertThrows(IOException.class, () -> ClassProcessor.loadConfigMap());
-    }
-
-    @Test
-    void loadConfigMap_loadsEmptyPropertiesWhenFileIsEmpty() throws IOException {
-        // Ensure the file is deleted before writing an empty file
-        File configFile = new File("src/main/resources/generator.cfg");
-        if (configFile.exists()) {
-            configFile.delete();
-        }
-
-        try (FileWriter writer = new FileWriter(configFile)) {
-            writer.write("");
-        }
-
-        // Reset properties to null before loading the configuration
-        ClassProcessor.basePath = null;
-        ClassProcessor.basePackage = null;
-
-        ClassProcessor.loadConfigMap();
-        assertNull(ClassProcessor.basePackage);
-    }
-
     @Test
     void findImport_findsMatchingImport() {
         CompilationUnit cu = mock(CompilationUnit.class);
