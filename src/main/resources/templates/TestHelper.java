@@ -1,6 +1,6 @@
 package com.cloud.api.base;
 
-import com.cloud.api.constants.DataSets;
+import com.cloud.api.configurations.Configurations;
 import com.cloud.api.constants.StaticHeaders;
 import com.cloud.api.rest.APIRequester;
 import com.cloud.core.config.enums.ConfigKeys;
@@ -40,9 +40,9 @@ public abstract class TestHelper extends APIBaseTest {
     public void loadEnvironmentData() throws Exception {
         String path = config.getValue(ConfigKeys.KEY_DATA_FILE_PATH.getKey()) + config.getValue(ConfigKeys.KEY_ENVIRONMENT.getKey()).toLowerCase();
         DataProviderUtil.setDataFile(path, DataProviderType.PROPERTY);
-        DataProviderUtil.loadData(EnumSet.allOf(DataSets.class).stream().map(DataSets::name).collect(Collectors.toList()));
-        loginProperties = DataProviderUtil.getDataSet("Data", DataSets.Login.name());
-        urlProperties = DataProviderUtil.getDataSet("Data", DataSets.Url.name());
+        DataProviderUtil.loadData(EnumSet.allOf(Configurations.class).stream().map(Configurations::name).collect(Collectors.toList()));
+        loginProperties = DataProviderUtil.getDataSet("Data", Configurations.Login.name());
+        urlProperties = DataProviderUtil.getDataSet("Data", Configurations.Url.name());
         TokenDataProvider.setTokenDataService(urlProperties.get("tokenServices.host"));
         authorizationHeader = new Header("authorization", TokenDataProvider.getInstance().tokenGenerate(loginProperties.get("username"), loginProperties.get("password")));
     }
