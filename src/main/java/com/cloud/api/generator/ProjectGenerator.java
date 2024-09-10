@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Objects;
 import java.util.Properties;
 
 public class ProjectGenerator {
@@ -114,17 +113,6 @@ public class ProjectGenerator {
             Path path = Paths.get(basePath, controllers.replace(".", "/"));
             RestControllerParser processor = new RestControllerParser(path.toFile());
             processor.start();
-        }
-    }
-
-    public void writeFile(String belongingPackage, String filename, String content) throws IOException {
-        String filePath = outputPath + File.separator + "src" + File.separator + "main" + File.separator + "java"
-                + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
-        File file = new File(filePath);
-        File parentDir = file.getParentFile();
-        Files.createDirectories(parentDir.toPath());
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(content);
         }
     }
 
