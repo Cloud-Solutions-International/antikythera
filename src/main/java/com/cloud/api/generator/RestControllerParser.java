@@ -376,10 +376,6 @@ public class RestControllerParser extends ClassProcessor {
                         \tpublic void %sTest() throws JsonProcessingException {
                         \t\t%s
                         \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll(); 
                         """.formatted(md.getName(),
                         assignment,
                         body, getPath(annotation).replace("\"", "")));
@@ -395,11 +391,17 @@ public class RestControllerParser extends ClassProcessor {
                         }
                         else {
                             generatedCode.append("""
-                                    \t\t%s %s = response.as(%s.class);
+                                    \t\t%s %sValue = response.as(%s.class);
                                     """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
                         }
                     }
                 }
+                generatedCode.append("""
+                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
+                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
+                        "Expected status code starting with 2xx, but got: " + response.getStatusCode());
+                        \t\tsoftAssert.assertAll(); 
+                        """);
                 generatedCode.append("\t}\n\n");
             }
         }
