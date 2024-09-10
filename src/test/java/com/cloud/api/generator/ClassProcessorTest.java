@@ -4,11 +4,7 @@ import com.github.javaparser.ast.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.Type;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -135,9 +131,4 @@ class ClassProcessorTest {
 
         assertFalse(result);
     }
-
-
-
-
-
 }
