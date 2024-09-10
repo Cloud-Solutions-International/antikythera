@@ -24,19 +24,18 @@ import java.util.Map;
 import static com.cloud.api.generator.ClassProcessor.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-public class RestControllerParserTest {
+class RestControllerParserTest {
 
     private RestControllerParser parser;
     private Path path;
     private static String basePath;
-    private static String controllers;
     private static String outputPath;
 
     @BeforeEach
     void setUp() throws IOException {
         Settings.loadConfigMap();
         basePath = Settings.getProperty("BASE_PATH");
-        controllers = Settings.getProperty("CONTROLLERS");
+        String controllers = Settings.getProperty("CONTROLLERS");
         outputPath = Settings.getProperty("OUTPUT_PATH");
         String s = Settings.getProperty("CONTROLLERS");
         if (s.endsWith(SUFFIX)) {
