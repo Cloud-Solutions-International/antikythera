@@ -147,7 +147,7 @@ public class DTOHandler extends  ClassProcessor{
         }
     }
 
-    private void handleStaticImports(NodeList<ImportDeclaration> imports) {
+    void handleStaticImports(NodeList<ImportDeclaration> imports) {
         imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
         {
             if(importDeclaration.isStatic()) {
