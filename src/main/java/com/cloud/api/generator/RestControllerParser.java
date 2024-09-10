@@ -52,8 +52,7 @@ public class RestControllerParser extends ClassProcessor {
      *
      * @param controllers either a folder containing many controllers or a single controller
      */
-    public RestControllerParser(File controllers) throws IOException {
-        loadConfigMap();
+    public RestControllerParser(File controllers)  {
         this.controllers = controllers;
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());

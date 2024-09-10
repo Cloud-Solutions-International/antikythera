@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,17 +23,14 @@ public class DTOHandlerTest {
 
     @BeforeClass
     void setUp() throws IOException {
-        try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
-            props.load(fis);
-            basePath = props.getProperty("BASE_PATH");
-            controllers = props.getProperty("CONTROLLERS");
-            outputPath = props.getProperty("OUTPUT_PATH");
-        }
+        Settings.loadConfigMap();
+        basePath = Settings.getProperty("BASE_PATH");
+        controllers = Settings.getProperty("CONTROLLERS");
+        outputPath = Settings.getProperty("OUTPUT_PATH");
     }
 
     @BeforeEach
     void loadConfigMapBeforeEach() throws IOException {
-        loadConfigMap();
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();
 

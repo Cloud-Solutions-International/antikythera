@@ -1,5 +1,7 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
+
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -10,36 +12,29 @@ import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
 public class ProjectGenerator {
-    private Properties props = new Properties();
-    public String basePackage;
+    private String basePackage;
     private String basePath;
     private String controllers;
-    public String outputPath;
+    private String outputPath;
     private static final String SUFFIX = ".java";
 
     private static ProjectGenerator instance;
 
     private ProjectGenerator() throws IOException {
-        loadConfigMap();
+        basePath = Settings.getProperty("BASE_PATH");
+        basePackage = Settings.getProperty("BASE_PACKAGE");
+        outputPath = Settings.getProperty("OUTPUT_PATH");
+        controllers = Settings.getProperty("CONTROLLERS");
     }
 
     public static ProjectGenerator getInstance() throws IOException {
         if (instance == null) {
+            Settings.loadConfigMap();
+
             instance = new ProjectGenerator();
         }
         return instance;
     }
-
-    private void loadConfigMap() throws IOException {
-        try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
-            props.load(fis);
-            this.basePath = props.getProperty("BASE_PATH");
-            this.basePackage = props.getProperty("BASE_PACKAGE");
-            this.controllers = props.getProperty("CONTROLLERS");
-            this.outputPath = props.getProperty("OUTPUT_PATH");
-        }
-    }
-
 
     private void createMavenProjectStructure(String basePackage, String path) throws IOException {
         String basePackagePath = basePackage.replace(".", File.separator);
@@ -143,8 +138,6 @@ public class ProjectGenerator {
     }
 
     public static void main(String[] args) throws IOException {
-        ProjectGenerator generator = new ProjectGenerator();
-        generator.generate();
+        ProjectGenerator.getInstance().generate();
     }
-
 }
