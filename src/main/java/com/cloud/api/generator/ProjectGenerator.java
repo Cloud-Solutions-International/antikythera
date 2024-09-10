@@ -20,7 +20,7 @@ public class ProjectGenerator {
 
     private static ProjectGenerator instance;
 
-    private ProjectGenerator() throws IOException {
+    private ProjectGenerator() {
         basePath = Settings.getProperty("BASE_PATH");
         basePackage = Settings.getProperty("BASE_PACKAGE");
         outputPath = Settings.getProperty("OUTPUT_PATH");
