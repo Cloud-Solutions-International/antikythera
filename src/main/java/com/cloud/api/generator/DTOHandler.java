@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -34,9 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -48,6 +47,7 @@ import java.util.Optional;
  */
 public class DTOHandler extends  ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
+    public static final String STR_GETTER = "Getter";
     /*
      * The strategy followed is that we iterate through all the fields in the
      * class and add them to a queue. Then we iterate through the items in
@@ -125,7 +125,8 @@ public class DTOHandler extends  ClassProcessor{
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
         String className = cdecl.getNameAsString();
 
-        if(cdecl.isClassOrInterfaceDeclaration() && className.toLowerCase().endsWith("to")) {
+        if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+                && className.toLowerCase().endsWith("to")) {
             String variable = classToInstanceName(cdecl);
 
             method = new MethodDeclaration();
@@ -147,7 +148,7 @@ public class DTOHandler extends  ClassProcessor{
         }
     }
 
-    private void handleStaticImports(NodeList<ImportDeclaration> imports) {
+    void handleStaticImports(NodeList<ImportDeclaration> imports) {
         imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
         {
             if(importDeclaration.isStatic()) {
@@ -199,7 +200,7 @@ public class DTOHandler extends  ClassProcessor{
                         ImportDeclaration importDeclaration = new ImportDeclaration("lombok.AllArgsConstructor", false, false);
                         cu.addImport(importDeclaration);
                     }
-                    if(annotation.getNameAsString().equals("Getter")) {
+                    if(annotation.getNameAsString().equals(STR_GETTER)) {
                         ImportDeclaration importDeclaration = new ImportDeclaration("lombok.Getter", false, false);
                         cu.addImport(importDeclaration);
                     }
@@ -213,13 +214,16 @@ public class DTOHandler extends  ClassProcessor{
      * @param classDecl the class to which we are going to add lombok annotations
      * @param annotations the existing annotations (which will probably be empty)
      */
-    private void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
+    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
         String[] annotationsToAdd;
         if (classDecl.getFields().size()<=255) {
-            annotationsToAdd = new String[]{"Getter", "NoArgsConstructor", "AllArgsConstructor", "Setter"};
+            annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
         } else {
-            annotationsToAdd = new String[]{"Getter", "NoArgsConstructor", "Setter"};
+            annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
+
+        // Find the CompilationUnit associated with the classDecl
+        cu = classDecl.findCompilationUnit().orElseThrow(() -> new IllegalStateException("CompilationUnit not found"));
 
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
@@ -243,6 +247,9 @@ public class DTOHandler extends  ClassProcessor{
 
             try {
                 if(field.getElementType().toString().equals("DateScheduleUtil")) {
+                    return null;
+                }
+                if (field.getElementType().toString().equals("Sort.Direction")) {
                     return null;
                 }
                 field.getAnnotations().clear();
@@ -299,8 +306,17 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("true");
                         break;
 
+                    case "Character":
+                        setter.addArgument("'A'");
+                        break;
+
                     case "Date":
-                        setter.addArgument("new Date()");
+                        if(field.getElementType().toString().contains(".")) {
+                            setter.addArgument("new java.util.Date()");
+                        }
+                        else {
+                            setter.addArgument("new Date()");
+                        }
                         break;
 
                     case "Double":
@@ -371,10 +387,10 @@ public class DTOHandler extends  ClassProcessor{
     }
 
     public static void main(String[] args) throws IOException{
-        loadConfigMap();
+        Settings.loadConfigMap();
 
         if (args.length != 1) {
-            System.err.println("Usage: java RestControllerProcessor <base-path> <relative-path>");
+            System.err.println("Usage: java DTOHandler <base-path> <relative-path>");
             System.exit(1);
         }
 
