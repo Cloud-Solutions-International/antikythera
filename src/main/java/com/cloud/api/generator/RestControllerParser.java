@@ -333,7 +333,7 @@ public class RestControllerParser extends ClassProcessor {
                             .append(param.getNameAsString().substring(1));
                 }
 
-                String testName = md.getName() + "By" + paramNames.toString() + "Test";
+                String testName = md.getName() + "By" + paramNames + "Test";
                 generatedCode.append("""
                         \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
@@ -349,10 +349,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
-            if(md.getParameters().isEmpty()) {
-
-            }
-            else {
+            if(md.getParameters().isNonEmpty())  {
                 Parameter param = md.getParameter(0);
                 String paramClassName = param.getTypeAsString();
                 String body = "objectMapper.writeValueAsString(%s)";
@@ -380,10 +377,6 @@ public class RestControllerParser extends ClassProcessor {
                         \tpublic void %sTest() throws JsonProcessingException {
                         \t\t%s
                         \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll(); 
                         """.formatted(md.getName(),
                         assignment,
                         body, getPath(annotation).replace("\"", "")));
@@ -399,11 +392,19 @@ public class RestControllerParser extends ClassProcessor {
                         }
                         else {
                             generatedCode.append("""
-                                    \t\t%s %s = response.as(%s.class);
+                                    \t\t%s %sResponse = response.as(%s.class);
                                     """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
                         }
                     }
                 }
+
+                generatedCode.append("""
+                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
+                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
+                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
+                        \t\tsoftAssert.assertAll(); 
+                        """);
+
                 generatedCode.append("\t}\n\n");
             }
         }
