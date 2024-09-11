@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class DTOHandlerTest {
     private ClassProcessor classProcessor;
     private DTOHandler handler;
+    private DTOHandler.TypeCollector typeCollector;
 
     private static String basePath;
     private static String controllers;
@@ -41,6 +42,7 @@ public class DTOHandlerTest {
 
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();
+        typeCollector = handler.new TypeCollector();
     }
 
     // -------- handleStaticImports -------- //
@@ -257,4 +259,23 @@ public class DTOHandlerTest {
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("AllArgsConstructor")));
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
     }
+
+    // ======== TypeCollector ======== //
+
+    // -------- capitalize -------- //
+    @Test
+    void capitalizeConvertsFirstCharacterToUpperCase() {
+        assertEquals("Hello", typeCollector.capitalize("hello"));
+    }
+
+    @Test
+    void capitalizeDoesNotChangeAlreadyCapitalizedString() {
+        assertEquals("Hello", typeCollector.capitalize("Hello"));
+    }
+
+    @Test
+    void capitalizeHandlesEmptyString() {
+        assertThrows(StringIndexOutOfBoundsException.class, () -> typeCollector.capitalize(""));
+    }
+
 }
