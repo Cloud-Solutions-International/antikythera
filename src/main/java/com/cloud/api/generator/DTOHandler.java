@@ -249,6 +249,9 @@ public class DTOHandler extends  ClassProcessor{
                 if(field.getElementType().toString().equals("DateScheduleUtil")) {
                     return null;
                 }
+                if(field.getElementType().toString().equals("Logger")) {
+                    return null;
+                }
                 if (field.getElementType().toString().equals("Sort.Direction")) {
                     return null;
                 }
