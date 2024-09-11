@@ -125,7 +125,8 @@ public class DTOHandler extends  ClassProcessor{
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
         String className = cdecl.getNameAsString();
 
-        if(cdecl.isClassOrInterfaceDeclaration() && className.toLowerCase().endsWith("to")) {
+        if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+                && className.toLowerCase().endsWith("to")) {
             String variable = classToInstanceName(cdecl);
 
             method = new MethodDeclaration();
@@ -245,6 +246,9 @@ public class DTOHandler extends  ClassProcessor{
                 if(field.getElementType().toString().equals("DateScheduleUtil")) {
                     return null;
                 }
+                if (field.getElementType().toString().equals("Sort.Direction")) {
+                    return null;
+                }
                 field.getAnnotations().clear();
                 extractEnums(field);
                 extractComplexType(field.getElementType(), cu);
@@ -299,8 +303,17 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("true");
                         break;
 
+                    case "Character":
+                        setter.addArgument("'A'");
+                        break;
+
                     case "Date":
-                        setter.addArgument("new Date()");
+                        if(field.getElementType().toString().contains(".")) {
+                            setter.addArgument("new java.util.Date()");
+                        }
+                        else {
+                            setter.addArgument("new Date()");
+                        }
                         break;
 
                     case "Double":
@@ -374,7 +387,7 @@ public class DTOHandler extends  ClassProcessor{
         Settings.loadConfigMap();
 
         if (args.length != 1) {
-            System.err.println("Usage: java RestControllerProcessor <base-path> <relative-path>");
+            System.err.println("Usage: java DTOHandler <base-path> <relative-path>");
             System.exit(1);
         }
 
