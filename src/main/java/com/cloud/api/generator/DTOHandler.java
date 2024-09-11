@@ -241,7 +241,7 @@ public class DTOHandler extends  ClassProcessor{
      * All annotations associated with the field are removed. Then we try to extract
      * it's type. If the type is defined in the application under test we copy it.
      */
-   private class TypeCollector extends ModifierVisitor<Void> {
+    private class TypeCollector extends ModifierVisitor<Void> {
         @Override
         public Visitable visit(FieldDeclaration field, Void arg) {
 
