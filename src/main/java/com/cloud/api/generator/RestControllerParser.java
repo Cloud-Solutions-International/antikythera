@@ -71,8 +71,10 @@ public class RestControllerParser extends ClassProcessor {
         if (path.isDirectory()) {
             int i = 0;
             for (File f : path.listFiles()) {
-                new RestControllerParser(f).start();
-                i++;
+                if(f.toString().contains(controllers.toString())) {
+                    new RestControllerParser(f).start();
+                    i++;
+                }
             }
             logger.info("Processed {} controllers", i);
         } else {
