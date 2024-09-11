@@ -71,6 +71,10 @@ public class DTOHandler extends  ClassProcessor{
         this.javaParser = new JavaParser(parserConfiguration);
     }
 
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
+    }
+
     /**
      * Copy the DTO from the AUT.
      * @param relativePath a path name relative to the base path of the application.
@@ -222,9 +226,6 @@ public class DTOHandler extends  ClassProcessor{
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        // Find the CompilationUnit associated with the classDecl
-        cu = classDecl.findCompilationUnit().orElseThrow(() -> new IllegalStateException("CompilationUnit not found"));
-
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
@@ -284,7 +285,7 @@ public class DTOHandler extends  ClassProcessor{
             }
         }
 
-        private void generateRandomValue(FieldDeclaration field) {
+        void generateRandomValue(FieldDeclaration field) {
             TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
             if(!field.isStatic() && method != null) {
