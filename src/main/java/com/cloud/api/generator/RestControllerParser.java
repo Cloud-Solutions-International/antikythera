@@ -4,6 +4,7 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -39,10 +40,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,8 +55,7 @@ public class RestControllerParser extends ClassProcessor {
     StringBuilder generatedCode = new StringBuilder();
     private CompilationUnit cu;
     DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
-    private int counter = 1;
-    private Set<String> methodNames = new HashSet<>();
+    private CompilationUnit gen;
 
     /**
      * Creates a new RestControllerParser
@@ -116,37 +114,38 @@ public class RestControllerParser extends ClassProcessor {
 
     private void processRestController(PackageDeclaration pd) throws IOException {
         StringBuilder fileContent = new StringBuilder();
+        gen = new CompilationUnit();
+
+        ClassOrInterfaceDeclaration cdecl = gen.addClass(cu.getTypes().get(0).getName() + "Test");
+        cdecl.addExtendedType("TestHelper");
+
+        gen.setPackageDeclaration(pd);
 
         removeUnwantedImports(cu.getImports());
         expandWildCards(cu);
 
-        fileContent.append("package " + pd.getName() + ";").append("\n");
-        fileContent.append("\n").append("\n");
-        fileContent.append("import com.cloud.api.base.TestHelper;").append("\n");
+        gen.addImport("com.cloud.api.base.TestHelper");
 
-        fileContent.append("import org.testng.annotations.Test;").append("\n");
-        fileContent.append("import org.testng.Assert;\n").append("\n");
+        gen.addImport("org.testng.annotations.Test");
+        gen.addImport("org.testng.Assert");
 
-        fileContent.append("import com.fasterxml.jackson.core.JsonProcessingException;").append("\n");
-        fileContent.append("import io.restassured.http.Method;").append("\n");
-        fileContent.append("import io.restassured.response.Response;").append("\n");
-        fileContent.append("import com.cloud.core.annotations.TestCaseType;").append("\n");
-        fileContent.append("import com.cloud.core.enums.TestType;").append("\n");
+        gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
+        gen.addImport("io.restassured.http.Method");
+        gen.addImport("io.restassured.response.Response");
+        gen.addImport("com.cloud.core.annotations.TestCaseType");
+        gen.addImport("com.cloud.core.enums.TestType");
 
         cu.accept(new MethodVisitor(), null);
 
         //removeUnusedImports(cu.getImports());
 
         for (String s : dependencies) {
-            fileContent.append("import " + s + ";").append("\n");
+            gen.addImport(s);
         }
 
-        fileContent.append("\n").append("\n");
-        fileContent.append("public class " + cu.getTypes().get(0).getName() + "Test extends TestHelper {").append("\n");
 
+        fileContent.append(gen.toString()).append("\n");
         fileContent.append(generatedCode).append("\n");
-
-        fileContent.append("}").append("\n");
 
         ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
 
@@ -352,7 +351,7 @@ public class RestControllerParser extends ClassProcessor {
                 makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
             }
             else {
-                String path = setPathVariables(md, annotation);
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 makeGetCall.addArgument(new StringLiteralExpr(path));
             }
             VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
@@ -361,9 +360,7 @@ public class RestControllerParser extends ClassProcessor {
             body.addStatement(new ExpressionStmt(assignExpr));
 
             addCheckStatus(testMethod);
-
-            generatedCode.append("GENERATED\n\n");
-            generatedCode.append(printer.print(testMethod));
+            gen.getType(0).addMember(testMethod);
 
         }
 
