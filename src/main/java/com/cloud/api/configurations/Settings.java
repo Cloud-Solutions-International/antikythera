@@ -1,7 +1,7 @@
 package com.cloud.api.configurations;
 
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
 
@@ -20,7 +20,7 @@ public class Settings {
         if (props == null) {
             props = new Properties();
 
-            try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
+            try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
                 props.load(fis);
                 String userDir = System.getProperty("user.home");
                 for (Map.Entry<Object, Object> prop : props.entrySet()) {
