@@ -314,21 +314,9 @@ public class RestControllerParser extends ClassProcessor {
                         getPath(annotation).replace("\"", "")));
             }
             else {
-                String path = getPath(annotation).replace("\"", "");
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 StringBuilder paramNames = new StringBuilder();
                 for(var param : md.getParameters()) {
-                    switch(param.getTypeAsString()) {
-                        case "Integer":
-                        case "int":
-                            path = path.replace('{' + param.getNameAsString() +'}', "1");
-                            break;
-                        case "Long":
-                            path = path.replace('{' + param.getNameAsString() +'}', "1L");
-                            break;
-                        case "String":
-                            path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
-                            break;
-                    }
                     paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
                             .append(param.getNameAsString().substring(1));
                 }
@@ -353,25 +341,8 @@ public class RestControllerParser extends ClassProcessor {
 
             }
             else {
-                Parameter requestBody = md.getParameter(0);
-                String path = getPath(annotation).replace("\"", "");
-                for(var param : md.getParameters()) {
-                    String paramString = String.valueOf(param);
-                    if(!paramString.startsWith("@RequestBody")){
-                        switch(param.getTypeAsString()) {
-                            case "Integer":
-                            case "int":
-                                path = path.replace('{' + param.getNameAsString() +'}', "1");
-                                break;
-                            case "Long":
-                                path = path.replace('{' + param.getNameAsString() +'}', "1L");
-                                break;
-                            case "String":
-                                path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
-                        }
-                    }
-                    requestBody = param;
-                }
+                Parameter requestBody = findRequestBody(md);
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
                 String body = "objectMapper.writeValueAsString(%s)";
                 var assignment = "%s %s = new %s();".formatted(paramClassName, classToInstanceName(paramClassName), paramClassName);
@@ -426,6 +397,36 @@ public class RestControllerParser extends ClassProcessor {
                 generatedCode.append("\t}\n\n");
             }
         }
+    }
+
+    private String handlePathVariables(MethodDeclaration md, String path){
+        for(var param : md.getParameters()) {
+            String paramString = String.valueOf(param);
+            if(!paramString.startsWith("@RequestBody")){
+                switch(param.getTypeAsString()) {
+                    case "Integer":
+                    case "int":
+                        path = path.replace('{' + param.getNameAsString() +'}', "1");
+                        break;
+                    case "Long":
+                        path = path.replace('{' + param.getNameAsString() +'}', "1L");
+                        break;
+                    case "String":
+                        path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+                }
+            }
+        }
+        return path;
+    }
+
+    private Parameter findRequestBody(MethodDeclaration md) {
+        Parameter requestBody = md.getParameter(0);
+        for(var param : md.getParameters()) {
+            if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
+                return param;
+            }
+        }
+        return requestBody;
     }
 
     private String getPath(AnnotationExpr annotation) {
