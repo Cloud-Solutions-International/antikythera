@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -8,9 +9,8 @@ import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -22,33 +22,22 @@ import java.nio.file.Paths;
 import java.util.Map;
 
 import static com.cloud.api.generator.ClassProcessor.*;
-import static org.mockito.Mockito.*;
-import static org.testng.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-public class RestControllerParserTest {
+class RestControllerParserTest {
 
     private RestControllerParser parser;
     private Path path;
     private static String basePath;
-    private static String controllers;
     private static String outputPath;
 
-    @BeforeClass
-    public static void loadConfigMapAtStart() throws IOException {
-
-        try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
-            props.load(fis);
-            basePath = props.getProperty("BASE_PATH");
-            controllers = props.getProperty("CONTROLLERS");
-            outputPath = props.getProperty("OUTPUT_PATH");
-        }
-    }
-
-    @BeforeMethod
+    @BeforeEach
     void setUp() throws IOException {
-        loadConfigMap();
-        System.out.println(controllers);
-        String s = props.getProperty("CONTROLLERS");
+        Settings.loadConfigMap();
+        basePath = Settings.getProperty("BASE_PATH");
+        String controllers = Settings.getProperty("CONTROLLERS");
+        outputPath = Settings.getProperty("OUTPUT_PATH");
+        String s = Settings.getProperty("CONTROLLERS");
         if (s.endsWith(SUFFIX)) {
             path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
         } else {
@@ -58,7 +47,7 @@ public class RestControllerParserTest {
         parser = new RestControllerParser(path.toFile());
     }
 
-//    Tests for start() method
+
     @Test
     void start_processesRestControllerSuccessfully() throws IOException {
         parser.start();
@@ -70,7 +59,7 @@ public class RestControllerParserTest {
     }
 
     @Test
-    void start_throwsIOExceptionWhenProcessingFails() throws IOException {
+    void start_throwsIOExceptionWhenProcessingFails()  {
         System.out.println(basePath);
         Path invalidPath = Paths.get(basePath, "invalid/path", path.toString());
         RestControllerParser invalidParser = new RestControllerParser(invalidPath.toFile());

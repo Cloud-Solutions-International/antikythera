@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -29,11 +30,19 @@ public class ClassProcessor {
     protected static String basePackage;
     protected static String basePath;
     public static final String SUFFIX = ".java";
-    protected static Properties props = new Properties();
+
     protected final Set<String> dependencies = new TreeSet<>();
 
     private static final Set<String> exclude = new HashSet<>();
     static {
+        try {
+            Settings.loadConfigMap();
+            basePath = Settings.getProperty("BASE_PATH");
+            basePackage = Settings.getProperty("BASE_PACKAGE");
+
+        } catch (IOException e) {
+            throw new GeneratorException("Failed to load configuration", e);
+        }
         exclude.add("List");
         exclude.add("Set");
     }
@@ -60,24 +69,6 @@ public class ClassProcessor {
             ClassProcessor.resolved.add(nameAsString);
             DTOHandler handler = new DTOHandler();
             handler.copyDTO(nameAsString.replace(".", "/") + ClassProcessor.SUFFIX);
-        }
-    }
-
-    protected static void loadConfigMap() throws IOException {
-        try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
-            props.load(fis);
-            String userDir = System.getProperty("user.home");
-            basePath = props.getProperty("BASE_PATH");
-            if (basePath != null) {
-                basePath = basePath.replace("{$USERDIR}", userDir);
-                props.setProperty("BASE_PATH", basePath);
-            }
-            basePackage = props.getProperty("BASE_PACKAGE");
-            if (props.getProperty("OUTPUT_PATH") != null) {
-                props.setProperty("OUTPUT_PATH",
-                        props.getProperty("OUTPUT_PATH").replace("{$USERDIR}", userDir));
-
-            }
         }
     }
 
