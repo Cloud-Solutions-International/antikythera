@@ -246,13 +246,10 @@ public class DTOHandler extends  ClassProcessor{
         public Visitable visit(FieldDeclaration field, Void arg) {
 
             try {
-                if(field.getElementType().toString().equals("DateScheduleUtil")) {
-                    return null;
-                }
-                if(field.getElementType().toString().equals("Logger")) {
-                    return null;
-                }
-                if (field.getElementType().toString().equals("Sort.Direction")) {
+                String fieldAsString = field.getElementType().toString();
+                if (fieldAsString.equals("DateScheduleUtil")
+                        || fieldAsString.equals("Logger")
+                        || fieldAsString.equals("Sort.Direction")) {
                     return null;
                 }
                 field.getAnnotations().clear();
