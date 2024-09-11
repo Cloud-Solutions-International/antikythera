@@ -77,9 +77,10 @@ public class ClassProcessor {
             String mainType = classType.getNameAsString();
             NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
-            if(mainType != null && mainType.equals("DateScheduleUtil")) {
+            if(mainType != null &&
+                    (mainType.equals("DateScheduleUtil") || mainType.equals("Logger"))) {
                 /*
-                 * Absolutely no reason for a DTO to have DateScheduleUtil as a dependency.
+                 * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
                  */
 
                 return;
@@ -116,7 +117,7 @@ public class ClassProcessor {
             String[] parts = ref2.getNameAsString().split("\\.");
 
             if (parts[parts.length - 1].equals(mainType)) {
-                dependencies.add(ref2.getNameAsString() );
+                dependencies.add(ref2.getNameAsString());
                 return true;
             }
         }
