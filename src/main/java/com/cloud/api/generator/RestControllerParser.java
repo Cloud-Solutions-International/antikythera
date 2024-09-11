@@ -315,6 +315,7 @@ public class RestControllerParser extends ClassProcessor {
             }
             else {
                 String path = getPath(annotation).replace("\"", "");
+                StringBuilder paramNames = new StringBuilder();
                 for(var param : md.getParameters()) {
                     switch(param.getTypeAsString()) {
                         case "Integer":
@@ -326,22 +327,24 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         case "String":
                             path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+                            break;
                     }
+                    paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                            .append(param.getNameAsString().substring(1));
                 }
 
-                Parameter param = md.getParameter(0);
-                String className = param.getTypeAsString();
+                String testName = md.getName() + "By" + paramNames.toString() + "Test";
                 generatedCode.append("""
                         \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
-                        \tpublic void %sTest() {
+                        \tpublic void %s() {
                         \t\tResponse response = makeGet(headers, "%s");
                         \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
                         \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
                                              "Expected status code starting with 2xx, but got: " + response.getStatusCode());
                         \t\tsoftAssert.assertAll();
                         \t}\n
-                        """.formatted(md.getName(), path));
+                        """.formatted(testName, path));
             }
         }
 
