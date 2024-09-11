@@ -11,12 +11,10 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -55,7 +53,6 @@ public class ClassProcessor {
         );
     }
 
-
     /**
      * Copy a dependency from the application under test.
      *
@@ -76,11 +73,7 @@ public class ClassProcessor {
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
-            if(classType.toString().equals("Sort.Direction")) {
-                // todo remove thsi hack.
-                dependencies.add("org.springframework.data.domain.Sort");
-                return;
-            }
+
             String mainType = classType.getNameAsString();
             NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
@@ -135,7 +128,11 @@ public class ClassProcessor {
     }
 
     protected static String classToInstanceName(String className) {
-        return Character.toLowerCase(className.charAt(0)) + className.substring(1);
+        String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
+        if(name.equals("long") || name.equals("int")) {
+            return "_" + name;
+        }
+        return name;
     }
 
     protected Set<String> findMatchingClasses(String packageName) {
