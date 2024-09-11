@@ -398,7 +398,6 @@ public class RestControllerParser extends ClassProcessor {
                         body, path));
 
                 if(returnType != null) {
-//                    generatedCode.append("\t\t try {\n");
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                     } else {
                         if(returnType.toString().equals(paramClassName)) {
@@ -413,11 +412,6 @@ public class RestControllerParser extends ClassProcessor {
                                     """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
                         }
                     }
-//                    generatedCode.append("""
-//                        \t\t} catch (Exception e) {
-//                        \t\t\tCsiResponseDto csiResponseDto = response.as(CsiResponseDto.class);
-//                            \t\t}
-//                        """);
                 }
                 generatedCode.append("""
                         \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
