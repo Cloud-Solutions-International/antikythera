@@ -101,4 +101,9 @@ public abstract class TestHelper extends APIBaseTest {
 
         return response;
     }
+
+    protected void checkStatusCode(Response response) {
+        softAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),
+                "Expected status code starting with 2xx, but got: " + response.getStatusCode());
+    }
 }
