@@ -214,13 +214,16 @@ public class DTOHandler extends  ClassProcessor{
      * @param classDecl the class to which we are going to add lombok annotations
      * @param annotations the existing annotations (which will probably be empty)
      */
-    private void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
+    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
         String[] annotationsToAdd;
         if (classDecl.getFields().size()<=255) {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
         } else {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
+
+        // Find the CompilationUnit associated with the classDecl
+        cu = classDecl.findCompilationUnit().orElseThrow(() -> new IllegalStateException("CompilationUnit not found"));
 
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
@@ -238,7 +241,7 @@ public class DTOHandler extends  ClassProcessor{
      * All annotations associated with the field are removed. Then we try to extract
      * it's type. If the type is defined in the application under test we copy it.
      */
-    private class TypeCollector extends ModifierVisitor<Void> {
+   private class TypeCollector extends ModifierVisitor<Void> {
         @Override
         public Visitable visit(FieldDeclaration field, Void arg) {
 
