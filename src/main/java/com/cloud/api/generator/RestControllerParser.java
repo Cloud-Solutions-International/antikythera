@@ -349,13 +349,30 @@ public class RestControllerParser extends ClassProcessor {
 
             }
             else {
-                Parameter param = md.getParameter(0);
-                String paramClassName = param.getTypeAsString();
+                Parameter requestBody = md.getParameter(0);
+                String path = getPath(annotation).replace("\"", "");
+                for(var param : md.getParameters()) {
+                    String paramString = String.valueOf(param);
+                    if(!paramString.startsWith("@RequestBody")){
+                        switch(param.getTypeAsString()) {
+                            case "Integer":
+                            case "int":
+                                path = path.replace('{' + param.getNameAsString() +'}', "1");
+                                break;
+                            case "Long":
+                                path = path.replace('{' + param.getNameAsString() +'}', "1L");
+                                break;
+                            case "String":
+                                path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+                        }
+                    }
+                    requestBody = param;
+                }
+                String paramClassName = requestBody.getTypeAsString();
                 String body = "objectMapper.writeValueAsString(%s)";
                 var assignment = "%s %s = new %s();".formatted(paramClassName, classToInstanceName(paramClassName), paramClassName);
-
-                if(param.getType().isClassOrInterfaceType()) {
-                    var cdecl = param.getType().asClassOrInterfaceType();
+                if(requestBody.getType().isClassOrInterfaceType()) {
+                    var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
                         case "List":
                             assignment = "%s list = List.of();".formatted(paramClassName);
@@ -378,9 +395,10 @@ public class RestControllerParser extends ClassProcessor {
                         \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
                         """.formatted(md.getName(),
                         assignment,
-                        body, getPath(annotation).replace("\"", "")));
+                        body, path));
 
                 if(returnType != null) {
+//                    generatedCode.append("\t\t try {\n");
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                     } else {
                         if(returnType.toString().equals(paramClassName)) {
@@ -395,6 +413,11 @@ public class RestControllerParser extends ClassProcessor {
                                     """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
                         }
                     }
+//                    generatedCode.append("""
+//                        \t\t} catch (Exception e) {
+//                        \t\t\tCsiResponseDto csiResponseDto = response.as(CsiResponseDto.class);
+//                            \t\t}
+//                        """);
                 }
                 generatedCode.append("""
                         \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
