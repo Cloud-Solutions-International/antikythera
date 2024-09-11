@@ -1,7 +1,5 @@
 package com.cloud.api.generator;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -86,8 +84,10 @@ public class RestControllerParser extends ClassProcessor {
         if (path.isDirectory()) {
             int i = 0;
             for (File f : path.listFiles()) {
-                new RestControllerParser(f).start();
-                i++;
+                if(f.toString().contains(controllers.toString())) {
+                    new RestControllerParser(f).start();
+                    i++;
+                }
             }
             logger.info("Processed {} controllers", i);
         } else {
@@ -320,12 +320,14 @@ public class RestControllerParser extends ClassProcessor {
 
             testMethod.addAnnotation(testCaseTypeAnnotation);
             testMethod.addAnnotation("Test");
-            String methodName = md.getName() + "Test";
-            if(methodNames.contains(methodName)) {
-                methodName += counter++;
+            StringBuilder paramNames = new StringBuilder();
+            for(var param : md.getParameters()) {
+                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                        .append(param.getNameAsString().substring(1));
             }
-            methodNames.add(methodName);
-            testMethod.setName(methodName);
+
+            String testName = md.getName() + "By" + paramNames + "Test";
+            testMethod.setName(testName);
 
             BlockStmt body = new BlockStmt();
 
@@ -365,73 +367,38 @@ public class RestControllerParser extends ClassProcessor {
 
         }
 
-        private String setPathVariables(MethodDeclaration md, AnnotationExpr annotation) {
-            String path = getPath(annotation).replace("\"", "");
-            for (Parameter param : md.getParameters()) {
-                for (AnnotationExpr a : param.getAnnotations()) {
-                    if (a.getNameAsString().equals("PathVariable")) {
-                        switch (param.getTypeAsString()) {
-                            case "Integer":
-                            case "int":
-                                path = path.replace('{' + param.getNameAsString() + '}', "1");
-                                break;
-                            case "Long":
-                                path = path.replace('{' + param.getNameAsString() + '}', "1L");
-                                break;
-                            case "String":
-                                path = path.replace('{' + param.getNameAsString() + '}', "Ibuprofen");
-                        }
-                    }
-                }
-            }
-            return path;
-        }
-
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
-            if(md.getParameters().isEmpty()) {
-
-            }
-            else {
-                StringBuilder body = new StringBuilder();
-                String mapped = "\t\tString json = objectMapper.writeValueAsString(%s);";
-                for(Parameter param : md.getParameters()) {
-                    String paramClassName = param.getTypeAsString();
-                    if (param.getType().isClassOrInterfaceType()) {
-                        var cdecl = param.getType().asClassOrInterfaceType();
-                        // execute switch if the cdelc has a RequestBody Annotation
-                        if (param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
-                            body.append("\t\t%s %s = new %s();\n".formatted(paramClassName, classToInstanceName(paramClassName), paramClassName));
-
-                            switch (cdecl.getNameAsString()) {
-                                case "List":
-                                    body.append("\t\t%s list = List.of();\n".formatted(paramClassName));
-                                    body.append(mapped.formatted("list"));
-                                    break;
-                                case "Map":
-                                    body.append("\t\t%s map = Map.of();\n".formatted(paramClassName));
-                                    body.append(mapped.formatted("map"));
-                                    break;
-                                default:
-                                    body.append(mapped.formatted(classToInstanceName(paramClassName)));
-                            }
-                        }
+            if(md.getParameters().isNonEmpty()) {
+                Parameter requestBody = findRequestBody(md);
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                String paramClassName = requestBody.getTypeAsString();
+                String body = "objectMapper.writeValueAsString(%s)";
+                var assignment = "%s %s = new %s();".formatted(paramClassName, classToInstanceName(paramClassName), paramClassName);
+                if(requestBody.getType().isClassOrInterfaceType()) {
+                    var cdecl = requestBody.getType().asClassOrInterfaceType();
+                    switch(cdecl.getNameAsString()) {
+                        case "List":
+                            assignment = "%s list = List.of();".formatted(paramClassName);
+                            body = body.formatted("list");
+                            break;
+                        case "Map":
+                            assignment = "%s map = Map.of();".formatted(paramClassName);
+                            body = body.formatted("map");
+                            break;
+                        default:
+                            body = body.formatted(classToInstanceName(paramClassName));
                     }
                 }
 
                 generatedCode.append("""
-                        
-                        \t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
+                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
                         \tpublic void %sTest() throws JsonProcessingException {
-                        %s
-                        \t\tResponse response = makePost(json, headers, \n\t\t\t"%s");
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll(); 
+                        \t\t%s
+                        \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
                         """.formatted(md.getName(),
-                        body,
-                        getPath(annotation).replace("\"", "")));
+                        assignment,
+                        body, path));
 
                 if(returnType != null) {
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
@@ -444,14 +411,50 @@ public class RestControllerParser extends ClassProcessor {
                         }
                         else {
                             generatedCode.append("""
-                                    \t\t%s %s = response.as(%s.class);
+                                    \t\t%s %sResponse = response.as(%s.class);
                                     """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
                         }
                     }
                 }
+                generatedCode.append("""
+                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
+                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
+                        "Expected status code starting with 2xx, but got: " + response.getStatusCode());
+                        \t\tsoftAssert.assertAll(); 
+                        """);
                 generatedCode.append("\t}\n\n");
             }
         }
+    }
+
+    private String handlePathVariables(MethodDeclaration md, String path){
+        for(var param : md.getParameters()) {
+            String paramString = String.valueOf(param);
+            if(!paramString.startsWith("@RequestBody")){
+                switch(param.getTypeAsString()) {
+                    case "Integer":
+                    case "int":
+                        path = path.replace('{' + param.getNameAsString() +'}', "1");
+                        break;
+                    case "Long":
+                        path = path.replace('{' + param.getNameAsString() +'}', "1L");
+                        break;
+                    case "String":
+                        path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+                }
+            }
+        }
+        return path;
+    }
+
+    private Parameter findRequestBody(MethodDeclaration md) {
+        Parameter requestBody = md.getParameter(0);
+        for(var param : md.getParameters()) {
+            if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
+                return param;
+            }
+        }
+        return requestBody;
     }
 
     private String getPath(AnnotationExpr annotation) {
