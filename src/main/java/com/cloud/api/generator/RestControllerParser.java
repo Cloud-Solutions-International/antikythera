@@ -321,7 +321,7 @@ public class RestControllerParser extends ClassProcessor {
                             .append(param.getNameAsString().substring(1));
                 }
 
-                String testName = md.getName() + "By" + paramNames.toString() + "Test";
+                String testName = md.getName() + "By" + paramNames + "Test";
                 generatedCode.append("""
                         \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
                         \t@Test
@@ -337,10 +337,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
-            if(md.getParameters().isEmpty()) {
-
-            }
-            else {
+            if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
@@ -383,7 +380,7 @@ public class RestControllerParser extends ClassProcessor {
                         }
                         else {
                             generatedCode.append("""
-                                    \t\t%s %sValue = response.as(%s.class);
+                                    \t\t%s %sResponse = response.as(%s.class);
                                     """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
                         }
                     }
