@@ -48,8 +48,7 @@ public class ClassProcessor {
     protected static void removeUnwantedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
                 importDeclaration -> ! (importDeclaration.getNameAsString().startsWith(basePackage) ||
-                        importDeclaration.getNameAsString().startsWith("java.") ||
-                        importDeclaration.getNameAsString().startsWith("org.springframework.data.domain"))
+                        importDeclaration.getNameAsString().startsWith("java."))
         );
     }
 
