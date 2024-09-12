@@ -469,6 +469,9 @@ public class RestControllerParser extends ClassProcessor {
                     case "Long":
                         path = path.replace('{' + param.getNameAsString() +'}', "1L");
                         break;
+                    case "Boolean":
+                        path = path.replace('{' + param.getNameAsString() +'}', "false");
+                        break;
                     case "String":
                         path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
                 }
