@@ -3,11 +3,13 @@ package com.cloud.api.generator;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -121,7 +123,7 @@ public class RestControllerParser extends ClassProcessor {
 
         gen.setPackageDeclaration(pd);
 
-        removeUnwantedImports(cu.getImports());
+        //removeUnwantedImports(cu.getImports());
         expandWildCards(cu);
 
         gen.addImport("com.cloud.api.base.TestHelper");
@@ -137,7 +139,7 @@ public class RestControllerParser extends ClassProcessor {
 
         cu.accept(new MethodVisitor(), null);
 
-        //removeUnusedImports(cu.getImports());
+        removeUnusedImports(cu.getImports());
 
         for (String s : dependencies) {
             gen.addImport(s);
@@ -365,61 +367,78 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            MethodDeclaration testMethod = buildTestMethod(md);
+            MethodCallExpr makeGetCall = new MethodCallExpr("makePost");
+
+
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
-                String body = "objectMapper.writeValueAsString(%s)";
-                var assignment = "%s %s = new %s();".formatted(paramClassName, classToInstanceName(paramClassName), paramClassName);
+
                 if(requestBody.getType().isClassOrInterfaceType()) {
                     var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
-                        case "List":
-                            assignment = "%s list = List.of();".formatted(paramClassName);
-                            body = body.formatted("list");
-                            break;
-                        case "Map":
-                            assignment = "%s map = Map.of();".formatted(paramClassName);
-                            body = body.formatted("map");
-                            break;
-                        default:
-                            body = body.formatted(classToInstanceName(paramClassName));
-                    }
-                }
+                        case "List": {
+                            Type listType = new ClassOrInterfaceType(null, paramClassName);
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
+                            MethodCallExpr methodCallExpr = new MethodCallExpr("List.of");
+                            variableDeclarator.setInitializer(methodCallExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
 
-                generatedCode.append("""
-                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
-                        \t@Test
-                        \tpublic void %sTest() throws JsonProcessingException {
-                        \t\t%s
-                        \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
-                        """.formatted(md.getName(),
-                        assignment,
-                        body, path));
+                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            break;
+                        }
+                        case "Map": {
+                            Type listType = new ClassOrInterfaceType(paramClassName);
+
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
+                            MethodCallExpr methodCallExpr = new MethodCallExpr("Map.of");
+                            variableDeclarator.setInitializer(methodCallExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+
+                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            break;
+                        }
+                        default:
+                            ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
+                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
+                            variableDeclarator.setInitializer(objectCreationExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                    }
+
+
+                    MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                    writeValueAsStringCall.addArgument(new NameExpr("req"));
+                    makeGetCall.addArgument(writeValueAsStringCall);
+                    testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    makeGetCall.addArgument(new NameExpr("headers"));
+
+                }
+                makeGetCall.addArgument(new StringLiteralExpr(path));
+
+
+                gen.getType(0).addMember(testMethod);
+
+                VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
+                AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
+                testMethod.getBody().get().addStatement(new ExpressionStmt(assignExpr));
+
+                addCheckStatus(testMethod);
 
                 if(returnType != null) {
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                     } else if(!returnType.toString().equals("void")){
                         if(returnType.toString().equals(md.getParameter(0).getTypeAsString())) {
-                            // special case. The return type and the data that are posted to the server happen to be the same.
-                            generatedCode.append("""
-                                \t\t%s res%s = response.as(%s.class);
-                                """.formatted(returnType.asString(), returnType.toString(), returnType.asString()));
+
                         }
                         else {
-                            generatedCode.append("""
-                                    \t\t%s %sResponse = response.as(%s.class);
-                                    """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
+
                         }
                     }
                 }
-                generatedCode.append("""
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                        "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll(); 
-                        """);
-                generatedCode.append("\t}\n\n");
             }
         }
     }
