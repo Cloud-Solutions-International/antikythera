@@ -59,7 +59,7 @@ public class ClassProcessor {
      * @param nameAsString
      */
     protected void copyDependencies(String nameAsString) throws IOException {
-        if(nameAsString.startsWith("org.springframework.data.domain")) {
+        if(nameAsString.startsWith("org.springframework")) {
             return;
         }
         if (!ClassProcessor.resolved.contains(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
