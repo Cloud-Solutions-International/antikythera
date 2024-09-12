@@ -142,6 +142,9 @@ public class RestControllerParser extends ClassProcessor {
         removeUnusedImports(cu.getImports());
 
         for (String s : dependencies) {
+            if(! (s.startsWith("java.") || s.startsWith(basePackage))) {
+                continue;
+            }
             gen.addImport(s);
         }
 
@@ -380,6 +383,7 @@ public class RestControllerParser extends ClassProcessor {
                     var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
                         case "List": {
+                            dependencies.add("java.util.List");
                             Type listType = new ClassOrInterfaceType(null, paramClassName);
                             VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
                             MethodCallExpr methodCallExpr = new MethodCallExpr("List.of");
@@ -390,6 +394,7 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         }
                         case "Map": {
+                            dependencies.add("java.util.Map");
                             Type listType = new ClassOrInterfaceType(paramClassName);
 
                             VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
@@ -400,6 +405,15 @@ public class RestControllerParser extends ClassProcessor {
                             testMethod.getBody().get().addStatement(variableDeclarationExpr);
                             break;
                         }
+                        case "Integer":
+                        case "Long": {
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
+                            variableDeclarator.setInitializer("0");
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+
+                            break;
+                        }
+
                         default:
                             ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
                             VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
