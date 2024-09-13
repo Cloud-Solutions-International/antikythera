@@ -72,7 +72,7 @@ public class RestControllerParser extends ClassProcessor {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
-        dataPath = Paths.get(Settings.getProperty("DATA_PATH"));
+        dataPath = Paths.get(Settings.getProperty("OUTPUT_PATH"), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
