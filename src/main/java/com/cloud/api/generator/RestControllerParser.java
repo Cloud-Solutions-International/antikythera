@@ -104,7 +104,7 @@ public class RestControllerParser extends ClassProcessor {
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
-            File file = new File(dataPath + "/" + controllerName + ".json");
+            File file = new File(dataPath + "/" + controllerName + "Params.json");
             objectMapper.writeValue(file, parameterSet);
         }
     }
