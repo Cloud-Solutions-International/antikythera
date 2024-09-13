@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -10,12 +11,10 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -29,11 +28,19 @@ public class ClassProcessor {
     protected static String basePackage;
     protected static String basePath;
     public static final String SUFFIX = ".java";
-    protected static Properties props = new Properties();
+
     protected final Set<String> dependencies = new TreeSet<>();
 
     private static final Set<String> exclude = new HashSet<>();
     static {
+        try {
+            Settings.loadConfigMap();
+            basePath = Settings.getProperty("BASE_PATH");
+            basePackage = Settings.getProperty("BASE_PACKAGE");
+
+        } catch (IOException e) {
+            throw new GeneratorException("Failed to load configuration", e);
+        }
         exclude.add("List");
         exclude.add("Set");
     }
@@ -41,11 +48,9 @@ public class ClassProcessor {
     protected static void removeUnwantedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
                 importDeclaration -> ! (importDeclaration.getNameAsString().startsWith(basePackage) ||
-                        importDeclaration.getNameAsString().startsWith("java.") ||
-                        importDeclaration.getNameAsString().startsWith("org.springframework.data.domain"))
+                        importDeclaration.getNameAsString().startsWith("java."))
         );
     }
-
 
     /**
      * Copy a dependency from the application under test.
@@ -53,7 +58,7 @@ public class ClassProcessor {
      * @param nameAsString
      */
     protected void copyDependencies(String nameAsString) throws IOException {
-        if(nameAsString.startsWith("org.springframework.data.domain")) {
+        if(nameAsString.startsWith("org.springframework")) {
             return;
         }
         if (!ClassProcessor.resolved.contains(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
@@ -63,29 +68,18 @@ public class ClassProcessor {
         }
     }
 
-    protected static void loadConfigMap() throws IOException {
-        try (FileInputStream fis = new FileInputStream("src/main/resources/generator.cfg")) {
-            props.load(fis);
-            basePath = props.getProperty("BASE_PATH");
-            basePackage = props.getProperty("BASE_PACKAGE");
-        }
-    }
-
     protected void extractComplexType(Type type, CompilationUnit dependencyCu) throws IOException {
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
-            if(classType.toString().equals("Sort.Direction")) {
-                // todo remove thsi hack.
-                dependencies.add("org.springframework.data.domain.Sort");
-                return;
-            }
+
             String mainType = classType.getNameAsString();
             NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
-            if(mainType != null && mainType.equals("DateScheduleUtil")) {
+            if(mainType != null &&
+                    (mainType.equals("DateScheduleUtil") || mainType.equals("Logger"))) {
                 /*
-                 * Absolutely no reason for a DTO to have DateScheduleUtil as a dependency.
+                 * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
                  */
 
                 return;
@@ -122,7 +116,7 @@ public class ClassProcessor {
             String[] parts = ref2.getNameAsString().split("\\.");
 
             if (parts[parts.length - 1].equals(mainType)) {
-                dependencies.add(ref2.getNameAsString() );
+                dependencies.add(ref2.getNameAsString());
                 return true;
             }
         }
@@ -134,7 +128,11 @@ public class ClassProcessor {
     }
 
     protected static String classToInstanceName(String className) {
-        return Character.toLowerCase(className.charAt(0)) + className.substring(1);
+        String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
+        if(name.equals("long") || name.equals("int")) {
+            return "_" + name;
+        }
+        return name;
     }
 
     protected Set<String> findMatchingClasses(String packageName) {
