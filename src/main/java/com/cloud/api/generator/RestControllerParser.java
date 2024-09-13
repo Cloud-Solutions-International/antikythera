@@ -64,7 +64,7 @@ public class RestControllerParser extends ClassProcessor {
      *
      * @param controllers either a folder containing many controllers or a single controller
      */
-    public RestControllerParser(File controllers)  {
+    public RestControllerParser(File controllers) throws IOException {
         this.controllers = controllers;
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
@@ -73,6 +73,11 @@ public class RestControllerParser extends ClassProcessor {
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
         dataPath = Paths.get(Settings.getProperty("DATA_PATH"));
+
+        // Check if the dataPath directory exists, if not, create it
+        if (!Files.exists(dataPath)) {
+            Files.createDirectories(dataPath);
+        }
 
     }
 
@@ -98,9 +103,6 @@ public class RestControllerParser extends ClassProcessor {
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
-            }
-            if (!Files.exists(dataPath)) {
-                Files.createDirectories(dataPath);
             }
             File file = new File(dataPath + "/" + controllerName + ".json");
             objectMapper.writeValue(file, parameterSet);
