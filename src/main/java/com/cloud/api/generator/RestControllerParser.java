@@ -41,6 +41,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,7 +99,13 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
-            String controllerName = path.toString().substring(path.toString().lastIndexOf("/") + 1, path.toString().indexOf(".java"));
+            Pattern pattern = Pattern.compile(".*/([^/]+)\\.java$");
+            Matcher matcher = pattern.matcher(path.toString());
+
+            String controllerName = null;
+            if (matcher.find()) {
+                controllerName = matcher.group(1);
+            }
             parameterSet = new HashMap<>();
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
