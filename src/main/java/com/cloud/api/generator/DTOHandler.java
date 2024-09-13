@@ -88,7 +88,6 @@ public class DTOHandler extends  ClassProcessor{
             return ;
         }
 
-        expandWildCards(cu);
         // remove unwanted imports. This is different from removing unused imports
         removeUnwantedImports(imports);
 
@@ -97,7 +96,6 @@ public class DTOHandler extends  ClassProcessor{
 
         cu.accept(new TypeCollector(), null);
 
-        handleStaticImports(imports);
         // remove unused imports. These are items in the import list that seem to be unused.
         // there are no type declarations in the code that make use of the import.
         removeUnusedImports(imports);
@@ -148,22 +146,6 @@ public class DTOHandler extends  ClassProcessor{
         }
     }
 
-    void handleStaticImports(NodeList<ImportDeclaration> imports) {
-        imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
-        {
-            if(importDeclaration.isStatic()) {
-                String importName = importDeclaration.getNameAsString();
-                if(importDeclaration.isAsterisk()) {
-                    dependencies.add(importName);
-                }
-                else {
-                    dependencies.add(importName.substring(0, importName.lastIndexOf(".")));
-                }
-            }
-        });
-    }
-
-
     /**
      * Iterates through all the classes in the file and processes them.
      * If we are inheriting from a class that's part of our AUT, we need to copy it.
@@ -183,13 +165,10 @@ public class DTOHandler extends  ClassProcessor{
                 // goto hell because they just shouldn't be here in the first place.
                 classDecl.getConstructors().forEach(Node::remove);
                 classDecl.getMethods().forEach(Node::remove);
+
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
-                    if(findImport(cu, parent.getName().asString())) {
-                        return;
-                    }
-                    String className = cu.getPackageDeclaration().get().getNameAsString() + "." + parent.getNameAsString();
-                    dependencies.add(className);
+                    extractComplexType(parent);
                 }
                 // we don't want interfaces
                 classDecl.getImplementedTypes().clear();
@@ -245,20 +224,15 @@ public class DTOHandler extends  ClassProcessor{
         @Override
         public Visitable visit(FieldDeclaration field, Void arg) {
 
-            try {
-                String fieldAsString = field.getElementType().toString();
-                if (fieldAsString.equals("DateScheduleUtil")
-                        || fieldAsString.equals("Logger")
-                        || fieldAsString.equals("Sort.Direction")) {
-                    return null;
-                }
-                field.getAnnotations().clear();
-                extractEnums(field);
-                extractComplexType(field.getElementType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + field.getElementType(), e);
-
+            String fieldAsString = field.getElementType().toString();
+            if (fieldAsString.equals("DateScheduleUtil")
+                    || fieldAsString.equals("Logger")
+                    || fieldAsString.equals("Sort.Direction")) {
+                return null;
             }
+            field.getAnnotations().clear();
+            extractEnums(field);
+            extractComplexType(field.getElementType());
 
             return super.visit(field, arg);
         }
@@ -271,12 +245,12 @@ public class DTOHandler extends  ClassProcessor{
                     MethodCallExpr methodCall = (MethodCallExpr) initializer;
                     Optional<Expression> nameExpr = methodCall.getScope();
                     // Check if the scope of the method call is a field access expression
-                    if (nameExpr.isPresent() && nameExpr.get().isFieldAccessExpr()) {
-                        findImport(cu, nameExpr.get().asFieldAccessExpr().getScope().toString());
+                    if(nameExpr.isPresent() && nameExpr.get().isClassExpr()) {
+                        System.out.println("bada");
                     }
                 }
                 else if(initializer.isFieldAccessExpr()) {
-                    findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
+
                 }
             }
             else {
@@ -376,12 +350,10 @@ public class DTOHandler extends  ClassProcessor{
         @Override
         public Visitable visit(MethodDeclaration method, Void arg) {
             super.visit(method, arg);
-            try {
-                method.getAnnotations().clear();
-                extractComplexType(method.getType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + method.getType(), e);
-            }
+
+            method.getAnnotations().clear();
+            extractComplexType(method.getType());
+
             return method;
         }
     }

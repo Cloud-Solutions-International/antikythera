@@ -4,22 +4,18 @@ import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
 public class ClassProcessor {
-
     /*
      * this is made static because multiple classes may have the same dependency
      * and we don't want to spend time copying them multiple times.
@@ -29,21 +25,10 @@ public class ClassProcessor {
     protected static String basePath;
     public static final String SUFFIX = ".java";
 
+    /**
+     * This is the set of imports.
+     */
     protected final Set<String> dependencies = new TreeSet<>();
-
-    private static final Set<String> exclude = new HashSet<>();
-    static {
-        try {
-            Settings.loadConfigMap();
-            basePath = Settings.getProperty("BASE_PATH");
-            basePackage = Settings.getProperty("BASE_PACKAGE");
-
-        } catch (IOException e) {
-            throw new GeneratorException("Failed to load configuration", e);
-        }
-        exclude.add("List");
-        exclude.add("Set");
-    }
 
     protected static void removeUnwantedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
@@ -68,13 +53,13 @@ public class ClassProcessor {
         }
     }
 
-    protected void extractComplexType(Type type, CompilationUnit dependencyCu) throws IOException {
+    protected void extractComplexType(Type type) {
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
 
             String mainType = classType.getNameAsString();
-            NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
+            Optional<NodeList<Type>> types = classType.getTypeArguments();
 
             if(mainType != null &&
                     (mainType.equals("DateScheduleUtil") || mainType.equals("Logger"))) {
@@ -84,29 +69,23 @@ public class ClassProcessor {
 
                 return;
             }
-            if (secondaryType != null) {
-                for (Type t : secondaryType) {
-                    // todo find out the proper way to indentify Type parameters like List<T>
-                    if(t.asString().length() != 1 ) {
-                        extractComplexType(t, dependencyCu);
+
+            if(types.isPresent()) {
+                try {
+                    String[] parts = type.resolve().describe().split("<");
+                    for (String part : parts) {
+                        for (String s : part.split(",")) {
+                            dependencies.add(s.replace(">", ""));
+                        }
+                    }
+                } catch (UnsolvedSymbolException e) {
+                    for(Type t : types.get()) {
+                        extractComplexType(t);
                     }
                 }
             }
-
-            boolean found = findImport(dependencyCu, mainType);
-
-            if (!found ) {
-                PackageDeclaration pd = dependencyCu.getPackageDeclaration().orElseGet(null);
-                String packageName = pd.getNameAsString();
-                try {
-                    if (!classType.resolve().describe().startsWith("java.")) {
-                        dependencies.add(classType.resolve().describe());
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    if(!exclude.contains(mainType)) {
-                        dependencies.add(packageName + "." + mainType);
-                    }
-                }
+            else {
+                dependencies.add(type.resolve().describe());
             }
         }
     }
@@ -114,7 +93,6 @@ public class ClassProcessor {
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
         for (var ref2 : dependencyCu.getImports()) {
             String[] parts = ref2.getNameAsString().split("\\.");
-
             if (parts[parts.length - 1].equals(mainType)) {
                 dependencies.add(ref2.getNameAsString());
                 return true;
@@ -133,37 +111,6 @@ public class ClassProcessor {
             return "_" + name;
         }
         return name;
-    }
-
-    protected Set<String> findMatchingClasses(String packageName) {
-        Set<String> matchingClasses = new HashSet<>();
-        Path p = Paths.get(basePath, packageName.replace(".", "/"));
-        for (File f : p.toFile().listFiles()) {
-            String fname = f.getName();
-            if (fname.endsWith(ClassProcessor.SUFFIX)) {
-                String imp = packageName + "." + fname.substring(0, fname.length() - 5);
-                matchingClasses.add(imp);
-            }
-        }
-        return matchingClasses;
-    }
-
-    protected void expandWildCards(CompilationUnit cu) {
-        Set<String> wildCards = new HashSet<>();
-        for(var imp : cu.getImports()) {
-            if(imp.isAsterisk() && !imp.isStatic()) {
-                String packageName = imp.getNameAsString();
-                if (packageName.startsWith(basePackage)) {
-                    wildCards.addAll(findMatchingClasses(packageName));
-                }
-            }
-        }
-        for(String s : wildCards) {
-            // setting asterisk as true and then switching it off is to overcome a bug in javaparser
-            ImportDeclaration impl = new ImportDeclaration(s, false, true);
-            cu.addImport(impl);
-            impl.setAsterisk(false);
-        }
     }
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {

@@ -56,7 +56,6 @@ public class RestControllerParser extends ClassProcessor {
     private final File controllers;
     StringBuilder generatedCode = new StringBuilder();
     private CompilationUnit cu;
-    DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
     private CompilationUnit gen;
 
     /**
@@ -123,9 +122,6 @@ public class RestControllerParser extends ClassProcessor {
 
         gen.setPackageDeclaration(pd);
 
-        //removeUnwantedImports(cu.getImports());
-        expandWildCards(cu);
-
         gen.addImport("com.cloud.api.base.TestHelper");
 
         gen.addImport("org.testng.annotations.Test");
@@ -147,7 +143,6 @@ public class RestControllerParser extends ClassProcessor {
             }
             gen.addImport(s);
         }
-
 
         fileContent.append(gen.toString()).append("\n");
         fileContent.append(generatedCode).append("\n");
@@ -246,7 +241,7 @@ public class RestControllerParser extends ClassProcessor {
                             MethodDeclaration method = member.asMethodDeclaration();
 
                             if (!method.isPrivate() && method.getName().asString().equals(methodCallExpr.getNameAsString())) {
-                                extractComplexType(method.getType(), dependencyCu);
+                                extractComplexType(method.getType());
                             }
                         }
                     }
@@ -289,15 +284,12 @@ public class RestControllerParser extends ClassProcessor {
                         returnType = findReturnType(blockStmt);
                     }
                 }
-                try {
-                    if (returnType != null) {
-                        extractComplexType(returnType, cu);
-                    }
-                    for(var param : md.getParameters()) {
-                        extractComplexType(param.getType(), cu);
-                    }
-                } catch (IOException e) {
-                    throw new GeneratorException("Error extracting type", e);
+
+                if (returnType != null) {
+                    extractComplexType(returnType);
+                }
+                for(var param : md.getParameters()) {
+                    extractComplexType(param.getType());
                 }
 
                 createTests(md, returnType);
@@ -326,11 +318,17 @@ public class RestControllerParser extends ClassProcessor {
             testMethod.addAnnotation("Test");
             StringBuilder paramNames = new StringBuilder();
             for(var param : md.getParameters()) {
-                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                        .append(param.getNameAsString().substring(1));
+                for(var annotation : param.getAnnotations()) {
+                    if(annotation.getNameAsString().equals("PathVariable")) {
+                        paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                                .append(param.getNameAsString().substring(1));
+                    }
+                }
             }
 
-            String testName = md.getName() + "By" + paramNames + "Test";
+            String testName = paramNames.isEmpty() ? md.getName() +  "Test"
+                : md.getName() + "By" + paramNames + "Test";
+
             testMethod.setName(testName);
 
             BlockStmt body = new BlockStmt();
