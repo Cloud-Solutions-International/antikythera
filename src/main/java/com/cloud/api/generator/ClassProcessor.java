@@ -31,25 +31,18 @@ public class ClassProcessor {
 
     protected final Set<String> dependencies = new TreeSet<>();
 
-    private static final Set<String> exclude = new HashSet<>();
-    static {
-        try {
-            Settings.loadConfigMap();
-            basePath = Settings.getProperty("BASE_PATH");
-            basePackage = Settings.getProperty("BASE_PACKAGE");
-
-        } catch (IOException e) {
-            throw new GeneratorException("Failed to load configuration", e);
-        }
-        exclude.add("List");
-        exclude.add("Set");
-    }
-
     protected static void removeUnwantedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
                 importDeclaration -> ! (importDeclaration.getNameAsString().startsWith(basePackage) ||
                         importDeclaration.getNameAsString().startsWith("java."))
         );
+    }
+
+    protected ClassProcessor() {
+        if(basePackage == null) {
+            basePackage = Settings.getProperty("BASE_PACKAGE");
+            basePath = Settings.getProperty("BASE_PATH");
+        }
     }
 
     /**
@@ -97,15 +90,9 @@ public class ClassProcessor {
 
             if (!found ) {
                 PackageDeclaration pd = dependencyCu.getPackageDeclaration().orElseGet(null);
-                String packageName = pd.getNameAsString();
-                try {
-                    if (!classType.resolve().describe().startsWith("java.")) {
-                        dependencies.add(classType.resolve().describe());
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    if(!exclude.contains(mainType)) {
-                        dependencies.add(packageName + "." + mainType);
-                    }
+
+                if (!classType.resolve().describe().startsWith("java.")) {
+                    dependencies.add(classType.resolve().describe());
                 }
             }
         }

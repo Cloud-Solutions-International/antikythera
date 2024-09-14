@@ -34,10 +34,9 @@ class ClassProcessorTest {
     void removeUnwantedImports_removesNonMatchingImports() {
         ClassProcessor.basePackage = "com.example";
         ClassProcessor.removeUnwantedImports(imports);
-        assertEquals(3, imports.size());
+        assertEquals(2, imports.size());
         assertEquals("com.example.SomeClass", imports.get(0).getNameAsString());
         assertEquals("java.util.List", imports.get(1).getNameAsString());
-        assertEquals("org.springframework.data.domain.Page", imports.get(2).getNameAsString());
     }
 
     @Test
@@ -45,20 +44,18 @@ class ClassProcessorTest {
         ClassProcessor.basePackage = "com.example";
         imports.add(new ImportDeclaration("java.util.ArrayList", false, false));
         ClassProcessor.removeUnwantedImports(imports);
-        assertEquals(4, imports.size());
+        assertEquals(3, imports.size());
         assertEquals("com.example.SomeClass", imports.get(0).getNameAsString());
         assertEquals("java.util.List", imports.get(1).getNameAsString());
-        assertEquals("org.springframework.data.domain.Page", imports.get(2).getNameAsString());
-        assertEquals("java.util.ArrayList", imports.get(3).getNameAsString());
+        assertEquals("java.util.ArrayList", imports.get(2).getNameAsString());
     }
 
     @Test
     void removeUnwantedImports_removesAllWhenNoMatch() {
         ClassProcessor.basePackage = "com.nonexistent";
         ClassProcessor.removeUnwantedImports(imports);
-        assertEquals(2, imports.size());
+        assertEquals(1, imports.size());
         assertEquals("java.util.List", imports.get(0).getNameAsString());
-        assertEquals("org.springframework.data.domain.Page", imports.get(1).getNameAsString());
     }
 
     @Test
