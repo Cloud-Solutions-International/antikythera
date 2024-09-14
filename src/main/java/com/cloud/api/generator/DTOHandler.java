@@ -44,6 +44,8 @@ import java.util.Optional;
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
  *
+ * We operate by opening the DTO or Entity class and building it's tree.
+ *
  */
 public class DTOHandler extends  ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
@@ -56,6 +58,7 @@ public class DTOHandler extends  ClassProcessor{
      * parent, so we will skip it.
      */
     private final JavaParser javaParser;
+    private final CombinedTypeSolver combinedTypeSolver;
     private CompilationUnit cu;
 
     MethodDeclaration method = null;
@@ -64,7 +67,7 @@ public class DTOHandler extends  ClassProcessor{
      * Constructor to initialize the JavaParser and set things up
      */
     public DTOHandler() {
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
@@ -244,13 +247,12 @@ public class DTOHandler extends  ClassProcessor{
                 if (initializer.isMethodCallExpr()) {
                     MethodCallExpr methodCall = (MethodCallExpr) initializer;
                     Optional<Expression> nameExpr = methodCall.getScope();
-                    // Check if the scope of the method call is a field access expression
-                    if(nameExpr.isPresent() && nameExpr.get().isClassExpr()) {
-                        System.out.println("bada");
+                    if(nameExpr.isPresent()) {
+                        findImport(cu, nameExpr.get().toString().split("\\.")[0]);
                     }
                 }
                 else if(initializer.isFieldAccessExpr()) {
-
+                    System.out.println("bada2");
                 }
             }
             else {

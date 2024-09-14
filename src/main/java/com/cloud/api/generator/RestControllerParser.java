@@ -141,6 +141,9 @@ public class RestControllerParser extends ClassProcessor {
             if(! (s.startsWith("java.") || s.startsWith(basePackage))) {
                 continue;
             }
+            if(s.startsWith("java.lang")) {
+                continue;
+            }
             gen.addImport(s);
         }
 

@@ -10,7 +10,6 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -36,6 +35,16 @@ public class ClassProcessor {
                         importDeclaration.getNameAsString().startsWith("java."))
         );
     }
+
+    protected ClassProcessor() {
+        if(basePath == null) {
+            basePath = Settings.getProperty("BASE_PATH");
+        }
+        if(basePackage == null) {
+            basePackage = Settings.getProperty("BASE_PACKAGE");
+        }
+    }
+
 
     /**
      * Copy a dependency from the application under test.
@@ -90,6 +99,14 @@ public class ClassProcessor {
         }
     }
 
+    /**
+     * Find an import by iterating through the imports in the compilation unit.
+     * Instead of using this method try to use the SymbolSolver to resolve the type.
+     *
+     * @param dependencyCu
+     * @param mainType
+     * @return
+     */
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
         for (var ref2 : dependencyCu.getImports()) {
             String[] parts = ref2.getNameAsString().split("\\.");
@@ -101,6 +118,11 @@ public class ClassProcessor {
         return false;
     }
 
+    /**
+     * ClassNames are PascalCase. We need to convert them to camelCase for variables
+     * @param cdecl
+     * @return
+     */
     protected static String classToInstanceName(TypeDeclaration<?> cdecl) {
         return classToInstanceName(cdecl.getNameAsString());
     }
@@ -114,12 +136,6 @@ public class ClassProcessor {
     }
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
-        imports.removeIf(
-                importDeclaration -> !(importDeclaration.isAsterisk() || importDeclaration.isStatic()
-                        || dependencies.contains(importDeclaration.getNameAsString())
-                        || importDeclaration.getNameAsString().startsWith("java.")
-                        || (importDeclaration.getNameAsString().startsWith(basePackage) && dependencies.contains(importDeclaration.getNameAsString()))
-                        || importDeclaration.getNameAsString().startsWith("lombok."))
-        );
+
     }
 }
