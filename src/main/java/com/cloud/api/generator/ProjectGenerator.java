@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -29,12 +30,11 @@ public class ProjectGenerator {
     private static ProjectGenerator instance;
 
 
-
     private ProjectGenerator() {
-        basePath = Settings.getProperty("BASE_PATH");
-        basePackage = Settings.getProperty("BASE_PACKAGE");
-        outputPath = Settings.getProperty("OUTPUT_PATH");
-        controllers = Settings.getProperty("CONTROLLERS");
+        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
+        basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
+        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
     }
 
     public static ProjectGenerator getInstance() throws IOException {
@@ -92,10 +92,10 @@ public class ProjectGenerator {
      * @throws XmlPullParserException
      */
     public void copyPom() throws IOException, XmlPullParserException {
-        if (Settings.getProperty("DEPENDENCIES") == null) {
+        if (Settings.getProperty(Constants.DEPENDENCIES) == null) {
             copyTemplate("pom.xml");
         } else {
-            String[] dependencies = Settings.getProperty("DEPENDENCIES").split(",");
+            String[] dependencies = Settings.getProperty(Constants.DEPENDENCIES).toString().split(",");
             Path destinationPath = Path.of(outputPath, "pom.xml");
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
