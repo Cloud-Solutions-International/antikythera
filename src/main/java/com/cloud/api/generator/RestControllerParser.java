@@ -1,5 +1,7 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -34,16 +36,13 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSol
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,13 +57,16 @@ public class RestControllerParser extends ClassProcessor {
     private CompilationUnit cu;
     DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
     private CompilationUnit gen;
+    private HashMap<String, String> parameterSet;
+    private final Path dataPath;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Creates a new RestControllerParser
      *
      * @param controllers either a folder containing many controllers or a single controller
      */
-    public RestControllerParser(File controllers)  {
+    public RestControllerParser(File controllers) throws IOException {
         this.controllers = controllers;
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
@@ -72,6 +74,12 @@ public class RestControllerParser extends ClassProcessor {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
+        dataPath = Paths.get(Settings.getProperty("OUTPUT_PATH"), "src/test/resources/data");
+
+        // Check if the dataPath directory exists, if not, create it
+        if (!Files.exists(dataPath)) {
+            Files.createDirectories(dataPath);
+        }
 
     }
 
@@ -91,11 +99,21 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
+            Pattern pattern = Pattern.compile(".*/([^/]+)\\.java$");
+            Matcher matcher = pattern.matcher(path.toString());
+
+            String controllerName = null;
+            if (matcher.find()) {
+                controllerName = matcher.group(1);
+            }
+            parameterSet = new HashMap<>();
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
+            File file = new File(dataPath + "/" + controllerName + "Params.json");
+            objectMapper.writeValue(file, parameterSet);
         }
     }
 
@@ -294,6 +312,7 @@ public class RestControllerParser extends ClassProcessor {
                         extractComplexType(returnType, cu);
                     }
                     for(var param : md.getParameters()) {
+                        parameterSet.put(param.getName().toString(), "");
                         extractComplexType(param.getType(), cu);
                     }
                 } catch (IOException e) {

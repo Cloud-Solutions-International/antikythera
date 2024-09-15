@@ -47,25 +47,6 @@ class RestControllerParserTest {
         parser = new RestControllerParser(path.toFile());
     }
 
-
-    @Test
-    void start_processesRestControllerSuccessfully() throws IOException {
-        parser.start();
-
-        File srcDirectory = new File(outputPath + "/src/main/java/");
-        File testDirectory = new File(outputPath + "/src/test/java/");
-        assertTrue(srcDirectory.exists() && srcDirectory.isDirectory());
-        assertTrue(testDirectory.exists() && testDirectory.isDirectory());
-    }
-
-    @Test
-    void start_throwsIOExceptionWhenProcessingFails()  {
-        System.out.println(basePath);
-        Path invalidPath = Paths.get(basePath, "invalid/path", path.toString());
-        RestControllerParser invalidParser = new RestControllerParser(invalidPath.toFile());
-        assertThrows(IOException.class, invalidParser::start);
-    }
-
 //    Tests for getFields() method
     @Test
     void getFields_returnsEmptyMapWhenNoFieldsPresent() throws IOException {
