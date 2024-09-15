@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -34,10 +35,10 @@ class RestControllerParserTest {
     @BeforeEach
     void setUp() throws IOException {
         Settings.loadConfigMap();
-        basePath = Settings.getProperty("base_path");
-        String controllers = Settings.getProperty("controllers");
-        outputPath = Settings.getProperty("output_path");
-        String s = Settings.getProperty("controllers");
+        basePath = Settings.getProperty(Constants.BASE_PACKAGE).toString();
+        String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
+        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+        String s = Settings.getProperty(Constants.CONTROLLERS).toString();
         if (s.endsWith(SUFFIX)) {
             path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
         } else {

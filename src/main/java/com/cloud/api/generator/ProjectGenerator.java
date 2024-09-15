@@ -31,10 +31,10 @@ public class ProjectGenerator {
 
 
     private ProjectGenerator() {
-        basePath = Settings.getProperty(Constants.BASE_PATH);
-        basePackage = Settings.getProperty(Constants.BASE_PACKAGE);
-        outputPath = Settings.getProperty(Constants.OUTPUT_PATH);
-        controllers = Settings.getProperty(Constants.CONTROLLERS);
+        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
+        basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
+        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
     }
 
     public static ProjectGenerator getInstance() throws IOException {
@@ -95,7 +95,7 @@ public class ProjectGenerator {
         if (Settings.getProperty(Constants.DEPENDENCIES) == null) {
             copyTemplate("pom.xml");
         } else {
-            String[] dependencies = Settings.getProperty(Constants.DEPENDENCIES).split(",");
+            String[] dependencies = Settings.getProperty(Constants.DEPENDENCIES).toString().split(",");
             Path destinationPath = Path.of(outputPath, "pom.xml");
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
