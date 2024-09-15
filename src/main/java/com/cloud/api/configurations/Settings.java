@@ -1,5 +1,9 @@
 package com.cloud.api.configurations;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -19,18 +23,43 @@ public class Settings {
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new Properties();
+            File yamlFile = new File("generator.yml");
 
-            try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
-                props.load(fis);
-                String userDir = System.getProperty("user.home");
-                for (Map.Entry<Object, Object> prop : props.entrySet()) {
-                    String key = (String) prop.getKey();
-                    String value = (String) prop.getValue();
-                    if (value != null) {
-                        value = value.replace("${USERDIR}", userDir);
-                        value = replaceEnvVariables(value);
-                        props.setProperty(key, value);
-                    }
+            if (yamlFile.exists()) {
+                loadYamlConfig(yamlFile);
+            } else {
+                loadCfgConfig();
+            }
+        }
+    }
+
+    private static void loadYamlConfig(File yamlFile) throws IOException {
+        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        Map<String, String> yamlProps = mapper.readValue(yamlFile, Map.class);
+        String userDir = System.getProperty("user.home");
+
+        for (Map.Entry<String, String> entry : yamlProps.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            if (value != null) {
+                value = value.replace("${USERDIR}", userDir);
+                value = replaceEnvVariables(value);
+                props.setProperty(key, value);
+            }
+        }
+    }
+
+    private static void loadCfgConfig() throws IOException {
+        try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
+            props.load(fis);
+            String userDir = System.getProperty("user.home");
+            for (Map.Entry<Object, Object> prop : props.entrySet()) {
+                String key = (String) prop.getKey();
+                String value = (String) prop.getValue();
+                if (value != null) {
+                    value = value.replace("${USERDIR}", userDir);
+                    value = replaceEnvVariables(value);
+                    props.setProperty(key, value);
                 }
             }
         }
