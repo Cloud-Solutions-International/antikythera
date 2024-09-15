@@ -36,9 +36,9 @@ public class DTOHandlerTest {
     @BeforeEach
     void loadConfigMapBeforeEach() throws IOException {
         Settings.loadConfigMap();
-        basePath = Settings.getProperty("BASE_PATH");
-        controllers = Settings.getProperty("CONTROLLERS");
-        outputPath = Settings.getProperty("OUTPUT_PATH");
+        basePath = Settings.getProperty("base_path");
+        controllers = Settings.getProperty("controllers");
+        outputPath = Settings.getProperty("output_path");
 
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();

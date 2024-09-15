@@ -40,8 +40,8 @@ public class ClassProcessor {
 
     protected ClassProcessor() {
         if(basePackage == null) {
-            basePackage = Settings.getProperty("BASE_PACKAGE");
-            basePath = Settings.getProperty("BASE_PATH");
+            basePackage = Settings.getProperty("base_package");
+            basePath = Settings.getProperty("base_path");
         }
     }
 

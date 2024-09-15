@@ -46,7 +46,7 @@ class ProjectGeneratorTest {
         String relativePath = "TestDummyFile.java";
         String content = "public class TestDummyFile {}";
         File file = new File(
-                Settings.getProperty("OUTPUT_PATH") + File.separator + "src" + File.separator + "main"
+                Settings.getProperty("output_path") + File.separator + "src" + File.separator + "main"
                         + File.separator + "java" + File.separator + relativePath);
         if (file.exists()) {
             Files.delete(file.toPath());
@@ -58,11 +58,11 @@ class ProjectGeneratorTest {
 
     @Test
     void writeFilesToTestCreatesFileWithContent() throws IOException {
-        String belongingPackage = Settings.getProperty("BASE_PACKAGE")  + ".controller";
+        String belongingPackage = Settings.getProperty("base_package")  + ".controller";
         String filename = "TestDummyFile.java";
         String content = "public class TestDummyFile {}";
         generator.writeFilesToTest(belongingPackage, filename, content);
-        File file = new File(Settings.getProperty("OUTPUT_PATH") + File.separator + "src" + File.separator +
+        File file = new File(Settings.getProperty("output_path") + File.separator + "src" + File.separator +
                 "test" + File.separator + "java" + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename);
         assertTrue(file.exists());
         assertEquals(content, Files.readString(file.toPath()));
@@ -72,9 +72,9 @@ class ProjectGeneratorTest {
     void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException {
         generator.generate();
 
-        String outputPath = Settings.getProperty("OUTPUT_PATH");
+        String outputPath = Settings.getProperty("output_path");
 
-        String basePackage = Settings.getProperty("BASE_PACKAGE").replace(".", File.separator);
+        String basePackage = Settings.getProperty("base_package").replace(".", File.separator);
         File mainJavaDir = new File(outputPath + File.separator + "src" + File.separator
                 + "main" + File.separator + "java" + File.separator + basePackage);
         File mainResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "resources");

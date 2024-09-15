@@ -1,11 +1,16 @@
 package com.cloud.api.configurations;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
@@ -23,8 +28,8 @@ public class Settings {
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new Properties();
-            File yamlFile = new File("generator.yml");
 
+            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
@@ -35,16 +40,23 @@ public class Settings {
 
     private static void loadYamlConfig(File yamlFile) throws IOException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
+                .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
+
+
         Map<String, String> yamlProps = mapper.readValue(yamlFile, Map.class);
         String userDir = System.getProperty("user.home");
 
-        for (Map.Entry<String, String> entry : yamlProps.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
+        for (String key : yamlProps.keySet()) {
+            System.out.println(key);
+            Object value = yamlProps.get(key);
             if (value != null) {
-                value = value.replace("${USERDIR}", userDir);
-                value = replaceEnvVariables(value);
-                props.setProperty(key, value);
+                if (value instanceof String) {
+                    String v = (String) value;
+                    v = v.replace("${USERDIR}", userDir);
+                    v = replaceEnvVariables(v);
+                    props.setProperty(key, v);
+                }
             }
         }
     }
@@ -92,5 +104,13 @@ public class Settings {
 
     public static String getProperty(String key) {
         return props.getProperty(key);
+    }
+
+    public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {
+        @Override
+        public Map<String, Object> deserialize(JsonParser p, DeserializationContext ctxt)
+                throws IOException, JsonProcessingException {
+            return p.readValueAs(LinkedHashMap.class);
+        }
     }
 }

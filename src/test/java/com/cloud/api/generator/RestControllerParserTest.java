@@ -34,10 +34,10 @@ class RestControllerParserTest {
     @BeforeEach
     void setUp() throws IOException {
         Settings.loadConfigMap();
-        basePath = Settings.getProperty("BASE_PATH");
-        String controllers = Settings.getProperty("CONTROLLERS");
-        outputPath = Settings.getProperty("OUTPUT_PATH");
-        String s = Settings.getProperty("CONTROLLERS");
+        basePath = Settings.getProperty("base_path");
+        String controllers = Settings.getProperty("controllers");
+        outputPath = Settings.getProperty("output_path");
+        String s = Settings.getProperty("controllers");
         if (s.endsWith(SUFFIX)) {
             path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
         } else {
@@ -49,7 +49,7 @@ class RestControllerParserTest {
 
 
     @Test
-    void start_processesRestControllerSuccessfully() throws IOException {
+    void start_processesRestcontrollersuccessfully() throws IOException {
         parser.start();
 
         File srcDirectory = new File(outputPath + "/src/main/java/");
