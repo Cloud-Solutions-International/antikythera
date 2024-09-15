@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -40,8 +41,8 @@ public class ClassProcessor {
 
     protected ClassProcessor() {
         if(basePackage == null) {
-            basePackage = Settings.getProperty("BASE_PACKAGE");
-            basePath = Settings.getProperty("BASE_PATH");
+            basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
+            basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         }
     }
 

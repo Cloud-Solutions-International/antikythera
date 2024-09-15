@@ -2,21 +2,32 @@
 # anywhere in this file. For example ${HOME} will be replaced with the value of the HOME
 # environment variable.
 
+variables:
+  projects_folder: /home/raditha/workspaces/python/liquibase/selenium/repos
+  m2_folder: /home/raditha/.m2/repository
+
 # Points to top level folder of the application under test. This is a file system path.
-BASE_PATH: ${HOME}/workspace/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java
+base_path: ${projects_folder}/EHR-IP/csi-ehr-ip-java-sev/src/main/java
 
 # Add the base path to the src/main/java folder of csi-project
 # The top level package for your project. As an example for the pharmacy project it is
 # com.csi.phr
-BASE_PACKAGE: com.csi.vidaplus.ehr
+base_package: com.csi.vidaplus.ehr
 
 # The controllers settings determines where the controllers can be found. If you
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
-CONTROLLERS: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller.externaltransfer.ExternalTransferController.java
+controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller.externaltransfer.ExternalTransferController.java
 
 # Path to output the generated test project
-OUTPUT_PATH: /tmp/csi-ehr
+output_path: /tmp/csi-ehr
 
-DEPENDENCIES: csi-ehr-ip-core
+# Dependencies configuration
+dependencies:
+  artifact_ids:
+    - csi-ehr-ip-core
+    - another-dependency-id
+  jar_files:
+    - ${m2_folder}/com/csi/ehr/csi-ehr-ip-core/1.0.30/csi-ehr-ip-core-1.0.0.jar
+    - /path/to/artifact2.jar
