@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ProjectGenerator {
     private final String basePackage;
@@ -57,6 +60,12 @@ public class ProjectGenerator {
         }
     }
 
+    /**
+     * Copy template file to the specified path
+     * @param filename
+     * @param subPath
+     * @throws IOException
+     */
     private void copyTemplate(String filename, String... subPath) throws IOException {
         Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
         Files.createDirectories(destinationPath);
@@ -70,6 +79,18 @@ public class ProjectGenerator {
         }
     }
 
+    /**
+     * Copy the pom.xml file to the specified path injecting the dependencies as needed.
+     *
+     * The configuration file needs to have a dependencies section that provides the list of
+     * artifactids that need to be included in the output pom file. If these dependencies
+     * require any variables, those are copied as well.
+     *
+     * The primary source file is the file from the template folder. The dependencies are
+     * supposed to be listed in the pom file of the application under test.
+     * @throws IOException
+     * @throws XmlPullParserException
+     */
     public void copyPom() throws IOException, XmlPullParserException {
         if (Settings.getProperty("DEPENDENCIES") == null) {
             copyTemplate("pom.xml");
@@ -90,12 +111,40 @@ public class ProjectGenerator {
                 for (Dependency dependency : srcDependencies) {
                     if (dependency.getArtifactId().equals(dep)) {
                         templateModel.addDependency(dependency);
+                        copyDependencyProperties(srcModel, templateModel, dependency);
                     }
                 }
             }
 
             MavenXpp3Writer writer = new MavenXpp3Writer();
             writer.write(new FileWriter(destinationPath.toFile()), templateModel);
+        }
+    }
+
+    /**
+     * Copy the properties of the dependency from the source model to the template model
+     *
+     * @param srcModel the pom file model from the application under test
+     * @param templateModel from the template folder
+     * @param dependency the dependency that may or may not have a property
+     */
+    private void copyDependencyProperties(Model srcModel, Model templateModel, Dependency dependency) {
+        Properties srcProperties = srcModel.getProperties();
+        Properties templateProperties = templateModel.getProperties();
+        Pattern pattern = Pattern.compile("\\$\\{(.+?)\\}");
+
+        // Check all fields of the dependency for property references
+        String[] fields = {dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion(), dependency.getScope()};
+        for (String field : fields) {
+            if (field != null) {
+                Matcher matcher = pattern.matcher(field);
+                while (matcher.find()) {
+                    String propertyName = matcher.group(1);
+                    if (srcProperties.containsKey(propertyName) && !templateProperties.containsKey(propertyName)) {
+                        templateProperties.setProperty(propertyName, srcProperties.getProperty(propertyName));
+                    }
+                }
+            }
         }
     }
 
