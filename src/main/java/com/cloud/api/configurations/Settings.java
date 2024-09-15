@@ -80,7 +80,7 @@ public class Settings {
                 if (value instanceof String) {
                     String v = (String) value;
                     entry.setValue(v.replace("${USERDIR}", userDir));
-                    v = replaceYamlVariables(yamlProps, entry);
+                    v = replaceYamlVariables(entry);
                     props.put(key, replaceEnvVariables(v));
                 }
                 else if (value instanceof Map) {
@@ -93,8 +93,12 @@ public class Settings {
         }
     }
 
-    private static String replaceYamlVariables(Map<String, Object> yamlProps,
-                                             Map.Entry<String, Object> entry) {
+    /**
+     * Replace variables in the given property.
+     * @param entry
+     * @return
+     */
+    private static String replaceYamlVariables(Map.Entry<String, Object> entry) {
 
         Map<String, Object> variablesMap = (Map<String, Object>) props.get("variables");
         for(Map.Entry<String, Object> variable : variablesMap.entrySet()) {
@@ -105,6 +109,10 @@ public class Settings {
         return entry.getValue().toString();
     }
 
+    /**
+     * Load configurations from props files
+     * @throws IOException
+     */
     private static void loadCfgConfig() throws IOException {
         try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
             Properties props = new Properties();

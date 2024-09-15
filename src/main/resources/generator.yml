@@ -29,5 +29,5 @@ dependencies:
     - csi-ehr-ip-core
     - another-dependency-id
   jar_files:
-    - /path/to/artifact1.jar
+    - ${m2_folder}/com/csi/ehr/csi-ehr-ip-core/1.0.30/csi-ehr-ip-core-1.0.0.jar
     - /path/to/artifact2.jar
