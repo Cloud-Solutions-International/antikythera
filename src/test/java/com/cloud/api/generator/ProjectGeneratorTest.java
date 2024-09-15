@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,9 +73,9 @@ class ProjectGeneratorTest {
     void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException {
         generator.generate();
 
-        String outputPath = Settings.getProperty("output_path");
+        String outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
-        String basePackage = Settings.getProperty("base_package").replace(".", File.separator);
+        String basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString().replace(".", File.separator);
         File mainJavaDir = new File(outputPath + File.separator + "src" + File.separator
                 + "main" + File.separator + "java" + File.separator + basePackage);
         File mainResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "resources");
