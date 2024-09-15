@@ -1,10 +1,11 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
-import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 import java.io.*;
 import java.nio.channels.Channels;
@@ -13,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 
 public class ProjectGenerator {
     private final String basePackage;
@@ -23,8 +25,7 @@ public class ProjectGenerator {
 
     private static ProjectGenerator instance;
 
-    @JacksonXmlRootElement(localName = "project", namespace = "http://maven.apache.org/POM/4.0.0")
-    public static class ProjectNode {}
+
 
     private ProjectGenerator() {
         basePath = Settings.getProperty("BASE_PATH");
@@ -69,35 +70,32 @@ public class ProjectGenerator {
         }
     }
 
-    public void copyPom() throws IOException {
+    public void copyPom() throws IOException, XmlPullParserException {
         if (Settings.getProperty("DEPENDENCIES") == null) {
             copyTemplate("pom.xml");
         } else {
             String[] dependencies = Settings.getProperty("DEPENDENCIES").split(",");
-            Path destinationPath = Path.of(outputPath, "pom.xml");     // Path where template file should be copied into
-            if(!Files.exists(destinationPath.getParent())) {
-                Files.createDirectories(destinationPath.getParent());
-            }
+            Path destinationPath = Path.of(outputPath, "pom.xml");
 
-            XmlMapper xmlMapper = new XmlMapper();
-            xmlMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-            JsonNode template = xmlMapper.readTree(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
+            MavenXpp3Reader reader = new MavenXpp3Reader();
+            Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
             Path p = basePath.contains("src/main/java")
                     ? Paths.get(basePath.replace("/src/main/java", ""), "pom.xml")
                     : Paths.get(basePath, "pom.xml");
 
-            JsonNode src = xmlMapper.readTree(p.toFile());
+            Model srcModel = reader.read(new FileReader(p.toFile()));
 
+            List<Dependency> srcDependencies = srcModel.getDependencies();
             for (String dep : dependencies) {
-                src.path("dependencies").path("dependency").forEach(dependency -> {
-                    if (dependency.path("artifactId").asText().equals(dep)) {
-                        ((com.fasterxml.jackson.databind.node.ArrayNode) template.path("dependencies").path("dependency")).add(dependency);
+                for (Dependency dependency : srcDependencies) {
+                    if (dependency.getArtifactId().equals(dep)) {
+                        templateModel.addDependency(dependency);
                     }
-                });
+                }
             }
-            xmlMapper.addMixIn(JsonNode.class, ProjectNode.class);
-            xmlMapper.writerWithDefaultPrettyPrinter().writeValue(new File(destinationPath.toString()), template);
+
+            MavenXpp3Writer writer = new MavenXpp3Writer();
+            writer.write(new FileWriter(destinationPath.toFile()), templateModel);
         }
     }
 
@@ -122,7 +120,7 @@ public class ProjectGenerator {
         });
     }
 
-    private void copyBaseFiles(String outputPath) throws IOException {
+    private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
         copyPom();
         copyTemplate("TestHelper.java", "src", "test", "java", "com", "cloud", "api", "base");
 
@@ -139,7 +137,7 @@ public class ProjectGenerator {
         copyFolder(Paths.get("src","main", "java", "com", "cloud", "api", "configurations"), pathToCopy);
     }
 
-    public void generate() throws IOException {
+    public void generate() throws IOException, XmlPullParserException {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
         if (controllers.endsWith(SUFFIX)) {
@@ -175,7 +173,7 @@ public class ProjectGenerator {
         }
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, XmlPullParserException {
         ProjectGenerator.getInstance().generate();
     }
 }
