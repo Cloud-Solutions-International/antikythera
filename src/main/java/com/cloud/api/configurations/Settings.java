@@ -10,6 +10,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -18,7 +19,10 @@ import java.util.Properties;
  * Manages the configuration properties from the generator.cfg file.
  */
 public class Settings {
-    protected static Properties props;
+    /**
+     * Hashmpa to store the configurations.
+     */
+    protected static HashMap<String, Object> props;
 
     /**
      * Private constructor to prevent class being initialized.
@@ -27,8 +31,7 @@ public class Settings {
 
     public static void loadConfigMap() throws IOException {
         if (props == null) {
-            props = new Properties();
-
+            props = new HashMap<>();
             File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
@@ -38,31 +41,73 @@ public class Settings {
         }
     }
 
+    /**
+     * Load configuration from a yaml file
+     *
+     * Using yaml gives us the advantage of being able to have nested properties and also properties
+     * tha can have multiple entries without getting into ugly comma seperated values.
+     * @param yamlFile
+     * @throws IOException
+     */
     private static void loadYamlConfig(File yamlFile) throws IOException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
                 .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
 
 
-        Map<String, String> yamlProps = mapper.readValue(yamlFile, Map.class);
+        Map<String, Object> yamlProps = mapper.readValue(yamlFile, Map.class);
+        Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault("variables", new HashMap<>());
+        props.put("variables", variables);
+
+        replaceVariables(yamlProps);
+        for(var entry : props.entrySet()) {
+            System.out.println(entry.getKey() + " " + entry.getValue());
+        }
+    }
+
+    /**
+     * Replace variables from the yaml file with enviorenment or internal variables
+     *
+     * @param yamlProps
+     */
+    private static void replaceVariables(Map<String, Object> yamlProps) {
         String userDir = System.getProperty("user.home");
 
-        for (String key : yamlProps.keySet()) {
-            System.out.println(key);
-            Object value = yamlProps.get(key);
-            if (value != null) {
+        for (Map.Entry<String, Object> entry : yamlProps.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value != null && !key.equals("variables")) {
                 if (value instanceof String) {
                     String v = (String) value;
-                    v = v.replace("${USERDIR}", userDir);
-                    v = replaceEnvVariables(v);
-                    props.setProperty(key, v);
+                    entry.setValue(v.replace("${USERDIR}", userDir));
+                    v = replaceYamlVariables(yamlProps, entry);
+                    props.put(key, replaceEnvVariables(v));
+                }
+                else if (value instanceof Map) {
+                    replaceVariables((Map<String, Object>) value);
+                }
+                else {
+                    props.put(key, value);
                 }
             }
         }
     }
 
+    private static String replaceYamlVariables(Map<String, Object> yamlProps,
+                                             Map.Entry<String, Object> entry) {
+
+        Map<String, Object> variablesMap = (Map<String, Object>) props.get("variables");
+        for(Map.Entry<String, Object> variable : variablesMap.entrySet()) {
+            String key = "${" + variable.getKey() + "}";
+            String value = (String) variable.getValue();
+            entry.setValue(((String) entry.getValue()).replace(key, value));
+        }
+        return entry.getValue().toString();
+    }
+
     private static void loadCfgConfig() throws IOException {
         try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
+            Properties props = new Properties();
             props.load(fis);
             String userDir = System.getProperty("user.home");
             for (Map.Entry<Object, Object> prop : props.entrySet()) {
@@ -71,7 +116,7 @@ public class Settings {
                 if (value != null) {
                     value = value.replace("${USERDIR}", userDir);
                     value = replaceEnvVariables(value);
-                    props.setProperty(key, value);
+                    Settings.props.put(key, value);
                 }
             }
         }
@@ -102,8 +147,8 @@ public class Settings {
         return value;
     }
 
-    public static String getProperty(String key) {
-        return props.getProperty(key);
+    public static Object getProperty(String key) {
+        return props.get(key);
     }
 
     public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {
