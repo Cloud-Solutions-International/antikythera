@@ -1,42 +1,38 @@
 package com.cloud.api.generator;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.Map;
 
 public class PomParser {
     public static void main(String[] args) {
-        XmlMapper xmlMapper = new XmlMapper();
-        xmlMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
         try {
-            JsonNode rootNode = xmlMapper.readTree(new File("pom.xml"));
-            System.out.println("GroupId: " + rootNode.path("groupId").asText());
-            System.out.println("ArtifactId: " + rootNode.path("artifactId").asText());
-            System.out.println("Version: " + rootNode.path("version").asText());
+            // Read the pom.xml file into a Model object
+            MavenXpp3Reader reader = new MavenXpp3Reader();
+            Model model = reader.read(new FileReader("pom.xml"));
 
-            JsonNode dependenciesNode = rootNode.path("dependencies").path("dependency");
-            if (dependenciesNode.isArray()) {
-                for (JsonNode dependencyNode : dependenciesNode) {
-                    System.out.println("Dependency GroupId: " + dependencyNode.path("groupId").asText());
-                    System.out.println("Dependency ArtifactId: " + dependencyNode.path("artifactId").asText());
-                    System.out.println("Dependency Version: " + dependencyNode.path("version").asText());
-                }
-            }
+            // Modify the Model object as needed (example: print values)
+            System.out.println("GroupId: " + model.getGroupId());
+            System.out.println("ArtifactId: " + model.getArtifactId());
+            System.out.println("Version: " + model.getVersion());
 
-            JsonNode propertiesNode = rootNode.path("properties");
-            Iterator<Map.Entry<String, JsonNode>> fields = propertiesNode.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
-                System.out.println("Property Key: " + field.getKey() + " : Property Value: " + field.getValue().asText());
-            }
+            model.getDependencies().forEach(dependency -> {
+                System.out.println("Dependency GroupId: " + dependency.getGroupId());
+                System.out.println("Dependency ArtifactId: " + dependency.getArtifactId());
+                System.out.println("Dependency Version: " + dependency.getVersion());
+            });
 
-        } catch (IOException e) {
+            // Write the Model object back to an XML file
+            MavenXpp3Writer writer = new MavenXpp3Writer();
+            writer.write(new FileWriter("output-pom.xml"), model);
+
+        } catch (IOException | XmlPullParserException e) {
             e.printStackTrace();
         }
     }

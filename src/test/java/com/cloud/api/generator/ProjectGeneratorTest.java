@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class ProjectGeneratorTest {
     }
 
     @Test
-    void generateCreatesMavenProjectStructure() throws IOException {
+    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException {
         generator.generate();
 
         String outputPath = Settings.getProperty("OUTPUT_PATH");
