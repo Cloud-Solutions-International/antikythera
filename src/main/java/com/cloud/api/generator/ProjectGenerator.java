@@ -64,9 +64,9 @@ public class ProjectGenerator {
 
     /**
      * Copy template file to the specified path
-     * @param filename
-     * @param subPath
-     * @throws IOException
+     * @param filename the name of the template file to copy
+     * @param subPath the path components
+     * @throws IOException thrown if the copy operation failed
      */
     private void copyTemplate(String filename, String... subPath) throws IOException {
         Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
@@ -90,8 +90,8 @@ public class ProjectGenerator {
      *
      * The primary source file is the file from the template folder. The dependencies are
      * supposed to be listed in the pom file of the application under test.
-     * @throws IOException
-     * @throws XmlPullParserException
+     * @throws IOException if the POM file cannot be copied
+     * @throws XmlPullParserException if the POM file cannot be converted to an XML Tree
      */
     public void copyPom() throws IOException, XmlPullParserException {
         String[] dependencies = Settings.getArtifacts();
@@ -156,25 +156,25 @@ public class ProjectGenerator {
             Files.createDirectories(destination);
         }
 
-        Files.walk(source).forEach(sourcePath -> {
+        var paths = Files.walk(source).iterator();
+        while (paths.hasNext()) {
+            Path sourcePath = paths.next();
             Path targetPath = destination.resolve(source.relativize(sourcePath));
-            try {
-                if (Files.isDirectory(sourcePath)) {
-                    if (!Files.exists(targetPath)) {
-                        Files.createDirectories(targetPath);
-                    }
-                } else {
-                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            if (Files.isDirectory(sourcePath)) {
+                if (!Files.exists(targetPath)) {
+                    Files.createDirectories(targetPath);
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+            } else {
+                Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
-        });
+        }
+
     }
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
         copyPom();
         copyTemplate("TestHelper.java", SRC, "test", "java", "com", "cloud", "api", "base");
+        copyTemplate("Configurations.java", SRC, "main", "java", "com", "cloud", "api", "configurations");
 
         Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
         Files.createDirectories(pathToCopy);
@@ -186,7 +186,7 @@ public class ProjectGenerator {
 
         pathToCopy = Paths.get(outputPath, SRC, "main", "java", "com", "cloud", "api", "configurations");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get(SRC,"main", "java", "com", "cloud", "api", "configurations"), pathToCopy);
+
     }
 
     public void generate() throws IOException, XmlPullParserException {
