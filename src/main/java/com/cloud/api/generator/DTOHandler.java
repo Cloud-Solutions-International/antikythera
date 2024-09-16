@@ -1,8 +1,6 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -27,7 +25,6 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
-import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -376,11 +373,12 @@ public class DTOHandler extends  ClassProcessor{
         Settings.loadConfigMap();
 
         if (args.length != 1) {
-            System.err.println("Usage: java DTOHandler <base-path> <relative-path>");
-            System.exit(1);
-        }
+            logger.error("Usage: java DTOHandler <base-path> <relative-path>");
 
-        DTOHandler processor = new DTOHandler();
-        processor.copyDTO(args[0]);
+        }
+        else {
+            DTOHandler processor = new DTOHandler();
+            processor.copyDTO(args[0]);
+        }
     }
 }
