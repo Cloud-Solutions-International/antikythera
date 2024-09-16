@@ -21,6 +21,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ProjectGenerator {
+    public static final String POM_XML = "pom.xml";
+    public static final String SRC = "src";
     private final String basePackage;
     private final String basePath;
     private final String controllers;
@@ -49,10 +51,10 @@ public class ProjectGenerator {
     private void createMavenProjectStructure(String basePackage, String path) throws IOException {
         String basePackagePath = basePackage.replace(".", File.separator);
         String[] directories = {
-                path + File.separator + "src" + File.separator + "main" + File.separator + "java" + File.separator + basePackagePath,
-                path + File.separator + "src" + File.separator + "main" + File.separator + "resources",
-                path + File.separator + "src" + File.separator + "test" + File.separator + "java" + File.separator + basePackagePath,
-                path + File.separator + "src" + File.separator + "test" + File.separator + "resources"
+                path + File.separator + SRC + File.separator + "main" + File.separator + "java" + File.separator + basePackagePath,
+                path + File.separator + SRC + File.separator + "main" + File.separator + "resources",
+                path + File.separator + SRC + File.separator + "test" + File.separator + "java" + File.separator + basePackagePath,
+                path + File.separator + SRC + File.separator + "test" + File.separator + "resources"
         };
 
         for (String dir : directories) {
@@ -92,17 +94,18 @@ public class ProjectGenerator {
      * @throws XmlPullParserException
      */
     public void copyPom() throws IOException, XmlPullParserException {
-        if (Settings.getProperty(Constants.DEPENDENCIES) == null) {
-            copyTemplate("pom.xml");
+        String[] dependencies = Settings.getArtifacts();
+        if (dependencies.length == 0) {
+            copyTemplate(POM_XML);
         } else {
-            String[] dependencies = Settings.getProperty(Constants.DEPENDENCIES).toString().split(",");
-            Path destinationPath = Path.of(outputPath, "pom.xml");
+
+            Path destinationPath = Path.of(outputPath, POM_XML);
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
             Path p = basePath.contains("src/main/java")
-                    ? Paths.get(basePath.replace("/src/main/java", ""), "pom.xml")
-                    : Paths.get(basePath, "pom.xml");
+                    ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
+                    : Paths.get(basePath, POM_XML);
 
             Model srcModel = reader.read(new FileReader(p.toFile()));
 
@@ -171,19 +174,19 @@ public class ProjectGenerator {
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
         copyPom();
-        copyTemplate("TestHelper.java", "src", "test", "java", "com", "cloud", "api", "base");
+        copyTemplate("TestHelper.java", SRC, "test", "java", "com", "cloud", "api", "base");
 
-        Path pathToCopy = Paths.get(outputPath, "src", "test", "resources");
+        Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","test", "resources"), pathToCopy);
+        copyFolder(Paths.get(SRC,"test", "resources"), pathToCopy);
 
-        pathToCopy = Paths.get(outputPath, "src", "main", "java", "com", "cloud", "api", "constants");
+        pathToCopy = Paths.get(outputPath, SRC, "main", "java", "com", "cloud", "api", "constants");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","main", "java", "com", "cloud", "api", "constants"), pathToCopy);
+        copyFolder(Paths.get(SRC,"main", "java", "com", "cloud", "api", "constants"), pathToCopy);
 
-        pathToCopy = Paths.get(outputPath, "src", "main", "java", "com", "cloud", "api", "configurations");
+        pathToCopy = Paths.get(outputPath, SRC, "main", "java", "com", "cloud", "api", "configurations");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get("src","main", "java", "com", "cloud", "api", "configurations"), pathToCopy);
+        copyFolder(Paths.get(SRC,"main", "java", "com", "cloud", "api", "configurations"), pathToCopy);
     }
 
     public void generate() throws IOException, XmlPullParserException {
@@ -201,7 +204,7 @@ public class ProjectGenerator {
     }
 
     public void writeFile(String relativePath, String content) throws IOException {
-        String filePath = outputPath + File.separator + "src" + File.separator + "main" + File.separator + "java" +
+        String filePath = outputPath + File.separator + SRC + File.separator + "main" + File.separator + "java" +
                 File.separator + relativePath;
         File file = new File(filePath);
         File parentDir = file.getParentFile();
@@ -212,7 +215,7 @@ public class ProjectGenerator {
     }
 
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
-        String filePath = outputPath + File.separator + "src" + File.separator + "test" + File.separator + "java"
+        String filePath = outputPath + File.separator + SRC + File.separator + "test" + File.separator + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
         File file = new File(filePath);
         File parentDir = file.getParentFile();
