@@ -315,6 +315,21 @@ public class RestControllerParser extends ClassProcessor {
                 if(annotation.getNameAsString().equals("PostMapping")) {
                     buildPostMethodTests(md, annotation, returnType);
                 }
+                if(annotation.getNameAsString().equals("RequestMapping")) {
+                    if(annotation.isNormalAnnotationExpr()) {
+                        NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
+                        for (var pair : normalAnnotation.getPairs()) {
+                            if (pair.getNameAsString().equals("method")) {
+                                if (pair.getValue().toString().equals("RequestMethod.GET")) {
+                                    buildGetMethodTests(md, annotation, returnType);
+                                }
+                                if (pair.getValue().toString().equals("RequestMethod.POST")) {
+                                    buildPostMethodTests(md, annotation, returnType);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
