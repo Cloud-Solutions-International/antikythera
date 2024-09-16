@@ -18,7 +18,7 @@ class ClassProcessorTest {
     private DTOHandler handler;
 
     @BeforeEach
-    void setUp(){
+    void setUp() throws IOException {
         imports = new NodeList<>();
         imports.add(new ImportDeclaration("com.example.SomeClass", false, false));
         imports.add(new ImportDeclaration("java.util.List", false, false));

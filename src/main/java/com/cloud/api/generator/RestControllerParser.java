@@ -30,13 +30,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.github.javaparser.printer.DefaultPrettyPrinter;
-
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -51,14 +44,9 @@ import org.slf4j.LoggerFactory;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-    private final JavaParser javaParser;
-    private final JavaSymbolSolver symbolResolver;
-
     private final File controllers;
-    private final CombinedTypeSolver combinedTypeSolver;
-    StringBuilder generatedCode = new StringBuilder();
     private CompilationUnit cu;
-    DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
+
     private CompilationUnit gen;
     private HashMap<String, String> parameterSet;
     private final Path dataPath;
@@ -70,18 +58,9 @@ public class RestControllerParser extends ClassProcessor {
      * @param controllers either a folder containing many controllers or a single controller
      */
     public RestControllerParser(File controllers) throws IOException {
+        super();
         this.controllers = controllers;
-        combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
 
-        for(String jarFile : Settings.getJarFiles()) {
-            combinedTypeSolver.add(new JarTypeSolver(jarFile));
-        }
-
-        symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
         dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
@@ -174,10 +153,7 @@ public class RestControllerParser extends ClassProcessor {
             gen.addImport(s);
         }
 
-
         fileContent.append(gen.toString()).append("\n");
-        fileContent.append(generatedCode).append("\n");
-
         ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
 
         for(String dependency : dependencies) {
