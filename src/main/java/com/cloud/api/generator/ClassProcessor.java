@@ -134,8 +134,22 @@ public class ClassProcessor {
         }
     }
 
+    /**
+     * Resolves an import.
+     *
+     * @param dependencyCu the compilation unit with the imports
+     * @param mainType the data type to search for
+     * @return true if a matching import was found.
+     */
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
+        /*
+         * Iterates through the imports declared in the compilation unit to see if any match.
+         * if an import is found it's added to the dependency list but we also need to check
+         * whether the import comes from an external jar file. In that case we do not need to
+         * copy the DTO across with the generated tests
+         */
         for (var ref2 : dependencyCu.getImports()) {
+
             String[] parts = ref2.getNameAsString().split("\\.");
             if (parts[parts.length - 1].equals(mainType)) {
                 dependencies.add(ref2.getNameAsString());
