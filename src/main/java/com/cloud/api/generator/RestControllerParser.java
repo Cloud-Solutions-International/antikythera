@@ -478,10 +478,9 @@ public class RestControllerParser extends ClassProcessor {
             String paramString = String.valueOf(param);
             if(!paramString.startsWith("@RequestBody")){
                 switch(param.getTypeAsString()) {
+
                     case "Integer":
                     case "int":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1");
-                        break;
                     case "Long":
                         path = path.replace('{' + param.getNameAsString() +'}', "1");
                         break;
@@ -496,6 +495,11 @@ public class RestControllerParser extends ClassProcessor {
         return path;
     }
 
+    /**
+     * Of the various params in the method, which one is the RequestBody
+     * @param md a method argument
+     * @return the parameter identified as the RequestBody
+     */
     private Parameter findRequestBody(MethodDeclaration md) {
         Parameter requestBody = md.getParameter(0);
         for(var param : md.getParameters()) {
@@ -506,6 +510,11 @@ public class RestControllerParser extends ClassProcessor {
         return requestBody;
     }
 
+    /**
+     * Given an annotation for a method in a controller find the full path in the url
+     * @param annotation a GetMapping, PostMapping etc
+     * @return the path url component
+     */
     private String getPath(AnnotationExpr annotation) {
         if (annotation.isSingleMemberAnnotationExpr()) {
             return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
@@ -521,6 +530,8 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     /**
+     * Each method in the controller will be a child of the main path for that controller
+     * which is represented by the RequestMapping for that controller
      *
      * @return the path from the RequestMapping Annotation or an empty string
      */
