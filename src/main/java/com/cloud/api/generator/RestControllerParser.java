@@ -75,7 +75,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private void processRestController(File path) throws IOException {
-        System.out.println(path);
+        logger.debug(path.toString());
         if (path.isDirectory()) {
             int i = 0;
             for (File f : path.listFiles()) {
@@ -99,7 +99,7 @@ public class RestControllerParser extends ClassProcessor {
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
-            File file = new File(dataPath + "/" + controllerName + "Params.json");
+            File file = new File(dataPath + File.separator + controllerName + "Params.json");
             objectMapper.writeValue(file, parameterSet);
         }
     }
@@ -128,14 +128,11 @@ public class RestControllerParser extends ClassProcessor {
 
         gen.setPackageDeclaration(pd);
 
-        //removeUnwantedImports(cu.getImports());
         expandWildCards(cu);
 
         gen.addImport("com.cloud.api.base.TestHelper");
-
         gen.addImport("org.testng.annotations.Test");
         gen.addImport("org.testng.Assert");
-
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
         gen.addImport("io.restassured.http.Method");
         gen.addImport("io.restassured.response.Response");
@@ -143,8 +140,6 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.enums.TestType");
 
         cu.accept(new MethodVisitor(), null);
-
-        removeUnusedImports(cu.getImports());
 
         for (String s : dependencies) {
             if(! (s.startsWith("java.") || s.startsWith(basePackage))) {
@@ -259,6 +254,11 @@ public class RestControllerParser extends ClassProcessor {
     }
 
 
+    /**
+     * Will be called for each method of the controller.
+     *
+     * We use it to identify the return types and the arguments of each method in the class.
+     */
     private class MethodVisitor extends VoidVisitorAdapter<Void> {
 
         @Override
@@ -291,16 +291,13 @@ public class RestControllerParser extends ClassProcessor {
                         returnType = findReturnType(blockStmt);
                     }
                 }
-                try {
-                    if (returnType != null) {
-                        extractComplexType(returnType, cu);
-                    }
-                    for(var param : md.getParameters()) {
-                        parameterSet.put(param.getName().toString(), "");
-                        extractComplexType(param.getType(), cu);
-                    }
-                } catch (IOException e) {
-                    throw new GeneratorException("Error extracting type", e);
+
+                if (returnType != null) {
+                    extractComplexType(returnType, cu);
+                }
+                for(var param : md.getParameters()) {
+                    parameterSet.put(param.getName().toString(), "");
+                    extractComplexType(param.getType(), cu);
                 }
 
                 createTests(md, returnType);
@@ -315,17 +312,15 @@ public class RestControllerParser extends ClassProcessor {
                 if(annotation.getNameAsString().equals("PostMapping")) {
                     buildPostMethodTests(md, annotation, returnType);
                 }
-                if(annotation.getNameAsString().equals("RequestMapping")) {
-                    if(annotation.isNormalAnnotationExpr()) {
-                        NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
-                        for (var pair : normalAnnotation.getPairs()) {
-                            if (pair.getNameAsString().equals("method")) {
-                                if (pair.getValue().toString().equals("RequestMethod.GET")) {
-                                    buildGetMethodTests(md, annotation, returnType);
-                                }
-                                if (pair.getValue().toString().equals("RequestMethod.POST")) {
-                                    buildPostMethodTests(md, annotation, returnType);
-                                }
+                if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
+                    NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
+                    for (var pair : normalAnnotation.getPairs()) {
+                        if (pair.getNameAsString().equals("method")) {
+                            if (pair.getValue().toString().equals("RequestMethod.GET")) {
+                                buildGetMethodTests(md, annotation, returnType);
+                            }
+                            if (pair.getValue().toString().equals("RequestMethod.POST")) {
+                                buildPostMethodTests(md, annotation, returnType);
                             }
                         }
                     }
