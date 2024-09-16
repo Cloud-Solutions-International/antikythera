@@ -2,6 +2,8 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -9,6 +11,12 @@ import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,6 +39,17 @@ public class ClassProcessor {
 
     protected final Set<String> dependencies = new TreeSet<>();
 
+    /*
+     * The strategy followed is that we iterate through all the fields in the
+     * class and add them to a queue. Then we iterate through the items in
+     * the queue and call the copy method on each one. If an item has already
+     * been copied, it will be in the resolved set that is defined in the
+     * parent, so we will skip it.
+     */
+    protected JavaParser javaParser;
+    protected JavaSymbolSolver symbolResolver;
+    protected CombinedTypeSolver combinedTypeSolver;
+
     protected static void removeUnwantedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
                 importDeclaration -> ! (importDeclaration.getNameAsString().startsWith(basePackage) ||
@@ -38,11 +57,21 @@ public class ClassProcessor {
         );
     }
 
-    protected ClassProcessor() {
+    protected ClassProcessor() throws IOException {
         if(basePackage == null) {
             basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
             basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         }
+        combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver());
+        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+
+        for(String jarFile : Settings.getJarFiles()) {
+            combinedTypeSolver.add(new JarTypeSolver(jarFile));
+        }
+        symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
+        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
+        this.javaParser = new JavaParser(parserConfiguration);
     }
 
     /**
@@ -89,8 +118,12 @@ public class ClassProcessor {
             boolean found = findImport(dependencyCu, mainType);
 
             if (!found ) {
-                if (!classType.resolve().describe().startsWith("java.")) {
-                    dependencies.add(classType.resolve().describe());
+                try {
+                    if (!classType.resolve().describe().startsWith("java.")) {
+                        dependencies.add(classType.resolve().describe());
+                    }
+                } catch (UnsolvedSymbolException e) {
+                    // ignore for now
                 }
             }
         }
