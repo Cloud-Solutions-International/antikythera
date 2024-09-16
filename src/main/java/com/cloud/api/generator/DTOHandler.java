@@ -1,7 +1,6 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
-import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -20,14 +19,12 @@ import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +60,7 @@ public class DTOHandler extends  ClassProcessor{
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-        logger.info("\t"+relativePath);
+        logger.info("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
         FileInputStream in = new FileInputStream(sourcePath.toFile());
