@@ -5,10 +5,15 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class RepositoryParser extends ClassProcessor{
 
@@ -37,7 +42,7 @@ public class RepositoryParser extends ClassProcessor{
                 if(ann.getNameAsString().equals("Query")) {
                     String query = null;
                     if (ann.isSingleMemberAnnotationExpr()) {
-                        query = ann.asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"","");
+                        query = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
                     } else if (ann.isNormalAnnotationExpr()) {
                         boolean nt = false;
                         for(var pair : ann.asNormalAnnotationExpr().getPairs()) {
@@ -53,13 +58,41 @@ public class RepositoryParser extends ClassProcessor{
                         }
                         for(var pair : ann.asNormalAnnotationExpr().getPairs()) {
                             if(pair.getNameAsString().equals("value")) {
-                                query = pair.getValue().toString().replace("\"","");
+                                query = pair.getValue().toString();
                             }
                         }
                     }
-                    System.out.println(query);
+
+                    query = cleanUp(query);
+                    try {
+                        Statement bada = CCJSqlParserUtil.parse(cleanUp(query));
+                        System.out.println("\t" + bada);
+                    } catch (JSQLParserException e) {
+                        System.out.println("\tUnparsable: " + query);
+                    }
                 }
             }
         }
+
+        private String cleanUp(String sql) {
+            // If a JPA query is using a projection, we will have a new keyword immidiately after the select
+            // JSQL does not recognize this. So we will remove everything from the NEW keyword to the FROM
+            // keyword and replace it with the '*' character.
+            // Use case-insensitive regex to find and replace the NEW keyword and the FROM keyword
+            Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(sql);
+            if (matcher.find()) {
+                sql = matcher.replaceAll(" * from ");
+            }
+
+            // Remove '+' signs only when they have spaces and a quotation mark on either side
+            sql = sql.replaceAll("\"\\s*\\+\\s*\"", " ");
+
+            // Remove quotation marks
+            sql = sql.replace("\"", "");
+
+            return sql;
+        }
     }
 }
+
