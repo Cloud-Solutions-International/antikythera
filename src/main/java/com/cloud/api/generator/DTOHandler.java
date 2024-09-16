@@ -104,6 +104,7 @@ public class DTOHandler extends  ClassProcessor{
         String className = cdecl.getNameAsString();
 
         if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+                && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
                 && className.toLowerCase().endsWith("to")) {
             String variable = classToInstanceName(cdecl);
 

@@ -142,9 +142,9 @@ public class RestControllerParser extends ClassProcessor {
         cu.accept(new MethodVisitor(), null);
 
         for (String s : dependencies) {
-            if(! (s.startsWith("java.") || s.startsWith(basePackage))) {
-                continue;
-            }
+            gen.addImport(s);
+        }
+        for(String s: externalDependencies) {
             gen.addImport(s);
         }
 
@@ -154,7 +154,9 @@ public class RestControllerParser extends ClassProcessor {
         for(String dependency : dependencies) {
             copyDependencies(dependency);
         }
+
         dependencies.clear();
+        externalDependencies.clear();
     }
 
 
