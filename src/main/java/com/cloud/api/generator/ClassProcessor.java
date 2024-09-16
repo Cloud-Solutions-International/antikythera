@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -50,6 +51,7 @@ public class ClassProcessor {
     protected JavaParser javaParser;
     protected JavaSymbolSolver symbolResolver;
     protected CombinedTypeSolver combinedTypeSolver;
+    protected ArrayList<JarTypeSolver> jarSolvers;
 
     protected ClassProcessor() throws IOException {
         if(basePackage == null) {
@@ -60,8 +62,11 @@ public class ClassProcessor {
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
 
+        jarSolvers = new ArrayList<>();
         for(String jarFile : Settings.getJarFiles()) {
-            combinedTypeSolver.add(new JarTypeSolver(jarFile));
+            JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
+            jarSolvers.add(jarSolver);
+            combinedTypeSolver.add(jarSolver);
         }
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
@@ -75,6 +80,9 @@ public class ClassProcessor {
      */
     protected void copyDependencies(String nameAsString) throws IOException {
         if(nameAsString.startsWith("org.springframework")) {
+            return;
+        }
+        if(externalDependencies.contains(nameAsString)) {
             return;
         }
         if (!ClassProcessor.resolved.contains(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
@@ -110,8 +118,15 @@ public class ClassProcessor {
             }
 
             try {
-                if (!classType.resolve().describe().startsWith("java.")) {
-                    dependencies.add(classType.resolve().describe());
+                String description = classType.resolve().describe();
+                if (!description.startsWith("java.")) {
+                    for (var jarSolver : jarSolvers) {
+                        if(jarSolver.getKnownClasses().contains(description)) {
+                            externalDependencies.add(description);
+                            return;
+                        }
+                    }
+                    dependencies.add(description);
                 }
             } catch (UnsolvedSymbolException e) {
                 findImport(dependencyCu, mainType);
@@ -124,8 +139,10 @@ public class ClassProcessor {
             String[] parts = ref2.getNameAsString().split("\\.");
             if (parts[parts.length - 1].equals(mainType)) {
                 dependencies.add(ref2.getNameAsString());
-                if(combinedTypeSolver.hasType(ref2.getNameAsString())) {
-                    externalDependencies.add(ref2.getNameAsString());
+                for (var jarSolver : jarSolvers) {
+                    if(jarSolver.getKnownClasses().contains(ref2.getNameAsString())) {
+                        externalDependencies.add(ref2.getNameAsString());
+                    }
                 }
                 return true;
             }
@@ -180,15 +197,15 @@ public class ClassProcessor {
         imports.removeIf(
                 importDeclaration ->
                 {
-                    if(importDeclaration.isAsterisk() || importDeclaration.isStatic()) {
+                    String nameAsString = importDeclaration.getNameAsString();
+                    if (dependencies.contains(nameAsString) ||
+                        externalDependencies.contains(nameAsString)) {
                         return false;
                     }
-                    String name = importDeclaration.getNameAsString();
-                    if(name.startsWith("java.") || name.startsWith(basePackage) || dependencies.contains(name)) {
+                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
                         return false;
                     }
-                    if(name.startsWith("lombok")) return false;
-                    if(externalDependencies.contains(name)) return false;
+
                     return true;
                 }
             );
