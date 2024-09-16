@@ -8,6 +8,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.util.TablesNamesFinder;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -66,6 +67,7 @@ public class RepositoryParser extends ClassProcessor{
                     query = cleanUp(query);
                     try {
                         Statement bada = CCJSqlParserUtil.parse(cleanUp(query));
+                        System.out.println(TablesNamesFinder.findTables(query));
                         System.out.println("\t" + bada);
                     } catch (JSQLParserException e) {
                         System.out.println("\tUnparsable: " + query);
@@ -75,7 +77,7 @@ public class RepositoryParser extends ClassProcessor{
         }
 
         private String cleanUp(String sql) {
-            // If a JPA query is using a projection, we will have a new keyword immidiately after the select
+            // If a JPA query is using a projection, we will have a new keyword immediately after the select
             // JSQL does not recognize this. So we will remove everything from the NEW keyword to the FROM
             // keyword and replace it with the '*' character.
             // Use case-insensitive regex to find and replace the NEW keyword and the FROM keyword
