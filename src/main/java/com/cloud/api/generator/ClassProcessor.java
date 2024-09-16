@@ -38,6 +38,7 @@ public class ClassProcessor {
     public static final String SUFFIX = ".java";
 
     protected final Set<String> dependencies = new TreeSet<>();
+    protected final Set<String> externalDependencies = new TreeSet<>();
 
     /*
      * The strategy followed is that we iterate through all the fields in the
@@ -124,6 +125,8 @@ public class ClassProcessor {
                     }
                 } catch (UnsolvedSymbolException e) {
                     // ignore for now
+                    //combinedTypeSolver.
+                    System.out.println("Error resoling " + classType.toString());
                 }
             }
         }
