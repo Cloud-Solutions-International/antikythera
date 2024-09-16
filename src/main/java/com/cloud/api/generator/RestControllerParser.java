@@ -34,6 +34,7 @@ import com.github.javaparser.printer.DefaultPrettyPrinter;
 
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
@@ -54,6 +55,7 @@ public class RestControllerParser extends ClassProcessor {
     private final JavaSymbolSolver symbolResolver;
 
     private final File controllers;
+    private final CombinedTypeSolver combinedTypeSolver;
     StringBuilder generatedCode = new StringBuilder();
     private CompilationUnit cu;
     DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
@@ -69,9 +71,14 @@ public class RestControllerParser extends ClassProcessor {
      */
     public RestControllerParser(File controllers) throws IOException {
         this.controllers = controllers;
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+
+        for(String jarFile : Settings.getJarFiles()) {
+            combinedTypeSolver.add(new JarTypeSolver(jarFile));
+        }
+
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
