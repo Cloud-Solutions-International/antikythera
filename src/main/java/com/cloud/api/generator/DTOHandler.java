@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -19,12 +20,14 @@ import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,25 +68,20 @@ public class DTOHandler extends  ClassProcessor{
 
         FileInputStream in = new FileInputStream(sourcePath.toFile());
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        NodeList<ImportDeclaration> imports = cu.getImports();
 
         if(resolved.contains(cu.toString())) {
             return ;
         }
 
         expandWildCards(cu);
-        // remove unwanted imports. This is different from removing unused imports
-        removeUnwantedImports(imports);
-
         solveTypes();
         createFactory();
 
         cu.accept(new TypeCollector(), null);
 
-        handleStaticImports(imports);
-        // remove unused imports. These are items in the import list that seem to be unused.
-        // there are no type declarations in the code that make use of the import.
-        removeUnusedImports(imports);
+        handleStaticImports(cu.getImports());
+
+        removeUnusedImports(cu.getImports());
 
         if(method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
@@ -225,25 +223,22 @@ public class DTOHandler extends  ClassProcessor{
      * it's type. If the type is defined in the application under test we copy it.
      */
     class TypeCollector extends ModifierVisitor<Void> {
+
         @Override
-        public Visitable visit(FieldDeclaration field, Void arg) {
+        public Visitable visit(FieldDeclaration field, Void args) {
 
-            try {
-                String fieldAsString = field.getElementType().toString();
-                if (fieldAsString.equals("DateScheduleUtil")
-                        || fieldAsString.equals("Logger")
-                        || fieldAsString.equals("Sort.Direction")) {
-                    return null;
-                }
-                field.getAnnotations().clear();
-                extractEnums(field);
-                extractComplexType(field.getElementType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + field.getElementType(), e);
 
+            String fieldAsString = field.getElementType().toString();
+            if (fieldAsString.equals("DateScheduleUtil")
+                    || fieldAsString.equals("Logger")
+                    || fieldAsString.equals("Sort.Direction")) {
+                return null;
             }
+            field.getAnnotations().clear();
+            extractEnums(field);
+            extractComplexType(field.getElementType(), cu);
 
-            return super.visit(field, arg);
+            return super.visit(field, args);
         }
 
         private void extractEnums(FieldDeclaration field) {
@@ -357,14 +352,10 @@ public class DTOHandler extends  ClassProcessor{
         }
 
         @Override
-        public Visitable visit(MethodDeclaration method, Void arg) {
-            super.visit(method, arg);
-            try {
-                method.getAnnotations().clear();
-                extractComplexType(method.getType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + method.getType(), e);
-            }
+        public Visitable visit(MethodDeclaration method, Void args) {
+            super.visit(method, args);
+            method.getAnnotations().clear();
+            extractComplexType(method.getType(), cu);
             return method;
         }
     }

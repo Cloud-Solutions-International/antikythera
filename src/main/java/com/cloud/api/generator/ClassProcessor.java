@@ -7,7 +7,7 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.PackageDeclaration;
+
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -51,13 +51,6 @@ public class ClassProcessor {
     protected JavaSymbolSolver symbolResolver;
     protected CombinedTypeSolver combinedTypeSolver;
 
-    protected static void removeUnwantedImports(NodeList<ImportDeclaration> imports) {
-        imports.removeIf(
-                importDeclaration -> ! (importDeclaration.getNameAsString().startsWith(basePackage) ||
-                        importDeclaration.getNameAsString().startsWith("java."))
-        );
-    }
-
     protected ClassProcessor() throws IOException {
         if(basePackage == null) {
             basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
@@ -91,7 +84,7 @@ public class ClassProcessor {
         }
     }
 
-    protected void extractComplexType(Type type, CompilationUnit dependencyCu) throws IOException {
+    protected void extractComplexType(Type type, CompilationUnit dependencyCu)  {
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
@@ -116,18 +109,12 @@ public class ClassProcessor {
                 }
             }
 
-            boolean found = findImport(dependencyCu, mainType);
-
-            if (!found ) {
-                try {
-                    if (!classType.resolve().describe().startsWith("java.")) {
-                        dependencies.add(classType.resolve().describe());
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    // ignore for now
-                    //combinedTypeSolver.
-                    System.out.println("Error resoling " + classType.toString());
+            try {
+                if (!classType.resolve().describe().startsWith("java.")) {
+                    dependencies.add(classType.resolve().describe());
                 }
+            } catch (UnsolvedSymbolException e) {
+                findImport(dependencyCu, mainType);
             }
         }
     }
@@ -135,9 +122,11 @@ public class ClassProcessor {
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
         for (var ref2 : dependencyCu.getImports()) {
             String[] parts = ref2.getNameAsString().split("\\.");
-
             if (parts[parts.length - 1].equals(mainType)) {
                 dependencies.add(ref2.getNameAsString());
+                if(combinedTypeSolver.hasType(ref2.getNameAsString())) {
+                    externalDependencies.add(ref2.getNameAsString());
+                }
                 return true;
             }
         }
@@ -189,11 +178,19 @@ public class ClassProcessor {
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
-                importDeclaration -> !(importDeclaration.isAsterisk() || importDeclaration.isStatic()
-                        || dependencies.contains(importDeclaration.getNameAsString())
-                        || importDeclaration.getNameAsString().startsWith("java.")
-                        || (importDeclaration.getNameAsString().startsWith(basePackage) && dependencies.contains(importDeclaration.getNameAsString()))
-                        || importDeclaration.getNameAsString().startsWith("lombok."))
-        );
+                importDeclaration ->
+                {
+                    if(importDeclaration.isAsterisk() || importDeclaration.isStatic()) {
+                        return false;
+                    }
+                    String name = importDeclaration.getNameAsString();
+                    if(name.startsWith("java.") || name.startsWith(basePackage) || dependencies.contains(name)) {
+                        return false;
+                    }
+                    if(name.startsWith("lombok")) return false;
+                    if(externalDependencies.contains(name)) return false;
+                    return true;
+                }
+            );
     }
 }
