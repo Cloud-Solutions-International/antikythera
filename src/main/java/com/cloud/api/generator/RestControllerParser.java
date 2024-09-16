@@ -398,26 +398,17 @@ public class RestControllerParser extends ClassProcessor {
                     var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
                         case "List": {
-                            dependencies.add("java.util.List");
-                            Type listType = new ClassOrInterfaceType(null, paramClassName);
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr("List.of");
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-
-                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
                             break;
                         }
+
+                        case "Set": {
+                            prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
+                            break;
+                        }
+
                         case "Map": {
-                            dependencies.add("java.util.Map");
-                            Type listType = new ClassOrInterfaceType(paramClassName);
-
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr("Map.of");
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-
-                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
                             break;
                         }
                         case "Integer":
@@ -470,6 +461,16 @@ public class RestControllerParser extends ClassProcessor {
                 }
             }
         }
+
+        private void prepareBody(String e, ClassOrInterfaceType paramClassName, String name, MethodDeclaration testMethod) {
+            dependencies.add(e);
+            VariableDeclarator variableDeclarator = new VariableDeclarator(paramClassName, "req");
+            MethodCallExpr methodCallExpr = new MethodCallExpr(name);
+            variableDeclarator.setInitializer(methodCallExpr);
+            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+
+            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+        }
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){
@@ -482,7 +483,7 @@ public class RestControllerParser extends ClassProcessor {
                         path = path.replace('{' + param.getNameAsString() +'}', "1");
                         break;
                     case "Long":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1L");
+                        path = path.replace('{' + param.getNameAsString() +'}', "1");
                         break;
                     case "Boolean":
                         path = path.replace('{' + param.getNameAsString() +'}', "false");
@@ -529,6 +530,10 @@ public class RestControllerParser extends ClassProcessor {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();
                 } else {
+                    var memberValue = classAnnotation.asSingleMemberAnnotationExpr().getMemberValue();
+                    if(memberValue.isArrayInitializerExpr()) {
+                        return memberValue.asArrayInitializerExpr().getValues().get(0).toString();
+                    }
                     return classAnnotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
                 }
             }
