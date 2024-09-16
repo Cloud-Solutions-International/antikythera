@@ -9,7 +9,6 @@ import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.File;
 import java.io.IOException;
@@ -90,8 +89,6 @@ public class ClassProcessor {
             boolean found = findImport(dependencyCu, mainType);
 
             if (!found ) {
-                PackageDeclaration pd = dependencyCu.getPackageDeclaration().orElseGet(null);
-
                 if (!classType.resolve().describe().startsWith("java.")) {
                     dependencies.add(classType.resolve().describe());
                 }

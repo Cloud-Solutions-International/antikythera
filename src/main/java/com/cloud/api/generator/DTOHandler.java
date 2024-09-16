@@ -29,6 +29,7 @@ import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.slf4j.Logger;
@@ -63,10 +64,13 @@ public class DTOHandler extends  ClassProcessor{
     /**
      * Constructor to initialize the JavaParser and set things up
      */
-    public DTOHandler() {
+    public DTOHandler() throws IOException {
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+        for(String jarFile : Settings.getJarFiles()) {
+            combinedTypeSolver.add(new JarTypeSolver(jarFile));
+        }
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
         this.javaParser = new JavaParser(parserConfiguration);
     }
