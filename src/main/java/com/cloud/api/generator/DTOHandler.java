@@ -27,11 +27,7 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,14 +45,7 @@ import java.util.Optional;
 public class DTOHandler extends  ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
-    /*
-     * The strategy followed is that we iterate through all the fields in the
-     * class and add them to a queue. Then we iterate through the items in
-     * the queue and call the copy method on each one. If an item has already
-     * been copied, it will be in the resolved set that is defined in the
-     * parent, so we will skip it.
-     */
-    private final JavaParser javaParser;
+
     private CompilationUnit cu;
 
     MethodDeclaration method = null;
@@ -65,14 +54,7 @@ public class DTOHandler extends  ClassProcessor{
      * Constructor to initialize the JavaParser and set things up
      */
     public DTOHandler() throws IOException {
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        for(String jarFile : Settings.getJarFiles()) {
-            combinedTypeSolver.add(new JarTypeSolver(jarFile));
-        }
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
-        this.javaParser = new JavaParser(parserConfiguration);
+       super();
     }
 
     /**
