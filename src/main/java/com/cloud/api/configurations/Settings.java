@@ -1,5 +1,6 @@
 package com.cloud.api.configurations;
 
+import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -10,8 +11,10 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -20,7 +23,7 @@ import java.util.Properties;
  */
 public class Settings {
     /**
-     * Hashmpa to store the configurations.
+     * HashMap to store the configurations.
      */
     protected static HashMap<String, Object> props;
 
@@ -45,7 +48,7 @@ public class Settings {
      * Load configuration from a yaml file
      *
      * Using yaml gives us the advantage of being able to have nested properties and also properties
-     * tha can have multiple entries without getting into ugly comma seperated values.
+     * that can have multiple entries without getting into ugly comma separated values.
      * @param yamlFile
      * @throws IOException
      */
@@ -54,40 +57,43 @@ public class Settings {
         mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
                 .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
 
-
         Map<String, Object> yamlProps = mapper.readValue(yamlFile, Map.class);
         Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault("variables", new HashMap<>());
         props.put("variables", variables);
 
-        replaceVariables(yamlProps);
-        for(var entry : props.entrySet()) {
-            System.out.println(entry.getKey() + " " + entry.getValue());
-        }
+        replaceVariables(yamlProps, props);
     }
 
     /**
-     * Replace variables from the yaml file with enviorenment or internal variables
+     * Replace variables from the yaml file with environment or internal variables
      *
-     * @param yamlProps
+     * @param source
+     * @param target
      */
-    private static void replaceVariables(Map<String, Object> yamlProps) {
+    private static void replaceVariables(Map<String, Object> source, Map<String, Object> target) {
         String userDir = System.getProperty("user.home");
 
-        for (Map.Entry<String, Object> entry : yamlProps.entrySet()) {
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
             if (value != null && !key.equals("variables")) {
                 if (value instanceof String) {
                     String v = (String) value;
-                    entry.setValue(v.replace("${USERDIR}", userDir));
-                    v = replaceYamlVariables(entry);
-                    props.put(key, replaceEnvVariables(v));
-                }
-                else if (value instanceof Map) {
-                    replaceVariables((Map<String, Object>) value);
-                }
-                else {
-                    props.put(key, value);
+                    v = v.replace("${USERDIR}", userDir);
+                    v = replaceYamlVariables(v);
+                    target.put(key, replaceEnvVariables(v));
+                } else if (value instanceof Map) {
+                    Map<String, Object> nestedMap = new HashMap<>();
+                    replaceVariables((Map<String, Object>) value, nestedMap);
+                    target.put(key, nestedMap);
+                } else if (value instanceof List) {
+                    List<String> result = new ArrayList<>();
+                    for(String s : (List<String>) value) {
+                        s = s.replace("${USERDIR}", userDir);
+                        s = replaceYamlVariables(s);
+                        result.add(s);
+                    }
+                    target.put(key, result);
                 }
             }
         }
@@ -95,18 +101,17 @@ public class Settings {
 
     /**
      * Replace variables in the given property.
-     * @param entry
+     * @param value
      * @return
      */
-    private static String replaceYamlVariables(Map.Entry<String, Object> entry) {
-
+    private static String replaceYamlVariables(String value) {
         Map<String, Object> variablesMap = (Map<String, Object>) props.get("variables");
-        for(Map.Entry<String, Object> variable : variablesMap.entrySet()) {
+        for (Map.Entry<String, Object> variable : variablesMap.entrySet()) {
             String key = "${" + variable.getKey() + "}";
-            String value = (String) variable.getValue();
-            entry.setValue(((String) entry.getValue()).replace(key, value));
+            String varValue = (String) variable.getValue();
+            value = value.replace(key, varValue);
         }
-        return entry.getValue().toString();
+        return value;
     }
 
     /**
@@ -157,6 +162,26 @@ public class Settings {
 
     public static Object getProperty(String key) {
         return props.get(key);
+    }
+
+    public static String[] getArtifacts() {
+        return get_deps("artifact_ids");
+    }
+
+    private static String[] get_deps(String artifact_ids) {
+        Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
+        if (deps == null) {
+            return new String[0];
+        }
+        if (deps instanceof String) {
+            return ((String) deps).split(",");
+        }
+        Map<String, Object> dependencies = (Map<String, Object>) deps;
+        return ((List<String>) dependencies.get(artifact_ids)).toArray(new String[0]);
+    }
+
+    public static String[] getJarFiles() {
+        return get_deps("jar_files");
     }
 
     public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {
