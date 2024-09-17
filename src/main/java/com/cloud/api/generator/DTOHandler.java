@@ -1,8 +1,6 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -27,10 +25,6 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,14 +42,7 @@ import java.util.Optional;
 public class DTOHandler extends  ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
-    /*
-     * The strategy followed is that we iterate through all the fields in the
-     * class and add them to a queue. Then we iterate through the items in
-     * the queue and call the copy method on each one. If an item has already
-     * been copied, it will be in the resolved set that is defined in the
-     * parent, so we will skip it.
-     */
-    private final JavaParser javaParser;
+
     private CompilationUnit cu;
 
     MethodDeclaration method = null;
@@ -63,12 +50,8 @@ public class DTOHandler extends  ClassProcessor{
     /**
      * Constructor to initialize the JavaParser and set things up
      */
-    public DTOHandler() {
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
-        this.javaParser = new JavaParser(parserConfiguration);
+    public DTOHandler() throws IOException {
+       super();
     }
 
     /**
@@ -77,30 +60,25 @@ public class DTOHandler extends  ClassProcessor{
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-        logger.info("\t"+relativePath);
+        logger.info("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
         FileInputStream in = new FileInputStream(sourcePath.toFile());
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        NodeList<ImportDeclaration> imports = cu.getImports();
 
         if(resolved.contains(cu.toString())) {
             return ;
         }
 
         expandWildCards(cu);
-        // remove unwanted imports. This is different from removing unused imports
-        removeUnwantedImports(imports);
-
         solveTypes();
         createFactory();
 
         cu.accept(new TypeCollector(), null);
 
-        handleStaticImports(imports);
-        // remove unused imports. These are items in the import list that seem to be unused.
-        // there are no type declarations in the code that make use of the import.
-        removeUnusedImports(imports);
+        handleStaticImports(cu.getImports());
+
+        removeUnusedImports(cu.getImports());
 
         if(method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
@@ -126,6 +104,7 @@ public class DTOHandler extends  ClassProcessor{
         String className = cdecl.getNameAsString();
 
         if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+                && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
                 && className.toLowerCase().endsWith("to")) {
             String variable = classToInstanceName(cdecl);
 
@@ -242,25 +221,22 @@ public class DTOHandler extends  ClassProcessor{
      * it's type. If the type is defined in the application under test we copy it.
      */
     class TypeCollector extends ModifierVisitor<Void> {
+
         @Override
-        public Visitable visit(FieldDeclaration field, Void arg) {
+        public Visitable visit(FieldDeclaration field, Void args) {
 
-            try {
-                String fieldAsString = field.getElementType().toString();
-                if (fieldAsString.equals("DateScheduleUtil")
-                        || fieldAsString.equals("Logger")
-                        || fieldAsString.equals("Sort.Direction")) {
-                    return null;
-                }
-                field.getAnnotations().clear();
-                extractEnums(field);
-                extractComplexType(field.getElementType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + field.getElementType(), e);
 
+            String fieldAsString = field.getElementType().toString();
+            if (fieldAsString.equals("DateScheduleUtil")
+                    || fieldAsString.equals("Logger")
+                    || fieldAsString.equals("Sort.Direction")) {
+                return null;
             }
+            field.getAnnotations().clear();
+            extractEnums(field);
+            extractComplexType(field.getElementType(), cu);
 
-            return super.visit(field, arg);
+            return super.visit(field, args);
         }
 
         private void extractEnums(FieldDeclaration field) {
@@ -284,6 +260,10 @@ public class DTOHandler extends  ClassProcessor{
             }
         }
 
+        /**
+         * Generate random values for use in the factory method for a DTO
+         * @param field
+         */
         private void generateRandomValue(FieldDeclaration field) {
             TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
@@ -374,14 +354,10 @@ public class DTOHandler extends  ClassProcessor{
         }
 
         @Override
-        public Visitable visit(MethodDeclaration method, Void arg) {
-            super.visit(method, arg);
-            try {
-                method.getAnnotations().clear();
-                extractComplexType(method.getType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + method.getType(), e);
-            }
+        public Visitable visit(MethodDeclaration method, Void args) {
+            super.visit(method, args);
+            method.getAnnotations().clear();
+            extractComplexType(method.getType(), cu);
             return method;
         }
     }
@@ -390,11 +366,12 @@ public class DTOHandler extends  ClassProcessor{
         Settings.loadConfigMap();
 
         if (args.length != 1) {
-            System.err.println("Usage: java DTOHandler <base-path> <relative-path>");
-            System.exit(1);
-        }
+            logger.error("Usage: java DTOHandler <base-path> <relative-path>");
 
-        DTOHandler processor = new DTOHandler();
-        processor.copyDTO(args[0]);
+        }
+        else {
+            DTOHandler processor = new DTOHandler();
+            processor.copyDTO(args[0]);
+        }
     }
 }
