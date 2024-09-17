@@ -8,64 +8,34 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.*;
-import net.sf.jsqlparser.expression.operators.arithmetic.Addition;
-import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseAnd;
-import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseLeftShift;
-import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseOr;
-import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseRightShift;
-import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseXor;
-import net.sf.jsqlparser.expression.operators.arithmetic.Concat;
-import net.sf.jsqlparser.expression.operators.arithmetic.Division;
-import net.sf.jsqlparser.expression.operators.arithmetic.IntegerDivision;
-import net.sf.jsqlparser.expression.operators.arithmetic.Modulo;
-import net.sf.jsqlparser.expression.operators.arithmetic.Multiplication;
-import net.sf.jsqlparser.expression.operators.arithmetic.Subtraction;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
-import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
-import net.sf.jsqlparser.expression.operators.conditional.XorExpression;
-import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
-import net.sf.jsqlparser.expression.operators.relational.ContainedBy;
-import net.sf.jsqlparser.expression.operators.relational.Contains;
-import net.sf.jsqlparser.expression.operators.relational.DoubleAnd;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
-import net.sf.jsqlparser.expression.operators.relational.ExcludesExpression;
-import net.sf.jsqlparser.expression.operators.relational.ExistsExpression;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
-import net.sf.jsqlparser.expression.operators.relational.FullTextSearch;
-import net.sf.jsqlparser.expression.operators.relational.GeometryDistance;
-import net.sf.jsqlparser.expression.operators.relational.GreaterThan;
-import net.sf.jsqlparser.expression.operators.relational.GreaterThanEquals;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
-import net.sf.jsqlparser.expression.operators.relational.IncludesExpression;
-import net.sf.jsqlparser.expression.operators.relational.IsBooleanExpression;
-import net.sf.jsqlparser.expression.operators.relational.IsDistinctExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
-import net.sf.jsqlparser.expression.operators.relational.JsonOperator;
-import net.sf.jsqlparser.expression.operators.relational.LikeExpression;
-import net.sf.jsqlparser.expression.operators.relational.Matches;
-import net.sf.jsqlparser.expression.operators.relational.MemberOfExpression;
-import net.sf.jsqlparser.expression.operators.relational.MinorThan;
-import net.sf.jsqlparser.expression.operators.relational.MinorThanEquals;
-import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
-import net.sf.jsqlparser.expression.operators.relational.RegExpMatchOperator;
-import net.sf.jsqlparser.expression.operators.relational.SimilarToExpression;
-import net.sf.jsqlparser.expression.operators.relational.TSQLLeftJoin;
-import net.sf.jsqlparser.expression.operators.relational.TSQLRightJoin;
+
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.parser.SimpleNode;
 import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
-import net.sf.jsqlparser.statement.select.AllTableColumns;
+import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.FromItemVisitor;
 import net.sf.jsqlparser.statement.select.GroupByElement;
+import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.OrderByElement;
 import net.sf.jsqlparser.statement.select.ParenthesedSelect;
+import net.sf.jsqlparser.statement.select.Pivot;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
+import net.sf.jsqlparser.statement.select.UnPivot;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -99,36 +69,16 @@ public class RepositoryParser extends ClassProcessor{
             if(t.isPresent()) {
                 Type entity = t.get().get(0);
 
-                String nameAsString = entity.asClassOrInterfaceType().resolve().describe();
-                String fileName = basePath + File.separator + nameAsString.replaceAll("\\.","/") + SUFFIX;
-                CompilationUnit entityCu = javaParser.parse(
-                        new File(fileName)).getResult().orElseThrow(
-                                () -> new IllegalStateException("Parse error")
-                );
+                CompilationUnit entityCu = findEntity(entity);
 
-                String table = null;
-
-                for(var ann : entityCu.getTypes().get(0).getAnnotations()) {
-                    if(ann.getNameAsString().equals("Table")) {
-                        if(ann.isNormalAnnotationExpr()) {
-                            for(var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                                if(pair.getNameAsString().equals("name")) {
-                                    table = pair.getValue().toString();
-                                }
-                            }
-                        }
-                        else {
-                            table = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
-                        }
-                    }
-                }
+                String table = findTableName(entityCu);
 
                 for (var entry : queries.entrySet()) {
                     String query = entry.getValue();
                     try {
                         query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
                         Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
-                        convertFieldsToSnakeCase(stmt);
+                        convertFieldsToSnakeCase(stmt, entityCu);
                         System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
                     } catch (JSQLParserException e) {
                         System.out.println("\tUnparsable: " + query);
@@ -137,9 +87,40 @@ public class RepositoryParser extends ClassProcessor{
             }
         }
     }
-    private void convertFieldsToSnakeCase(Statement stmt) {
+
+    private static String findTableName(CompilationUnit entityCu) {
+        String table = null;
+
+        for(var ann : entityCu.getTypes().get(0).getAnnotations()) {
+            if(ann.getNameAsString().equals("Table")) {
+                if(ann.isNormalAnnotationExpr()) {
+                    for(var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                        if(pair.getNameAsString().equals("name")) {
+                            table = pair.getValue().toString();
+                        }
+                    }
+                }
+                else {
+                    table = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
+                }
+            }
+        }
+        return table;
+    }
+
+    private CompilationUnit findEntity(Type entity) throws FileNotFoundException {
+        String nameAsString = entity.asClassOrInterfaceType().resolve().describe();
+        String fileName = basePath + File.separator + nameAsString.replaceAll("\\.","/") + SUFFIX;
+        return javaParser.parse(
+                new File(fileName)).getResult().orElseThrow(
+                        () -> new IllegalStateException("Parse error")
+        );
+    }
+
+    private void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
         if(stmt instanceof  Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
+
             List<SelectItem<?>> items = select.getSelectItems();
             if(items.size() == 1 && items.get(0).toString().length() == 1) {
                 // This is a select * query but because it's an HQL query it appears as SELECT t
@@ -182,6 +163,58 @@ public class RepositoryParser extends ClassProcessor{
 
             if (select.getHaving() != null) {
                 select.setHaving(convertExpressionToSnakeCase(select.getHaving()));
+            }
+
+            List<Join> joins = select.getJoins();
+            if(joins != null) {
+                for (int i = 0 ; i < joins.size() ; i++) {
+                    Join j = joins.get(i);
+                    if (j.getRightItem() instanceof ParenthesedSelect) {
+                        convertFieldsToSnakeCase(((ParenthesedSelect) j.getRightItem()).getSelectBody(), entity);
+                    } else {
+                        FromItem a = j.getRightItem();
+                        // the toString() of this will look something like p.dischargeNurseRequest n
+                        // from this we need to extract the dischargeNurseRequest
+                        String[] parts = a.toString().split("\\.");
+                        if (parts.length == 2) {
+                            String field = parts[1].split(" ")[0];
+                            var x = entity.getType(0).getFieldByName(field);
+                            if(x.isPresent()) {
+                                var member = x.get();
+                                String lhs = null;
+                                String rhs = null;
+                                for(var ann : member.getAnnotations()) {
+                                    if(ann.getNameAsString().equals("JoinColumn")) {
+                                        if(ann.isNormalAnnotationExpr()) {
+                                            for(var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                                                if(pair.getNameAsString().equals("name")) {
+                                                    lhs = camelToSnake(pair.getValue().toString());
+                                                }
+                                                if(pair.getNameAsString().equals("referencedColumnName")) {
+                                                    rhs = camelToSnake(pair.getValue().toString());
+                                                }
+                                            }
+                                        }
+                                        else {
+                                            lhs = camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
+                                        }
+                                    }
+                                }
+                                CompilationUnit other = findEntity(member.getElementType());
+                                String tableName = findTableName(other);
+
+                                var f = j.getFromItem();
+                                if(f instanceof Table) {
+                                    j.setFromItem(new Table(tableName));
+                                }
+                                EqualsTo eq = new EqualsTo();
+                                eq.setLeftExpression(new Column("t." + lhs));
+                                eq.setRightExpression(new Column("p." + lhs));
+                                j.getOnExpressions().add(eq);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
