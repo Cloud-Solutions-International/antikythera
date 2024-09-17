@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -29,12 +30,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.github.javaparser.printer.DefaultPrettyPrinter;
-
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -49,13 +44,9 @@ import org.slf4j.LoggerFactory;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-    private final JavaParser javaParser;
-    private final JavaSymbolSolver symbolResolver;
-
     private final File controllers;
-    StringBuilder generatedCode = new StringBuilder();
     private CompilationUnit cu;
-    DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
+
     private CompilationUnit gen;
     private HashMap<String, String> parameterSet;
     private final Path dataPath;
@@ -67,14 +58,10 @@ public class RestControllerParser extends ClassProcessor {
      * @param controllers either a folder containing many controllers or a single controller
      */
     public RestControllerParser(File controllers) throws IOException {
+        super();
         this.controllers = controllers;
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
-        dataPath = Paths.get(Settings.getProperty("OUTPUT_PATH"), "src/test/resources/data");
+
+        dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
@@ -88,7 +75,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private void processRestController(File path) throws IOException {
-        System.out.println(path);
+        logger.debug(path.toString());
         if (path.isDirectory()) {
             int i = 0;
             for (File f : path.listFiles()) {
@@ -112,7 +99,7 @@ public class RestControllerParser extends ClassProcessor {
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
-            File file = new File(dataPath + "/" + controllerName + "Params.json");
+            File file = new File(dataPath + File.separator + controllerName + "Params.json");
             objectMapper.writeValue(file, parameterSet);
         }
     }
@@ -141,14 +128,11 @@ public class RestControllerParser extends ClassProcessor {
 
         gen.setPackageDeclaration(pd);
 
-        //removeUnwantedImports(cu.getImports());
         expandWildCards(cu);
 
         gen.addImport("com.cloud.api.base.TestHelper");
-
         gen.addImport("org.testng.annotations.Test");
         gen.addImport("org.testng.Assert");
-
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
         gen.addImport("io.restassured.http.Method");
         gen.addImport("io.restassured.response.Response");
@@ -157,25 +141,22 @@ public class RestControllerParser extends ClassProcessor {
 
         cu.accept(new MethodVisitor(), null);
 
-        removeUnusedImports(cu.getImports());
-
         for (String s : dependencies) {
-            if(! (s.startsWith("java.") || s.startsWith(basePackage))) {
-                continue;
-            }
+            gen.addImport(s);
+        }
+        for(String s: externalDependencies) {
             gen.addImport(s);
         }
 
-
         fileContent.append(gen.toString()).append("\n");
-        fileContent.append(generatedCode).append("\n");
-
         ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
 
         for(String dependency : dependencies) {
             copyDependencies(dependency);
         }
+
         dependencies.clear();
+        externalDependencies.clear();
     }
 
 
@@ -275,6 +256,11 @@ public class RestControllerParser extends ClassProcessor {
     }
 
 
+    /**
+     * Will be called for each method of the controller.
+     *
+     * We use it to identify the return types and the arguments of each method in the class.
+     */
     private class MethodVisitor extends VoidVisitorAdapter<Void> {
 
         @Override
@@ -307,16 +293,13 @@ public class RestControllerParser extends ClassProcessor {
                         returnType = findReturnType(blockStmt);
                     }
                 }
-                try {
-                    if (returnType != null) {
-                        extractComplexType(returnType, cu);
-                    }
-                    for(var param : md.getParameters()) {
-                        parameterSet.put(param.getName().toString(), "");
-                        extractComplexType(param.getType(), cu);
-                    }
-                } catch (IOException e) {
-                    throw new GeneratorException("Error extracting type", e);
+
+                if (returnType != null) {
+                    extractComplexType(returnType, cu);
+                }
+                for(var param : md.getParameters()) {
+                    parameterSet.put(param.getName().toString(), "");
+                    extractComplexType(param.getType(), cu);
                 }
 
                 createTests(md, returnType);
@@ -330,6 +313,19 @@ public class RestControllerParser extends ClassProcessor {
                 }
                 if(annotation.getNameAsString().equals("PostMapping")) {
                     buildPostMethodTests(md, annotation, returnType);
+                }
+                if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
+                    NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
+                    for (var pair : normalAnnotation.getPairs()) {
+                        if (pair.getNameAsString().equals("method")) {
+                            if (pair.getValue().toString().equals("RequestMethod.GET")) {
+                                buildGetMethodTests(md, annotation, returnType);
+                            }
+                            if (pair.getValue().toString().equals("RequestMethod.POST")) {
+                                buildPostMethodTests(md, annotation, returnType);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -402,26 +398,17 @@ public class RestControllerParser extends ClassProcessor {
                     var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
                         case "List": {
-                            dependencies.add("java.util.List");
-                            Type listType = new ClassOrInterfaceType(null, paramClassName);
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr("List.of");
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-
-                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
                             break;
                         }
+
+                        case "Set": {
+                            prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
+                            break;
+                        }
+
                         case "Map": {
-                            dependencies.add("java.util.Map");
-                            Type listType = new ClassOrInterfaceType(paramClassName);
-
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(listType, "req");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr("Map.of");
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-
-                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
                             break;
                         }
                         case "Integer":
@@ -474,6 +461,16 @@ public class RestControllerParser extends ClassProcessor {
                 }
             }
         }
+
+        private void prepareBody(String e, ClassOrInterfaceType paramClassName, String name, MethodDeclaration testMethod) {
+            dependencies.add(e);
+            VariableDeclarator variableDeclarator = new VariableDeclarator(paramClassName, "req");
+            MethodCallExpr methodCallExpr = new MethodCallExpr(name);
+            variableDeclarator.setInitializer(methodCallExpr);
+            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+
+            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+        }
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){
@@ -481,12 +478,11 @@ public class RestControllerParser extends ClassProcessor {
             String paramString = String.valueOf(param);
             if(!paramString.startsWith("@RequestBody")){
                 switch(param.getTypeAsString()) {
+
                     case "Integer":
                     case "int":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1");
-                        break;
                     case "Long":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1L");
+                        path = path.replace('{' + param.getNameAsString() +'}', "1");
                         break;
                     case "Boolean":
                         path = path.replace('{' + param.getNameAsString() +'}', "false");
@@ -499,6 +495,11 @@ public class RestControllerParser extends ClassProcessor {
         return path;
     }
 
+    /**
+     * Of the various params in the method, which one is the RequestBody
+     * @param md a method argument
+     * @return the parameter identified as the RequestBody
+     */
     private Parameter findRequestBody(MethodDeclaration md) {
         Parameter requestBody = md.getParameter(0);
         for(var param : md.getParameters()) {
@@ -509,6 +510,11 @@ public class RestControllerParser extends ClassProcessor {
         return requestBody;
     }
 
+    /**
+     * Given an annotation for a method in a controller find the full path in the url
+     * @param annotation a GetMapping, PostMapping etc
+     * @return the path url component
+     */
     private String getPath(AnnotationExpr annotation) {
         if (annotation.isSingleMemberAnnotationExpr()) {
             return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
@@ -524,6 +530,8 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     /**
+     * Each method in the controller will be a child of the main path for that controller
+     * which is represented by the RequestMapping for that controller
      *
      * @return the path from the RequestMapping Annotation or an empty string
      */
@@ -533,6 +541,10 @@ public class RestControllerParser extends ClassProcessor {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();
                 } else {
+                    var memberValue = classAnnotation.asSingleMemberAnnotationExpr().getMemberValue();
+                    if(memberValue.isArrayInitializerExpr()) {
+                        return memberValue.asArrayInitializerExpr().getValues().get(0).toString();
+                    }
                     return classAnnotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
                 }
             }
