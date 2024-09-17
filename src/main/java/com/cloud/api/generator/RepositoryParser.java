@@ -35,6 +35,12 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -45,12 +51,20 @@ import java.util.regex.Pattern;
 
 public class RepositoryParser extends ClassProcessor{
     Map<MethodDeclaration, String> queries;
-    public RepositoryParser() throws IOException {
+    Connection conn;
+    public RepositoryParser() throws IOException, SQLException {
         super();
         queries = new HashMap<>();
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if(db != null) {
+            conn = DriverManager.getConnection(db.get("url").toString(), db.get("user").toString(), db.get("password").toString());
+            try (java.sql.Statement statement = conn.createStatement()) {
+                statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
+            }
+        }
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, SQLException {
         Settings.loadConfigMap();
         RepositoryParser parser = new RepositoryParser();
         parser.process();
@@ -79,8 +93,43 @@ public class RepositoryParser extends ClassProcessor{
                         Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
                         convertFieldsToSnakeCase(stmt, entityCu);
                         System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
+
+                       String sql = stmt.toString().replace("true", "1").replaceAll("\\?\\d+", "?");
+
+                        PreparedStatement prep = conn.prepareStatement(sql);
+
+                        prep.setLong(1, 58);
+                        prep.setLong(2, 59);
+
+
+                        if(prep.execute()) {
+                            ResultSet rs = prep.getResultSet();
+
+                            ResultSetMetaData metaData = rs.getMetaData();
+                            int columnCount = metaData.getColumnCount();
+
+                            // Print column names
+                            for (int i = 1; i <= columnCount; i++) {
+                                System.out.print(metaData.getColumnName(i) + "\t");
+                            }
+                            System.out.println();
+
+                            int i = 0;
+                            while(rs.next() && i < 10) {
+                                for (int j = 1; j <= columnCount; j++) {
+                                    System.out.print(rs.getString(j) + "\t");
+                                }
+                                System.out.println();
+                                i++;
+                            }
+                        }
+
                     } catch (JSQLParserException e) {
                         System.out.println("\tUnparsable: " + query);
+                    } catch (SQLException e) {
+                        System.out.println("\tSQL Error: " + e.getMessage());
+                        throw new RuntimeException(e);
+                        //System.out.println("\t\t " + prep.toString());
                     }
                 }
             }
@@ -165,7 +214,6 @@ public class RepositoryParser extends ClassProcessor{
             if (select.getWhere() != null) {
                 select.setWhere(convertExpressionToSnakeCase(select.getWhere(), removed, true));
             }
-
 
             if (select.getGroupBy() != null) {
                 GroupByElement group = select.getGroupBy();
@@ -274,6 +322,8 @@ public class RepositoryParser extends ClassProcessor{
 
     /**
      * Recursively convert field names in expressions to snake case
+     *
+     * We violate SRP by also cleaning up some of the fields in the where clause
      * @param expr
      * @return the converted expression
      */
@@ -285,7 +335,9 @@ public class RepositoryParser extends ClassProcessor{
         }
         else if (expr instanceof  InExpression) {
             InExpression ine = (InExpression) expr;
-            if(where) {
+            Column col = (Column) ine.getLeftExpression();
+            if(where &&
+                    !(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
                 removed.add(ine.getLeftExpression());
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
