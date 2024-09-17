@@ -32,6 +32,8 @@ import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import org.checkerframework.checker.units.qual.A;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -51,6 +53,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RepositoryParser extends ClassProcessor{
+    private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     private Map<MethodDeclaration, String> queries;
     private Connection conn;
     private String dialect;
@@ -163,11 +166,9 @@ public class RepositoryParser extends ClassProcessor{
             }
 
         } catch (JSQLParserException e) {
-            System.out.println("\tUnparsable: " + query);
+            logger.error("\tUnparsable: {}", query);
         } catch (SQLException e) {
-            System.out.println("\tSQL Error: " + e.getMessage());
-          //  throw new RuntimeException(e);
-            //System.out.println("\t\t " + prep.toString());
+            logger.error("\tSQL Error: {}", e.getMessage());
         }
     }
 
@@ -351,17 +352,27 @@ public class RepositoryParser extends ClassProcessor{
                                 if(lhs == null || rhs == null) {
                                     // lets roll with an implicit join for now
                                     // todo fix this by figuring out the join column from other annotations
+                                    for(var column : other.getType(0).getFields()) {
+                                        for(var ann : column.getAnnotations()) {
+                                            if(ann.getNameAsString().equals("Id")) {
+                                                lhs = camelToSnake(column.getVariable(0).getNameAsString());
+                                                rhs = lhs;
+                                                break;
+                                            }
+                                        }
+                                    }
                                 }
-                                else {
-                                    if(dialect.equals(ORACLE)) {
-                                        lhs = lhs.replace("\"","");
-                                        rhs = rhs.replace("\"","");
+                                if(lhs != null && rhs != null) {
+                                    if (dialect.equals(ORACLE)) {
+                                        lhs = lhs.replace("\"", "");
+                                        rhs = rhs.replace("\"", "");
                                     }
                                     EqualsTo eq = new EqualsTo();
                                     eq.setLeftExpression(new Column(parts[0] + "." + lhs));
                                     eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
                                     j.getOnExpressions().add(eq);
                                 }
+
                             }
                         }
                         // if we have discovered a new entity add it to our collection for looking up
@@ -420,6 +431,7 @@ public class RepositoryParser extends ClassProcessor{
                 when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression(), removed, where));
                 when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression(), removed, where));
             }
+
         }
         else if (expr instanceof WhenClause) {
             WhenClause wh = (WhenClause) expr;
@@ -469,10 +481,11 @@ public class RepositoryParser extends ClassProcessor{
                     return expr;
                 }
             }
-            else {
-                compare.setRightExpression(convertExpressionToSnakeCase(right, removed, where));
-                compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
-            }
+
+            // common fall through for everything
+            compare.setRightExpression(convertExpressionToSnakeCase(right, removed, where));
+            compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+
         }
         else if (expr instanceof BinaryExpression) {
             BinaryExpression binaryExpr = (BinaryExpression) expr;
@@ -491,6 +504,9 @@ public class RepositoryParser extends ClassProcessor{
 
 
     public static String camelToSnake(String str) {
+        if(str.toLowerCase().equals("patientpomr")) {
+            return str;
+        }
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
