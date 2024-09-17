@@ -44,3 +44,4 @@ database:
   url: jdbc:oracle:thin:@//10.201.215.50:1521/VQPDB.hmg.local
   user: C##xstrm
   password: p08642xs
+  schema: EH_IP
