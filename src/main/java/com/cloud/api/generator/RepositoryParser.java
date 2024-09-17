@@ -4,6 +4,7 @@ import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
@@ -159,27 +160,30 @@ public class RepositoryParser extends ClassProcessor{
                 }
             }
 
+            List<Expression> removed = new ArrayList<>();
+
             if (select.getWhere() != null) {
-                select.setWhere(convertExpressionToSnakeCase(select.getWhere()));
+                select.setWhere(convertExpressionToSnakeCase(select.getWhere(), removed, true));
             }
+
 
             if (select.getGroupBy() != null) {
                 GroupByElement group = select.getGroupBy();
                 List<Expression> groupBy = group.getGroupByExpressions();
                 for (int i = 0; i < groupBy.size(); i++) {
-                    groupBy.set(i, convertExpressionToSnakeCase(groupBy.get(i)));
+                    groupBy.set(i, convertExpressionToSnakeCase(groupBy.get(i), removed, false));
                 }
             }
 
             if (select.getOrderByElements() != null) {
                 List<OrderByElement> orderBy = select.getOrderByElements();
                 for (int i = 0; i < orderBy.size(); i++) {
-                    orderBy.get(i).setExpression(convertExpressionToSnakeCase(orderBy.get(i).getExpression()));
+                    orderBy.get(i).setExpression(convertExpressionToSnakeCase(orderBy.get(i).getExpression(), removed, false));
                 }
             }
 
             if (select.getHaving() != null) {
-                select.setHaving(convertExpressionToSnakeCase(select.getHaving()));
+                select.setHaving(convertExpressionToSnakeCase(select.getHaving(), removed, false));
             }
 
             processJoins(entity, select);
@@ -273,56 +277,83 @@ public class RepositoryParser extends ClassProcessor{
      * @param expr
      * @return the converted expression
      */
-    private Expression convertExpressionToSnakeCase(Expression expr) {
+    private Expression convertExpressionToSnakeCase(Expression expr, List<Expression> removed, boolean where) {
         if (expr instanceof AndExpression) {
             AndExpression andExpr = (AndExpression) expr;
-            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression()));
-            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression()));
+            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), removed, where));
+            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), removed, where));
         }
         else if (expr instanceof  InExpression) {
             InExpression ine = (InExpression) expr;
-            ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression()));
+            if(where) {
+                removed.add(ine.getLeftExpression());
+                ine.setLeftExpression(new StringValue("1"));
+                ExpressionList<Expression> rightExpression = new ExpressionList<>();
+                rightExpression.add(new StringValue("1"));
+                ine.setRightExpression(rightExpression);
+            }
+            else {
+                ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression(), removed, where));
+            }
         }
         else if (expr instanceof IsNullExpression) {
             IsNullExpression isNull = (IsNullExpression) expr;
-            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression()));
+            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression(), removed, where));
         }
         else if (expr instanceof ParenthesedExpressionList) {
             ParenthesedExpressionList pel = (ParenthesedExpressionList) expr;
             for(int i = 0 ; i < pel.size() ; i++) {
-                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i)));
+                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i), removed, where));
             }
         }
         else if (expr instanceof CaseExpression) {
             CaseExpression ce = (CaseExpression) expr;
             for(int i = 0; i < ce.getWhenClauses().size(); i++) {
                 WhenClause when = ce.getWhenClauses().get(i);
-                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression()));
-                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression()));
+                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression(), removed, where));
+                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression(), removed, where));
             }
         }
         else if (expr instanceof WhenClause) {
             WhenClause wh = (WhenClause) expr;
-            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression()));
+            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression(), removed, where));
         }
         else if (expr instanceof Function) {
             Function function = (Function) expr;
             ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
             if(params != null) {
                 for (int i = 0; i < params.size(); i++) {
-                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i)));
+                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i), removed, where));
                 }
             }
         }
         else if (expr instanceof ComparisonOperator) {
-            ComparisonOperator equalsTo = (ComparisonOperator) expr;
-            equalsTo.setLeftExpression(convertExpressionToSnakeCase(equalsTo.getLeftExpression()));
-            equalsTo.setRightExpression(convertExpressionToSnakeCase(equalsTo.getRightExpression()));
+            ComparisonOperator compare = (ComparisonOperator) expr;
+
+            Expression left = compare.getLeftExpression();
+            Expression right = compare.getRightExpression();
+
+            if(left instanceof Column && right instanceof JdbcParameter || right instanceof JdbcNamedParameter) {
+                // we have a comparison so this is vary likely to be a part of the where clause.
+                // our object is to run a query to identify likely data. So removing as many
+                // components from the where clause is the way to go
+                Column col = (Column) left;
+                if(where &&
+                        !(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
+                    removed.add(left);
+
+                    compare.setLeftExpression(new StringValue("1"));
+                    compare.setRightExpression(new StringValue("1"));
+                    return expr;
+                }
+            }
+            compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+            compare.setRightExpression(convertExpressionToSnakeCase(right, removed, where));
         }
         else if (expr instanceof BinaryExpression) {
             BinaryExpression binaryExpr = (BinaryExpression) expr;
-            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression()));
-            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression()));
+            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression(), removed, where));
+            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression(), removed, where));
         } else if (expr instanceof Column) {
             Column column = (Column) expr;
             String columnName = column.getColumnName();

@@ -39,3 +39,8 @@ dependencies:
     - ${m2_folder}/com/csi/csi-microservices-base/1.1.2/csi-microservices-base-1.1.2.jar
     - ${m2_folder}/com/csi/csi-ehr-base/1.0.30/csi-ehr-base-1.0.30.jar
     - ${m2_folder}/com/csi/csi-error-handler/1.1.2/csi-error-handler-1.1.2.jar
+
+database:
+  url: jdbc:oracle:thin:@//10.201.215.50:1521/VQPDB.hmg.local
+  user: C##xstrm
+  password: p08642xs
