@@ -70,6 +70,21 @@ public class RepositoryParser extends ClassProcessor{
         parser.process();
     }
 
+    /**
+     * Count the number of parameters to bind.
+     * @param sql an sql statement as a string
+     * @return the number of place holder can be 0
+     */
+    private static int countPlaceholders(String sql) {
+        Pattern pattern = Pattern.compile("\\?");
+        Matcher matcher = pattern.matcher(sql);
+        int count = 0;
+        while (matcher.find()) {
+            count++;
+        }
+        return count;
+    }
+
     private void process() throws IOException {
         File f = new File("/home/raditha/workspace/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/discharge/DischargeDetailRepository.java");
         CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
@@ -94,13 +109,13 @@ public class RepositoryParser extends ClassProcessor{
                         convertFieldsToSnakeCase(stmt, entityCu);
                         System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
 
-                       String sql = stmt.toString().replace("true", "1").replaceAll("\\?\\d+", "?");
+                        String sql = stmt.toString().replace("true", "1").replaceAll("\\?\\d+", "?");
 
                         PreparedStatement prep = conn.prepareStatement(sql);
 
-                        prep.setLong(1, 58);
-                        prep.setLong(2, 59);
-
+                        for(int j = 0 ; j < countPlaceholders(sql) ; j++) {
+                            prep.setLong(j + 1, 1);
+                        }
 
                         if(prep.execute()) {
                             ResultSet rs = prep.getResultSet();
@@ -242,9 +257,9 @@ public class RepositoryParser extends ClassProcessor{
      * HQL joins use entity names instead of table name and column names.
      * We need to replace those with the proper table and column name syntax if we are to execut the
      * query through JDBC.
-     * @param entity
-     * @param select
-     * @throws FileNotFoundException
+     * @param entity the primary table or view for the join
+     * @param select the select statement
+     * @throws FileNotFoundException if we are unable to find related entities.
      */
     private void processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
         List<CompilationUnit> units = new ArrayList<>();
@@ -272,6 +287,9 @@ public class RepositoryParser extends ClassProcessor{
                                 var member = x.get();
                                 String lhs = null;
                                 String rhs = null;
+
+                                // find if there is a join column annotation, that will tell us the column names
+                                // to map for the on clause.
                                 for (var ann : member.getAnnotations()) {
                                     if (ann.getNameAsString().equals("JoinColumn")) {
                                         if (ann.isNormalAnnotationExpr()) {
@@ -380,6 +398,7 @@ public class RepositoryParser extends ClassProcessor{
             }
         }
         else if (expr instanceof ComparisonOperator) {
+            // Most where clause and having clause stuff have their leaves here.
             ComparisonOperator compare = (ComparisonOperator) expr;
 
             Expression left = compare.getLeftExpression();
@@ -390,17 +409,33 @@ public class RepositoryParser extends ClassProcessor{
                 // our object is to run a query to identify likely data. So removing as many
                 // components from the where clause is the way to go
                 Column col = (Column) left;
-                if(where &&
-                        !(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
-                    removed.add(left);
+                if(where) {
+                    if (!(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
+                        removed.add(left);
 
-                    compare.setLeftExpression(new StringValue("1"));
-                    compare.setRightExpression(new StringValue("1"));
+                        compare.setLeftExpression(new StringValue("1"));
+                        compare.setRightExpression(new StringValue("1"));
+                        return expr;
+                    }
+                }
+
+                // Because we are not sure in which horder the hospital id and the group id may have been
+                // specified in the query we set them here when we encounter it.
+                if(col.getColumnName().equals("hospitalId")) {
+                    compare.setRightExpression(new LongValue("59"));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+                    return expr;
+                }
+                else if(col.getColumnName().equals("hospitalGroupId")) {
+                    compare.setRightExpression(new LongValue("58"));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
                     return expr;
                 }
             }
-            compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
-            compare.setRightExpression(convertExpressionToSnakeCase(right, removed, where));
+            else {
+                compare.setRightExpression(convertExpressionToSnakeCase(right, removed, where));
+                compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+            }
         }
         else if (expr instanceof BinaryExpression) {
             BinaryExpression binaryExpr = (BinaryExpression) expr;
