@@ -4,7 +4,7 @@ import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
+
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
@@ -31,6 +31,7 @@ import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
+import org.checkerframework.checker.units.qual.A;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -50,14 +51,25 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RepositoryParser extends ClassProcessor{
-    Map<MethodDeclaration, String> queries;
-    Connection conn;
+    private Map<MethodDeclaration, String> queries;
+    private Connection conn;
+    private String dialect;
+    private static final String ORACLE = "oracle";
+    private static final String POSTGRESQL = "PG";
+
     public RepositoryParser() throws IOException, SQLException {
         super();
         queries = new HashMap<>();
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null) {
-            conn = DriverManager.getConnection(db.get("url").toString(), db.get("user").toString(), db.get("password").toString());
+            String url = db.get("url").toString();
+            if(url.contains(ORACLE)) {
+                dialect = ORACLE;
+            }
+            else {
+                dialect = POSTGRESQL;
+            }
+            conn = DriverManager.getConnection(url, db.get("user").toString(), db.get("password").toString());
             try (java.sql.Statement statement = conn.createStatement()) {
                 statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
             }
@@ -102,52 +114,60 @@ public class RepositoryParser extends ClassProcessor{
                 String table = findTableName(entityCu);
 
                 for (var entry : queries.entrySet()) {
-                    String query = entry.getValue();
-                    try {
-                        query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
-                        Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
-                        convertFieldsToSnakeCase(stmt, entityCu);
-                        System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
-
-                        String sql = stmt.toString().replace("true", "1").replaceAll("\\?\\d+", "?");
-
-                        PreparedStatement prep = conn.prepareStatement(sql);
-
-                        for(int j = 0 ; j < countPlaceholders(sql) ; j++) {
-                            prep.setLong(j + 1, 1);
-                        }
-
-                        if(prep.execute()) {
-                            ResultSet rs = prep.getResultSet();
-
-                            ResultSetMetaData metaData = rs.getMetaData();
-                            int columnCount = metaData.getColumnCount();
-
-                            // Print column names
-                            for (int i = 1; i <= columnCount; i++) {
-                                System.out.print(metaData.getColumnName(i) + "\t");
-                            }
-                            System.out.println();
-
-                            int i = 0;
-                            while(rs.next() && i < 10) {
-                                for (int j = 1; j <= columnCount; j++) {
-                                    System.out.print(rs.getString(j) + "\t");
-                                }
-                                System.out.println();
-                                i++;
-                            }
-                        }
-
-                    } catch (JSQLParserException e) {
-                        System.out.println("\tUnparsable: " + query);
-                    } catch (SQLException e) {
-                        System.out.println("\tSQL Error: " + e.getMessage());
-                        throw new RuntimeException(e);
-                        //System.out.println("\t\t " + prep.toString());
-                    }
+                    executeQuery(entry, entity, table, entityCu);
                 }
             }
+        }
+    }
+
+    private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
+        String query = entry.getValue();
+        try {
+            query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
+            Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
+            convertFieldsToSnakeCase(stmt, entityCu);
+            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
+
+            String sql = stmt.toString().replaceAll("\\?\\d+", "?");
+            if(dialect.equals(ORACLE)) {
+                sql = sql.replaceAll("(?i)true", "1")
+                        .replaceAll("(?i)false", "0");
+            }
+
+            PreparedStatement prep = conn.prepareStatement(sql);
+
+            for(int j = 0 ; j < countPlaceholders(sql) ; j++) {
+                prep.setLong(j + 1, 1);
+            }
+
+            if(prep.execute()) {
+                ResultSet rs = prep.getResultSet();
+
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();
+
+                // Print column names
+                for (int i = 1; i <= columnCount; i++) {
+                    System.out.print(metaData.getColumnName(i) + "\t");
+                }
+                System.out.println();
+
+                int i = 0;
+                while(rs.next() && i < 10) {
+                    for (int j = 1; j <= columnCount; j++) {
+                        System.out.print(rs.getString(j) + "\t");
+                    }
+                    System.out.println();
+                    i++;
+                }
+            }
+
+        } catch (JSQLParserException e) {
+            System.out.println("\tUnparsable: " + query);
+        } catch (SQLException e) {
+            System.out.println("\tSQL Error: " + e.getMessage());
+          //  throw new RuntimeException(e);
+            //System.out.println("\t\t " + prep.toString());
         }
     }
 
@@ -210,16 +230,22 @@ public class RepositoryParser extends ClassProcessor{
                 items.set(0, SelectItem.from(new AllColumns()));
             }
             else {
+                // here we deal with general projections
                 for (int i = 0; i < items.size(); i++) {
                     SelectItem<?> item = items.get(i);
                     String itemStr = item.toString();
-                    if (itemStr.contains(".")) {
-                        String[] parts = itemStr.split("\\.");
-                        if (parts.length == 2) {
-                            String field = parts[1];
-                            String snakeCaseField = camelToSnake(field);
-                            items.set(i, SelectItem.from(new Column(snakeCaseField)));
-                        }
+                    String[] parts = itemStr.split("\\.");
+
+                    if (itemStr.contains(".") && parts.length == 2) {
+                        String field = parts[1];
+                        String snakeCaseField = camelToSnake(field);
+                        SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
+                        items.set(i, col);
+                    }
+                    else {
+                        String snakeCaseField = camelToSnake(parts[0]);
+                        SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
+                        items.set(i, col);
                     }
                 }
             }
@@ -311,15 +337,26 @@ public class RepositoryParser extends ClassProcessor{
                                 other = findEntity(member.getElementType());
 
                                 String tableName = findTableName(other);
+                                if(dialect.equals(ORACLE)) {
+                                    tableName = tableName.replace("\"","");
+                                }
 
                                 var f = j.getFromItem();
                                 if (f instanceof Table) {
-                                    j.setFromItem(new Table(tableName));
+                                    Table t = new Table(tableName);
+                                    t.setAlias(f.getAlias());
+                                    j.setFromItem(t);
+
                                 }
                                 if(lhs == null || rhs == null) {
                                     // lets roll with an implicit join for now
+                                    // todo fix this by figuring out the join column from other annotations
                                 }
                                 else {
+                                    if(dialect.equals(ORACLE)) {
+                                        lhs = lhs.replace("\"","");
+                                        rhs = rhs.replace("\"","");
+                                    }
                                     EqualsTo eq = new EqualsTo();
                                     eq.setLeftExpression(new Column(parts[0] + "." + lhs));
                                     eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
@@ -494,7 +531,7 @@ public class RepositoryParser extends ClassProcessor{
                 queries.put(n, query);
             }
             else {
-                // todo the query needs to be build from the method name
+                // todo the query needs to be built from the method name
             }
         }
     }
