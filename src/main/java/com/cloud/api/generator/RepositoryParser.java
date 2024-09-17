@@ -7,18 +7,60 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
-import net.sf.jsqlparser.expression.BinaryExpression;
-import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.*;
+import net.sf.jsqlparser.expression.operators.arithmetic.Addition;
+import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseAnd;
+import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseLeftShift;
+import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseOr;
+import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseRightShift;
+import net.sf.jsqlparser.expression.operators.arithmetic.BitwiseXor;
+import net.sf.jsqlparser.expression.operators.arithmetic.Concat;
+import net.sf.jsqlparser.expression.operators.arithmetic.Division;
+import net.sf.jsqlparser.expression.operators.arithmetic.IntegerDivision;
+import net.sf.jsqlparser.expression.operators.arithmetic.Modulo;
+import net.sf.jsqlparser.expression.operators.arithmetic.Multiplication;
+import net.sf.jsqlparser.expression.operators.arithmetic.Subtraction;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
+import net.sf.jsqlparser.expression.operators.conditional.XorExpression;
+import net.sf.jsqlparser.expression.operators.relational.Between;
+import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
+import net.sf.jsqlparser.expression.operators.relational.ContainedBy;
+import net.sf.jsqlparser.expression.operators.relational.Contains;
+import net.sf.jsqlparser.expression.operators.relational.DoubleAnd;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.ExcludesExpression;
+import net.sf.jsqlparser.expression.operators.relational.ExistsExpression;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.expression.operators.relational.FullTextSearch;
+import net.sf.jsqlparser.expression.operators.relational.GeometryDistance;
+import net.sf.jsqlparser.expression.operators.relational.GreaterThan;
+import net.sf.jsqlparser.expression.operators.relational.GreaterThanEquals;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.IncludesExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsBooleanExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsDistinctExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.expression.operators.relational.JsonOperator;
+import net.sf.jsqlparser.expression.operators.relational.LikeExpression;
+import net.sf.jsqlparser.expression.operators.relational.Matches;
+import net.sf.jsqlparser.expression.operators.relational.MemberOfExpression;
+import net.sf.jsqlparser.expression.operators.relational.MinorThan;
+import net.sf.jsqlparser.expression.operators.relational.MinorThanEquals;
+import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
+import net.sf.jsqlparser.expression.operators.relational.RegExpMatchOperator;
+import net.sf.jsqlparser.expression.operators.relational.SimilarToExpression;
+import net.sf.jsqlparser.expression.operators.relational.TSQLLeftJoin;
+import net.sf.jsqlparser.expression.operators.relational.TSQLRightJoin;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
+import net.sf.jsqlparser.statement.select.AllTableColumns;
 import net.sf.jsqlparser.statement.select.GroupByElement;
 import net.sf.jsqlparser.statement.select.OrderByElement;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
@@ -151,13 +193,43 @@ public class RepositoryParser extends ClassProcessor{
             andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression()));
             andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression()));
         }
+        else if (expr instanceof  InExpression) {
+            InExpression ine = (InExpression) expr;
+            ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression()));
+        }
+        else if (expr instanceof IsNullExpression) {
+            IsNullExpression isNull = (IsNullExpression) expr;
+            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression()));
+        }
+        else if (expr instanceof ParenthesedExpressionList) {
+            ParenthesedExpressionList pel = (ParenthesedExpressionList) expr;
+            for(int i = 0 ; i < pel.size() ; i++) {
+                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i)));
+            }
+        }
+        else if (expr instanceof CaseExpression) {
+            CaseExpression ce = (CaseExpression) expr;
+            for(int i = 0; i < ce.getWhenClauses().size(); i++) {
+                WhenClause when = ce.getWhenClauses().get(i);
+                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression()));
+                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression()));
+            }
+        }
+        else if (expr instanceof WhenClause) {
+            WhenClause wh = (WhenClause) expr;
+            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression()));
+        }
         else if (expr instanceof Function) {
             Function function = (Function) expr;
-            ExpressionList<?> params = function.getParameters();
-            function.getParameters();
+            ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
+            if(params != null) {
+                for (int i = 0; i < params.size(); i++) {
+                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i)));
+                }
+            }
         }
-        else if (expr instanceof EqualsTo) {
-            EqualsTo equalsTo = (EqualsTo) expr;
+        else if (expr instanceof ComparisonOperator) {
+            ComparisonOperator equalsTo = (ComparisonOperator) expr;
             equalsTo.setLeftExpression(convertExpressionToSnakeCase(equalsTo.getLeftExpression()));
             equalsTo.setRightExpression(convertExpressionToSnakeCase(equalsTo.getRightExpression()));
         }
@@ -175,6 +247,7 @@ public class RepositoryParser extends ClassProcessor{
         }
         return expr;
     }
+
 
     public static String camelToSnake(String str) {
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
