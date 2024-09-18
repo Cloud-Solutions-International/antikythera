@@ -1,65 +1,73 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-    private final JavaParser javaParser;
-    private final JavaSymbolSolver symbolResolver;
-
     private final File controllers;
-    StringBuilder generatedCode = new StringBuilder();
     private CompilationUnit cu;
+
+    private CompilationUnit gen;
+    private HashMap<String, String> parameterSet;
+    private final Path dataPath;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Creates a new RestControllerParser
      *
      * @param controllers either a folder containing many controllers or a single controller
      */
-    public RestControllerParser(File controllers)  {
+    public RestControllerParser(File controllers) throws IOException {
+        super();
         this.controllers = controllers;
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
+
+        dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
+
+        // Check if the dataPath directory exists, if not, create it
+        if (!Files.exists(dataPath)) {
+            Files.createDirectories(dataPath);
+        }
+
     }
 
     public void start() throws IOException {
@@ -67,7 +75,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private void processRestController(File path) throws IOException {
-        System.out.println(path);
+        logger.debug(path.toString());
         if (path.isDirectory()) {
             int i = 0;
             for (File f : path.listFiles()) {
@@ -78,11 +86,21 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
+            Pattern pattern = Pattern.compile(".*/([^/]+)\\.java$");
+            Matcher matcher = pattern.matcher(path.toString());
+
+            String controllerName = null;
+            if (matcher.find()) {
+                controllerName = matcher.group(1);
+            }
+            parameterSet = new HashMap<>();
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
+            File file = new File(dataPath + File.separator + controllerName + "Params.json");
+            objectMapper.writeValue(file, parameterSet);
         }
     }
 
@@ -103,44 +121,42 @@ public class RestControllerParser extends ClassProcessor {
 
     private void processRestController(PackageDeclaration pd) throws IOException {
         StringBuilder fileContent = new StringBuilder();
+        gen = new CompilationUnit();
 
-        removeUnwantedImports(cu.getImports());
+        ClassOrInterfaceDeclaration cdecl = gen.addClass(cu.getTypes().get(0).getName() + "Test");
+        cdecl.addExtendedType("TestHelper");
+
+        gen.setPackageDeclaration(pd);
+
         expandWildCards(cu);
 
-        fileContent.append("package " + pd.getName() + ";").append("\n");
-        fileContent.append("\n").append("\n");
-        fileContent.append("import com.cloud.api.base.TestHelper;").append("\n");
-
-        fileContent.append("import org.testng.annotations.Test;").append("\n");
-        fileContent.append("import org.testng.Assert;\n").append("\n");
-
-        fileContent.append("import com.fasterxml.jackson.core.JsonProcessingException;").append("\n");
-        fileContent.append("import io.restassured.http.Method;").append("\n");
-        fileContent.append("import io.restassured.response.Response;").append("\n");
-        fileContent.append("import com.cloud.core.annotations.TestCaseType;").append("\n");
-        fileContent.append("import com.cloud.core.enums.TestType;").append("\n");
+        gen.addImport("com.cloud.api.base.TestHelper");
+        gen.addImport("org.testng.annotations.Test");
+        gen.addImport("org.testng.Assert");
+        gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
+        gen.addImport("io.restassured.http.Method");
+        gen.addImport("io.restassured.response.Response");
+        gen.addImport("com.cloud.core.annotations.TestCaseType");
+        gen.addImport("com.cloud.core.enums.TestType");
 
         cu.accept(new MethodVisitor(), null);
 
-        //removeUnusedImports(cu.getImports());
-
         for (String s : dependencies) {
-            fileContent.append("import " + s + ";").append("\n");
+            gen.addImport(s);
+        }
+        for(String s: externalDependencies) {
+            gen.addImport(s);
         }
 
-        fileContent.append("\n").append("\n");
-        fileContent.append("public class " + cu.getTypes().get(0).getName() + "Test extends TestHelper {").append("\n");
-
-        fileContent.append(generatedCode).append("\n");
-
-        fileContent.append("}").append("\n");
-
+        fileContent.append(gen.toString()).append("\n");
         ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
 
         for(String dependency : dependencies) {
             copyDependencies(dependency);
         }
+
         dependencies.clear();
+        externalDependencies.clear();
     }
 
 
@@ -240,6 +256,11 @@ public class RestControllerParser extends ClassProcessor {
     }
 
 
+    /**
+     * Will be called for each method of the controller.
+     *
+     * We use it to identify the return types and the arguments of each method in the class.
+     */
     private class MethodVisitor extends VoidVisitorAdapter<Void> {
 
         @Override
@@ -272,15 +293,13 @@ public class RestControllerParser extends ClassProcessor {
                         returnType = findReturnType(blockStmt);
                     }
                 }
-                try {
-                    if (returnType != null) {
-                        extractComplexType(returnType, cu);
-                    }
-                    for(var param : md.getParameters()) {
-                        extractComplexType(param.getType(), cu);
-                    }
-                } catch (IOException e) {
-                    throw new GeneratorException("Error extracting type", e);
+
+                if (returnType != null) {
+                    extractComplexType(returnType, cu);
+                }
+                for(var param : md.getParameters()) {
+                    parameterSet.put(param.getName().toString(), "");
+                    extractComplexType(param.getType(), cu);
                 }
 
                 createTests(md, returnType);
@@ -295,120 +314,207 @@ public class RestControllerParser extends ClassProcessor {
                 if(annotation.getNameAsString().equals("PostMapping")) {
                     buildPostMethodTests(md, annotation, returnType);
                 }
+                if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
+                    NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
+                    for (var pair : normalAnnotation.getPairs()) {
+                        if (pair.getNameAsString().equals("method")) {
+                            if (pair.getValue().toString().equals("RequestMethod.GET")) {
+                                buildGetMethodTests(md, annotation, returnType);
+                            }
+                            if (pair.getValue().toString().equals("RequestMethod.POST")) {
+                                buildPostMethodTests(md, annotation, returnType);
+                            }
+                        }
+                    }
+                }
             }
+        }
+
+        private MethodDeclaration buildTestMethod(MethodDeclaration md) {
+            MethodDeclaration testMethod = new MethodDeclaration();
+
+            NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
+            testCaseTypeAnnotation.setName("TestCaseType");
+            testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
+
+            testMethod.addAnnotation(testCaseTypeAnnotation);
+            testMethod.addAnnotation("Test");
+            StringBuilder paramNames = new StringBuilder();
+            for(var param : md.getParameters()) {
+                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                        .append(param.getNameAsString().substring(1));
+            }
+
+            String testName = md.getName() + "By" + paramNames + "Test";
+            testMethod.setName(testName);
+
+            BlockStmt body = new BlockStmt();
+
+            testMethod.setType(new VoidType());
+
+            testMethod.setBody(body);
+            return testMethod;
+        }
+
+        private void addCheckStatus(MethodDeclaration md) {
+            MethodCallExpr check = new MethodCallExpr("checkStatusCode");
+            check.addArgument(new NameExpr("response"));
+            md.getBody().get().addStatement(new ExpressionStmt(check));
         }
 
         private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            MethodDeclaration testMethod = buildTestMethod(md);
+            MethodCallExpr makeGetCall = new MethodCallExpr("makeGet");
+            makeGetCall.addArgument(new NameExpr("headers"));
+
             if(md.getParameters().isEmpty()) {
-                generatedCode.append("""
-                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
-                        \t@Test
-                        \tpublic void %sTest() {
-                        \t\tResponse response = makeGet(headers, "%s");
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll();
-                        \t}\n
-                        """.formatted(md.getName(),
-                        getPath(annotation).replace("\"", "")));
+                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
             }
             else {
-                String path = getPath(annotation).replace("\"", "");
-                StringBuilder paramNames = new StringBuilder();
-                for(var param : md.getParameters()) {
-                    switch(param.getTypeAsString()) {
-                        case "Integer":
-                        case "int":
-                            path = path.replace('{' + param.getNameAsString() +'}', "1");
-                            break;
-                        case "Long":
-                            path = path.replace('{' + param.getNameAsString() +'}', "1L");
-                            break;
-                        case "String":
-                            path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
-                            break;
-                    }
-                    paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                            .append(param.getNameAsString().substring(1));
-                }
-
-                String testName = md.getName() + "By" + paramNames.toString() + "Test";
-                generatedCode.append("""
-                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
-                        \t@Test
-                        \tpublic void %s() {
-                        \t\tResponse response = makeGet(headers, "%s");
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll();
-                        \t}\n
-                        """.formatted(testName, path));
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                makeGetCall.addArgument(new StringLiteralExpr(path));
             }
+            VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
+            AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
+            BlockStmt body = testMethod.getBody().get();
+            body.addStatement(new ExpressionStmt(assignExpr));
+
+            addCheckStatus(testMethod);
+            gen.getType(0).addMember(testMethod);
+
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
-            if(md.getParameters().isEmpty()) {
+            MethodDeclaration testMethod = buildTestMethod(md);
+            MethodCallExpr makeGetCall = new MethodCallExpr("makePost");
 
-            }
-            else {
-                Parameter param = md.getParameter(0);
-                String paramClassName = param.getTypeAsString();
-                String body = "objectMapper.writeValueAsString(%s)";
-                var assignment = "%s %s = new %s();".formatted(paramClassName, classToInstanceName(paramClassName), paramClassName);
 
-                if(param.getType().isClassOrInterfaceType()) {
-                    var cdecl = param.getType().asClassOrInterfaceType();
+            if(md.getParameters().isNonEmpty()) {
+                Parameter requestBody = findRequestBody(md);
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                String paramClassName = requestBody.getTypeAsString();
+
+                if(requestBody.getType().isClassOrInterfaceType()) {
+                    var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
-                        case "List":
-                            assignment = "%s list = List.of();".formatted(paramClassName);
-                            body = body.formatted("list");
+                        case "List": {
+                            prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
                             break;
-                        case "Map":
-                            assignment = "%s map = Map.of();".formatted(paramClassName);
-                            body = body.formatted("map");
-                            break;
-                        default:
-                            body = body.formatted(classToInstanceName(paramClassName));
-                    }
-                }
+                        }
 
-                generatedCode.append("""
-                        \n\t@TestCaseType(types = {TestType.BVT, TestType.REGRESSION})
-                        \t@Test
-                        \tpublic void %sTest() throws JsonProcessingException {
-                        \t\t%s
-                        \t\tResponse response = makePost(%s, headers, \n\t\t\t"%s");
-                        \t\t// Assert that the response status code is in the 2xx range, indicating a successful response (e.g., 200, 201)
-                        \t\tsoftAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),\s
-                                             "Expected status code starting with 2xx, but got: " + response.getStatusCode());
-                        \t\tsoftAssert.assertAll(); 
-                        """.formatted(md.getName(),
-                        assignment,
-                        body, getPath(annotation).replace("\"", "")));
+                        case "Set": {
+                            prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
+                            break;
+                        }
+
+                        case "Map": {
+                            prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
+                            break;
+                        }
+                        case "Integer":
+                        case "Long": {
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
+                            variableDeclarator.setInitializer("0");
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+
+                            break;
+                        }
+
+                        default:
+                            ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
+                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
+                            variableDeclarator.setInitializer(objectCreationExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                    }
+
+
+                    MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                    writeValueAsStringCall.addArgument(new NameExpr("req"));
+                    makeGetCall.addArgument(writeValueAsStringCall);
+                    testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    makeGetCall.addArgument(new NameExpr("headers"));
+
+                }
+                makeGetCall.addArgument(new StringLiteralExpr(path));
+
+
+                gen.getType(0).addMember(testMethod);
+
+                VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
+                AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
+                testMethod.getBody().get().addStatement(new ExpressionStmt(assignExpr));
+
+                addCheckStatus(testMethod);
 
                 if(returnType != null) {
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                    } else {
-                        if(returnType.toString().equals(paramClassName)) {
-                            // special case. The return type and the data that are posted to the server happen to be the same.
-                            generatedCode.append("""
-                                \t\t%s res%s = response.as(%s.class);
-                                """.formatted(returnType.asString(), returnType.toString(), returnType.asString()));
+                    } else if(!returnType.toString().equals("void")){
+                        if(returnType.toString().equals(md.getParameter(0).getTypeAsString())) {
+
                         }
                         else {
-                            generatedCode.append("""
-                                    \t\t%s %s = response.as(%s.class);
-                                    """.formatted(returnType.asString(), classToInstanceName(returnType.asString()), returnType.asString()));
+
                         }
                     }
                 }
-                generatedCode.append("\t}\n\n");
             }
+        }
+
+        private void prepareBody(String e, ClassOrInterfaceType paramClassName, String name, MethodDeclaration testMethod) {
+            dependencies.add(e);
+            VariableDeclarator variableDeclarator = new VariableDeclarator(paramClassName, "req");
+            MethodCallExpr methodCallExpr = new MethodCallExpr(name);
+            variableDeclarator.setInitializer(methodCallExpr);
+            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+
+            testMethod.getBody().get().addStatement(variableDeclarationExpr);
         }
     }
 
+    private String handlePathVariables(MethodDeclaration md, String path){
+        for(var param : md.getParameters()) {
+            String paramString = String.valueOf(param);
+            if(!paramString.startsWith("@RequestBody")){
+                switch(param.getTypeAsString()) {
+
+                    case "Integer":
+                    case "int":
+                    case "Long":
+                        path = path.replace('{' + param.getNameAsString() +'}', "1");
+                        break;
+                    case "Boolean":
+                        path = path.replace('{' + param.getNameAsString() +'}', "false");
+                        break;
+                    case "String":
+                        path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+                }
+            }
+        }
+        return path;
+    }
+
+    /**
+     * Of the various params in the method, which one is the RequestBody
+     * @param md a method argument
+     * @return the parameter identified as the RequestBody
+     */
+    private Parameter findRequestBody(MethodDeclaration md) {
+        Parameter requestBody = md.getParameter(0);
+        for(var param : md.getParameters()) {
+            if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
+                return param;
+            }
+        }
+        return requestBody;
+    }
+
+    /**
+     * Given an annotation for a method in a controller find the full path in the url
+     * @param annotation a GetMapping, PostMapping etc
+     * @return the path url component
+     */
     private String getPath(AnnotationExpr annotation) {
         if (annotation.isSingleMemberAnnotationExpr()) {
             return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
@@ -423,16 +529,26 @@ public class RestControllerParser extends ClassProcessor {
         return "";
     }
 
+    /**
+     * Each method in the controller will be a child of the main path for that controller
+     * which is represented by the RequestMapping for that controller
+     *
+     * @return the path from the RequestMapping Annotation or an empty string
+     */
     private String getCommonPath() {
         for (var classAnnotation : cu.getTypes().get(0).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();
                 } else {
+                    var memberValue = classAnnotation.asSingleMemberAnnotationExpr().getMemberValue();
+                    if(memberValue.isArrayInitializerExpr()) {
+                        return memberValue.asArrayInitializerExpr().getValues().get(0).toString();
+                    }
                     return classAnnotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
                 }
             }
         }
-        return null;
+        return "";
     }
 }
