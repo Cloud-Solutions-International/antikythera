@@ -413,7 +413,7 @@ public class RestControllerParser extends ClassProcessor {
             makeGetCall.addArgument(new NameExpr("headers"));
 
             if(md.getParameters().isNonEmpty()){
-                setPathVariables(md, getPath(annotation).replace("\"", ""));
+                setPathVariables(md);
             }
 
             makeGetCall.addArgument(new NameExpr("relativeUrl"));
@@ -436,7 +436,7 @@ public class RestControllerParser extends ClassProcessor {
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
-                setPathVariables(md, getPath(annotation).replace("\"", ""));
+                setPathVariables(md);
                 String paramClassName = requestBody.getTypeAsString();
 
                 if(requestBody.getType().isClassOrInterfaceType()) {
