@@ -472,12 +472,7 @@ public class RestControllerParser extends ClassProcessor {
                         case "Object": {
                             // SOme methods incorrectly have their DTO listed as of type Object. We will treat
                             // as a String
-                            ClassOrInterfaceType str = new ClassOrInterfaceType(null, "String");
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(str, "req");
-                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, str, new NodeList<>());
-                            variableDeclarator.setInitializer(objectCreationExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
                             break;
                         }
 
@@ -500,7 +495,6 @@ public class RestControllerParser extends ClassProcessor {
                 }
                 makeGetCall.addArgument(new StringLiteralExpr(path));
 
-
                 gen.getType(0).addMember(testMethod);
 
                 VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
@@ -511,13 +505,17 @@ public class RestControllerParser extends ClassProcessor {
 
                 if(returnType != null) {
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                    } else if(!returnType.toString().equals("void")){
-                        if(returnType.toString().equals(md.getParameter(0).getTypeAsString())) {
-
-                        }
-                        else {
-
-                        }
+                        System.out.println();
+                    } else if(!
+                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                        Type resp = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        VariableDeclarator variableDeclarator = new VariableDeclarator(resp, "resp");
+                        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                        methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                        variableDeclarator.setInitializer(methodCallExpr);
+                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                        testMethod.getBody().get().addStatement(expressionStmt);
                     }
                 }
             }
