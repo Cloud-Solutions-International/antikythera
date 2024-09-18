@@ -35,7 +35,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -160,6 +162,15 @@ public class RestControllerParser extends ClassProcessor {
     }
 
 
+    /**
+     * Find the return type of a method.
+     *
+     * This is a recursive function that will begin at the block that denotes the body of the method.
+     * thereafter it will descend into child blocks that are parts of conditionals or try catch blocks
+     *
+     * @param blockStmt
+     * @return
+     */
     private Type findReturnType(BlockStmt blockStmt) {
         Map<String, Type> variables = new HashMap<>();
         Map<String, Type> fields = getFields(cu);
@@ -255,6 +266,19 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
+    private class MethodCallVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+        private final MethodDeclaration method;
+
+        public MethodCallVisitor(MethodDeclaration method) {
+            this.method = method;
+        }
+
+        @Override
+        public void visit(MethodCallExpr methodCallExpr, MethodDeclaration method) {
+            super.visit(methodCallExpr, method);
+            System.out.println(method.getNameAsString() + "  " + methodCallExpr.getNameAsString());
+        }
+    }
 
     /**
      * Will be called for each method of the controller.
@@ -266,12 +290,14 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-
             if (md.isPublic()) {
                 if(md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
                 logger.debug("Method: {}\n", md.getName());
+
+                md.accept(new MethodCallVisitor(md), md);
+
                 Type returnType = null;
                 Type methodType = md.getType();
                 if (methodType.asString().contains("<")) {
