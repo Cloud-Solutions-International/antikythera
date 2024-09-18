@@ -1,6 +1,8 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +47,7 @@ class ProjectGeneratorTest {
         String relativePath = "TestDummyFile.java";
         String content = "public class TestDummyFile {}";
         File file = new File(
-                Settings.getProperty("OUTPUT_PATH") + File.separator + "src" + File.separator + "main"
+                Settings.getProperty("output_path") + File.separator + "src" + File.separator + "main"
                         + File.separator + "java" + File.separator + relativePath);
         if (file.exists()) {
             Files.delete(file.toPath());
@@ -57,23 +59,23 @@ class ProjectGeneratorTest {
 
     @Test
     void writeFilesToTestCreatesFileWithContent() throws IOException {
-        String belongingPackage = Settings.getProperty("BASE_PACKAGE")  + ".controller";
+        String belongingPackage = Settings.getProperty("base_package")  + ".controller";
         String filename = "TestDummyFile.java";
         String content = "public class TestDummyFile {}";
         generator.writeFilesToTest(belongingPackage, filename, content);
-        File file = new File(Settings.getProperty("OUTPUT_PATH") + File.separator + "src" + File.separator +
+        File file = new File(Settings.getProperty("output_path") + File.separator + "src" + File.separator +
                 "test" + File.separator + "java" + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename);
         assertTrue(file.exists());
         assertEquals(content, Files.readString(file.toPath()));
     }
 
     @Test
-    void generateCreatesMavenProjectStructure() throws IOException {
+    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException {
         generator.generate();
 
-        String outputPath = Settings.getProperty("OUTPUT_PATH");
+        String outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
-        String basePackage = Settings.getProperty("BASE_PACKAGE").replace(".", File.separator);
+        String basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString().replace(".", File.separator);
         File mainJavaDir = new File(outputPath + File.separator + "src" + File.separator
                 + "main" + File.separator + "java" + File.separator + basePackage);
         File mainResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "resources");
