@@ -116,20 +116,21 @@ public class ClassProcessor {
                     }
                 }
             }
-
-            try {
-                String description = classType.removeTypeArguments().resolve().describe();
-                if (!description.startsWith("java.")) {
-                    for (var jarSolver : jarSolvers) {
-                        if(jarSolver.getKnownClasses().contains(description)) {
-                            externalDependencies.add(description);
-                            return;
+            else {
+                try {
+                    String description = classType.resolve().describe();
+                    if (!description.startsWith("java.")) {
+                        for (var jarSolver : jarSolvers) {
+                            if(jarSolver.getKnownClasses().contains(description)) {
+                                externalDependencies.add(description);
+                                return;
+                            }
                         }
+                        dependencies.add(description);
                     }
-                    dependencies.add(description);
+                } catch (UnsolvedSymbolException e) {
+                    findImport(dependencyCu, mainType);
                 }
-            } catch (UnsolvedSymbolException e) {
-                findImport(dependencyCu, mainType);
             }
         }
     }
