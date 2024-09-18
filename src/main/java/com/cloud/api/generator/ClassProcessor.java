@@ -217,7 +217,7 @@ public class ClassProcessor {
                         externalDependencies.contains(nameAsString)) {
                         return false;
                     }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
+                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.") || nameAsString.contains("constants.")) {
                         return false;
                     }
 
