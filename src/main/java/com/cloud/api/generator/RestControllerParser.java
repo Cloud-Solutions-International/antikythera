@@ -48,7 +48,13 @@ public class RestControllerParser extends ClassProcessor {
     private CompilationUnit cu;
 
     private CompilationUnit gen;
-    private HashMap<String, String> parameterSet;
+    private HashMap<String, Object> parameterSet;
+    private final Map<String, ?> typeDefsForPathVars = Map.of(
+            "Integer", 1,
+            "int", 1,
+            "Long", 1L,
+            "String", "Ibuprofen"
+    );
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -99,7 +105,7 @@ public class RestControllerParser extends ClassProcessor {
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
-            File file = new File(dataPath + File.separator + controllerName + "Params.json");
+            File file = new File(dataPath + File.separator + controllerName + "PathVars.json");
             objectMapper.writeValue(file, parameterSet);
         }
     }
@@ -134,6 +140,8 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("org.testng.annotations.Test");
         gen.addImport("org.testng.Assert");
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
+        gen.addImport("java.io.IOException");
+        gen.addImport("java.util.List");
         gen.addImport("io.restassured.http.Method");
         gen.addImport("io.restassured.response.Response");
         gen.addImport("com.cloud.core.annotations.TestCaseType");
@@ -298,7 +306,6 @@ public class RestControllerParser extends ClassProcessor {
                     extractComplexType(returnType, cu);
                 }
                 for(var param : md.getParameters()) {
-                    parameterSet.put(param.getName().toString(), "");
                     extractComplexType(param.getType(), cu);
                 }
 
@@ -345,7 +352,12 @@ public class RestControllerParser extends ClassProcessor {
                         .append(param.getNameAsString().substring(1));
             }
 
-            String testName = md.getName() + "By" + paramNames + "Test";
+            String testName = String.valueOf(md.getName());
+            if (md.getParameters().isNonEmpty()) {
+                testName += "By" + paramNames + "Test";
+            } else {
+                testName += "Test";
+            }
             testMethod.setName(testName);
 
             BlockStmt body = new BlockStmt();
@@ -362,18 +374,50 @@ public class RestControllerParser extends ClassProcessor {
             md.getBody().get().addStatement(new ExpressionStmt(check));
         }
 
+        private void addBuildRelativeUrl(MethodDeclaration md, MethodDeclaration testMethod) {
+            testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
+            MethodCallExpr buildRelativeUrlCall = new MethodCallExpr("buildRelativeUrl");
+            buildRelativeUrlCall.addArgument(new StringLiteralExpr(cu.getTypes().get(0).getNameAsString()));
+            AnnotationExpr annotation = md.getAnnotations().get(0);
+
+            String path = md.getParameters().isEmpty() && annotation.getNameAsString().equals("GetMapping")
+                    ? getCommonPath()
+                    : getPath(annotation);
+            buildRelativeUrlCall.addArgument(new StringLiteralExpr(path.replace("\"", "")));
+
+            List<String> pathVars = new ArrayList<>();
+            for (Parameter p : md.getParameters()) {
+                boolean hasRequestBodyAnnotation = false;
+                for (AnnotationExpr paramAnnotation : p.getAnnotations()) {
+                    if (paramAnnotation.getNameAsString().contains("RequestBody")) {
+                        hasRequestBodyAnnotation = true;
+                        break;
+                    }
+                }
+                if (!hasRequestBodyAnnotation) {
+                    pathVars.add("\"" + p.getNameAsString() + "\"");
+                }
+            }
+            String pathVarsString = String.join(", ", pathVars);
+            buildRelativeUrlCall.addArgument(new NameExpr("List.of(" + pathVarsString + ")"));
+
+            VariableDeclarationExpr relativeUrl = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "String"), "relativeUrl");
+            AssignExpr assignExpr = new AssignExpr(relativeUrl, buildRelativeUrlCall, AssignExpr.Operator.ASSIGN);
+            testMethod.getBody().get().addStatement(new ExpressionStmt(assignExpr));
+        }
+
         private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
             MethodDeclaration testMethod = buildTestMethod(md);
+            addBuildRelativeUrl(md, testMethod);
             MethodCallExpr makeGetCall = new MethodCallExpr("makeGet");
             makeGetCall.addArgument(new NameExpr("headers"));
 
-            if(md.getParameters().isEmpty()) {
-                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
+            if(md.getParameters().isNonEmpty()){
+                setPathVariables(md);
             }
-            else {
-                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
-                makeGetCall.addArgument(new StringLiteralExpr(path));
-            }
+
+            makeGetCall.addArgument(new NameExpr("relativeUrl"));
+
             VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
             AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
             BlockStmt body = testMethod.getBody().get();
@@ -386,12 +430,13 @@ public class RestControllerParser extends ClassProcessor {
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
             MethodDeclaration testMethod = buildTestMethod(md);
+            addBuildRelativeUrl(md, testMethod);
             MethodCallExpr makeGetCall = new MethodCallExpr("makePost");
 
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
-                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                setPathVariables(md);
                 String paramClassName = requestBody.getTypeAsString();
 
                 if(requestBody.getType().isClassOrInterfaceType()) {
@@ -437,7 +482,7 @@ public class RestControllerParser extends ClassProcessor {
                     makeGetCall.addArgument(new NameExpr("headers"));
 
                 }
-                makeGetCall.addArgument(new StringLiteralExpr(path));
+                makeGetCall.addArgument(new NameExpr("relativeUrl"));
 
 
                 gen.getType(0).addMember(testMethod);
@@ -473,26 +518,14 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private String handlePathVariables(MethodDeclaration md, String path){
-        for(var param : md.getParameters()) {
+    private void setPathVariables(MethodDeclaration md) {
+        for (var param : md.getParameters()) {
             String paramString = String.valueOf(param);
-            if(!paramString.startsWith("@RequestBody")){
-                switch(param.getTypeAsString()) {
-
-                    case "Integer":
-                    case "int":
-                    case "Long":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1");
-                        break;
-                    case "Boolean":
-                        path = path.replace('{' + param.getNameAsString() +'}', "false");
-                        break;
-                    case "String":
-                        path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
-                }
+            if (!paramString.contains("@RequestBody")) {
+                Object replacementValue = typeDefsForPathVars.get(param.getTypeAsString());
+                parameterSet.put(param.getName().toString(), replacementValue);
             }
         }
-        return path;
     }
 
     /**
