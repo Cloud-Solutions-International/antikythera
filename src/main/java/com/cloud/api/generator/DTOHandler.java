@@ -335,6 +335,10 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("UUID.randomUUID()");
                         break;
 
+                    case "LocalDate":
+                        setter.addArgument("LocalDate.now()");
+                        break;
+
                     default:
                         if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
                             setter.addArgument("new " + type + "()");
