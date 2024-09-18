@@ -319,7 +319,6 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("0");
                         break;
 
-                    case "byte":
                     case "Byte":
                         setter.addArgument("(byte) 0");
                         break;
@@ -355,6 +354,18 @@ public class DTOHandler extends  ClassProcessor{
 
                     case "Short":
                         setter.addArgument("(short) 0");
+                        break;
+
+                    case "byte":
+                        setter.addArgument("new byte[] {0}");
+                        break;
+
+                    case "T":
+                        setter.addArgument("null");
+                        break;
+
+                    case "BigDecimal":
+                        setter.addArgument("BigDecimal.ZERO");
                         break;
 
                     default:
