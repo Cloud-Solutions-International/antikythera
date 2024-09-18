@@ -335,6 +335,10 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("UUID.randomUUID()");
                         break;
 
+                    case "Short":
+                        setter.addArgument("(short) 0");
+                        break;
+
                     default:
                         if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
                             setter.addArgument("new " + type + "()");
