@@ -118,7 +118,7 @@ public class ClassProcessor {
             }
 
             try {
-                String description = classType.resolve().describe();
+                String description = classType.removeTypeArguments().resolve().describe();
                 if (!description.startsWith("java.")) {
                     for (var jarSolver : jarSolvers) {
                         if(jarSolver.getKnownClasses().contains(description)) {
@@ -216,7 +216,7 @@ public class ClassProcessor {
                         externalDependencies.contains(nameAsString)) {
                         return false;
                     }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
+                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.") || nameAsString.contains("constants.")) {
                         return false;
                     }
 
