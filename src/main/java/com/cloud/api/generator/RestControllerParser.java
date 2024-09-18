@@ -50,7 +50,13 @@ public class RestControllerParser extends ClassProcessor {
     private CompilationUnit cu;
 
     private CompilationUnit gen;
-    private HashMap<String, String> parameterSet;
+    private HashMap<String, Object> parameterSet;
+    private final Map<String, ?> typeDefsForPathVars = Map.of(
+            "Integer", 1,
+            "int", 1,
+            "Long", 1L,
+            "String", "Ibuprofen"
+    );
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -136,6 +142,8 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("org.testng.annotations.Test");
         gen.addImport("org.testng.Assert");
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
+        gen.addImport("java.io.IOException");
+        gen.addImport("java.util.List");
         gen.addImport("io.restassured.http.Method");
         gen.addImport("io.restassured.response.Response");
         gen.addImport("com.cloud.core.annotations.TestCaseType");
@@ -266,19 +274,6 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private class MethodCallVisitor extends VoidVisitorAdapter<MethodDeclaration> {
-        private final MethodDeclaration method;
-
-        public MethodCallVisitor(MethodDeclaration method) {
-            this.method = method;
-        }
-
-        @Override
-        public void visit(MethodCallExpr methodCallExpr, MethodDeclaration method) {
-            super.visit(methodCallExpr, method);
-            System.out.println(method.getNameAsString() + "  " + methodCallExpr.getNameAsString());
-        }
-    }
 
     /**
      * Will be called for each method of the controller.
@@ -290,14 +285,12 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
+
             if (md.isPublic()) {
                 if(md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
                 logger.debug("Method: {}\n", md.getName());
-
-                md.accept(new MethodCallVisitor(md), md);
-
                 Type returnType = null;
                 Type methodType = md.getType();
                 if (methodType.asString().contains("<")) {
@@ -388,7 +381,12 @@ public class RestControllerParser extends ClassProcessor {
                         .append(param.getNameAsString().substring(1));
             }
 
-            String testName = md.getName() + "By" + paramNames + "Test";
+            String testName = String.valueOf(md.getName());
+            if (md.getParameters().isNonEmpty()) {
+                testName += "By" + paramNames + "Test";
+            } else {
+                testName += "Test";
+            }
             testMethod.setName(testName);
 
             BlockStmt body = new BlockStmt();
@@ -428,6 +426,7 @@ public class RestControllerParser extends ClassProcessor {
 
             addCheckStatus(testMethod);
             gen.getType(0).addMember(testMethod);
+
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
