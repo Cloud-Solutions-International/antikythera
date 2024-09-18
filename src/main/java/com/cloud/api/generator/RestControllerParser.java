@@ -518,7 +518,7 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private void setPathVariables(MethodDeclaration md, String path) {
+    private void setPathVariables(MethodDeclaration md) {
         for (var param : md.getParameters()) {
             String paramString = String.valueOf(param);
             if (!paramString.contains("@RequestBody")) {
@@ -526,28 +526,6 @@ public class RestControllerParser extends ClassProcessor {
                 parameterSet.put(param.getName().toString(), replacementValue);
             }
         }
-    }
-
-    private String handlePathVariables(MethodDeclaration md, String path){
-        for(var param : md.getParameters()) {
-            String paramString = String.valueOf(param);
-            if(!paramString.startsWith("@RequestBody")){
-                switch(param.getTypeAsString()) {
-
-                    case "Integer":
-                    case "int":
-                    case "Long":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1");
-                        break;
-                    case "Boolean":
-                        path = path.replace('{' + param.getNameAsString() +'}', "false");
-                        break;
-                    case "String":
-                        path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
-                }
-            }
-        }
-        return path;
     }
 
     /**
