@@ -335,6 +335,10 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("UUID.randomUUID()");
                         break;
 
+                    case "LocalDate":
+                        setter.addArgument("LocalDate.now()");
+                        break;
+
                     case "Short":
                         setter.addArgument("(short) 0");
                         break;
