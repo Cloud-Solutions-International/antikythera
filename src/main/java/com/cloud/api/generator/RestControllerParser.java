@@ -444,6 +444,18 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         }
 
+                        case "Object": {
+                            // SOme methods incorrectly have their DTO listed as of type Object. We will treat
+                            // as a String
+                            ClassOrInterfaceType str = new ClassOrInterfaceType(null, "String");
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(str, "req");
+                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, str, new NodeList<>());
+                            variableDeclarator.setInitializer(objectCreationExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            break;
+                        }
+
                         default:
                             ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
                             VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
@@ -501,36 +513,57 @@ public class RestControllerParser extends ClassProcessor {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
             if(!paramString.startsWith("@RequestBody")){
+                String paramName = getParamName(param);
                 switch(param.getTypeAsString()) {
                     case "Boolean":
-                        path = path.replace('{' + param.getNameAsString() +'}', "false");
+                        path = path.replace('{' + paramName +'}', "false");
                         break;
 
                     case "float":
                     case "Float":
                     case "double":
                     case "Double":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1.0");
+                        path = path.replace('{' + paramName +'}', "1.0");
                         break;
 
                     case "Integer":
                     case "int":
                     case "Long":
-                        path = path.replace('{' + param.getNameAsString() +'}', "1");
+                        path = path.replace('{' + paramName +'}', "1");
                         break;
 
                     case "String":
-                        path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+                        path = path.replace('{' + paramName +'}', "Ibuprofen");
 
                     default:
                         // some get methods rely on an enum.
                         // todo handle this properly
-                        path = path.replace('{' + param.getNameAsString() +'}', "0");
+                        path = path.replace('{' + paramName +'}', "0");
 
                 }
             }
         }
         return path;
+    }
+
+    private static String getParamName(Parameter param) {
+        String paramString = String.valueOf(param);
+        if(paramString.startsWith("@PathVariable")) {
+            Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
+            if(ann.isPresent()) {
+                if(ann.get().isSingleMemberAnnotationExpr()) {
+                    return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+                }
+                if(ann.get().isNormalAnnotationExpr()) {
+                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                        if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
+                            return pair.getValue().toString().replace("\"", "");
+                        }
+                    }
+                }
+            }
+        }
+        return param.getNameAsString();
     }
 
     /**
@@ -559,12 +592,12 @@ public class RestControllerParser extends ClassProcessor {
         } else if (annotation.isNormalAnnotationExpr()) {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
-                if (pair.getNameAsString().equals("path")) {
+                if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
                     return getCommonPath() + pair.getValue().toString();
                 }
             }
         }
-        return "";
+        return getCommonPath();
     }
 
     /**
