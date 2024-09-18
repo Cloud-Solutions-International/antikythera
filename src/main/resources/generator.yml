@@ -3,7 +3,7 @@
 # environment variable.
 
 variables:
-  projects_folder: /home/raditha/workspace/python/CSI/selenium/repos
+  projects_folder: /home/raditha/workspaces/python/CSI/selenium/repos
   m2_folder: /home/raditha/.m2/repository
 
 # Points to top level folder of the application under test. This is a file system path.
@@ -19,7 +19,8 @@ base_package: com.csi
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
-controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller
+controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller.dischargesummarycomponent.DischargeSummaryComponentController.java
+  #.admission.AdmissionServiceRead.java
 #.externaltransfer.ExternalTransferController.java
 
 # Path to output the generated test project
@@ -40,6 +41,9 @@ dependencies:
     - ${m2_folder}/com/csi/csi-ehr-base/1.0.30/csi-ehr-base-1.0.30.jar
     - ${m2_folder}/com/csi/csi-error-handler/1.1.2/csi-error-handler-1.1.2.jar
 
+#
+# use the database settings to connect and try out the queries extracted from JPARepository
+#
 database:
   url: jdbc:oracle:thin:@//10.201.215.50:1521/VQPDB.hmg.local
   user: C##xstrm

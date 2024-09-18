@@ -35,7 +35,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -105,7 +107,7 @@ public class RestControllerParser extends ClassProcessor {
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
-            File file = new File(dataPath + File.separator + controllerName + "PathVars.json");
+            File file = new File(dataPath + File.separator + controllerName + "Params.json");
             objectMapper.writeValue(file, parameterSet);
         }
     }
@@ -168,6 +170,15 @@ public class RestControllerParser extends ClassProcessor {
     }
 
 
+    /**
+     * Find the return type of a method.
+     *
+     * This is a recursive function that will begin at the block that denotes the body of the method.
+     * thereafter it will descend into child blocks that are parts of conditionals or try catch blocks
+     *
+     * @param blockStmt
+     * @return
+     */
     private Type findReturnType(BlockStmt blockStmt) {
         Map<String, Type> variables = new HashMap<>();
         Map<String, Type> fields = getFields(cu);
@@ -306,6 +317,7 @@ public class RestControllerParser extends ClassProcessor {
                     extractComplexType(returnType, cu);
                 }
                 for(var param : md.getParameters()) {
+                    parameterSet.put(param.getName().toString(), "");
                     extractComplexType(param.getType(), cu);
                 }
 
@@ -318,10 +330,13 @@ public class RestControllerParser extends ClassProcessor {
                 if (annotation.getNameAsString().equals("GetMapping") ) {
                     buildGetMethodTests(md, annotation, returnType);
                 }
-                if(annotation.getNameAsString().equals("PostMapping")) {
+                else if(annotation.getNameAsString().equals("PostMapping")) {
                     buildPostMethodTests(md, annotation, returnType);
                 }
-                if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
+                else if(annotation.getNameAsString().equals("DeleteMapping")) {
+                    buildDeleteMethodTests(md, annotation, returnType);
+                }
+                else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                     NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
                     for (var pair : normalAnnotation.getPairs()) {
                         if (pair.getNameAsString().equals("method")) {
@@ -331,10 +346,24 @@ public class RestControllerParser extends ClassProcessor {
                             if (pair.getValue().toString().equals("RequestMethod.POST")) {
                                 buildPostMethodTests(md, annotation, returnType);
                             }
+                            if (pair.getValue().toString().equals("RequestMethod.PUT")) {
+                                buildPutMethodTests(md, annotation, returnType);
+                            }
+                            if (pair.getValue().toString().equals("RequestMethod.DELETE")) {
+                                buildDeleteMethodTests(md, annotation, returnType);
+                            }
                         }
                     }
                 }
             }
+        }
+
+        private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithoutBody(md, annotation, "makeDelete");
+        }
+
+        private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithBody(md, annotation, returnType, "makePut");
         }
 
         private MethodDeclaration buildTestMethod(MethodDeclaration md) {
@@ -374,50 +403,22 @@ public class RestControllerParser extends ClassProcessor {
             md.getBody().get().addStatement(new ExpressionStmt(check));
         }
 
-        private void addBuildRelativeUrl(MethodDeclaration md, MethodDeclaration testMethod) {
-            testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
-            MethodCallExpr buildRelativeUrlCall = new MethodCallExpr("buildRelativeUrl");
-            buildRelativeUrlCall.addArgument(new StringLiteralExpr(cu.getTypes().get(0).getNameAsString()));
-            AnnotationExpr annotation = md.getAnnotations().get(0);
-
-            String path = md.getParameters().isEmpty() && annotation.getNameAsString().equals("GetMapping")
-                    ? getCommonPath()
-                    : getPath(annotation);
-            buildRelativeUrlCall.addArgument(new StringLiteralExpr(path.replace("\"", "")));
-
-            List<String> pathVars = new ArrayList<>();
-            for (Parameter p : md.getParameters()) {
-                boolean hasRequestBodyAnnotation = false;
-                for (AnnotationExpr paramAnnotation : p.getAnnotations()) {
-                    if (paramAnnotation.getNameAsString().contains("RequestBody")) {
-                        hasRequestBodyAnnotation = true;
-                        break;
-                    }
-                }
-                if (!hasRequestBodyAnnotation) {
-                    pathVars.add("\"" + p.getNameAsString() + "\"");
-                }
-            }
-            String pathVarsString = String.join(", ", pathVars);
-            buildRelativeUrlCall.addArgument(new NameExpr("List.of(" + pathVarsString + ")"));
-
-            VariableDeclarationExpr relativeUrl = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "String"), "relativeUrl");
-            AssignExpr assignExpr = new AssignExpr(relativeUrl, buildRelativeUrlCall, AssignExpr.Operator.ASSIGN);
-            testMethod.getBody().get().addStatement(new ExpressionStmt(assignExpr));
+        private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithoutBody(md, annotation, "makeGet");
         }
 
-        private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call) {
             MethodDeclaration testMethod = buildTestMethod(md);
-            addBuildRelativeUrl(md, testMethod);
-            MethodCallExpr makeGetCall = new MethodCallExpr("makeGet");
+            MethodCallExpr makeGetCall = new MethodCallExpr(call);
             makeGetCall.addArgument(new NameExpr("headers"));
 
-            if(md.getParameters().isNonEmpty()){
-                setPathVariables(md);
+            if(md.getParameters().isEmpty()) {
+                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
             }
-
-            makeGetCall.addArgument(new NameExpr("relativeUrl"));
-
+            else {
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                makeGetCall.addArgument(new StringLiteralExpr(path));
+            }
             VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
             AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
             BlockStmt body = testMethod.getBody().get();
@@ -429,14 +430,17 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithBody(md, annotation, returnType, "makePost");
+        }
+
+        private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, Type returnType, String call) {
             MethodDeclaration testMethod = buildTestMethod(md);
-            addBuildRelativeUrl(md, testMethod);
-            MethodCallExpr makeGetCall = new MethodCallExpr("makePost");
+            MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
-                setPathVariables(md);
+                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
 
                 if(requestBody.getType().isClassOrInterfaceType()) {
@@ -465,6 +469,18 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         }
 
+                        case "Object": {
+                            // SOme methods incorrectly have their DTO listed as of type Object. We will treat
+                            // as a String
+                            ClassOrInterfaceType str = new ClassOrInterfaceType(null, "String");
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(str, "req");
+                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, str, new NodeList<>());
+                            variableDeclarator.setInitializer(objectCreationExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            break;
+                        }
+
                         default:
                             ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
                             VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
@@ -482,7 +498,7 @@ public class RestControllerParser extends ClassProcessor {
                     makeGetCall.addArgument(new NameExpr("headers"));
 
                 }
-                makeGetCall.addArgument(new NameExpr("relativeUrl"));
+                makeGetCall.addArgument(new StringLiteralExpr(path));
 
 
                 gen.getType(0).addMember(testMethod);
@@ -518,14 +534,61 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private void setPathVariables(MethodDeclaration md) {
-        for (var param : md.getParameters()) {
+    private String handlePathVariables(MethodDeclaration md, String path){
+        for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
-            if (!paramString.contains("@RequestBody")) {
-                Object replacementValue = typeDefsForPathVars.get(param.getTypeAsString());
-                parameterSet.put(param.getName().toString(), replacementValue);
+            if(!paramString.startsWith("@RequestBody")){
+                String paramName = getParamName(param);
+                switch(param.getTypeAsString()) {
+                    case "Boolean":
+                        path = path.replace('{' + paramName +'}', "false");
+                        break;
+
+                    case "float":
+                    case "Float":
+                    case "double":
+                    case "Double":
+                        path = path.replace('{' + paramName +'}', "1.0");
+                        break;
+
+                    case "Integer":
+                    case "int":
+                    case "Long":
+                        path = path.replace('{' + paramName +'}', "1");
+                        break;
+
+                    case "String":
+                        path = path.replace('{' + paramName +'}', "Ibuprofen");
+
+                    default:
+                        // some get methods rely on an enum.
+                        // todo handle this properly
+                        path = path.replace('{' + paramName +'}', "0");
+
+                }
             }
         }
+        return path;
+    }
+
+    private static String getParamName(Parameter param) {
+        String paramString = String.valueOf(param);
+        if(paramString.startsWith("@PathVariable")) {
+            Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
+            if(ann.isPresent()) {
+                if(ann.get().isSingleMemberAnnotationExpr()) {
+                    return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+                }
+                if(ann.get().isNormalAnnotationExpr()) {
+                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                        if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
+                            return pair.getValue().toString().replace("\"", "");
+                        }
+                    }
+                }
+            }
+        }
+        return param.getNameAsString();
     }
 
     /**
@@ -554,12 +617,12 @@ public class RestControllerParser extends ClassProcessor {
         } else if (annotation.isNormalAnnotationExpr()) {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
-                if (pair.getNameAsString().equals("path")) {
+                if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
                     return getCommonPath() + pair.getValue().toString();
                 }
             }
         }
-        return "";
+        return getCommonPath();
     }
 
     /**
