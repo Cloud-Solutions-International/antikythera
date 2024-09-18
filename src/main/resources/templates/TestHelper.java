@@ -107,5 +107,19 @@ public abstract class TestHelper extends APIBaseTest {
                 "Expected status code starting with 2xx, but got: " + response.getStatusCode());
     }
 
+    protected String buildRelativeUrl(String controllerName, String relativeUrl, List<String> pathVariables) throws IOException {
+        if (pathVariables.isEmpty()) {
+            return relativeUrl;
+        }
 
+        String filePath = "src/test/resources/data/" + controllerName + "PathVars.json";
+        String jsonContent = new String(Files.readAllBytes(Paths.get(filePath)));
+        JSONObject jsonObject = new JSONObject(jsonContent);
+
+        for (String pathVariable : pathVariables) {
+            Object value = jsonObject.get(pathVariable);
+            relativeUrl = relativeUrl.replace("{" + pathVariable + "}", value.toString());
+        }
+        return relativeUrl;
+    }
 }
