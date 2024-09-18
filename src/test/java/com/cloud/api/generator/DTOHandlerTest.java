@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -40,9 +41,9 @@ public class DTOHandlerTest {
     @BeforeEach
     void loadConfigMapBeforeEach() throws IOException {
         Settings.loadConfigMap();
-        basePath = Settings.getProperty("BASE_PATH");
-        controllers = Settings.getProperty("CONTROLLERS");
-        outputPath = Settings.getProperty("OUTPUT_PATH");
+        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
+        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
+        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();
