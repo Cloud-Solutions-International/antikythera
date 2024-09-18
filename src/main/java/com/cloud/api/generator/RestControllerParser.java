@@ -502,17 +502,31 @@ public class RestControllerParser extends ClassProcessor {
             String paramString = String.valueOf(param);
             if(!paramString.startsWith("@RequestBody")){
                 switch(param.getTypeAsString()) {
+                    case "Boolean":
+                        path = path.replace('{' + param.getNameAsString() +'}', "false");
+                        break;
+
+                    case "float":
+                    case "Float":
+                    case "double":
+                    case "Double":
+                        path = path.replace('{' + param.getNameAsString() +'}', "1.0");
+                        break;
 
                     case "Integer":
                     case "int":
                     case "Long":
                         path = path.replace('{' + param.getNameAsString() +'}', "1");
                         break;
-                    case "Boolean":
-                        path = path.replace('{' + param.getNameAsString() +'}', "false");
-                        break;
+
                     case "String":
                         path = path.replace('{' + param.getNameAsString() +'}', "Ibuprofen");
+
+                    default:
+                        // some get methods rely on an enum.
+                        // todo handle this properly
+                        path = path.replace('{' + param.getNameAsString() +'}', "0");
+
                 }
             }
         }
