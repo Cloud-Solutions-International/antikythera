@@ -311,10 +311,13 @@ public class RestControllerParser extends ClassProcessor {
                 if (annotation.getNameAsString().equals("GetMapping") ) {
                     buildGetMethodTests(md, annotation, returnType);
                 }
-                if(annotation.getNameAsString().equals("PostMapping")) {
+                else if(annotation.getNameAsString().equals("PostMapping")) {
                     buildPostMethodTests(md, annotation, returnType);
                 }
-                if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
+                else if(annotation.getNameAsString().equals("DeleteMapping")) {
+                    buildDeleteMethodTests(md, annotation, returnType);
+                }
+                else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                     NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
                     for (var pair : normalAnnotation.getPairs()) {
                         if (pair.getNameAsString().equals("method")) {
@@ -324,10 +327,24 @@ public class RestControllerParser extends ClassProcessor {
                             if (pair.getValue().toString().equals("RequestMethod.POST")) {
                                 buildPostMethodTests(md, annotation, returnType);
                             }
+                            if (pair.getValue().toString().equals("RequestMethod.PUT")) {
+                                buildPutMethodTests(md, annotation, returnType);
+                            }
+                            if (pair.getValue().toString().equals("RequestMethod.DELETE")) {
+                                buildDeleteMethodTests(md, annotation, returnType);
+                            }
                         }
                     }
                 }
             }
+        }
+
+        private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithoutBody(md, annotation, "makeDelete");
+        }
+
+        private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithBody(md, annotation, returnType, "makePut");
         }
 
         private MethodDeclaration buildTestMethod(MethodDeclaration md) {
@@ -363,8 +380,12 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithoutBody(md, annotation, "makeGet");
+        }
+
+        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call) {
             MethodDeclaration testMethod = buildTestMethod(md);
-            MethodCallExpr makeGetCall = new MethodCallExpr("makeGet");
+            MethodCallExpr makeGetCall = new MethodCallExpr(call);
             makeGetCall.addArgument(new NameExpr("headers"));
 
             if(md.getParameters().isEmpty()) {
@@ -381,12 +402,15 @@ public class RestControllerParser extends ClassProcessor {
 
             addCheckStatus(testMethod);
             gen.getType(0).addMember(testMethod);
-
         }
 
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+            httpWithBody(md, annotation, returnType, "makePost");
+        }
+
+        private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, Type returnType, String call) {
             MethodDeclaration testMethod = buildTestMethod(md);
-            MethodCallExpr makeGetCall = new MethodCallExpr("makePost");
+            MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
 
             if(md.getParameters().isNonEmpty()) {
