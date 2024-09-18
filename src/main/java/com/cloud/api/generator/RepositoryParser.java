@@ -31,7 +31,7 @@ import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
-import org.checkerframework.checker.units.qual.A;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
