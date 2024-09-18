@@ -385,15 +385,21 @@ public class RestControllerParser extends ClassProcessor {
                     : getPath(annotation);
             buildRelativeUrlCall.addArgument(new StringLiteralExpr(path.replace("\"", "")));
 
-            buildRelativeUrlCall.addArgument(
-                    new NameExpr("List.of(" +
-                            md.getParameters().stream()
-                                    .filter(p -> p.getAnnotations().stream().noneMatch(a -> a.getNameAsString().contains("RequestBody")))  // Filter out parameters with @RequestBody
-                                    .map(p -> "\"" + p.getNameAsString() + "\"")  // Wrap each parameter name in quotes
-                                    .reduce((a, b) -> a + ", " + b)
-                                    .orElse("")
-                            + ")")
-            );
+            List<String> pathVars = new ArrayList<>();
+            for (Parameter p : md.getParameters()) {
+                boolean hasRequestBodyAnnotation = false;
+                for (AnnotationExpr paramAnnotation : p.getAnnotations()) {
+                    if (paramAnnotation.getNameAsString().contains("RequestBody")) {
+                        hasRequestBodyAnnotation = true;
+                        break;
+                    }
+                }
+                if (!hasRequestBodyAnnotation) {
+                    pathVars.add("\"" + p.getNameAsString() + "\"");
+                }
+            }
+            String pathVarsString = String.join(", ", pathVars);
+            buildRelativeUrlCall.addArgument(new NameExpr("List.of(" + pathVarsString + ")"));
 
             VariableDeclarationExpr relativeUrl = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "String"), "relativeUrl");
             AssignExpr assignExpr = new AssignExpr(relativeUrl, buildRelativeUrlCall, AssignExpr.Operator.ASSIGN);
