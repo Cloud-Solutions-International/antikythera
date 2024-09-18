@@ -345,6 +345,22 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("LocalDate.now()");
                         break;
 
+                    case "byte":
+                        setter.addArgument("new byte[] {0}");
+                        break;
+
+                    case "T":
+                        setter.addArgument("null");
+                        break;
+
+                    case "Short":
+                        setter.addArgument("(short) 0");
+                        break;
+
+                    case "BigDecimal":
+                        setter.addArgument("BigDecimal.ZERO");
+                        break;
+
                     default:
                         if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
                             setter.addArgument("new " + type + "()");
