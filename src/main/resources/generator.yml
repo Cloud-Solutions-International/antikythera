@@ -49,3 +49,4 @@ database:
   user: C##xstrm
   password: p08642xs
   schema: EH_IP
+  run_queries: true

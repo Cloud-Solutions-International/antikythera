@@ -77,12 +77,7 @@ public class Settings {
             String key = entry.getKey();
             Object value = entry.getValue();
             if (value != null && !key.equals("variables")) {
-                if (value instanceof String) {
-                    String v = (String) value;
-                    v = v.replace("${USERDIR}", userDir);
-                    v = replaceYamlVariables(v);
-                    target.put(key, replaceEnvVariables(v));
-                } else if (value instanceof Map) {
+                if (value instanceof Map) {
                     Map<String, Object> nestedMap = new HashMap<>();
                     replaceVariables((Map<String, Object>) value, nestedMap);
                     target.put(key, nestedMap);
@@ -94,6 +89,15 @@ public class Settings {
                         result.add(s);
                     }
                     target.put(key, result);
+                }
+                else if (value instanceof String) {
+                    String v = (String) value;
+                    v = v.replace("${USERDIR}", userDir);
+                    v = replaceYamlVariables(v);
+                    target.put(key, replaceEnvVariables(v));
+                }
+                else {
+                    target.put(key, value);
                 }
             }
         }
