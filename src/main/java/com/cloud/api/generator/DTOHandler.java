@@ -29,7 +29,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -60,7 +59,7 @@ public class DTOHandler extends  ClassProcessor {
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-        if (parseDTO(relativePath)) return;
+        parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
 
@@ -70,7 +69,14 @@ public class DTOHandler extends  ClassProcessor {
         dependencies.clear();
     }
 
-    public boolean parseDTO(String relativePath) throws FileNotFoundException {
+    public void compile(String relativePath) throws FileNotFoundException {
+        String className = relativePath.replace("/", ".").replace(".java","");
+
+        cu = resolved.get(className);
+        if (cu != null) {
+            return;
+        }
+
         logger.info("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
@@ -94,6 +100,7 @@ public class DTOHandler extends  ClassProcessor {
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        resolved.put(className, cu);
 
         // Search for any inner class that ends with "Dto"
         boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
@@ -102,11 +109,10 @@ public class DTOHandler extends  ClassProcessor {
         if (hasInnerDTO) {
             logger.info("Found inner DTO class in controller: {}", relativePath);
         }
+    }
 
-        if (resolved.containsKey(cu.toString())) {
-            return true;
-        }
-
+    public void parseDTO(String relativePath) throws FileNotFoundException {
+        compile(relativePath);
         expandWildCards(cu);
         solveTypes();
         createFactory();
@@ -120,8 +126,6 @@ public class DTOHandler extends  ClassProcessor {
             var variable = classToInstanceName(cu.getTypes().get(0));
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
-
-        return false;
     }
 
     /**
@@ -171,7 +175,6 @@ public class DTOHandler extends  ClassProcessor {
             }
         });
     }
-
 
     /**
      * Iterates through all the classes in the file and processes them.
