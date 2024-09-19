@@ -2,6 +2,7 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
+import com.github.javaparser.ast.CompilationUnit;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -15,7 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,11 +26,12 @@ import java.util.regex.Pattern;
 public class ProjectGenerator {
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
+    private static final String SUFFIX = ".java";
+
     private final String basePackage;
     private final String basePath;
     private final String controllers;
     private final String outputPath;
-    private static final String SUFFIX = ".java";
 
     private static ProjectGenerator instance;
 
