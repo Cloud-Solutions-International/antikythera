@@ -6,11 +6,8 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.*;
 
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -28,9 +25,11 @@ import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -55,6 +54,10 @@ public class DTOHandler extends  ClassProcessor{
        super();
     }
 
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
+    }
+
     /**
      * Copy the DTO from the AUT.
      * @param relativePath a path name relative to the base path of the application.
@@ -76,10 +79,36 @@ public class DTOHandler extends  ClassProcessor{
         logger.info("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
-        FileInputStream in = new FileInputStream(sourcePath.toFile());
+        // Check if the file exists
+        File file = sourcePath.toFile();
+        if (!file.exists()) {
+            // The file may not exist if the DTO is an inner class in a controller
+            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
+            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
+            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
+            sourcePath = Paths.get(basePath, controllerPath);
+        }
+
+        // Check again for the controller file
+        file = sourcePath.toFile();
+        if (!file.exists()) {
+            logger.error("Controller file not found: {}", sourcePath);
+            throw new FileNotFoundException(sourcePath.toString());
+        }
+
+        // Proceed with parsing the controller file
+        FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
 
-        if(resolved.contains(cu.toString())) {
+        // Search for any inner class that ends with "Dto"
+        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
+
+        if (hasInnerDTO) {
+            logger.info("Found inner DTO class in controller: {}", relativePath);
+        }
+
+        if (resolved.contains(cu.toString())) {
             return true;
         }
 
@@ -90,13 +119,13 @@ public class DTOHandler extends  ClassProcessor{
         cu.accept(new TypeCollector(), null);
 
         handleStaticImports(cu.getImports());
-
         removeUnusedImports(cu.getImports());
 
-        if(method != null) {
+        if (method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
+
         return false;
     }
 
@@ -207,9 +236,6 @@ public class DTOHandler extends  ClassProcessor{
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        // Find the CompilationUnit associated with the classDecl
-        cu = classDecl.findCompilationUnit().orElseThrow(() -> new IllegalStateException("CompilationUnit not found"));
-
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
@@ -270,7 +296,7 @@ public class DTOHandler extends  ClassProcessor{
          * Generate random values for use in the factory method for a DTO
          * @param field
          */
-        private void generateRandomValue(FieldDeclaration field) {
+        void generateRandomValue(FieldDeclaration field) {
             TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
             if(!field.isStatic() && method != null) {
