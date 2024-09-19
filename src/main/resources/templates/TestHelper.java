@@ -132,6 +132,7 @@ public abstract class TestHelper extends APIBaseTest {
     protected void checkStatusCode(Response response) {
         softAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),
                 "Expected status code starting with 2xx, but got: " + response.getStatusCode());
+        softAssert.assertAll();
     }
 
     protected String buildRelativeUrl(String controllerName, String relativeUrl, List<String> pathVariables) throws IOException {
