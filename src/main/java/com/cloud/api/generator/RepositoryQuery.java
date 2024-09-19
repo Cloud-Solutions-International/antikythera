@@ -1,13 +1,15 @@
 package com.cloud.api.generator;
 
+/**
+ * Represents a query from a JPARepository
+ */
 public class RepositoryQuery {
+    /**
+     * Whether the query is native or not.
+     * This is the value of the native flag to the @Query annotation.
+     */
     boolean isNative;
     String query;
-
-    public RepositoryQuery(String query)
-    {
-        this.query = query;
-    }
 
     public RepositoryQuery(String query, boolean isNative) {
         this.isNative = isNative;
@@ -18,15 +20,8 @@ public class RepositoryQuery {
         return isNative;
     }
 
-    public void setNative(boolean aNative) {
-        isNative = aNative;
-    }
-
     public String getQuery() {
         return query;
     }
 
-    public void setQuery(String query) {
-        this.query = query;
-    }
 }
