@@ -54,7 +54,7 @@ public abstract class TestHelper extends APIBaseTest {
 
     @BeforeClass
     public void serviceSetUp()  {
-        baseURI = urlProperties.get("PharmacyServices.host") + urlProperties.get("PharmacyServices.version");
+        baseURI = urlProperties.get("application.host") + urlProperties.get("application.version");
         APIBaseClass.headers = new Headers(
                 StaticHeaders.CONTENT_TYPE_JSON,
                 StaticHeaders.X_GROUP,
