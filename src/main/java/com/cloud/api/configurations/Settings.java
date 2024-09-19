@@ -40,7 +40,7 @@ public class Settings {
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
-            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator/csi-pms-adt-generator.yml").getFile());
+            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
