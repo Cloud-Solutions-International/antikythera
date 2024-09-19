@@ -34,7 +34,7 @@ class ClassProcessorTest {
     void copyDependencies_doesNotCopySpringDataDomain() throws IOException {
         ClassProcessor.resolved.clear();
         classProcessor.copyDependencies("org.springframework.data.domain.Page");
-        assertFalse(ClassProcessor.resolved.contains("org.springframework.data.domain.Page"));
+        assertFalse(ClassProcessor.resolved.containsKey("org.springframework.data.domain.Page"));
         verify(handler, never()).copyDTO(anyString());
     }
 
@@ -42,7 +42,7 @@ class ClassProcessorTest {
     void copyDependencies_doesNotCopyAlreadyResolvedDependency() throws IOException {
         ClassProcessor.resolved.clear();
         ClassProcessor.basePackage = "com.example";
-        ClassProcessor.resolved.add("com.example.NewClass");
+        ClassProcessor.resolved.put("com.example.NewClass", null);
         classProcessor.copyDependencies("com.example.NewClass");
         verify(handler, never()).copyDTO(anyString());
     }
@@ -52,7 +52,7 @@ class ClassProcessorTest {
         ClassProcessor.resolved.clear();
         ClassProcessor.basePackage = "com.example";
         classProcessor.copyDependencies("com.otherpackage.OtherClass");
-        assertFalse(ClassProcessor.resolved.contains("com.otherpackage.OtherClass"));
+        assertFalse(ClassProcessor.resolved.containsKey("com.otherpackage.OtherClass"));
         verify(handler, never()).copyDTO(anyString());
     }
 
