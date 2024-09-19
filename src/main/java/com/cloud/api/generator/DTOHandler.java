@@ -54,6 +54,10 @@ public class DTOHandler extends  ClassProcessor{
        super();
     }
 
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
+    }
+
     /**
      * Copy the DTO from the AUT.
      * @param relativePath a path name relative to the base path of the application.
@@ -232,9 +236,6 @@ public class DTOHandler extends  ClassProcessor{
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        // Find the CompilationUnit associated with the classDecl
-        cu = classDecl.findCompilationUnit().orElseThrow(() -> new IllegalStateException("CompilationUnit not found"));
-
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
@@ -295,7 +296,7 @@ public class DTOHandler extends  ClassProcessor{
          * Generate random values for use in the factory method for a DTO
          * @param field
          */
-        private void generateRandomValue(FieldDeclaration field) {
+        void generateRandomValue(FieldDeclaration field) {
             TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
             if(!field.isStatic() && method != null) {
@@ -344,7 +345,6 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("0");
                         break;
 
-                    case "byte":
                     case "Byte":
                         setter.addArgument("(byte) 0");
                         break;
@@ -376,6 +376,26 @@ public class DTOHandler extends  ClassProcessor{
 
                     case "LocalDate":
                         setter.addArgument("LocalDate.now()");
+                        break;
+
+                    case "LocalDateTime":
+                        setter.addArgument("LocalDateTime.now()");
+                        break;
+
+                    case "Short":
+                        setter.addArgument("(short) 0");
+                        break;
+
+                    case "byte":
+                        setter.addArgument("new byte[] {0}");
+                        break;
+
+                    case "T":
+                        setter.addArgument("null");
+                        break;
+
+                    case "BigDecimal":
+                        setter.addArgument("BigDecimal.ZERO");
                         break;
 
                     default:

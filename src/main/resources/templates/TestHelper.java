@@ -95,12 +95,34 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makePut(String body, Headers headers, String relativeUrl)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).body(body).when().request(Method.PUT);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected Response makeGet( Headers headers, String relativeUrl)  {
 
         APIRequester.setBaseURI(baseURI);
         APIRequester.setBasePath(relativeUrl);
 
         Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).when().request(Method.GET);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
+    protected Response makeDelete( Headers headers, String relativeUrl)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).when().request(Method.DELETE);
         APIRequester.resetBasePath();
         APIRequester.resetBaseURI();
 
