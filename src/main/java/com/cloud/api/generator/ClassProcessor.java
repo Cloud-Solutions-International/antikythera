@@ -217,7 +217,11 @@ public class ClassProcessor {
                         externalDependencies.contains(nameAsString)) {
                         return false;
                     }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.") || nameAsString.contains("constants.")) {
+                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
+                        return false;
+                    }
+
+                    if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
                         return false;
                     }
 
