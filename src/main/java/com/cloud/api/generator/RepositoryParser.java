@@ -103,7 +103,7 @@ public class RepositoryParser extends ClassProcessor{
     }
 
     public void process(String className) throws IOException {
-        File f = Paths.get(basePath, className.replace("\\.","/")).toFile();
+        File f = Paths.get(basePath, className.replaceAll("\\.","/")).toFile();
 
         CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         process(cu);
