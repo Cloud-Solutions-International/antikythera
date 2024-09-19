@@ -45,7 +45,7 @@ public class ClassProcessor extends AbstractClassProcessor {
     /**
      * Copy a dependency from the application under test.
      *
-     * @param nameAsString
+     * @param nameAsString a fully qualified class name
      */
     protected void copyDependencies(String nameAsString) throws IOException {
         if (nameAsString.endsWith("SUCCESS")) {
@@ -60,8 +60,9 @@ public class ClassProcessor extends AbstractClassProcessor {
         if (!ClassProcessor.resolved.containsKey(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
 
             DTOHandler handler = new DTOHandler();
-            handler.copyDTO(nameAsString.replace(".", "/") + ClassProcessor.SUFFIX);
-            ClassProcessor.resolved.put(nameAsString, handler.getCompilationUnit());
+            handler.copyDTO(classToPath(nameAsString));
+
+            AbstractClassProcessor.resolved.put(nameAsString, handler.getCompilationUnit());
         }
     }
 
@@ -112,7 +113,7 @@ public class ClassProcessor extends AbstractClassProcessor {
      * Resolves an import.
      *
      * @param dependencyCu the compilation unit with the imports
-     * @param mainType the data type to search for
+     * @param mainType the data type to search for. This is not going to be a fully qualified class name.
      * @return true if a matching import was found.
      */
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
@@ -138,10 +139,22 @@ public class ClassProcessor extends AbstractClassProcessor {
         return false;
     }
 
+    /**
+     * Converts a class name to an instance name.
+     * The usually convention. If we want to create an instance of List that variable is usually
+     * called 'list'
+     * @param cdecl type declaration
+     * @return a variable name as a string
+     */
     protected static String classToInstanceName(TypeDeclaration<?> cdecl) {
         return classToInstanceName(cdecl.getNameAsString());
     }
 
+    /**
+     * Converts a class name to an instance name.
+     * @param className as a string
+     * @return a variable name as a string
+     */
     protected static String classToInstanceName(String className) {
         String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
         if(name.equals("long") || name.equals("int")) {
@@ -150,6 +163,13 @@ public class ClassProcessor extends AbstractClassProcessor {
         return name;
     }
 
+    /**
+     * Finds all the classes in a package with in the application under test.
+     * We do not search jars, external dependencies or the java standard library.
+     *
+     * @param packageName the package name
+     * @return a set of fully qualified class names
+     */
     protected Set<String> findMatchingClasses(String packageName) {
         Set<String> matchingClasses = new HashSet<>();
         Path p = Paths.get(basePath, packageName.replace(".", "/"));
@@ -170,6 +190,13 @@ public class ClassProcessor extends AbstractClassProcessor {
         return matchingClasses;
     }
 
+    /**
+     * Expands wild card imports.
+     * Which means we delete the asterisk import and add all the classes in the package as
+     * individual imports.
+     * 
+     * @param cu the compilation unit
+     */
     protected void expandWildCards(CompilationUnit cu) {
         Set<String> wildCards = new HashSet<>();
         for(var imp : cu.getImports()) {
