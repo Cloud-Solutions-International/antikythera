@@ -2,10 +2,12 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
+import com.cloud.api.evaluator.Evaluator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -15,6 +17,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -24,6 +27,7 @@ import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -41,6 +45,8 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import net.sf.jsqlparser.statement.Block;
+import org.codehaus.groovy.ast.stmt.ReturnStatement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -287,7 +293,7 @@ public class RestControllerParser extends ClassProcessor {
             super.visit(md, arg);
 
             if (md.isPublic()) {
-                if(md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
+                if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
                 logger.debug("Method: {}\n", md.getName());
@@ -307,7 +313,7 @@ public class RestControllerParser extends ClassProcessor {
                     }
                 } else {
                     returnType = methodType;
-                    if(returnType.toString().equals("ResponseEntity")) {
+                    if (returnType.toString().equals("ResponseEntity")) {
                         BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
                         returnType = findReturnType(blockStmt);
                     }
@@ -316,12 +322,32 @@ public class RestControllerParser extends ClassProcessor {
                 if (returnType != null) {
                     extractComplexType(returnType, cu);
                 }
-                for(var param : md.getParameters()) {
+                for (var param : md.getParameters()) {
                     parameterSet.put(param.getName().toString(), "");
                     extractComplexType(param.getType(), cu);
                 }
 
-                createTests(md, returnType);
+                md.accept(new MethodBlockVisitor(), md);
+            }
+        }
+    }
+
+    private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+        Evaluator evaluator = new Evaluator();
+        Map<String, Comparable> context = new HashMap<>();
+        @Override
+        public void visit(ReturnStmt stmt, MethodDeclaration md) {
+            super.visit(stmt, md);
+            Optional<Node> parent = stmt.getParentNode();
+
+            if (parent.isPresent()) {
+                BlockStmt blockStmt = (BlockStmt) parent.get();
+                Optional<Node> gramps = blockStmt.getParentNode();
+                if (gramps.isPresent() && gramps.get() instanceof IfStmt) {
+                    IfStmt ifStmt = (IfStmt) gramps.get();
+                    Expression condition = ifStmt.getCondition();
+                    System.out.println(evaluator.evaluateCondition(condition, context));
+                }
             }
         }
 
