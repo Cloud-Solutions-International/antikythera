@@ -69,8 +69,17 @@ public class DTOHandler extends  ClassProcessor {
         dependencies.clear();
     }
 
+    /**
+     * Creates a compilation unit from the source code at the relative path.
+     *
+     * If this file has previously been resolved, it will not be recompiled rather, it will be
+     * fetched from the resolved map.
+     * @param relativePath a path name relative to the base path of the application.
+     * @throws FileNotFoundException when the source code cannot be found
+     */
+
     public void compile(String relativePath) throws FileNotFoundException {
-        String className = relativePath.replace("/", ".").replace(".java","");
+        String className = pathToClass(relativePath);
 
         cu = resolved.get(className);
         if (cu != null) {
