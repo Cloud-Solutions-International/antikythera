@@ -11,12 +11,17 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Scanner;
 
 /**
  * Manages the configuration properties from the csi-pms-adt-generator.cfg file.
@@ -62,6 +67,33 @@ public class Settings {
         props.put("variables", variables);
 
         replaceVariables(yamlProps, props);
+
+        if(yamlProps.get("application.host") != null || yamlProps.get("application.version") != null) {
+            Path path = Paths.get("src", "test", "resources", "testdata", "qa").resolve("Url.properties");
+            File urlFile = path.toFile();
+            if(urlFile.exists()) {
+                StringBuilder sb = new StringBuilder();
+                Scanner sc = new Scanner(urlFile);
+                while (sc.hasNextLine()) {
+                    String line = sc.nextLine().strip();
+                    if(line.startsWith("application.host")) {
+                        sb.append("application.host=")
+                          .append(yamlProps.get("application.host") == null ? "" : yamlProps.get("application.host"))
+                          .append("\n");
+                    }
+                    else if(line.startsWith("application.version")) {
+                        sb.append("application.version=")
+                                .append(yamlProps.get("application.version") == null ? "" : yamlProps.get("application.host"))
+                                .append("\n");
+                    }
+                    else {
+                        sb.append(line).append("\n");
+                    }
+                }
+                sc.close();
+                Files.write(path, sb.toString().getBytes());
+            }
+        }
     }
 
     /**
