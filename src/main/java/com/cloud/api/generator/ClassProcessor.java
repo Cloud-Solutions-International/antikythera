@@ -79,6 +79,9 @@ public class ClassProcessor {
      * @param nameAsString
      */
     protected void copyDependencies(String nameAsString) throws IOException {
+        if (nameAsString.endsWith("SUCCESS")) {
+            return;
+        }
         if(nameAsString.startsWith("org.springframework")) {
             return;
         }
