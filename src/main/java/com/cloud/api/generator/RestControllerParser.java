@@ -438,7 +438,7 @@ public class RestControllerParser extends ClassProcessor {
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
 
-            if(md.getParameters().isNonEmpty()) {
+            if( md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
@@ -469,6 +469,27 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         }
 
+                        case "MultipartFile": {
+                            dependencies.add("org.springframework.mock.web.MockMultipartFile");
+//                            prepareBody("org.springframework.web.multipart.MultipartFile", new ClassOrInterfaceType(null, "MultipartFile"), "new MockMultipartFile", testMethod);
+                            dependencies.add("org.springframework.web.multipart.MultipartFile");
+                            ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
+                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(
+                                    null,
+                                    new ClassOrInterfaceType(null, "MockMultipartFile"),
+                                    NodeList.nodeList(
+                                            new StringLiteralExpr("file"),
+                                            new StringLiteralExpr("test.csv"),
+                                            new StringLiteralExpr("text/csv"),
+                                            new MethodCallExpr(new NameExpr("\"some,csv,data\""), "getBytes")
+                                    )
+                            );
+                            variableDeclarator.setInitializer(objectCreationExpr);
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                            break;
+                        }
+
                         case "Object": {
                             // SOme methods incorrectly have their DTO listed as of type Object. We will treat
                             // as a String
@@ -490,11 +511,16 @@ public class RestControllerParser extends ClassProcessor {
                             testMethod.getBody().get().addStatement(variableDeclarationExpr);
                     }
 
-
-                    MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                    writeValueAsStringCall.addArgument(new NameExpr("req"));
-                    makeGetCall.addArgument(writeValueAsStringCall);
-                    testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    if (cdecl.getNameAsString().equals("MultipartFile")){
+                        makeGetCall.addArgument(new NameExpr("req"));
+                        testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
+                    }
+                    else {
+                        MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                        writeValueAsStringCall.addArgument(new NameExpr("req"));
+                        makeGetCall.addArgument(writeValueAsStringCall);
+                        testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    }
                     makeGetCall.addArgument(new NameExpr("headers"));
 
                 }
