@@ -49,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,6 +61,11 @@ public class RepositoryParser extends ClassProcessor{
     private static final String ORACLE = "oracle";
     private static final String POSTGRESQL = "PG";
 
+    /**
+     * Creates a new Repository parser
+     * @throws IOException if the configuration file cannot be read
+     * @throws SQLException if the connection to the database cannot be established
+     */
     public RepositoryParser() throws IOException, SQLException {
         super();
         queries = new HashMap<>();
@@ -101,7 +107,7 @@ public class RepositoryParser extends ClassProcessor{
     }
 
     private void process() throws IOException {
-        File f = new File("/home/raditha/workspaces/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/discharge/DischargeDetailRepository.java");
+        File f = new File("/home/raditha/workspace/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/sbar/NurseMasterRepository.java");
         CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         cu.accept(new Visitor(), null);
 
@@ -123,6 +129,14 @@ public class RepositoryParser extends ClassProcessor{
         }
     }
 
+    /**
+     * Execute the query given in entry.value
+     * @param entry a Map.Entry containing the method declaration and the query that it represents
+     * @param entity the Java Type representing the table
+     * @param table the name of the table
+     * @param entityCu Compilation Unit representing the entity
+     * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
+     */
     private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
         String query = entry.getValue();
         try {
@@ -510,11 +524,17 @@ public class RepositoryParser extends ClassProcessor{
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
+    /**
+     * A Visitor that will visit the method declarations and extract the query
+     */
     class Visitor extends VoidVisitorAdapter<Void> {
+        Set<String> keywords = Set.of("findBy", "And", "OrderBy", "In", "Desc","Not","Containing");
+
         @Override
         public void visit(MethodDeclaration n, Void arg) {
             super.visit(n, arg);
             String query = null;
+            String methodName = n.getNameAsString();
 
             for (var ann : n.getAnnotations()) {
                 if (ann.getNameAsString().equals("Query")) {
@@ -547,8 +567,45 @@ public class RepositoryParser extends ClassProcessor{
                 queries.put(n, query);
             }
             else {
-                // todo the query needs to be built from the method name
+                List<String> components = extractComponents(methodName);
+                System.out.println("Method: " + methodName);
+
             }
+        }
+
+        /**
+         * Recursively search method names for sql components
+         * @param methodName name of the method
+         * @return a list of components
+         */
+        private  List<String> extractComponents(String methodName) {
+            List<String> components = new ArrayList<>();
+            extractComponents(methodName, components);
+            return components;
+        }
+
+        /**
+         * Recursively search method names for sql components
+         * @param methodName the method name to search for, will keep shrinking in each cal
+         * @param components the list of components to add to.
+         */
+        private void extractComponents(String methodName, List<String> components) {
+
+            if(methodName == null || methodName.isEmpty()) {
+                return;
+            }
+            for(String keyword : keywords) {
+                if(methodName.contains(keyword)) {
+                    int index = methodName.indexOf(keyword);
+                    if(index > 0) {
+                        components.add(methodName.substring(0, index));
+                    }
+                    components.add(keyword);
+                    extractComponents(methodName.substring(index + keyword.length()), components);
+                    return;
+                }
+            }
+            components.add(methodName);
         }
     }
 
