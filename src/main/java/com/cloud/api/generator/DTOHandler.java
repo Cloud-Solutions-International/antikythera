@@ -286,6 +286,9 @@ public class DTOHandler extends  ClassProcessor{
                 else if(initializer.isFieldAccessExpr()) {
                     findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
                 }
+                else if (initializer.isNameExpr()) {
+                    findImport(cu, initializer.asNameExpr().toString());
+                }
             }
             else {
                 generateRandomValue(field);
