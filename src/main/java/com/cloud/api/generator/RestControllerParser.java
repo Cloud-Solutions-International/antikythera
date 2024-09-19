@@ -65,6 +65,8 @@ public class RestControllerParser extends ClassProcessor {
     );
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private Map<String, Type> fields;
+    Map<String, Type> variables;
 
     /**
      * Creates a new RestControllerParser
@@ -155,6 +157,8 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.annotations.TestCaseType");
         gen.addImport("com.cloud.core.enums.TestType");
 
+        fields = getFields(cu);
+
         cu.accept(new MethodVisitor(), null);
 
         for (String s : dependencies) {
@@ -181,13 +185,13 @@ public class RestControllerParser extends ClassProcessor {
      *
      * This is a recursive function that will begin at the block that denotes the body of the method.
      * thereafter it will descend into child blocks that are parts of conditionals or try catch blocks
-     *
+     * @Deprecated
      * @param blockStmt
      * @return
      */
     private Type findReturnType(BlockStmt blockStmt) {
-        Map<String, Type> variables = new HashMap<>();
-        Map<String, Type> fields = getFields(cu);
+
+
 
         for (var stmt : blockStmt.getStatements()) {
             if (stmt.isExpressionStmt()) {
@@ -291,6 +295,9 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
+            if(md.getBody().isPresent()) {
+                identifyLocals(md.getBody().get());
+            }
 
             if (md.isPublic()) {
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
@@ -330,8 +337,24 @@ public class RestControllerParser extends ClassProcessor {
                 md.accept(new MethodBlockVisitor(), md);
             }
         }
+
+        private void identifyLocals(BlockStmt blockStmt) {
+            variables = new HashMap<>();
+            for (var stmt : blockStmt.getStatements()) {
+                if (stmt.isExpressionStmt()) {
+                    Expression expr = stmt.asExpressionStmt().getExpression();
+                    if (expr.isVariableDeclarationExpr()) {
+                        VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
+                        variables.put(varDeclExpr.getVariable(0).getNameAsString(), varDeclExpr.getElementType());
+                    }
+                }
+            }
+        }
     }
 
+    /**
+     * A visitor that will iterate through the block of a method and identify the return statements.
+     */
     private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
         Evaluator evaluator = new Evaluator();
         Map<String, Comparable> context = new HashMap<>();
@@ -346,9 +369,44 @@ public class RestControllerParser extends ClassProcessor {
                 if (gramps.isPresent() && gramps.get() instanceof IfStmt) {
                     IfStmt ifStmt = (IfStmt) gramps.get();
                     Expression condition = ifStmt.getCondition();
-                    System.out.println(evaluator.evaluateCondition(condition, context));
+                    if (evaluator.evaluateCondition(condition, context)) {
+                        logger.debug("Condition is true");
+                        bada(stmt);
+                    }
                 }
             }
+        }
+
+
+        private Type bada(ReturnStmt returnStmt) {
+
+            Expression expression = returnStmt.getExpression().orElse(null);
+            if (expression != null && expression.isObjectCreationExpr()) {
+                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                    Expression typeArg = objectCreationExpr.getArguments().get(0);
+                    if (typeArg.isNameExpr()) {
+                        return variables.get(typeArg.asNameExpr().getNameAsString());
+                    }
+                    if (typeArg.isMethodCallExpr()) {
+                        MethodCallExpr methodCallExpr = null;
+                        try {
+                            methodCallExpr = typeArg.asMethodCallExpr();
+                            Optional<Expression> scope = methodCallExpr.getScope();
+                            if (scope.isPresent()) {
+                                Type type = (scope.get().isFieldAccessExpr())
+                                        ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                        : fields.get(scope.get().asNameExpr().getNameAsString());
+                                extractTypeFromCall(type, methodCallExpr);
+                                logger.debug(type.toString());
+                            }
+                        } catch (IOException e) {
+                            throw new GeneratorException("Exception while identifying dependencies", e);
+                        }
+                    }
+                }
+            }
+            return null;
         }
 
         private void createTests(MethodDeclaration md, Type returnType) {
