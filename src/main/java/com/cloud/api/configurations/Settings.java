@@ -24,7 +24,7 @@ import java.util.Properties;
 import java.util.Scanner;
 
 /**
- * Manages the configuration properties from the generator.cfg file.
+ * Manages the configuration properties from generator.yml file or generator.cfg file.
  */
 public class Settings {
     /**
