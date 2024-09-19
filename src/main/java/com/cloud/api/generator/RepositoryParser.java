@@ -55,7 +55,7 @@ import java.util.regex.Pattern;
 
 public class RepositoryParser extends ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
-    private Map<MethodDeclaration, String> queries;
+    private Map<MethodDeclaration, RepositoryQuery> queries;
     private Connection conn;
     private String dialect;
     private static final String ORACLE = "oracle";
@@ -136,10 +136,10 @@ public class RepositoryParser extends ClassProcessor{
      * @param entityCu Compilation Unit representing the entity
      * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
      */
-    private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
-        String query = entry.getValue();
+    private void executeQuery(Map.Entry<MethodDeclaration, RepositoryQuery> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
+        RepositoryQuery rql = entry.getValue();
         try {
-            query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
+            String query = rql.getQuery().replace(entity.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
             convertFieldsToSnakeCase(stmt, entityCu);
             System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
@@ -179,7 +179,7 @@ public class RepositoryParser extends ClassProcessor{
             }
 
         } catch (JSQLParserException e) {
-            logger.error("\tUnparsable: {}", query);
+            logger.error("\tUnparsable: {}", rql.getQuery());
         } catch (SQLException e) {
             logger.error("\tSQL Error: {}", e.getMessage());
         }
@@ -534,13 +534,14 @@ public class RepositoryParser extends ClassProcessor{
             super.visit(n, entity);
             String query = null;
             String methodName = n.getNameAsString();
+            boolean nt = false;
 
             for (var ann : n.getAnnotations()) {
                 if (ann.getNameAsString().equals("Query")) {
                     if (ann.isSingleMemberAnnotationExpr()) {
                         query = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
                     } else if (ann.isNormalAnnotationExpr()) {
-                        boolean nt = false;
+
                         for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
                             if (pair.getNameAsString().equals("nativeQuery")) {
                                 if (pair.getValue().toString().equals("true")) {
@@ -562,8 +563,7 @@ public class RepositoryParser extends ClassProcessor{
             }
 
             if(query != null) {
-                query = cleanUp(query);
-                queries.put(n, query);
+                queries.put(n, new RepositoryQuery(cleanUp(query), nt));
             }
             else {
                 List<String> components = extractComponents(methodName);
@@ -586,7 +586,7 @@ public class RepositoryParser extends ClassProcessor{
                             sql.append(camelToSnake(component)).append(" ");
                     }
                 }
-                queries.put(n, sql.toString());
+                queries.put(n, new RepositoryQuery(sql.toString(), true));
             }
         }
 
