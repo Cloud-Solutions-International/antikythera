@@ -107,9 +107,8 @@ public class RepositoryParser extends ClassProcessor{
     }
 
     private void process() throws IOException {
-        File f = new File("/home/raditha/workspace/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/sbar/NurseMasterRepository.java");
+        File f = new File(basePath + "/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/sbar/NurseShiftAssignmentReadRepository.java");
         CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        cu.accept(new Visitor(), null);
 
         var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
         var parents = cls.getExtendedTypes();
@@ -117,10 +116,10 @@ public class RepositoryParser extends ClassProcessor{
             Optional<NodeList<Type>> t = parents.get(0).getTypeArguments();
             if(t.isPresent()) {
                 Type entity = t.get().get(0);
-
                 CompilationUnit entityCu = findEntity(entity);
-
                 String table = findTableName(entityCu);
+
+                cu.accept(new Visitor(), entityCu);
 
                 for (var entry : queries.entrySet()) {
                     executeQuery(entry, entity, table, entityCu);
@@ -140,16 +139,7 @@ public class RepositoryParser extends ClassProcessor{
     private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
         String query = entry.getValue();
         try {
-            query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
-            Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
-            convertFieldsToSnakeCase(stmt, entityCu);
-            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
 
-            String sql = stmt.toString().replaceAll("\\?\\d+", "?");
-            if(dialect.equals(ORACLE)) {
-                sql = sql.replaceAll("(?i)true", "1")
-                        .replaceAll("(?i)false", "0");
-            }
 
             PreparedStatement prep = conn.prepareStatement(sql);
 
@@ -527,12 +517,12 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * A Visitor that will visit the method declarations and extract the query
      */
-    class Visitor extends VoidVisitorAdapter<Void> {
+    class Visitor extends VoidVisitorAdapter<CompilationUnit> {
         Set<String> keywords = Set.of("findBy", "And", "OrderBy", "In", "Desc","Not","Containing");
 
         @Override
-        public void visit(MethodDeclaration n, Void arg) {
-            super.visit(n, arg);
+        public void visit(MethodDeclaration n, CompilationUnit entity) {
+            super.visit(n, entity);
             String query = null;
             String methodName = n.getNameAsString();
 
@@ -568,8 +558,26 @@ public class RepositoryParser extends ClassProcessor{
             }
             else {
                 List<String> components = extractComponents(methodName);
-                System.out.println("Method: " + methodName);
+                StringBuilder sql = new StringBuilder();
+                for(String component : components) {
+                    switch(component) {
+                        case "find":
+                            sql.append("SELECT * FROM ")
+                                    .append(findTableName(entity).replace("\"",""))
+                                    .append(" WHERE ");
 
+                            break;
+                        case "And":
+                        case "OR":
+                            sql.append(component).append(" ");
+                            break;
+                        case "By":
+                            break;
+                        default:
+                            sql.append(camelToSnake(component)).append(" ");
+                    }
+                }
+                queries.put(n, sql.toString());
             }
         }
 
@@ -580,32 +588,31 @@ public class RepositoryParser extends ClassProcessor{
          */
         private  List<String> extractComponents(String methodName) {
             List<String> components = new ArrayList<>();
-            extractComponents(methodName, components);
-            return components;
-        }
+            String[] keywords = {"By", "And", "OrderBy", "In", "Desc", "NotContaining"};
+            String[] parts = methodName.split("By|And|OrderBy|In|Desc|NotContaining");
 
-        /**
-         * Recursively search method names for sql components
-         * @param methodName the method name to search for, will keep shrinking in each cal
-         * @param components the list of components to add to.
-         */
-        private void extractComponents(String methodName, List<String> components) {
+            components.add(parts[0]); // add the "find" part
 
-            if(methodName == null || methodName.isEmpty()) {
-                return;
-            }
-            for(String keyword : keywords) {
-                if(methodName.contains(keyword)) {
-                    int index = methodName.indexOf(keyword);
-                    if(index > 0) {
-                        components.add(methodName.substring(0, index));
+            int index = 1;
+            while (index < parts.length) {
+                for (String keyword : keywords) {
+                    if (methodName.contains(keyword) && methodName.indexOf(keyword) < methodName.indexOf(parts[index])) {
+                        components.add(keyword);
+                        methodName = methodName.substring(methodName.indexOf(keyword) + keyword.length());
                     }
-                    components.add(keyword);
-                    extractComponents(methodName.substring(index + keyword.length()), components);
-                    return;
                 }
+                components.add(parts[index]);
+                if (index < parts.length - 1 && !methodName.contains("OrderBy") && !methodName.contains("In") && !methodName.contains("NotContaining")) {
+                    components.add("AND");
+                }
+                index++;
             }
-            components.add(methodName);
+
+            if (methodName.endsWith("Desc")) {
+                components.add("Desc");
+            }
+
+            return components;
         }
     }
 
@@ -615,9 +622,12 @@ public class RepositoryParser extends ClassProcessor{
      * @return the cleaned up sql as a string
      */
     private String cleanUp(String sql) {
-        // If a JPA query is using a projection, we will have a new keyword immediately after the select
-        // JSQL does not recognize this. So we will remove everything from the NEW keyword to the FROM
-        // keyword and replace it with the '*' character.
+        // If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
+        // the select JSQL does not recognize this. So lets remove everything starting at the NEW keyword
+        // and finishing at the FROM keyword. It will be replaced by  the '*' character.
+        //
+        // A second pattern is SELECT t FROM EntityClassName t ...
+
         // Use case-insensitive regex to find and replace the NEW keyword and the FROM keyword
         Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(sql);
@@ -631,8 +641,14 @@ public class RepositoryParser extends ClassProcessor{
         // Remove quotation marks
         sql = sql.replace("\"", "");
 
+        Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+        Matcher selectMatcher = selectPattern.matcher(sql);
+        if (selectMatcher.find()) {
+            sql = selectMatcher.replaceAll("SELECT * FROM $1 $2");
+            sql = sql.replace(" as "," ");
+        }
+
         return sql;
     }
-
 }
 
