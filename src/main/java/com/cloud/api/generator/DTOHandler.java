@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -64,6 +65,18 @@ public class DTOHandler extends  ClassProcessor{
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
+        if (parseDTO(relativePath)) return;
+
+        ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
+        resolved.add(cu.toString());
+
+        for(String dependency : dependencies) {
+            copyDependencies(dependency);
+        }
+        dependencies.clear();
+    }
+
+    public boolean parseDTO(String relativePath) throws FileNotFoundException {
         logger.info("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
@@ -71,7 +84,7 @@ public class DTOHandler extends  ClassProcessor{
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
 
         if(resolved.contains(cu.toString())) {
-            return ;
+            return true;
         }
 
         expandWildCards(cu);
@@ -88,14 +101,7 @@ public class DTOHandler extends  ClassProcessor{
             var variable = classToInstanceName(cu.getTypes().get(0));
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
-
-        ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-        resolved.add(cu.toString());
-
-        for(String dependency : dependencies) {
-            copyDependencies(dependency);
-        }
-        dependencies.clear();
+        return false;
     }
 
     /**
@@ -294,8 +300,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "Date":
                         if(field.getElementType().toString().contains(".")) {
                             setter.addArgument("new java.util.Date()");
-                        }
-                        else {
+                        } else {
                             setter.addArgument("new Date()");
                         }
                         break;
@@ -304,6 +309,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "double":
                         setter.addArgument("0.0");
                         break;
+
                     case "Float":
                     case "float":
                         setter.addArgument("0.0f");
@@ -313,6 +319,11 @@ public class DTOHandler extends  ClassProcessor{
                     case "int":
                         setter.addArgument("0");
                         break;
+
+                    case "Byte":
+                        setter.addArgument("(byte) 0");
+                        break;
+
                     case "List":
                         setter.addArgument("List.of()");
                         break;
@@ -321,6 +332,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "Long":
                         setter.addArgument("0L");
                         break;
+
                     case "String":
                         setter.addArgument("\"Hello world\"");
                         break;
@@ -328,6 +340,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "Map":
                         setter.addArgument("Map.of()");
                         break;
+
                     case "Set":
                         setter.addArgument("Set.of()");
                         break;
@@ -340,14 +353,34 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("LocalDate.now()");
                         break;
 
+                    case "LocalDateTime":
+                        setter.addArgument("LocalDateTime.now()");
+                        break;
+
+                    case "Short":
+                        setter.addArgument("(short) 0");
+                        break;
+
+                    case "byte":
+                        setter.addArgument("new byte[] {0}");
+                        break;
+
+                    case "T":
+                        setter.addArgument("null");
+                        break;
+
+                    case "BigDecimal":
+                        setter.addArgument("BigDecimal.ZERO");
+                        break;
+
                     default:
                         if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
                             setter.addArgument("new " + type + "()");
-                        }
-                        else {
+                        } else {
                             setter = null;
                         }
                 }
+
                 if(setter != null) {
                     method.getBody().get().addStatement(setter);
                 }
@@ -378,5 +411,9 @@ public class DTOHandler extends  ClassProcessor{
             DTOHandler processor = new DTOHandler();
             processor.copyDTO(args[0]);
         }
+    }
+
+    public CompilationUnit getCompilationUnit() {
+        return cu;
     }
 }

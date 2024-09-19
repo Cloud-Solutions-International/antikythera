@@ -14,13 +14,18 @@ import io.restassured.http.Header;
 import io.restassured.http.Headers;
 import io.restassured.http.Method;
 import io.restassured.response.Response;
+import org.json.JSONObject;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.asserts.SoftAssert;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -90,6 +95,17 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makePut(String body, Headers headers, String relativeUrl)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).body(body).when().request(Method.PUT);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected Response makeGet( Headers headers, String relativeUrl)  {
 
         APIRequester.setBaseURI(baseURI);
@@ -102,10 +118,35 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makeDelete( Headers headers, String relativeUrl)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).when().request(Method.DELETE);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected void checkStatusCode(Response response) {
         softAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),
                 "Expected status code starting with 2xx, but got: " + response.getStatusCode());
     }
 
+    protected String buildRelativeUrl(String controllerName, String relativeUrl, List<String> pathVariables) throws IOException {
+        if (pathVariables.isEmpty()) {
+            return relativeUrl;
+        }
 
+        String filePath = "src/test/resources/data/" + controllerName + "PathVars.json";
+        String jsonContent = new String(Files.readAllBytes(Paths.get(filePath)));
+        JSONObject jsonObject = new JSONObject(jsonContent);
+
+        for (String pathVariable : pathVariables) {
+            Object value = jsonObject.get(pathVariable);
+            relativeUrl = relativeUrl.replace("{" + pathVariable + "}", value.toString());
+        }
+        return relativeUrl;
+    }
 }
