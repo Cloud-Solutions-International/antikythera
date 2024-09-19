@@ -35,6 +35,8 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Paths;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -82,7 +84,7 @@ public class RepositoryParser extends ClassProcessor{
     public static void main(String[] args) throws IOException, SQLException {
         Settings.loadConfigMap();
         RepositoryParser parser = new RepositoryParser();
-        parser.process();
+        parser.process("com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java");
     }
 
     /**
@@ -100,9 +102,14 @@ public class RepositoryParser extends ClassProcessor{
         return count;
     }
 
-    private void process() throws IOException {
-        File f = new File("/home/raditha/workspaces/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/discharge/DischargeDetailRepository.java");
+    public void process(String className) throws IOException {
+        File f = Paths.get(basePath, className.replace("\\.","/")).toFile();
+
         CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        process(cu);
+    }
+
+    public void process(CompilationUnit cu) throws FileNotFoundException {
         cu.accept(new Visitor(), null);
 
         var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();

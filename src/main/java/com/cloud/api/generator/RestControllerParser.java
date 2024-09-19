@@ -6,6 +6,7 @@ import com.cloud.api.evaluator.Evaluator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -17,7 +18,6 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -40,13 +40,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import net.sf.jsqlparser.statement.Block;
-import org.codehaus.groovy.ast.stmt.ReturnStatement;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +55,7 @@ public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
     private final File controllers;
     private CompilationUnit cu;
-
+    Set<String> testMethodNames;
     private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
     private final Map<String, ?> typeDefsForPathVars = Map.of(
@@ -159,7 +160,7 @@ public class RestControllerParser extends ClassProcessor {
 
         fields = getFields(cu);
 
-        cu.accept(new MethodVisitor(), null);
+        cu.accept(new ControllerVisitor(), null);
 
         for (String s : dependencies) {
             gen.addImport(s);
@@ -290,19 +291,36 @@ public class RestControllerParser extends ClassProcessor {
      *
      * We use it to identify the return types and the arguments of each method in the class.
      */
-    private class MethodVisitor extends VoidVisitorAdapter<Void> {
+    private class ControllerVisitor extends VoidVisitorAdapter<Void> {
+
+        public void visit(FieldDeclaration fd, Void arg) {
+            super.visit(fd, arg);
+            for (var variable : fd.getVariables()) {
+                if(variable.getType().isClassOrInterfaceType()) {
+                    Type t = variable.getType().asClassOrInterfaceType();
+                    try {
+                        String className = t.resolve().describe();
+                        if(className.startsWith(basePackage)) {
+
+                        }
+                    } catch (UnsolvedSymbolException e) {
+                        logger.debug("ignore {}", t.toString());
+                    }
+                }
+            }
+        }
 
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-            if(md.getBody().isPresent()) {
-                identifyLocals(md.getBody().get());
-            }
-
             if (md.isPublic()) {
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
+                if(md.getBody().isPresent()) {
+                    identifyLocals(md.getBody().get());
+                }
+                testMethodNames = new HashSet<>();
                 logger.debug("Method: {}\n", md.getName());
                 Type returnType = null;
                 Type methodType = md.getType();
@@ -358,6 +376,8 @@ public class RestControllerParser extends ClassProcessor {
     private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
         Evaluator evaluator = new Evaluator();
         Map<String, Comparable> context = new HashMap<>();
+
+
         @Override
         public void visit(ReturnStmt stmt, MethodDeclaration md) {
             super.visit(stmt, md);
@@ -371,14 +391,14 @@ public class RestControllerParser extends ClassProcessor {
                     Expression condition = ifStmt.getCondition();
                     if (evaluator.evaluateCondition(condition, context)) {
                         logger.debug("Condition is true");
-                        bada(stmt);
+                        identifyReturnType(stmt, md);
                     }
                 }
             }
         }
 
 
-        private Type bada(ReturnStmt returnStmt) {
+        private Type identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
 
             Expression expression = returnStmt.getExpression().orElse(null);
             if (expression != null && expression.isObjectCreationExpr()) {
@@ -388,7 +408,10 @@ public class RestControllerParser extends ClassProcessor {
                     if (typeArg.isNameExpr()) {
                         return variables.get(typeArg.asNameExpr().getNameAsString());
                     }
-                    if (typeArg.isMethodCallExpr()) {
+                    else if (typeArg.isStringLiteralExpr()) {
+                        createTests(md, StaticJavaParser.parseType("java.lang.String"));
+                    }
+                    else if (typeArg.isMethodCallExpr()) {
                         MethodCallExpr methodCallExpr = null;
                         try {
                             methodCallExpr = typeArg.asMethodCallExpr();
@@ -461,16 +484,27 @@ public class RestControllerParser extends ClassProcessor {
             testMethod.addAnnotation("Test");
             StringBuilder paramNames = new StringBuilder();
             for(var param : md.getParameters()) {
-                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                        .append(param.getNameAsString().substring(1));
+                for(var ann : param.getAnnotations()) {
+                    if(ann.getNameAsString().equals("PathVariable")) {
+                        paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                                .append(param.getNameAsString().substring(1));
+                        break;
+                    }
+                }
             }
 
             String testName = String.valueOf(md.getName());
-            if (md.getParameters().isNonEmpty()) {
-                testName += "By" + paramNames + "Test";
-            } else {
+            if (paramNames.isEmpty()) {
                 testName += "Test";
+            } else {
+                testName += "By" + paramNames + "Test";
+
             }
+
+            if (testMethodNames.contains(testName)) {
+                testName += "_" + (char)('A' + testMethodNames.size() -1);
+            }
+            testMethodNames.add(testName);
             testMethod.setName(testName);
 
             BlockStmt body = new BlockStmt();

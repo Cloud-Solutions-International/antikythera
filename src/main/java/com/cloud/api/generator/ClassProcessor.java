@@ -27,20 +27,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class ClassProcessor {
-
-    /*
-     * this is made static because multiple classes may have the same dependency
-     * and we don't want to spend time copying them multiple times.
-     */
-    protected static final Set<String> resolved = new TreeSet<>();
-    protected static String basePackage;
-    protected static String basePath;
-    public static final String SUFFIX = ".java";
-
-    protected final Set<String> dependencies = new TreeSet<>();
-    protected final Set<String> externalDependencies = new TreeSet<>();
-
+public class ClassProcessor extends AbstractClassProcessor {
     /*
      * The strategy followed is that we iterate through all the fields in the
      * class and add them to a queue. Then we iterate through the items in
@@ -48,29 +35,11 @@ public class ClassProcessor {
      * been copied, it will be in the resolved set that is defined in the
      * parent, so we will skip it.
      */
-    protected JavaParser javaParser;
-    protected JavaSymbolSolver symbolResolver;
-    protected CombinedTypeSolver combinedTypeSolver;
-    protected ArrayList<JarTypeSolver> jarSolvers;
+    protected final Set<String> dependencies = new TreeSet<>();
+    protected final Set<String> externalDependencies = new TreeSet<>();
 
     protected ClassProcessor() throws IOException {
-        if(basePackage == null) {
-            basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-            basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-        }
-        combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-
-        jarSolvers = new ArrayList<>();
-        for(String jarFile : Settings.getJarFiles()) {
-            JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
-            jarSolvers.add(jarSolver);
-            combinedTypeSolver.add(jarSolver);
-        }
-        symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
+        super();
     }
 
     /**
@@ -88,10 +57,11 @@ public class ClassProcessor {
         if(externalDependencies.contains(nameAsString)) {
             return;
         }
-        if (!ClassProcessor.resolved.contains(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
-            ClassProcessor.resolved.add(nameAsString);
+        if (!ClassProcessor.resolved.containsKey(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
+
             DTOHandler handler = new DTOHandler();
             handler.copyDTO(nameAsString.replace(".", "/") + ClassProcessor.SUFFIX);
+            ClassProcessor.resolved.put(nameAsString, handler.getCompilationUnit());
         }
     }
 

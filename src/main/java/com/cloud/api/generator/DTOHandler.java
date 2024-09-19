@@ -39,7 +39,7 @@ import java.util.Optional;
  * Recursively copy DTOs from the Application Under Test (AUT).
  *
  */
-public class DTOHandler extends  ClassProcessor{
+public class DTOHandler extends  ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
 
@@ -54,10 +54,6 @@ public class DTOHandler extends  ClassProcessor{
        super();
     }
 
-    public void setCompilationUnit(CompilationUnit cu) {
-        this.cu = cu;
-    }
-
     /**
      * Copy the DTO from the AUT.
      * @param relativePath a path name relative to the base path of the application.
@@ -67,7 +63,6 @@ public class DTOHandler extends  ClassProcessor{
         if (parseDTO(relativePath)) return;
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-        resolved.add(cu.toString());
 
         for(String dependency : dependencies) {
             copyDependencies(dependency);
@@ -108,7 +103,7 @@ public class DTOHandler extends  ClassProcessor{
             logger.info("Found inner DTO class in controller: {}", relativePath);
         }
 
-        if (resolved.contains(cu.toString())) {
+        if (resolved.containsKey(cu.toString())) {
             return true;
         }
 
