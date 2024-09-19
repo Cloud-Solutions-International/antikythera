@@ -15,6 +15,7 @@ import io.restassured.http.Headers;
 import io.restassured.http.Method;
 import io.restassured.response.Response;
 import org.json.JSONObject;
+import org.springframework.web.multipart.MultipartFile;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
@@ -89,6 +90,27 @@ public abstract class TestHelper extends APIBaseTest {
         APIRequester.setBasePath(relativeUrl);
 
         Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).body(body).when().request(Method.POST);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
+    protected Response makePost(MultipartFile file, Headers headers, String relativeUrl) throws IOException {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Headers filteredHeaders = new Headers(headers.asList().stream()
+                .filter(header -> !header.getName().equalsIgnoreCase("Content-Type"))
+                .collect(Collectors.toList()));
+
+        Response response = RestAssured.given()
+                .relaxedHTTPSValidation()
+                .headers(filteredHeaders)
+                .multiPart("file", file.getOriginalFilename(), file.getInputStream(), file.getContentType())
+                .when()
+                .request(Method.POST);
+
         APIRequester.resetBasePath();
         APIRequester.resetBaseURI();
 
