@@ -139,7 +139,16 @@ public class RepositoryParser extends ClassProcessor{
     private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
         String query = entry.getValue();
         try {
+            query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
+            Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
+            convertFieldsToSnakeCase(stmt, entityCu);
+            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
 
+            String sql = stmt.toString().replaceAll("\\?\\d+", "?");
+            if(dialect.equals(ORACLE)) {
+                sql = sql.replaceAll("(?i)true", "1")
+                        .replaceAll("(?i)false", "0");
+            }
 
             PreparedStatement prep = conn.prepareStatement(sql);
 
