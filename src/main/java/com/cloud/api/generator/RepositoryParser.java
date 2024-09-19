@@ -60,6 +60,7 @@ public class RepositoryParser extends ClassProcessor{
     private String dialect;
     private static final String ORACLE = "oracle";
     private static final String POSTGRESQL = "PG";
+    private static boolean runQueries = false;
 
     /**
      * Creates a new Repository parser
@@ -71,6 +72,7 @@ public class RepositoryParser extends ClassProcessor{
         queries = new HashMap<>();
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null) {
+            runQueries = db.getOrDefault("run_queries", "false").toString().equals("true");
             String url = db.get("url").toString();
             if(url.contains(ORACLE)) {
                 dialect = ORACLE;
@@ -78,9 +80,11 @@ public class RepositoryParser extends ClassProcessor{
             else {
                 dialect = POSTGRESQL;
             }
-            conn = DriverManager.getConnection(url, db.get("user").toString(), db.get("password").toString());
-            try (java.sql.Statement statement = conn.createStatement()) {
-                statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
+            if(runQueries) {
+                conn = DriverManager.getConnection(url, db.get("user").toString(), db.get("password").toString());
+                try (java.sql.Statement statement = conn.createStatement()) {
+                    statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
+                }
             }
         }
     }
@@ -142,7 +146,7 @@ public class RepositoryParser extends ClassProcessor{
             String query = rql.getQuery().replace(entity.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
             convertFieldsToSnakeCase(stmt, entityCu);
-            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
+
 
             String sql = stmt.toString().replaceAll("\\?\\d+", "?");
             if(dialect.equals(ORACLE)) {
@@ -150,34 +154,48 @@ public class RepositoryParser extends ClassProcessor{
                         .replaceAll("(?i)false", "0");
             }
 
-            PreparedStatement prep = conn.prepareStatement(sql);
-
-            for(int j = 0 ; j < countPlaceholders(sql) ; j++) {
-                prep.setLong(j + 1, 1);
+            // if the sql contains more than 1 and clause we will delete '1' IN '1'
+            Pattern pattern = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(query);
+            int count = 0;
+            while (matcher.find()) {
+                count++;
+                if(count == 3) {
+                    sql = sql.replaceAll("'1' IN '1' AND", "");
+                    break;
+                }
             }
 
-            if(prep.execute()) {
-                ResultSet rs = prep.getResultSet();
+            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + sql);
 
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
+            if(runQueries) {
+                PreparedStatement prep = conn.prepareStatement(sql);
 
-                // Print column names
-                for (int i = 1; i <= columnCount; i++) {
-                    System.out.print(metaData.getColumnName(i) + "\t");
+                for (int j = 0; j < countPlaceholders(sql); j++) {
+                    prep.setLong(j + 1, 1);
                 }
-                System.out.println();
 
-                int i = 0;
-                while(rs.next() && i < 10) {
-                    for (int j = 1; j <= columnCount; j++) {
-                        System.out.print(rs.getString(j) + "\t");
+                if (prep.execute()) {
+                    ResultSet rs = prep.getResultSet();
+
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    int columnCount = metaData.getColumnCount();
+
+                    for (int i = 1; i <= columnCount; i++) {
+                        System.out.print(metaData.getColumnName(i) + "\t");
                     }
                     System.out.println();
-                    i++;
+
+                    int i = 0;
+                    while (rs.next() && i < 10) {
+                        for (int j = 1; j <= columnCount; j++) {
+                            System.out.print(rs.getString(j) + "\t");
+                        }
+                        System.out.println();
+                        i++;
+                    }
                 }
             }
-
         } catch (JSQLParserException e) {
             logger.error("\tUnparsable: {}", rql.getQuery());
         } catch (SQLException e) {
@@ -420,6 +438,7 @@ public class RepositoryParser extends ClassProcessor{
                 removed.add(ine.getLeftExpression());
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
+
                 rightExpression.add(new StringValue("1"));
                 ine.setRightExpression(rightExpression);
             }
@@ -527,7 +546,6 @@ public class RepositoryParser extends ClassProcessor{
      * A Visitor that will visit the method declarations and extract the query
      */
     class Visitor extends VoidVisitorAdapter<CompilationUnit> {
-        Set<String> keywords = Set.of("findBy", "And", "OrderBy", "In", "Desc","Not","Containing");
 
         @Override
         public void visit(MethodDeclaration n, CompilationUnit entity) {
@@ -568,22 +586,63 @@ public class RepositoryParser extends ClassProcessor{
             else {
                 List<String> components = extractComponents(methodName);
                 StringBuilder sql = new StringBuilder();
-                for(String component : components) {
+                boolean top = false;
+                boolean ordering = false;
+                for(int i= 0 ; i < components.size() ; i++) {
+                    String component = components.get(i);
                     switch(component) {
-                        case "find":
+                        case "findBy":
+                        case "get":
                             sql.append("SELECT * FROM ")
                                     .append(findTableName(entity).replace("\"",""))
                                     .append(" WHERE ");
 
                             break;
+                        case "findFirstBy":
+                        case "findTopBy":
+                            top = true;
+                            sql.append("SELECT * FROM ")
+                                    .append(findTableName(entity).replace("\"",""))
+                                    .append(" WHERE ");
+                            break;
+
                         case "And":
-                        case "OR":
+                        case "Or":
+                        case "Not":
                             sql.append(component).append(" ");
                             break;
-                        case "By":
+                        case "Containing":
+                        case "Like":
+                            sql.append(" LIKE '%?%'");
+                            break;
+                        case "OrderBy":
+                            ordering = true;
+                            sql.append(" ORDER BY ");
+                            break;
+                        case "":
                             break;
                         default:
-                            sql.append(camelToSnake(component)).append(" ");
+                            sql.append(camelToSnake(component));
+                            if(!ordering) {
+                                if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
+                                    sql.append(" In  (?) ");
+                                    i++;
+                                } else {
+                                    sql.append(" = ? ");
+                                }
+                            }
+                            else {
+                                sql.append(" ");
+                            }
+
+                    }
+                }
+                if(top) {
+                    if(dialect.equals(ORACLE)) {
+                        sql.append(" FETCH FIRST 1 ROWS ONLY");
+                    }
+                    else {
+                        sql.append(" LIMIT 1");
                     }
                 }
                 queries.put(n, new RepositoryQuery(sql.toString(), true));
@@ -597,28 +656,23 @@ public class RepositoryParser extends ClassProcessor{
          */
         private  List<String> extractComponents(String methodName) {
             List<String> components = new ArrayList<>();
-            String[] keywords = {"By", "And", "OrderBy", "In", "Desc", "NotContaining"};
-            String[] parts = methodName.split("By|And|OrderBy|In|Desc|NotContaining");
+            String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|In|Desc|Not|Containing|Like|Or";
+            Pattern pattern = Pattern.compile(keywords);
+            Matcher matcher = pattern.matcher(methodName);
 
-            components.add(parts[0]); // add the "find" part
-
-            int index = 1;
-            while (index < parts.length) {
-                for (String keyword : keywords) {
-                    if (methodName.contains(keyword) && methodName.indexOf(keyword) < methodName.indexOf(parts[index])) {
-                        components.add(keyword);
-                        methodName = methodName.substring(methodName.indexOf(keyword) + keyword.length());
-                    }
-                }
-                components.add(parts[index]);
-                if (index < parts.length - 1 && !methodName.contains("OrderBy") && !methodName.contains("In") && !methodName.contains("NotContaining")) {
-                    components.add("AND");
-                }
-                index++;
+            // Add spaces around each keyword
+            StringBuffer sb = new StringBuffer();
+            while (matcher.find()) {
+                matcher.appendReplacement(sb, " " + matcher.group() + " ");
             }
+            matcher.appendTail(sb);
 
-            if (methodName.endsWith("Desc")) {
-                components.add("Desc");
+            // Split the modified method name by spaces
+            String[] parts = sb.toString().split("\\s+");
+            for (String part : parts) {
+                if (!part.isEmpty()) {
+                    components.add(part);
+                }
             }
 
             return components;
