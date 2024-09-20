@@ -42,7 +42,6 @@ public class DTOHandler extends  ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
 
-    private CompilationUnit cu;
 
     MethodDeclaration method = null;
 
@@ -67,57 +66,6 @@ public class DTOHandler extends  ClassProcessor {
             copyDependencies(dependency);
         }
         dependencies.clear();
-    }
-
-    /**
-     * Creates a compilation unit from the source code at the relative path.
-     *
-     * If this file has previously been resolved, it will not be recompiled rather, it will be
-     * fetched from the resolved map.
-     * @param relativePath a path name relative to the base path of the application.
-     * @throws FileNotFoundException when the source code cannot be found
-     */
-
-    public void compile(String relativePath) throws FileNotFoundException {
-        String className = pathToClass(relativePath);
-
-        cu = resolved.get(className);
-        if (cu != null) {
-            return;
-        }
-
-        logger.info("\t{}", relativePath);
-        Path sourcePath = Paths.get(basePath, relativePath);
-
-        // Check if the file exists
-        File file = sourcePath.toFile();
-        if (!file.exists()) {
-            // The file may not exist if the DTO is an inner class in a controller
-            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
-            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
-            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
-            sourcePath = Paths.get(basePath, controllerPath);
-        }
-
-        // Check again for the controller file
-        file = sourcePath.toFile();
-        if (!file.exists()) {
-            logger.error("Controller file not found: {}", sourcePath);
-            throw new FileNotFoundException(sourcePath.toString());
-        }
-
-        // Proceed with parsing the controller file
-        FileInputStream in = new FileInputStream(file);
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        resolved.put(className, cu);
-
-        // Search for any inner class that ends with "Dto"
-        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
-
-        if (hasInnerDTO) {
-            logger.info("Found inner DTO class in controller: {}", relativePath);
-        }
     }
 
     public void parseDTO(String relativePath) throws FileNotFoundException {
