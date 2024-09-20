@@ -75,6 +75,7 @@ public class RestControllerParser extends ClassProcessor {
         if (!Files.exists(dataPath)) {
             Files.createDirectories(dataPath);
         }
+        Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
 
     }
 
@@ -469,6 +470,17 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         }
 
+                        case "MultipartFile": {
+                            dependencies.add("org.springframework.web.multipart.MultipartFile");
+                            ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
+                            MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
+                            methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
+                            variableDeclarator.setInitializer(methodCallExpr);
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                            break;
+                        }
+
                         case "Object": {
                             // SOme methods incorrectly have their DTO listed as of type Object. We will treat
                             // as a String
@@ -485,11 +497,16 @@ public class RestControllerParser extends ClassProcessor {
                             testMethod.getBody().get().addStatement(variableDeclarationExpr);
                     }
 
-
-                    MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                    writeValueAsStringCall.addArgument(new NameExpr("req"));
-                    makeGetCall.addArgument(writeValueAsStringCall);
-                    testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    if (cdecl.getNameAsString().equals("MultipartFile")){
+                        makeGetCall.addArgument(new NameExpr("req"));
+                        testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
+                    }
+                    else {
+                        MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                        writeValueAsStringCall.addArgument(new NameExpr("req"));
+                        makeGetCall.addArgument(writeValueAsStringCall);
+                        testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    }
                     makeGetCall.addArgument(new NameExpr("headers"));
 
                 }
