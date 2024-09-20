@@ -194,7 +194,7 @@ public class ClassProcessor extends AbstractClassProcessor {
      * Expands wild card imports.
      * Which means we delete the asterisk import and add all the classes in the package as
      * individual imports.
-     * 
+     *
      * @param cu the compilation unit
      */
     protected void expandWildCards(CompilationUnit cu) {
@@ -217,23 +217,28 @@ public class ClassProcessor extends AbstractClassProcessor {
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
-                importDeclaration ->
-                {
-                    String nameAsString = importDeclaration.getNameAsString();
-                    if (dependencies.contains(nameAsString) ||
-                        externalDependencies.contains(nameAsString)) {
-                        return false;
-                    }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
-                        return false;
-                    }
-
-                    if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
-                        return false;
-                    }
-
-                    return true;
+            importDeclaration ->
+            {
+                String nameAsString = importDeclaration.getNameAsString();
+                if (dependencies.contains(nameAsString) ||
+                    externalDependencies.contains(nameAsString)) {
+                    return false;
                 }
-            );
+                if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
+                    return false;
+                }
+
+                if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
+                    return false;
+                }
+
+                return true;
+            }
+        );
+    }
+
+
+    public CompilationUnit getCompilationUnit() {
+        return cu;
     }
 }
