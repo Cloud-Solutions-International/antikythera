@@ -71,6 +71,7 @@ public class RestControllerParser extends ClassProcessor {
     );
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
 
     /**
      * Store the conditions that a controller may expect the input to meet.
@@ -95,9 +96,12 @@ public class RestControllerParser extends ClassProcessor {
 
         dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
+        // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
             Files.createDirectories(dataPath);
         }
+        Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
+
     }
 
     public void start() throws IOException {
@@ -116,8 +120,7 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
-            Pattern pattern = Pattern.compile(".*/([^/]+)\\.java$");
-            Matcher matcher = pattern.matcher(path.toString());
+            Matcher matcher = controllerPattern.matcher(path.toString());
 
             String controllerName = null;
             if (matcher.find()) {
@@ -194,6 +197,8 @@ public class RestControllerParser extends ClassProcessor {
      * @return
      */
     private Type findReturnType(BlockStmt blockStmt) {
+        Map<String, Type> variables = new HashMap<>();
+        Map<String, Type> fields = getFields(cu);
 
         for (var stmt : blockStmt.getStatements()) {
             if (stmt.isExpressionStmt()) {
@@ -352,6 +357,7 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
+
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
@@ -689,6 +695,17 @@ public class RestControllerParser extends ClassProcessor {
                             break;
                         }
 
+                        case "MultipartFile": {
+                            dependencies.add("org.springframework.web.multipart.MultipartFile");
+                            ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
+                            MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
+                            methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
+                            variableDeclarator.setInitializer(methodCallExpr);
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                            break;
+                        }
+
                         case "Object": {
                             // SOme methods incorrectly have their DTO listed as of type Object. We will treat
                             // as a String
@@ -715,10 +732,16 @@ public class RestControllerParser extends ClassProcessor {
                         }
                     }
 
-                    MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                    writeValueAsStringCall.addArgument(new NameExpr("req"));
-                    makeGetCall.addArgument(writeValueAsStringCall);
-                    testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    if (cdecl.getNameAsString().equals("MultipartFile")){
+                        makeGetCall.addArgument(new NameExpr("req"));
+                        testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
+                    }
+                    else {
+                        MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                        writeValueAsStringCall.addArgument(new NameExpr("req"));
+                        makeGetCall.addArgument(writeValueAsStringCall);
+                        testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    }
                     makeGetCall.addArgument(new NameExpr("headers"));
 
                 }

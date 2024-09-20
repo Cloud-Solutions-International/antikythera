@@ -480,7 +480,7 @@ public class RepositoryParser extends ClassProcessor{
             InExpression ine = (InExpression) expr;
             Column col = (Column) ine.getLeftExpression();
             if(where &&
-                    !(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
+                    !("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
                 removed.add(ine.getLeftExpression());
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
