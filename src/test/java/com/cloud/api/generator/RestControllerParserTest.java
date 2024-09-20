@@ -89,7 +89,7 @@ class RestControllerParserTest {
         CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
 
         // Use the parsed CompilationUnit
-        Map<String, Type> fields = parser.getFields(cu);
+        Map<String, Type> fields = parser.getFields();
         assertTrue(fields.isEmpty());
 
         // Clean up the temporary file
@@ -110,7 +110,7 @@ class RestControllerParserTest {
         FileInputStream in = new FileInputStream(testFilePath.toFile());
         CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
 
-        Map<String, Type> fields = parser.getFields(cu);
+        Map<String, Type> fields = parser.getFields();
         assertFalse(fields.isEmpty());
         assertEquals(fields.size(), 3);
         assertTrue(fields.containsKey("id"));

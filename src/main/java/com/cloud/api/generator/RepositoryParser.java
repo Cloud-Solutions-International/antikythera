@@ -66,7 +66,7 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * The queries that were identified in this repository
      */
-    private Map<MethodDeclaration, String> queries;
+    private Map<MethodDeclaration, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -81,7 +81,7 @@ public class RepositoryParser extends ClassProcessor{
      * Whether queries should actually be executed or not.
      * As determined by the configurations
      */
-    private boolean runQueries;
+    private static boolean runQueries;
     /**
      * The java parser compilation unit associated with this entity.
      *
@@ -179,15 +179,13 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * Execute the query given in entry.value
      * @param entry a Map.Entry containing the method declaration and the query that it represents
-     * @param entity the Java Type representing the table
-     * @param table the name of the table
-     * @param entityCu Compilation Unit representing the entity
      * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
      */
-    private void executeQuery(Map.Entry<MethodDeclaration, RepositoryQuery> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
+    private void executeQuery(Map.Entry<MethodDeclaration, RepositoryQuery> entry) throws FileNotFoundException {
         RepositoryQuery rql = entry.getValue();
         try {
-            String query = rql.getQuery().replace(entity.asClassOrInterfaceType().getNameAsString(), table);
+            RepositoryParser.createConnection();
+            String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
             convertFieldsToSnakeCase(stmt, entityCu);
 
@@ -646,7 +644,7 @@ public class RepositoryParser extends ClassProcessor{
                         case "findBy":
                         case "get":
                             sql.append("SELECT * FROM ")
-                                    .append(findTableName(entity).replace("\"",""))
+                                    .append(findTableName(entityCu).replace("\"",""))
                                     .append(" WHERE ");
 
                             break;
@@ -654,7 +652,7 @@ public class RepositoryParser extends ClassProcessor{
                         case "findTopBy":
                             top = true;
                             sql.append("SELECT * FROM ")
-                                    .append(findTableName(entity).replace("\"",""))
+                                    .append(findTableName(entityCu).replace("\"",""))
                                     .append(" WHERE ");
                             break;
 

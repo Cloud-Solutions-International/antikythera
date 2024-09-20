@@ -19,6 +19,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
@@ -416,41 +417,49 @@ public class RestControllerParser extends ClassProcessor {
         }
 
 
-        private Type identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
-
+        private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
             if (expression != null && expression.isObjectCreationExpr()) {
+                ControllerResponse response = new ControllerResponse();
                 ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
                 if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                    Expression typeArg = objectCreationExpr.getArguments().get(0);
-                    if (typeArg.isNameExpr()) {
-                        return variables.get(typeArg.asNameExpr().getNameAsString());
-                    }
-                    else if (typeArg.isStringLiteralExpr()) {
-                        createTests(md, StaticJavaParser.parseType("java.lang.String"));
-                    }
-                    else if (typeArg.isMethodCallExpr()) {
-                        MethodCallExpr methodCallExpr = null;
-                        try {
-                            methodCallExpr = typeArg.asMethodCallExpr();
-                            Optional<Expression> scope = methodCallExpr.getScope();
-                            if (scope.isPresent()) {
-                                Type type = (scope.get().isFieldAccessExpr())
-                                        ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                        : fields.get(scope.get().asNameExpr().getNameAsString());
-                                extractTypeFromCall(type, methodCallExpr);
-                                logger.debug(type.toString());
+                    for(Expression typeArg : objectCreationExpr.getArguments()) {
+                        if (typeArg.isFieldAccessExpr()) {
+                            FieldAccessExpr fae = typeArg.asFieldAccessExpr();
+                            if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
+                                response.setStatusCode(fae.getNameAsString());
                             }
-                        } catch (IOException e) {
-                            throw new GeneratorException("Exception while identifying dependencies", e);
+                        }
+                        if (typeArg.isNameExpr()) {
+                            response.setType(variables.get(typeArg.asNameExpr().getNameAsString()));
+                        } else if (typeArg.isStringLiteralExpr()) {
+                            response.setType(StaticJavaParser.parseType("java.lang.String"));
+                            response.setResponse(typeArg.asStringLiteralExpr().asString());
+                        } else if (typeArg.isMethodCallExpr()) {
+                            MethodCallExpr methodCallExpr = null;
+                            try {
+                                methodCallExpr = typeArg.asMethodCallExpr();
+                                Optional<Expression> scope = methodCallExpr.getScope();
+                                if (scope.isPresent()) {
+                                    Type type = (scope.get().isFieldAccessExpr())
+                                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                            : fields.get(scope.get().asNameExpr().getNameAsString());
+                                    extractTypeFromCall(type, methodCallExpr);
+                                    logger.debug(type.toString());
+                                }
+                            } catch (IOException e) {
+                                throw new GeneratorException("Exception while identifying dependencies", e);
+                            }
                         }
                     }
                 }
+                createTests(md, response);
+                return response;
             }
             return null;
         }
 
-        private void createTests(MethodDeclaration md, Type returnType) {
+        private void createTests(MethodDeclaration md, ControllerResponse returnType) {
             for (AnnotationExpr annotation : md.getAnnotations()) {
                 if (annotation.getNameAsString().equals("GetMapping") ) {
                     buildGetMethodTests(md, annotation, returnType);
@@ -483,11 +492,11 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
-        private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+        private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
             httpWithoutBody(md, annotation, "makeDelete");
         }
 
-        private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+        private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
             httpWithBody(md, annotation, returnType, "makePut");
         }
 
@@ -539,7 +548,7 @@ public class RestControllerParser extends ClassProcessor {
             md.getBody().get().addStatement(new ExpressionStmt(check));
         }
 
-        private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+        private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
             httpWithoutBody(md, annotation, "makeGet");
         }
 
@@ -565,11 +574,12 @@ public class RestControllerParser extends ClassProcessor {
 
         }
 
-        private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, Type returnType) {
+        private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
             httpWithBody(md, annotation, returnType, "makePost");
         }
 
-        private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, Type returnType, String call) {
+        private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse resp, String call) {
+            Type returnType = resp.getType();
             MethodDeclaration testMethod = buildTestMethod(md);
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
@@ -644,8 +654,8 @@ public class RestControllerParser extends ClassProcessor {
                         System.out.println();
                     } else if(!
                             (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                        Type resp = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        VariableDeclarator variableDeclarator = new VariableDeclarator(resp, "resp");
+                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
                         MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
                         methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
                         variableDeclarator.setInitializer(methodCallExpr);
@@ -781,4 +791,10 @@ public class RestControllerParser extends ClassProcessor {
         }
         return "";
     }
+
+    public Map<String, Type> getFields() {
+        return fields;
+    }
 }
+
+
