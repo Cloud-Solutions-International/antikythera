@@ -206,9 +206,6 @@ public class Settings {
 
     private static String[] get_deps(String artifact_ids) {
         Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
-        if (deps == null) {
-            return new String[0];
-        }
         if (deps instanceof String) {
             return ((String) deps).split(",");
         }
