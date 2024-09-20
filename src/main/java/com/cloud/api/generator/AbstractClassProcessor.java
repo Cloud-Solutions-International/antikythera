@@ -42,9 +42,22 @@ public class AbstractClassProcessor {
      */
     private static final Logger logger = LoggerFactory.getLogger(AbstractClassProcessor.class);
 
+    /**
+     * Keeps track of all the classes that we have compiled
+     */
     protected static final Map<String, CompilationUnit> resolved = new HashMap();
+    /**
+     * The base package for the AUT.
+     * It helps to identify if a class we are looking at is something we should
+     * try to compile or not.
+     */
     protected static String basePackage;
+    /**
+     * the top level folder for the AUT source code.
+     * If there is a java class without a package it should be in this folder.
+     */
     protected static String basePath;
+
     public static final String SUFFIX = ".java";
 
     protected JavaParser javaParser;

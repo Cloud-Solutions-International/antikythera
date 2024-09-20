@@ -56,12 +56,15 @@ import java.util.regex.Pattern;
 
 public class RepositoryParser extends ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
+    public static final String JPA_REPOSITORY = "JpaRepository";
     private Map<MethodDeclaration, String> queries;
     private static Connection conn;
     private String dialect;
     private static final String ORACLE = "oracle";
     private static final String POSTGRESQL = "PG";
     private boolean runQueries;
+    private CompilationUnit entityCu;
+    private String table;
 
     public RepositoryParser() throws IOException {
         super();
@@ -95,7 +98,11 @@ public class RepositoryParser extends ClassProcessor{
     public static void main(String[] args) throws IOException, SQLException {
         Settings.loadConfigMap();
         RepositoryParser parser = new RepositoryParser();
-        parser.process("com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java");
+        parser.compile(
+                AbstractClassProcessor.classToPath(
+                        "com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java")
+        );
+        parser.process();
     }
 
     /**
@@ -113,27 +120,20 @@ public class RepositoryParser extends ClassProcessor{
         return count;
     }
 
-    public void process(String className) throws IOException {
-        File f = Paths.get(basePath, classToPath(className)).toFile();
 
-        CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        process(cu);
-    }
-
-    public void process(CompilationUnit cu) throws IOException {
+    public void process() throws IOException {
         cu.accept(new Visitor(), null);
 
         var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
         var parents = cls.getExtendedTypes();
-        if(!parents.isEmpty() && parents.get(0).toString().startsWith("JpaRepository")) {
+        if(!parents.isEmpty() && parents.get(0).toString().startsWith(JPA_REPOSITORY)) {
             Optional<NodeList<Type>> t = parents.get(0).getTypeArguments();
             if(t.isPresent()) {
                 Type entity = t.get().get(0);
 
-                CompilationUnit entityCu = findEntity(entity);
+                entityCu = findEntity(entity);
 
-                String table = findTableName(entityCu);
-
+                table = findTableName(entityCu);
                 for (var entry : queries.entrySet()) {
                     executeQuery(entry, entity, table, entityCu);
                 }
@@ -196,6 +196,10 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * Find the table name from the hibernate entity.
      * Usually the entity will have an annotation giving the actual name of the table.
+     *
+     * This method is made static because when processing joins there are multiple entities
+     * and there by multipe table names involved.
+     *
      * @param entityCu a compilation unit representing the entity
      * @return the table name as a string.
      */

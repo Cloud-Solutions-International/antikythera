@@ -54,7 +54,7 @@ import org.slf4j.LoggerFactory;
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
     private final File controllers;
-    private CompilationUnit cu;
+
     Set<String> testMethodNames;
     private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
@@ -66,6 +66,11 @@ public class RestControllerParser extends ClassProcessor {
     );
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * Maintains a list of repositories that we have already encountered.
+     */
+    private static Map<String, RepositoryParser> respositories = new HashMap<>();
     private Map<String, Type> fields;
     Map<String, Type> variables;
 
@@ -119,21 +124,6 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    protected Map<String, Type> getFields(CompilationUnit cu) {
-        Map<String, Type> fields = new HashMap<>();
-        for (var type : cu.getTypes()) {
-            for (var member : type.getMembers()) {
-                if (member.isFieldDeclaration()) {
-                    FieldDeclaration field = member.asFieldDeclaration();
-                    for (var variable : field.getVariables()) {
-                        fields.put(variable.getNameAsString(), field.getElementType());
-                    }
-                }
-            }
-        }
-        return fields;
-    }
-
     private void processRestController(PackageDeclaration pd) throws IOException {
         StringBuilder fileContent = new StringBuilder();
         gen = new CompilationUnit();
@@ -156,7 +146,7 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.annotations.TestCaseType");
         gen.addImport("com.cloud.core.enums.TestType");
 
-        fields = getFields(cu);
+        fields = new HashMap<>();
 
         cu.accept(new ControllerVisitor(), null);
 
@@ -285,7 +275,7 @@ public class RestControllerParser extends ClassProcessor {
     /**
      * Will be called for each method of the controller.
      *
-     * We use it to identify the return types and the arguments of each method in the class.
+     * Identifies the return types and the arguments of each method in the class.
      */
     private class ControllerVisitor extends VoidVisitorAdapter<Void> {
 
@@ -299,34 +289,42 @@ public class RestControllerParser extends ClassProcessor {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 if(variable.getType().isClassOrInterfaceType()) {
+                    String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
+                    if(respositories.containsKey(shortName)) {
+                        return;
+                    }
+
                     Type t = variable.getType().asClassOrInterfaceType();
                     try {
                         String className = t.resolve().describe();
                         if(className.startsWith(basePackage)) {
-                            try {
-                                ClassProcessor proc = new ClassProcessor();
-                                proc.compile(AbstractClassProcessor.classToPath(className));
-                                CompilationUnit cu = proc.getCompilationUnit();
-                                for(var typeDecl : cu.getTypes()) {
-                                    if(typeDecl.isClassOrInterfaceDeclaration()) {
-                                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                                        if(cdecl.getNameAsString().equals(className)) {
-                                            for(var ext : cdecl.getExtendedTypes()) {
-                                                if(ext.getNameAsString().contains("JPARepository")) {
-                                                    RepositoryParser parser = new RepositoryParser();
-                                                }
+                            ClassProcessor proc = new ClassProcessor();
+                            proc.compile(AbstractClassProcessor.classToPath(className));
+                            CompilationUnit cu = proc.getCompilationUnit();
+                            for(var typeDecl : cu.getTypes()) {
+                                if(typeDecl.isClassOrInterfaceDeclaration()) {
+                                    ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                                    if(cdecl.getNameAsString().equals(shortName)) {
+                                        for(var ext : cdecl.getExtendedTypes()) {
+                                            if(ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                                RepositoryParser parser = new RepositoryParser();
+                                                parser.compile(AbstractClassProcessor.classToPath(className));
+
+                                                respositories.put(shortName, parser);
+                                                break;
                                             }
                                         }
                                     }
                                 }
-                            } catch (IOException e) {
-                                throw new GeneratorException("Exception while processing fields", e);
                             }
                         }
                     } catch (UnsolvedSymbolException e) {
                         logger.debug("ignore {}", t.toString());
+                    } catch (IOException e) {
+                        throw new GeneratorException("Exception while processing fields", e);
                     }
                 }
+                fields.put(variable.getNameAsString(), field.getElementType());
             }
         }
 
