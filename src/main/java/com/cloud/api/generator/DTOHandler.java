@@ -29,7 +29,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -39,11 +38,10 @@ import java.util.Optional;
  * Recursively copy DTOs from the Application Under Test (AUT).
  *
  */
-public class DTOHandler extends  ClassProcessor{
+public class DTOHandler extends  ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
 
-    private CompilationUnit cu;
 
     MethodDeclaration method = null;
 
@@ -54,20 +52,15 @@ public class DTOHandler extends  ClassProcessor{
        super();
     }
 
-    public void setCompilationUnit(CompilationUnit cu) {
-        this.cu = cu;
-    }
-
     /**
      * Copy the DTO from the AUT.
      * @param relativePath a path name relative to the base path of the application.
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-        if (parseDTO(relativePath)) return;
+        parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-        resolved.add(cu.toString());
 
         for(String dependency : dependencies) {
             copyDependencies(dependency);
@@ -75,43 +68,8 @@ public class DTOHandler extends  ClassProcessor{
         dependencies.clear();
     }
 
-    public boolean parseDTO(String relativePath) throws FileNotFoundException {
-        logger.info("\t{}", relativePath);
-        Path sourcePath = Paths.get(basePath, relativePath);
-
-        // Check if the file exists
-        File file = sourcePath.toFile();
-        if (!file.exists()) {
-            // The file may not exist if the DTO is an inner class in a controller
-            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
-            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
-            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
-            sourcePath = Paths.get(basePath, controllerPath);
-        }
-
-        // Check again for the controller file
-        file = sourcePath.toFile();
-        if (!file.exists()) {
-            logger.error("Controller file not found: {}", sourcePath);
-            throw new FileNotFoundException(sourcePath.toString());
-        }
-
-        // Proceed with parsing the controller file
-        FileInputStream in = new FileInputStream(file);
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-        // Search for any inner class that ends with "Dto"
-        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
-
-        if (hasInnerDTO) {
-            logger.info("Found inner DTO class in controller: {}", relativePath);
-        }
-
-        if (resolved.contains(cu.toString())) {
-            return true;
-        }
-
+    public void parseDTO(String relativePath) throws FileNotFoundException {
+        compile(relativePath);
         expandWildCards(cu);
         solveTypes();
         createFactory();
@@ -125,12 +83,10 @@ public class DTOHandler extends  ClassProcessor{
             var variable = classToInstanceName(cu.getTypes().get(0));
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
-
-        return false;
     }
 
     /**
-     * Create a factory method for the DTO being processsed.
+     * Create a factory method for the DTO being processed.
      * Does not return anything but the 'method' field will have a non null value.
      * the visitor can add a setter for each field that it encounters.
      */
@@ -176,7 +132,6 @@ public class DTOHandler extends  ClassProcessor{
             }
         });
     }
-
 
     /**
      * Iterates through all the classes in the file and processes them.
@@ -441,7 +396,4 @@ public class DTOHandler extends  ClassProcessor{
         }
     }
 
-    public CompilationUnit getCompilationUnit() {
-        return cu;
-    }
 }
