@@ -188,70 +188,6 @@ public class RestControllerParser extends ClassProcessor {
 
 
     /**
-     * Find the return type of a method.
-     *
-     * This is a recursive function that will begin at the block that denotes the body of the method.
-     * thereafter it will descend into child blocks that are parts of conditionals or try catch blocks
-     * @Deprecated
-     * @param blockStmt
-     * @return
-     */
-    private Type findReturnType(BlockStmt blockStmt) {
-        Map<String, Type> variables = new HashMap<>();
-        Map<String, Type> fields = getFields(cu);
-
-        for (var stmt : blockStmt.getStatements()) {
-            if (stmt.isExpressionStmt()) {
-                Expression expr = stmt.asExpressionStmt().getExpression();
-                if (expr.isVariableDeclarationExpr()) {
-                    VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-                    variables.put(varDeclExpr.getVariable(0).getNameAsString(), varDeclExpr.getElementType());
-                } else if (expr.isAssignExpr()) {
-                    AssignExpr assignExpr = expr.asAssignExpr();
-                    Expression left = assignExpr.getTarget();
-                    if (left.isVariableDeclarationExpr()) {
-                        VariableDeclarationExpr varDeclExpr = left.asVariableDeclarationExpr();
-                        return varDeclExpr.getElementType();
-                    }
-                }
-            } else if (stmt.isReturnStmt()) {
-                ReturnStmt returnStmt = stmt.asReturnStmt();
-                Expression expression = returnStmt.getExpression().orElse(null);
-                if (expression != null && expression.isObjectCreationExpr()) {
-                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        Expression typeArg = objectCreationExpr.getArguments().get(0);
-                        if (typeArg.isNameExpr()) {
-                            return variables.get(typeArg.asNameExpr().getNameAsString());
-                        }
-                        if (typeArg.isMethodCallExpr()) {
-                            MethodCallExpr methodCallExpr = null;
-                            try {
-                                methodCallExpr = typeArg.asMethodCallExpr();
-                                Optional<Expression> scope = methodCallExpr.getScope();
-                                if (scope.isPresent()) {
-                                    Type type = (scope.get().isFieldAccessExpr())
-                                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                            : fields.get(scope.get().asNameExpr().getNameAsString());
-                                    extractTypeFromCall(type, methodCallExpr);
-                                    logger.debug(type.toString());
-                                }
-                            } catch (IOException e) {
-                                throw new GeneratorException("Exception while identifying dependencies", e);
-                            }
-                        }
-                    }
-                }
-            } else if (stmt.isBlockStmt()) {
-                return findReturnType(stmt.asBlockStmt());
-            } else if (stmt.isTryStmt()) {
-                return findReturnType(stmt.asTryStmt().getTryBlock());
-            }
-        }
-        return null;
-    }
-
-    /**
      * Extracts the type from a method call expression
      *
      * This is used when the controller directly returns the result of a method call.
@@ -379,14 +315,14 @@ public class RestControllerParser extends ClassProcessor {
                             returnType = methodType.asClassOrInterfaceType().getTypeArguments().get().get(0);
                         } else {
                             BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
-                            returnType = findReturnType(blockStmt);
+
                         }
                     }
                 } else {
                     returnType = methodType;
                     if (returnType.toString().equals("ResponseEntity")) {
                         BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
-                        returnType = findReturnType(blockStmt);
+
                     }
                 }
 
@@ -921,9 +857,6 @@ public class RestControllerParser extends ClassProcessor {
         return "";
     }
 
-    public Map<String, Type> getFields() {
-        return fields;
-    }
 }
 
 
