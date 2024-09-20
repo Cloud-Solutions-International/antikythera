@@ -86,7 +86,7 @@ public class DTOHandler extends  ClassProcessor {
     }
 
     /**
-     * Create a factory method for the DTO being processsed.
+     * Create a factory method for the DTO being processed.
      * Does not return anything but the 'method' field will have a non null value.
      * the visitor can add a setter for each field that it encounters.
      */
@@ -396,7 +396,4 @@ public class DTOHandler extends  ClassProcessor {
         }
     }
 
-    public CompilationUnit getCompilationUnit() {
-        return cu;
-    }
 }

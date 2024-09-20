@@ -57,16 +57,19 @@ import java.util.regex.Pattern;
 public class RepositoryParser extends ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     private Map<MethodDeclaration, String> queries;
-    private Connection conn;
+    private static Connection conn;
     private String dialect;
     private static final String ORACLE = "oracle";
     private static final String POSTGRESQL = "PG";
+    private boolean runQueries;
 
-    public RepositoryParser() throws IOException, SQLException {
+    public RepositoryParser() throws IOException {
         super();
         queries = new HashMap<>();
+
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null) {
+            runQueries = db.getOrDefault("run_queries", "false").toString().equals("true");
             String url = db.get("url").toString();
             if(url.contains(ORACLE)) {
                 dialect = ORACLE;
@@ -74,6 +77,14 @@ public class RepositoryParser extends ClassProcessor{
             else {
                 dialect = POSTGRESQL;
             }
+        }
+    }
+
+    private static void createConnection() throws IOException, SQLException {
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if(db != null && conn == null) {
+            String url = db.get("url").toString();
+
             conn = DriverManager.getConnection(url, db.get("user").toString(), db.get("password").toString());
             try (java.sql.Statement statement = conn.createStatement()) {
                 statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
@@ -109,7 +120,7 @@ public class RepositoryParser extends ClassProcessor{
         process(cu);
     }
 
-    public void process(CompilationUnit cu) throws FileNotFoundException {
+    public void process(CompilationUnit cu) throws IOException {
         cu.accept(new Visitor(), null);
 
         var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
@@ -130,7 +141,7 @@ public class RepositoryParser extends ClassProcessor{
         }
     }
 
-    private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
+    private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws IOException {
         String query = entry.getValue();
         try {
             query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
@@ -144,34 +155,37 @@ public class RepositoryParser extends ClassProcessor{
                         .replaceAll("(?i)false", "0");
             }
 
-            PreparedStatement prep = conn.prepareStatement(sql);
+            if(runQueries) {
+                createConnection();
 
-            for(int j = 0 ; j < countPlaceholders(sql) ; j++) {
-                prep.setLong(j + 1, 1);
-            }
+                PreparedStatement prep = conn.prepareStatement(sql);
 
-            if(prep.execute()) {
-                ResultSet rs = prep.getResultSet();
-
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
-
-                // Print column names
-                for (int i = 1; i <= columnCount; i++) {
-                    System.out.print(metaData.getColumnName(i) + "\t");
+                for (int j = 0; j < countPlaceholders(sql); j++) {
+                    prep.setLong(j + 1, 1);
                 }
-                System.out.println();
 
-                int i = 0;
-                while(rs.next() && i < 10) {
-                    for (int j = 1; j <= columnCount; j++) {
-                        System.out.print(rs.getString(j) + "\t");
+                if (prep.execute()) {
+                    ResultSet rs = prep.getResultSet();
+
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    int columnCount = metaData.getColumnCount();
+
+                    // Print column names
+                    for (int i = 1; i <= columnCount; i++) {
+                        System.out.print(metaData.getColumnName(i) + "\t");
                     }
                     System.out.println();
-                    i++;
+
+                    int i = 0;
+                    while (rs.next() && i < 10) {
+                        for (int j = 1; j <= columnCount; j++) {
+                            System.out.print(rs.getString(j) + "\t");
+                        }
+                        System.out.println();
+                        i++;
+                    }
                 }
             }
-
         } catch (JSQLParserException e) {
             logger.error("\tUnparsable: {}", query);
         } catch (SQLException e) {

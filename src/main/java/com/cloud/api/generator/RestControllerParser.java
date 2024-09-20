@@ -80,11 +80,9 @@ public class RestControllerParser extends ClassProcessor {
 
         dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
-        // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
             Files.createDirectories(dataPath);
         }
-
     }
 
     public void start() throws IOException {
@@ -192,8 +190,6 @@ public class RestControllerParser extends ClassProcessor {
      */
     private Type findReturnType(BlockStmt blockStmt) {
 
-
-
         for (var stmt : blockStmt.getStatements()) {
             if (stmt.isExpressionStmt()) {
                 Expression expr = stmt.asExpressionStmt().getExpression();
@@ -293,15 +289,39 @@ public class RestControllerParser extends ClassProcessor {
      */
     private class ControllerVisitor extends VoidVisitorAdapter<Void> {
 
-        public void visit(FieldDeclaration fd, Void arg) {
-            super.visit(fd, arg);
-            for (var variable : fd.getVariables()) {
+        /**
+         * The field visitor will be used to identify the repositories that are being used in the controller.
+         * @param field
+         * @param arg
+         */
+        @Override
+        public void visit(FieldDeclaration field, Void arg) {
+            super.visit(field, arg);
+            for (var variable : field.getVariables()) {
                 if(variable.getType().isClassOrInterfaceType()) {
                     Type t = variable.getType().asClassOrInterfaceType();
                     try {
                         String className = t.resolve().describe();
                         if(className.startsWith(basePackage)) {
-
+                            try {
+                                ClassProcessor proc = new ClassProcessor();
+                                proc.compile(AbstractClassProcessor.classToPath(className));
+                                CompilationUnit cu = proc.getCompilationUnit();
+                                for(var typeDecl : cu.getTypes()) {
+                                    if(typeDecl.isClassOrInterfaceDeclaration()) {
+                                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                                        if(cdecl.getNameAsString().equals(className)) {
+                                            for(var ext : cdecl.getExtendedTypes()) {
+                                                if(ext.getNameAsString().contains("JPARepository")) {
+                                                    RepositoryParser parser = new RepositoryParser();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (IOException e) {
+                                throw new GeneratorException("Exception while processing fields", e);
+                            }
                         }
                     } catch (UnsolvedSymbolException e) {
                         logger.debug("ignore {}", t.toString());
