@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 public class ClassProcessor extends AbstractCompiler {
     /*
@@ -209,25 +208,15 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
-        imports.removeIf(
-            importDeclaration ->
-            {
-                String nameAsString = importDeclaration.getNameAsString();
-                if (dependencies.contains(nameAsString) ||
-                    externalDependencies.contains(nameAsString)) {
-                    return false;
-                }
-                if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
-                    return false;
-                }
-
-                if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
-                    return false;
-                }
-
-                return true;
-            }
-        );
+        imports.removeIf(importDeclaration -> {
+        String nameAsString = importDeclaration.getNameAsString();
+        return !(dependencies.contains(nameAsString) ||
+                 externalDependencies.contains(nameAsString) ||
+                 nameAsString.contains("lombok") ||
+                 nameAsString.startsWith("java.") ||
+                 nameAsString.startsWith("com.fasterxml.jackson") ||
+                 (importDeclaration.isStatic() && nameAsString.contains("constants.")));
+        });
     }
 
 

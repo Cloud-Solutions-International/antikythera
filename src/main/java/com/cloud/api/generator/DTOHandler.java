@@ -25,12 +25,9 @@ import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+
 
 import java.util.Optional;
 
@@ -219,7 +216,19 @@ public class DTOHandler extends  ClassProcessor {
                     || fieldAsString.equals("Sort.Direction")) {
                 return null;
             }
+
+
+            // Filter annotations to retain only @JsonFormat and @JsonIgnore
+            NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
+            for (AnnotationExpr annotation : field.getAnnotations()) {
+                String annotationName = annotation.getNameAsString();
+                if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+                    filteredAnnotations.add(annotation);
+                }
+            }
             field.getAnnotations().clear();
+            field.setAnnotations(filteredAnnotations);
+
             extractEnums(field);
             extractComplexType(field.getElementType(), cu);
 
