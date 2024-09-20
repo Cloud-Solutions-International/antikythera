@@ -75,6 +75,7 @@ public class RestControllerParser extends ClassProcessor {
         if (!Files.exists(dataPath)) {
             Files.createDirectories(dataPath);
         }
+        Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
 
     }
 
@@ -438,7 +439,7 @@ public class RestControllerParser extends ClassProcessor {
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
 
-            if( md.getParameters().isNonEmpty()) {
+            if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
