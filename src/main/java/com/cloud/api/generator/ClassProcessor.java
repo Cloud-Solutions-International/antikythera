@@ -27,20 +27,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class ClassProcessor {
-
-    /*
-     * this is made static because multiple classes may have the same dependency
-     * and we don't want to spend time copying them multiple times.
-     */
-    protected static final Set<String> resolved = new TreeSet<>();
-    protected static String basePackage;
-    protected static String basePath;
-    public static final String SUFFIX = ".java";
-
-    protected final Set<String> dependencies = new TreeSet<>();
-    protected final Set<String> externalDependencies = new TreeSet<>();
-
+public class ClassProcessor extends AbstractClassProcessor {
     /*
      * The strategy followed is that we iterate through all the fields in the
      * class and add them to a queue. Then we iterate through the items in
@@ -48,35 +35,17 @@ public class ClassProcessor {
      * been copied, it will be in the resolved set that is defined in the
      * parent, so we will skip it.
      */
-    protected JavaParser javaParser;
-    protected JavaSymbolSolver symbolResolver;
-    protected CombinedTypeSolver combinedTypeSolver;
-    protected ArrayList<JarTypeSolver> jarSolvers;
+    protected final Set<String> dependencies = new TreeSet<>();
+    protected final Set<String> externalDependencies = new TreeSet<>();
 
     protected ClassProcessor() throws IOException {
-        if(basePackage == null) {
-            basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-            basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-        }
-        combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-
-        jarSolvers = new ArrayList<>();
-        for(String jarFile : Settings.getJarFiles()) {
-            JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
-            jarSolvers.add(jarSolver);
-            combinedTypeSolver.add(jarSolver);
-        }
-        symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
+        super();
     }
 
     /**
      * Copy a dependency from the application under test.
      *
-     * @param nameAsString
+     * @param nameAsString a fully qualified class name
      */
     protected void copyDependencies(String nameAsString) throws IOException {
         if (nameAsString.endsWith("SUCCESS")) {
@@ -88,10 +57,12 @@ public class ClassProcessor {
         if(externalDependencies.contains(nameAsString)) {
             return;
         }
-        if (!ClassProcessor.resolved.contains(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
-            ClassProcessor.resolved.add(nameAsString);
+        if (!ClassProcessor.resolved.containsKey(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
+
             DTOHandler handler = new DTOHandler();
-            handler.copyDTO(nameAsString.replace(".", "/") + ClassProcessor.SUFFIX);
+            handler.copyDTO(classToPath(nameAsString));
+
+            AbstractClassProcessor.resolved.put(nameAsString, handler.getCompilationUnit());
         }
     }
 
@@ -142,7 +113,7 @@ public class ClassProcessor {
      * Resolves an import.
      *
      * @param dependencyCu the compilation unit with the imports
-     * @param mainType the data type to search for
+     * @param mainType the data type to search for. This is not going to be a fully qualified class name.
      * @return true if a matching import was found.
      */
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
@@ -168,10 +139,22 @@ public class ClassProcessor {
         return false;
     }
 
+    /**
+     * Converts a class name to an instance name.
+     * The usually convention. If we want to create an instance of List that variable is usually
+     * called 'list'
+     * @param cdecl type declaration
+     * @return a variable name as a string
+     */
     protected static String classToInstanceName(TypeDeclaration<?> cdecl) {
         return classToInstanceName(cdecl.getNameAsString());
     }
 
+    /**
+     * Converts a class name to an instance name.
+     * @param className as a string
+     * @return a variable name as a string
+     */
     protected static String classToInstanceName(String className) {
         String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
         if(name.equals("long") || name.equals("int")) {
@@ -180,6 +163,13 @@ public class ClassProcessor {
         return name;
     }
 
+    /**
+     * Finds all the classes in a package with in the application under test.
+     * We do not search jars, external dependencies or the java standard library.
+     *
+     * @param packageName the package name
+     * @return a set of fully qualified class names
+     */
     protected Set<String> findMatchingClasses(String packageName) {
         Set<String> matchingClasses = new HashSet<>();
         Path p = Paths.get(basePath, packageName.replace(".", "/"));
@@ -200,6 +190,13 @@ public class ClassProcessor {
         return matchingClasses;
     }
 
+    /**
+     * Expands wild card imports.
+     * Which means we delete the asterisk import and add all the classes in the package as
+     * individual imports.
+     *
+     * @param cu the compilation unit
+     */
     protected void expandWildCards(CompilationUnit cu) {
         Set<String> wildCards = new HashSet<>();
         for(var imp : cu.getImports()) {
@@ -220,23 +217,28 @@ public class ClassProcessor {
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
-                importDeclaration ->
-                {
-                    String nameAsString = importDeclaration.getNameAsString();
-                    if (dependencies.contains(nameAsString) ||
-                        externalDependencies.contains(nameAsString)) {
-                        return false;
-                    }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
-                        return false;
-                    }
-
-                    if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
-                        return false;
-                    }
-
-                    return true;
+            importDeclaration ->
+            {
+                String nameAsString = importDeclaration.getNameAsString();
+                if (dependencies.contains(nameAsString) ||
+                    externalDependencies.contains(nameAsString)) {
+                    return false;
                 }
-            );
+                if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
+                    return false;
+                }
+
+                if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
+                    return false;
+                }
+
+                return true;
+            }
+        );
+    }
+
+
+    public CompilationUnit getCompilationUnit() {
+        return cu;
     }
 }
