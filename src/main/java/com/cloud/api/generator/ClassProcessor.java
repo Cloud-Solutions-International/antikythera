@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 
+
 public class ClassProcessor extends AbstractCompiler {
     /*
      * The strategy followed is that we iterate through all the fields in the
@@ -38,13 +39,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param nameAsString a fully qualified class name
      */
     protected void copyDependencies(String nameAsString) throws IOException {
-        if (nameAsString.endsWith("SUCCESS")) {
-            return;
-        }
-        if(nameAsString.startsWith("org.springframework")) {
-            return;
-        }
-        if(externalDependencies.contains(nameAsString)) {
+        if (nameAsString.endsWith("SUCCESS") || nameAsString.startsWith("org.springframework") || externalDependencies.contains(nameAsString)) {
             return;
         }
         if (!copied.contains(nameAsString) && nameAsString.startsWith(AbstractCompiler.basePackage)) {
@@ -66,8 +61,7 @@ public class ClassProcessor extends AbstractCompiler {
             String mainType = classType.getNameAsString();
             NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
-            if(mainType != null &&
-                    (mainType.equals("DateScheduleUtil") || mainType.equals("Logger"))) {
+            if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
                 /*
                  * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
                  */
