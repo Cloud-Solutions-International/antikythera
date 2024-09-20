@@ -40,7 +40,7 @@ public class Settings {
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
-            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator/bm-billing-java-service-generator.yml").getFile());
+            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
@@ -202,9 +202,6 @@ public class Settings {
 
     private static String[] get_deps(String artifact_ids) {
         Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
-        if (deps == null) {
-            return new String[0];
-        }
         if (deps instanceof String) {
             return ((String) deps).split(",");
         }
