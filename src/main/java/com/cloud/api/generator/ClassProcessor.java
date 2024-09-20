@@ -17,7 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class ClassProcessor extends AbstractClassProcessor {
+public class ClassProcessor extends AbstractCompiler {
     /*
      * The strategy followed is that we iterate through all the fields in the
      * class and add them to a queue. Then we iterate through the items in
@@ -25,8 +25,9 @@ public class ClassProcessor extends AbstractClassProcessor {
      * been copied, it will be in the resolved set that is defined in the
      * parent, so we will skip it.
      */
-    protected final Set<String> dependencies = new TreeSet<>();
-    protected final Set<String> externalDependencies = new TreeSet<>();
+    protected final Set<String> dependencies = new HashSet<>();
+    protected final Set<String> externalDependencies = new HashSet<>();
+    private static final Set<String> copied = new HashSet<>();
 
     protected ClassProcessor() throws IOException {
         super();
@@ -47,12 +48,14 @@ public class ClassProcessor extends AbstractClassProcessor {
         if(externalDependencies.contains(nameAsString)) {
             return;
         }
-        if (!AbstractClassProcessor.resolved.containsKey(nameAsString) && nameAsString.startsWith(AbstractClassProcessor.basePackage)) {
+        if (!copied.contains(nameAsString) && nameAsString.startsWith(AbstractCompiler.basePackage)) {
+            copied.add(nameAsString);
 
             DTOHandler handler = new DTOHandler();
             handler.copyDTO(classToPath(nameAsString));
 
-            AbstractClassProcessor.resolved.put(nameAsString, handler.getCompilationUnit());
+            AbstractCompiler.resolved.put(nameAsString, handler.getCompilationUnit());
+
         }
     }
 
