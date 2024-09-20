@@ -276,9 +276,14 @@ public class RestControllerParser extends ClassProcessor {
                             }
                         }
                     } catch (UnsolvedSymbolException e) {
-                        logger.debug("ignore {}", t.toString());
+                        logger.debug("ignore {}", t);
                     } catch (IOException e) {
-                        throw new GeneratorException("Exception while processing fields", e);
+                        String action = Settings.getProperty("dependencies.on_error").toString();
+                        if(action == null || action.equals("exit")) {
+                            throw new GeneratorException("Exception while processing fields", e);
+                        }
+                        logger.error("Exception while processing fields");
+                        logger.error("\t{}",e.getMessage());
                     }
                 }
                 fields.put(variable.getNameAsString(), field.getElementType());
@@ -385,9 +390,7 @@ public class RestControllerParser extends ClassProcessor {
                         IfStmt ifStmt = (IfStmt) gramps.get();
                         Expression condition = ifStmt.getCondition();
                         if (evaluator.evaluateCondition(condition, context)) {
-                            logger.debug("Condition is true");
                             identifyReturnType(stmt, md);
-
                             buildPreconditions(md, condition);
                         }
                     }
@@ -422,7 +425,7 @@ public class RestControllerParser extends ClassProcessor {
                             preConditions.add(methodCall);
                         }
                     } catch (UnsolvedSymbolException e) {
-                        System.out.println("Unsolved symbol exception");
+                        logger.warn("Unsolved symbol exception");
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -744,6 +747,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){
+
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
             if(!paramString.startsWith("@RequestBody")){
