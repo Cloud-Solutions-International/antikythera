@@ -42,8 +42,10 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -405,28 +407,53 @@ public class RestControllerParser extends ClassProcessor {
     private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
         Evaluator evaluator = new Evaluator();
         Map<String, Comparable> context = new HashMap<>();
+        List<String> preConditions = new ArrayList<>();
 
-
+        /**
+         * This method will be called once for each return statment inside the method block.
+         * @param stmt the return statement
+         * @param md the method declaration that contains the return statement.
+         */
         @Override
         public void visit(ReturnStmt stmt, MethodDeclaration md) {
             super.visit(stmt, md);
             Optional<Node> parent = stmt.getParentNode();
 
             if (parent.isPresent()) {
+                // the return statement will have a parent no matter what but the optionals approach
+                // requires the use of isPresent.
+
                 BlockStmt blockStmt = (BlockStmt) parent.get();
                 Optional<Node> gramps = blockStmt.getParentNode();
                 if (gramps.isPresent() && gramps.get() instanceof IfStmt) {
+                    // we have found ourselves a conditional return statement.
                     IfStmt ifStmt = (IfStmt) gramps.get();
                     Expression condition = ifStmt.getCondition();
                     if (evaluator.evaluateCondition(condition, context)) {
                         logger.debug("Condition is true");
                         identifyReturnType(stmt, md);
+
+                        buildPreconditions(md, condition);
                     }
                 }
             }
         }
 
-
+        private void buildPreconditions(MethodDeclaration md, Expression expr) {
+            if(expr instanceof BinaryExpr) {
+                buildPreconditions(md, expr.asBinaryExpr().getLeft());
+                buildPreconditions(md, expr.asBinaryExpr().getRight());
+            }
+            if(expr instanceof MethodCallExpr) {
+                MethodCallExpr mce = expr.asMethodCallExpr();
+                if(mce.getNameAsString().equals("isPresent")) {
+                    preConditions.add(mce.getScope().get().toString());
+                }
+            }
+            else {
+                System.out.println(expr);
+            }
+        }
         private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
             if (expression != null && expression.isObjectCreationExpr()) {
@@ -658,9 +685,6 @@ public class RestControllerParser extends ClassProcessor {
                 AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
                 blockStmt.addStatement(new ExpressionStmt(assignExpr));
 
-                if(resp.getStatusCode() >= 400) {
-
-                }
 
                 addHttpStatusCheck(blockStmt, resp.getStatusCode());
                 Type returnType = resp.getType();
@@ -669,13 +693,21 @@ public class RestControllerParser extends ClassProcessor {
                 } else if(!
                         (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                    VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                    MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                    methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                    variableDeclarator.setInitializer(methodCallExpr);
-                    VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                    ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                    blockStmt.addStatement(expressionStmt);
+                    if (respType.toString().equals("String")) {
+                        blockStmt.addStatement(StaticJavaParser.parseStatement("String resp = response.getBody().asString();"));
+                        blockStmt.addStatement(StaticJavaParser.parseStatement(
+                                String.format("Assert.assertEquals(resp,\"%s\");",resp.getResponse().toString()))
+                        );
+                    }
+                    else {
+                        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                        methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                        variableDeclarator.setInitializer(methodCallExpr);
+                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                        blockStmt.addStatement(expressionStmt);
+                    }
                 }
 
             }

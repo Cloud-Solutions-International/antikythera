@@ -1,9 +1,5 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
-import com.cloud.api.constants.Constants;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -12,17 +8,11 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;

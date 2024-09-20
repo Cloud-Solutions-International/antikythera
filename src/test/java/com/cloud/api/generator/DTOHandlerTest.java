@@ -274,17 +274,17 @@ public class DTOHandlerTest {
     // -------- capitalize -------- //
     @Test
     void capitalizeConvertsFirstCharacterToUpperCase() {
-        assertEquals("Hello", typeCollector.capitalize("hello"));
+        assertEquals("Hello", DTOHandler.capitalize("hello"));
     }
 
     @Test
     void capitalizeDoesNotChangeAlreadyCapitalizedString() {
-        assertEquals("Hello", typeCollector.capitalize("Hello"));
+        assertEquals("Hello", DTOHandler.capitalize("Hello"));
     }
 
     @Test
     void capitalizeHandlesEmptyString() {
-        assertThrows(StringIndexOutOfBoundsException.class, () -> typeCollector.capitalize(""));
+        assertThrows(StringIndexOutOfBoundsException.class, () -> DTOHandler.capitalize(""));
     }
 
 
@@ -316,7 +316,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setIsActive(true)")));
@@ -349,7 +349,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setInitial('A')")));
@@ -382,7 +382,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setCreatedDate(new Date())")));
@@ -415,7 +415,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setCount(0)")));
@@ -448,7 +448,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setMessage(\"Hello world\")")));
@@ -481,7 +481,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setTestMap(Map.of())")));
@@ -514,7 +514,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setTestSet(Set.of())")));
@@ -547,7 +547,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertTrue(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setTestUUID(UUID.randomUUID())")));
@@ -582,7 +582,7 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-         typeCollector.generateRandomValue(field);
+        DTOHandler.generateRandomValue(field, cu);
 
         assertFalse(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setEnumField")));
