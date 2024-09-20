@@ -470,22 +470,12 @@ public class RestControllerParser extends ClassProcessor {
                         }
 
                         case "MultipartFile": {
-                            dependencies.add("org.springframework.mock.web.MockMultipartFile");
-//                            prepareBody("org.springframework.web.multipart.MultipartFile", new ClassOrInterfaceType(null, "MultipartFile"), "new MockMultipartFile", testMethod);
                             dependencies.add("org.springframework.web.multipart.MultipartFile");
                             ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
                             VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
-                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(
-                                    null,
-                                    new ClassOrInterfaceType(null, "MockMultipartFile"),
-                                    NodeList.nodeList(
-                                            new StringLiteralExpr("file"),
-                                            new StringLiteralExpr("test.csv"),
-                                            new StringLiteralExpr("text/csv"),
-                                            new MethodCallExpr(new NameExpr("\"some,csv,data\""), "getBytes")
-                                    )
-                            );
-                            variableDeclarator.setInitializer(objectCreationExpr);
+                            MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
+                            methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
+                            variableDeclarator.setInitializer(methodCallExpr);
                             testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
                             break;
                         }
