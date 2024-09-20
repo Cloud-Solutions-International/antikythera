@@ -241,4 +241,8 @@ public class ClassProcessor extends AbstractClassProcessor {
     public CompilationUnit getCompilationUnit() {
         return cu;
     }
+
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
+    }
 }
