@@ -7,7 +7,6 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
@@ -27,7 +26,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 
-public class AbstractClassProcessor {
+/**
+ * Sets up the Java Parser and maintains a cache of the clases that have been compiled.
+ */
+public class AbstractCompiler {
     /*
      * Let's define some terms.
      * A fully qualified class name is something that looks like java.util.List or
@@ -36,18 +38,22 @@ public class AbstractClassProcessor {
      * A simple class name is just the class name without the package name. Which
      * means we have List and StringUtils.
      *
-     * A relative path is a path that's relative to the base path of the project
+     * A relative path is a path that's relative to the base path of the project.
+     *
+     * Many of the fields are static naturally indicating that they should be shared
+     * amongst all instances of the class. Others like the ComppilationUnit property
+     * a specific to each instance.
      */
     /*
      * this is made static because multiple classes may have the same dependency
      * and we don't want to spend time copying them multiple times.
      */
-    private static final Logger logger = LoggerFactory.getLogger(AbstractClassProcessor.class);
+    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
 
     /**
      * Keeps track of all the classes that we have compiled
      */
-    protected static final Map<String, CompilationUnit> resolved = new HashMap();
+    protected static final Map<String, CompilationUnit> resolved = new HashMap<>();
     /**
      * The base package for the AUT.
      * It helps to identify if a class we are looking at is something we should
@@ -69,7 +75,7 @@ public class AbstractClassProcessor {
 
     protected CompilationUnit cu;
 
-    protected AbstractClassProcessor() throws IOException {
+    protected AbstractCompiler() throws IOException {
         if(basePackage == null) {
             basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
             basePath = Settings.getProperty(Constants.BASE_PATH).toString();

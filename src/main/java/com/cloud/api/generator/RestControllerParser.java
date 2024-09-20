@@ -73,6 +73,11 @@ public class RestControllerParser extends ClassProcessor {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
+     * Store the conditions that a controller may expect the input to meet.
+     */
+    List<Expression> preConditions;
+
+    /**
      * Maintains a list of repositories that we have already encountered.
      */
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
@@ -310,7 +315,7 @@ public class RestControllerParser extends ClassProcessor {
                         String className = t.resolve().describe();
                         if (className.startsWith(basePackage)) {
                             ClassProcessor proc = new ClassProcessor();
-                            proc.compile(AbstractClassProcessor.classToPath(className));
+                            proc.compile(AbstractCompiler.classToPath(className));
                             CompilationUnit cu = proc.getCompilationUnit();
                             for (var typeDecl : cu.getTypes()) {
                                 if (typeDecl.isClassOrInterfaceDeclaration()) {
@@ -319,7 +324,7 @@ public class RestControllerParser extends ClassProcessor {
                                         for (var ext : cdecl.getExtendedTypes()) {
                                             if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                                                 RepositoryParser parser = new RepositoryParser();
-                                                parser.compile(AbstractClassProcessor.classToPath(className));
+                                                parser.compile(AbstractCompiler.classToPath(className));
 
                                                 respositories.put(shortName, parser);
                                                 break;
@@ -345,6 +350,7 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
             if (md.isPublic()) {
+                preConditions = new ArrayList<>();
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
@@ -407,7 +413,6 @@ public class RestControllerParser extends ClassProcessor {
     private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
         Evaluator evaluator = new Evaluator();
         Map<String, Comparable> context = new HashMap<>();
-        List<Expression> preConditions = new ArrayList<>();
 
         /**
          * This method will be called once for each return statment inside the method block.
@@ -425,17 +430,23 @@ public class RestControllerParser extends ClassProcessor {
 
                 BlockStmt blockStmt = (BlockStmt) parent.get();
                 Optional<Node> gramps = blockStmt.getParentNode();
-                if (gramps.isPresent() && gramps.get() instanceof IfStmt) {
-                    // we have found ourselves a conditional return statement.
-                    IfStmt ifStmt = (IfStmt) gramps.get();
-                    Expression condition = ifStmt.getCondition();
-                    if (evaluator.evaluateCondition(condition, context)) {
-                        logger.debug("Condition is true");
-                        identifyReturnType(stmt, md);
+                if (gramps.isPresent()) {
+                    if (gramps.get() instanceof IfStmt) {
+                        // we have found ourselves a conditional return statement.
+                        IfStmt ifStmt = (IfStmt) gramps.get();
+                        Expression condition = ifStmt.getCondition();
+                        if (evaluator.evaluateCondition(condition, context)) {
+                            logger.debug("Condition is true");
+                            identifyReturnType(stmt, md);
 
-                        buildPreconditions(md, condition);
+                            buildPreconditions(md, condition);
+                        }
+                    }
+                    else if (gramps.get() instanceof MethodDeclaration) {
+                        identifyReturnType(stmt, md);
                     }
                 }
+
             }
         }
 
@@ -453,7 +464,7 @@ public class RestControllerParser extends ClassProcessor {
                         String fieldName = classToInstanceName(mce.getName().asString().replace("get",""));
 
                         DTOHandler handler = new DTOHandler();
-                        handler.compile(AbstractClassProcessor.classToPath(fullClassName));
+                        handler.compile(AbstractCompiler.classToPath(fullClassName));
                         Map<String, FieldDeclaration> fields = getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
 
                         FieldDeclaration fieldDeclaration = fields.get(fieldName);
@@ -687,6 +698,15 @@ public class RestControllerParser extends ClassProcessor {
                             blockStmt.addStatement(variableDeclarationExpr);
                     }
 
+                    for(Expression expr : preConditions) {
+                        if(expr.isMethodCallExpr()) {
+                            String s = expr.toString();
+                            if(s.contains("set")) {
+                                String[] parts = s.split("\\.");
+                                blockStmt.addStatement(String.format("req.%s;", parts[1]));
+                            }
+                        }
+                    }
 
                     MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
                     writeValueAsStringCall.addArgument(new NameExpr("req"));
@@ -712,10 +732,8 @@ public class RestControllerParser extends ClassProcessor {
                         (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                     if (respType.toString().equals("String")) {
-                        blockStmt.addStatement(StaticJavaParser.parseStatement("String resp = response.getBody().asString();"));
-                        blockStmt.addStatement(StaticJavaParser.parseStatement(
-                                String.format("Assert.assertEquals(resp,\"%s\");",resp.getResponse().toString()))
-                        );
+                        blockStmt.addStatement("String resp = response.getBody().asString();");
+                        blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");",resp.getResponse().toString()));
                     }
                     else {
                         VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
@@ -727,6 +745,7 @@ public class RestControllerParser extends ClassProcessor {
                         blockStmt.addStatement(expressionStmt);
                     }
                 }
+
 
             }
         }
