@@ -127,6 +127,9 @@ public class Settings {
                     }
                     target.put(key, result);
                 }
+                else {
+                    target.put(key, value);
+                }
             }
         }
     }
