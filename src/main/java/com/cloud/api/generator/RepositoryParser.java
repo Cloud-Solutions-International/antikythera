@@ -49,7 +49,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -132,7 +131,7 @@ public class RepositoryParser extends ClassProcessor{
         Settings.loadConfigMap();
         RepositoryParser parser = new RepositoryParser();
         parser.compile(
-                AbstractClassProcessor.classToPath(
+                AbstractCompiler.classToPath(
                         "com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java")
         );
         parser.process();
