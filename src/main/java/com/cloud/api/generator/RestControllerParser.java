@@ -59,6 +59,7 @@ public class RestControllerParser extends ClassProcessor {
     );
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
 
     /**
      * Creates a new RestControllerParser
@@ -94,8 +95,7 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
-            Pattern pattern = Pattern.compile(".*/([^/]+)\\.java$");
-            Matcher matcher = pattern.matcher(path.toString());
+            Matcher matcher = controllerPattern.matcher(path.toString());
 
             String controllerName = null;
             if (matcher.find()) {
