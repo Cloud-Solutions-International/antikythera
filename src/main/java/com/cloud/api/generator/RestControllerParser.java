@@ -18,8 +18,10 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
@@ -149,7 +151,12 @@ public class RestControllerParser extends ClassProcessor {
 
         fields = new HashMap<>();
 
-        cu.accept(new ControllerVisitor(), null);
+        /*
+         * There is a very valid reason for doing this in two steps.
+         * We want to make sure that all the repositories are identified before we start processing the methods.
+         */
+        cu.accept(new ControllerFieldVisitor(), null);
+        cu.accept(new ControllerMethodVisitor(), null);
 
         for (String s : dependencies) {
             gen.addImport(s);
@@ -278,10 +285,11 @@ public class RestControllerParser extends ClassProcessor {
      *
      * Identifies the return types and the arguments of each method in the class.
      */
-    private class ControllerVisitor extends VoidVisitorAdapter<Void> {
+    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
 
         /**
          * The field visitor will be used to identify the repositories that are being used in the controller.
+         *
          * @param field
          * @param arg
          */
@@ -289,25 +297,25 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(FieldDeclaration field, Void arg) {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
-                if(variable.getType().isClassOrInterfaceType()) {
+                if (variable.getType().isClassOrInterfaceType()) {
                     String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
-                    if(respositories.containsKey(shortName)) {
+                    if (respositories.containsKey(shortName)) {
                         return;
                     }
 
                     Type t = variable.getType().asClassOrInterfaceType();
                     try {
                         String className = t.resolve().describe();
-                        if(className.startsWith(basePackage)) {
+                        if (className.startsWith(basePackage)) {
                             ClassProcessor proc = new ClassProcessor();
                             proc.compile(AbstractClassProcessor.classToPath(className));
                             CompilationUnit cu = proc.getCompilationUnit();
-                            for(var typeDecl : cu.getTypes()) {
-                                if(typeDecl.isClassOrInterfaceDeclaration()) {
+                            for (var typeDecl : cu.getTypes()) {
+                                if (typeDecl.isClassOrInterfaceDeclaration()) {
                                     ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                                    if(cdecl.getNameAsString().equals(shortName)) {
-                                        for(var ext : cdecl.getExtendedTypes()) {
-                                            if(ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                    if (cdecl.getNameAsString().equals(shortName)) {
+                                        for (var ext : cdecl.getExtendedTypes()) {
+                                            if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                                                 RepositoryParser parser = new RepositoryParser();
                                                 parser.compile(AbstractClassProcessor.classToPath(className));
 
@@ -328,7 +336,9 @@ public class RestControllerParser extends ClassProcessor {
                 fields.put(variable.getNameAsString(), field.getElementType());
             }
         }
+    }
 
+    private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
@@ -579,7 +589,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse resp, String call) {
-            Type returnType = resp.getType();
+
             MethodDeclaration testMethod = buildTestMethod(md);
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
@@ -589,6 +599,7 @@ public class RestControllerParser extends ClassProcessor {
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                 String paramClassName = requestBody.getTypeAsString();
 
+                BlockStmt blockStmt = testMethod.getBody().get();
                 if(requestBody.getType().isClassOrInterfaceType()) {
                     var cdecl = requestBody.getType().asClassOrInterfaceType();
                     switch(cdecl.getNameAsString()) {
@@ -610,7 +621,7 @@ public class RestControllerParser extends ClassProcessor {
                         case "Long": {
                             VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
                             variableDeclarator.setInitializer("0");
-                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                            blockStmt.addStatement(new VariableDeclarationExpr(variableDeclarator));
 
                             break;
                         }
@@ -628,7 +639,7 @@ public class RestControllerParser extends ClassProcessor {
                             ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
                             variableDeclarator.setInitializer(objectCreationExpr);
                             VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                            testMethod.getBody().get().addStatement(variableDeclarationExpr);
+                            blockStmt.addStatement(variableDeclarationExpr);
                     }
 
 
@@ -645,25 +656,28 @@ public class RestControllerParser extends ClassProcessor {
 
                 VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
                 AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
-                testMethod.getBody().get().addStatement(new ExpressionStmt(assignExpr));
+                blockStmt.addStatement(new ExpressionStmt(assignExpr));
 
-                addCheckStatus(testMethod);
+                if(resp.getStatusCode() >= 400) {
 
-                if(returnType != null) {
-                    if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                        System.out.println();
-                    } else if(!
-                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                        methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                        variableDeclarator.setInitializer(methodCallExpr);
-                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                        testMethod.getBody().get().addStatement(expressionStmt);
-                    }
                 }
+
+                addHttpStatusCheck(blockStmt, resp.getStatusCode());
+                Type returnType = resp.getType();
+                if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                    System.out.println();
+                } else if(!
+                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                    Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                    VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                    MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                    methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                    variableDeclarator.setInitializer(methodCallExpr);
+                    VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                    ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                    blockStmt.addStatement(expressionStmt);
+                }
+
             }
         }
 
@@ -676,6 +690,22 @@ public class RestControllerParser extends ClassProcessor {
 
             testMethod.getBody().get().addStatement(variableDeclarationExpr);
         }
+    }
+
+    private void addHttpStatusCheck(BlockStmt blockStmt, int statusCode)
+    {
+        // Create a method call expression for response.getStatusCode()
+        MethodCallExpr getStatusCodeCall = new MethodCallExpr(new NameExpr("response"), "getStatusCode");
+
+        // Create a binary expression to compare the status code with 200
+        BinaryExpr comparison = new BinaryExpr(getStatusCodeCall, new IntegerLiteralExpr(statusCode), BinaryExpr.Operator.EQUALS);
+
+        // Create a method call expression for Assert.assertTrue
+        MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
+        assertTrueCall.addArgument(comparison);
+
+        // Add the assertTrue call to the block statement
+        blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){

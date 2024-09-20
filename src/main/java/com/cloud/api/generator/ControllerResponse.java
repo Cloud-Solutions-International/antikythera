@@ -42,4 +42,20 @@ public class ControllerResponse {
     public Type getType() {
         return type;
     }
+
+    public Object getResponse() {
+        return response;
+    }
+
+    public int getStatusCode() {
+        return statusCode;
+    }
+
+    public static Map<String, Integer> getStatusCodes() {
+        return statusCodes;
+    }
+
+    public static void setStatusCodes(Map<String, Integer> statusCodes) {
+        ControllerResponse.statusCodes = statusCodes;
+    }
 }
