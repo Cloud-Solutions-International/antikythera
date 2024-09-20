@@ -35,8 +35,6 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Paths;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -54,17 +52,51 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Parses JPARespository subclasses to indentify the queries that they execute.
+ *
+ * These queries can then be used to determine what kind of data need to be sent
+ * to the controller for a valid response.
+ */
 public class RepositoryParser extends ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     public static final String JPA_REPOSITORY = "JpaRepository";
+
+    /**
+     * The queries that were identified in this repository
+     */
     private Map<MethodDeclaration, String> queries;
+    /**
+     * The connection to the database established using the credentials in the configuration
+     */
     private static Connection conn;
+    /**
+     * SQL dialect, at the moment oracle or postgresql as identified from the connection url
+     */
     private String dialect;
     private static final String ORACLE = "oracle";
     private static final String POSTGRESQL = "PG";
+    /**
+     * Whether queries should actually be executed or not.
+     * As determined by the configurations
+     */
     private boolean runQueries;
+    /**
+     * The java parser compilation unit associated with this entity.
+     *
+     * This is different from the 'cu' field in the AbstractClassProcessor. That field will
+     * represent the repository interface while the entityCu will represent the entity that
+     * is part of the type arguments
+     */
     private CompilationUnit entityCu;
+    /**
+     * The table name associated with the entity
+     */
     private String table;
+    /**
+     * The java parser type associated with the entity.
+     */
+    private Type entityType;
 
     public RepositoryParser() throws IOException {
         super();
@@ -83,7 +115,7 @@ public class RepositoryParser extends ClassProcessor{
         }
     }
 
-    private static void createConnection() throws IOException, SQLException {
+    private static void createConnection() throws SQLException {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null && conn == null) {
             String url = db.get("url").toString();
@@ -103,6 +135,7 @@ public class RepositoryParser extends ClassProcessor{
                         "com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java")
         );
         parser.process();
+        parser.executeAllQueries();
     }
 
     /**
@@ -129,22 +162,23 @@ public class RepositoryParser extends ClassProcessor{
         if(!parents.isEmpty() && parents.get(0).toString().startsWith(JPA_REPOSITORY)) {
             Optional<NodeList<Type>> t = parents.get(0).getTypeArguments();
             if(t.isPresent()) {
-                Type entity = t.get().get(0);
-
-                entityCu = findEntity(entity);
-
+                entityType = t.get().get(0);
+                entityCu = findEntity(entityType);
                 table = findTableName(entityCu);
-                for (var entry : queries.entrySet()) {
-                    executeQuery(entry, entity, table, entityCu);
-                }
             }
         }
     }
 
-    private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws IOException {
+    public void executeAllQueries() throws IOException {
+        for (var entry : queries.entrySet()) {
+            executeQuery(entry);
+        }
+    }
+
+    private void executeQuery(Map.Entry<MethodDeclaration, String> entry) throws IOException {
         String query = entry.getValue();
         try {
-            query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
+            query = query.replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
             convertFieldsToSnakeCase(stmt, entityCu);
             System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
@@ -527,7 +561,11 @@ public class RepositoryParser extends ClassProcessor{
         return expr;
     }
 
-
+    /**
+     * Converts the fields in an Entity to snake case whcih is the usual pattern for columns
+     * @param str
+     * @return
+     */
     public static String camelToSnake(String str) {
         if(str.toLowerCase().equals("patientpomr")) {
             return str;
@@ -535,6 +573,9 @@ public class RepositoryParser extends ClassProcessor{
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
+    /**
+     * Visitor to iterate through the methods in the repository
+     */
     class Visitor extends VoidVisitorAdapter<Void> {
         @Override
         public void visit(MethodDeclaration n, Void arg) {
