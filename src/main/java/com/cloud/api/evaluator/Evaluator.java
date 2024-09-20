@@ -78,7 +78,13 @@ public class Evaluator {
                 if(leftValue == null && rightValue == null) return true;
                 return leftValue.equals(rightValue);
             case NOT_EQUALS:
-                if(leftValue == null && rightValue != null) return true;
+                if(leftValue == null) {
+                    if (rightValue != null) {
+                        return false;
+                    }
+                    return false;
+                }
+
                 return !leftValue.equals(rightValue);
             case LESS:
                 return (int) leftValue < (int) rightValue;

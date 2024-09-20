@@ -93,6 +93,8 @@ public class AbstractCompiler {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
+
+
     }
 
     public static String classToPath(String className) {
@@ -128,7 +130,7 @@ public class AbstractCompiler {
             return;
         }
 
-        logger.info("\t{}", relativePath);
+        logger.debug("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
         // Check if the file exists

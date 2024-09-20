@@ -37,6 +37,10 @@ public class Settings {
      */
     private Settings() {}
 
+    /**
+     * Load the configuration from a file.
+     * @throws IOException
+     */
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
@@ -197,24 +201,36 @@ public class Settings {
     }
 
     public static Object getProperty(String key) {
-        return props.get(key);
+
+        Object property = props.get(key);
+        if(property != null) {
+            return property;
+        }
+        String[] parts = key.split("\\.");
+        if(parts.length > 1) {
+            Map<String, Object> map = (Map<String, Object>) props.get(parts[0]);
+            if(map != null) {
+                return map.get(parts[1]);
+            }
+        }
+        return null;
     }
 
     public static String[] getArtifacts() {
-        return get_deps("artifact_ids");
+        return getDeps("artifact_ids");
     }
 
-    private static String[] get_deps(String artifact_ids) {
+    private static String[] getDeps(String artifactIds) {
         Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
         if (deps instanceof String) {
             return ((String) deps).split(",");
         }
         Map<String, Object> dependencies = (Map<String, Object>) deps;
-        return ((List<String>) dependencies.get(artifact_ids)).toArray(new String[0]);
+        return ((List<String>) dependencies.get(artifactIds)).toArray(new String[0]);
     }
 
     public static String[] getJarFiles() {
-        return get_deps("jar_files");
+        return getDeps("jar_files");
     }
 
     public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {
