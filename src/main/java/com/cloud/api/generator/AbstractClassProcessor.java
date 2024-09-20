@@ -6,6 +6,8 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
@@ -154,4 +156,28 @@ public class AbstractClassProcessor {
         }
     }
 
+    /**
+     * Build a map of all the fields in a class by field name.
+     * Warning: Most of the time you should use a Visitor instead of this method
+     *
+     * @param cu
+     * @String className
+     * @return
+     */
+    protected Map<String, FieldDeclaration> getFields(CompilationUnit cu, String className) {
+        Map<String, FieldDeclaration> fields = new HashMap<>();
+        for (var type : cu.getTypes()) {
+            if(type.getNameAsString().equals(className)) {
+                for (var member : type.getMembers()) {
+                    if (member.isFieldDeclaration()) {
+                        FieldDeclaration field = member.asFieldDeclaration();
+                        for (var variable : field.getVariables()) {
+                            fields.put(variable.getNameAsString(), field);
+                        }
+                    }
+                }
+            }
+        }
+        return fields;
+    }
 }
