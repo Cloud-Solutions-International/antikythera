@@ -345,6 +345,9 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
+    /**
+     * Visitor that will detect methods in the controller.
+     */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
@@ -393,6 +396,10 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
+        /**
+         * Identify local variables with in the block statement
+         * @param blockStmt the method body block. Any variable declared ehre will be a local.
+         */
         private void identifyLocals(BlockStmt blockStmt) {
             variables = new HashMap<>();
             for (var stmt : blockStmt.getStatements()) {
