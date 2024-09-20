@@ -25,7 +25,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 public class ClassProcessor {
 
@@ -33,13 +32,13 @@ public class ClassProcessor {
      * this is made static because multiple classes may have the same dependency
      * and we don't want to spend time copying them multiple times.
      */
-    protected static final Set<String> resolved = new TreeSet<>();
+    protected static final Set<String> resolved = new HashSet<>();
     protected static String basePackage;
     protected static String basePath;
     public static final String SUFFIX = ".java";
 
-    protected final Set<String> dependencies = new TreeSet<>();
-    protected final Set<String> externalDependencies = new TreeSet<>();
+    protected final Set<String> dependencies = new HashSet<>();
+    protected final Set<String> externalDependencies = new HashSet<>();
 
     /*
      * The strategy followed is that we iterate through all the fields in the
@@ -79,13 +78,7 @@ public class ClassProcessor {
      * @param nameAsString
      */
     protected void copyDependencies(String nameAsString) throws IOException {
-        if (nameAsString.endsWith("SUCCESS")) {
-            return;
-        }
-        if(nameAsString.startsWith("org.springframework")) {
-            return;
-        }
-        if(externalDependencies.contains(nameAsString)) {
+        if (nameAsString.endsWith("SUCCESS") || nameAsString.startsWith("org.springframework") || externalDependencies.contains(nameAsString)) {
             return;
         }
         if (!ClassProcessor.resolved.contains(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
@@ -103,8 +96,7 @@ public class ClassProcessor {
             String mainType = classType.getNameAsString();
             NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
-            if(mainType != null &&
-                    (mainType.equals("DateScheduleUtil") || mainType.equals("Logger"))) {
+            if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
                 /*
                  * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
                  */
@@ -223,19 +215,12 @@ public class ClassProcessor {
                 importDeclaration ->
                 {
                     String nameAsString = importDeclaration.getNameAsString();
-                    if (dependencies.contains(nameAsString) ||
-                        externalDependencies.contains(nameAsString)) {
-                        return false;
-                    }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
-                        return false;
-                    }
-
-                    if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
-                        return false;
-                    }
-
-                    return true;
+                    return (
+                            !dependencies.contains(nameAsString) &&
+                                    !externalDependencies.contains(nameAsString) &&
+                                    !nameAsString.contains("lombok") &&
+                                    !nameAsString.startsWith("java.") &&
+                                    !(importDeclaration.isStatic() && nameAsString.contains("constants.")));
                 }
             );
     }
