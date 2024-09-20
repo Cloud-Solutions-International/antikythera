@@ -407,7 +407,7 @@ public class RestControllerParser extends ClassProcessor {
     private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
         Evaluator evaluator = new Evaluator();
         Map<String, Comparable> context = new HashMap<>();
-        List<String> preConditions = new ArrayList<>();
+        List<Expression> preConditions = new ArrayList<>();
 
         /**
          * This method will be called once for each return statment inside the method block.
@@ -446,8 +446,26 @@ public class RestControllerParser extends ClassProcessor {
             }
             if(expr instanceof MethodCallExpr) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
-                if(mce.getNameAsString().equals("isPresent")) {
-                    preConditions.add(mce.getScope().get().toString());
+                Parameter reqBody = findRequestBody(md);
+                if(reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
+                    try {
+                        String fullClassName = reqBody.resolve().describeType();
+                        String fieldName = classToInstanceName(mce.getName().asString().replace("get",""));
+
+                        DTOHandler handler = new DTOHandler();
+                        handler.compile(AbstractClassProcessor.classToPath(fullClassName));
+                        Map<String, FieldDeclaration> fields = getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
+
+                        FieldDeclaration fieldDeclaration = fields.get(fieldName);
+                        if(fieldDeclaration != null) {
+                            MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
+                            preConditions.add(methodCall);
+                        }
+                    } catch (UnsolvedSymbolException e) {
+                        System.out.println("Unsolved symbol exception");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
             else {

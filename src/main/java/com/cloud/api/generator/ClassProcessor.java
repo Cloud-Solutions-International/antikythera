@@ -47,7 +47,7 @@ public class ClassProcessor extends AbstractClassProcessor {
         if(externalDependencies.contains(nameAsString)) {
             return;
         }
-        if (!ClassProcessor.resolved.containsKey(nameAsString) && nameAsString.startsWith(ClassProcessor.basePackage)) {
+        if (!AbstractClassProcessor.resolved.containsKey(nameAsString) && nameAsString.startsWith(AbstractClassProcessor.basePackage)) {
 
             DTOHandler handler = new DTOHandler();
             handler.copyDTO(classToPath(nameAsString));
