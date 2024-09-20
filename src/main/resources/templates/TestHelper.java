@@ -54,7 +54,7 @@ public abstract class TestHelper extends APIBaseTest {
 
     @BeforeClass
     public void serviceSetUp()  {
-        baseURI = urlProperties.get("PharmacyServices.host") + urlProperties.get("PharmacyServices.version");
+        baseURI = urlProperties.get("application.host") + urlProperties.get("application.version");
         APIBaseClass.headers = new Headers(
                 StaticHeaders.CONTENT_TYPE_JSON,
                 StaticHeaders.X_GROUP,
@@ -95,6 +95,17 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makePut(String body, Headers headers, String relativeUrl)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).body(body).when().request(Method.PUT);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected Response makeGet( Headers headers, String relativeUrl)  {
 
         APIRequester.setBaseURI(baseURI);
@@ -107,9 +118,21 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makeDelete( Headers headers, String relativeUrl)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).when().request(Method.DELETE);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected void checkStatusCode(Response response) {
         softAssert.assertTrue(String.valueOf(response.getStatusCode()).startsWith("2"),
                 "Expected status code starting with 2xx, but got: " + response.getStatusCode());
+        softAssert.assertAll();
     }
 
     protected String buildRelativeUrl(String controllerName, String relativeUrl, List<String> pathVariables) throws IOException {

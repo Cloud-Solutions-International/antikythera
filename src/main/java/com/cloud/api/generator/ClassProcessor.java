@@ -79,6 +79,9 @@ public class ClassProcessor {
      * @param nameAsString
      */
     protected void copyDependencies(String nameAsString) throws IOException {
+        if (nameAsString.endsWith("SUCCESS")) {
+            return;
+        }
         if(nameAsString.startsWith("org.springframework")) {
             return;
         }
@@ -180,11 +183,18 @@ public class ClassProcessor {
     protected Set<String> findMatchingClasses(String packageName) {
         Set<String> matchingClasses = new HashSet<>();
         Path p = Paths.get(basePath, packageName.replace(".", "/"));
-        for (File f : p.toFile().listFiles()) {
-            String fname = f.getName();
-            if (fname.endsWith(ClassProcessor.SUFFIX)) {
-                String imp = packageName + "." + fname.substring(0, fname.length() - 5);
-                matchingClasses.add(imp);
+        File directory = p.toFile();
+
+        if (directory.exists() && directory.isDirectory()) {
+            File[] files = directory.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    String fname = f.getName();
+                    if (fname.endsWith(ClassProcessor.SUFFIX)) {
+                        String imp = packageName + "." + fname.substring(0, fname.length() - 5);
+                        matchingClasses.add(imp);
+                    }
+                }
             }
         }
         return matchingClasses;
@@ -217,7 +227,11 @@ public class ClassProcessor {
                         externalDependencies.contains(nameAsString)) {
                         return false;
                     }
-                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.") || nameAsString.contains("constants.")) {
+                    if(nameAsString.contains("lombok") || nameAsString.startsWith("java.")) {
+                        return false;
+                    }
+
+                    if (importDeclaration.isStatic() && nameAsString.contains("constants.")) {
                         return false;
                     }
 
