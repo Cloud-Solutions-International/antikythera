@@ -35,7 +35,7 @@ public class Settings {
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
-            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
+            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator/bm-billing-java-service-generator.yml").getFile());
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
