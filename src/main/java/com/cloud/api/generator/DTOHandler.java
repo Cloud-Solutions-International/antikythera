@@ -272,7 +272,7 @@ public class DTOHandler extends  ClassProcessor {
      * Generate random values for use in the factory method for a DTO
      * @param field
      */
-    static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
+    public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
 
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
