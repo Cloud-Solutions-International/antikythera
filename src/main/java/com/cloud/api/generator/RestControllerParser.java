@@ -769,7 +769,7 @@ public class RestControllerParser extends ClassProcessor {
                 // There maybe controllers that do not return a body. In that case the
                 // return type will be null
                 if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                    System.out.println();
+                    System.out.println("bada 2");
                 } else if (!
                         (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
@@ -783,6 +783,7 @@ public class RestControllerParser extends ClassProcessor {
                             logger.warn("Reponse body is empty for {}", md.getName());
                         }
                     } else {
+                        System.out.println("bada 1");
                         // todo get thsi back on line
 //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
 //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
@@ -821,17 +822,12 @@ public class RestControllerParser extends ClassProcessor {
 
     private void addHttpStatusCheck(BlockStmt blockStmt, int statusCode)
     {
-        // Create a method call expression for response.getStatusCode()
         MethodCallExpr getStatusCodeCall = new MethodCallExpr(new NameExpr("response"), "getStatusCode");
 
-        // Create a binary expression to compare the status code with 200
-        BinaryExpr comparison = new BinaryExpr(getStatusCodeCall, new IntegerLiteralExpr(statusCode), BinaryExpr.Operator.EQUALS);
+        MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
+        assertTrueCall.addArgument(new IntegerLiteralExpr(statusCode));
+        assertTrueCall.addArgument(getStatusCodeCall);
 
-        // Create a method call expression for Assert.assertTrue
-        MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
-        assertTrueCall.addArgument(comparison);
-
-        // Add the assertTrue call to the block statement
         blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
     }
 
@@ -896,6 +892,8 @@ public class RestControllerParser extends ClassProcessor {
                 }
             }
         }
+
+        request.setPath(path);
     }
 
     private static String getParamName(Parameter param) {
