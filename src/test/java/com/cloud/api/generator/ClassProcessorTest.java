@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,12 +20,12 @@ class ClassProcessorTest {
 
     @BeforeEach
     void setUp() throws IOException {
+        Settings.loadConfigMap();
         imports = new NodeList<>();
         imports.add(new ImportDeclaration("com.example.SomeClass", false, false));
         imports.add(new ImportDeclaration("java.util.List", false, false));
         imports.add(new ImportDeclaration("org.springframework.data.domain.Page", false, false));
         imports.add(new ImportDeclaration("com.otherpackage.OtherClass", false, false));
-//        ClassProcessor.loadConfigMap(); // Ensure properties are loaded
         classProcessor = new ClassProcessor();
         handler = mock(DTOHandler.class);
     }
@@ -42,7 +43,17 @@ class ClassProcessorTest {
     void copyDependencies_doesNotCopyAlreadyResolvedDependency() throws IOException {
         ClassProcessor.resolved.clear();
         ClassProcessor.basePackage = "com.example";
-        ClassProcessor.resolved.put("com.example.NewClass", null);
+        ClassProcessor.copied.add("com.example.NewClass");
+
+        classProcessor.copyDependencies("com.example.NewClass");
+        verify(handler, never()).copyDTO(anyString());
+    }
+
+    @Test
+    void copyDependencies_doesNotCopyExternals() throws IOException {
+        ClassProcessor.resolved.clear();
+        ClassProcessor.basePackage = "com.example";
+        classProcessor.externalDependencies.add("com.example.NewClass");
         classProcessor.copyDependencies("com.example.NewClass");
         verify(handler, never()).copyDTO(anyString());
     }
