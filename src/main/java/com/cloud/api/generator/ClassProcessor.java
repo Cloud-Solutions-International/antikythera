@@ -53,7 +53,7 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
-    protected void extractComplexType(Type type, CompilationUnit dependencyCu)  {
+    void extractComplexType(Type type, CompilationUnit dependencyCu)  {
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
