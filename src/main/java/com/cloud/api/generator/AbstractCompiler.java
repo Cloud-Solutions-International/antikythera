@@ -76,7 +76,7 @@ public class AbstractCompiler {
     protected CompilationUnit cu;
 
     protected AbstractCompiler() throws IOException {
-        if(basePackage == null) {
+        if(basePackage == null || basePath == null) {
             basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
             basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         }
@@ -110,7 +110,7 @@ public class AbstractCompiler {
         if(path.endsWith(SUFFIX)) {
             path = path.replace(SUFFIX, "");
         }
-        return  path.replace(SUFFIX, "").replace("/", ".");
+        return  path.replace("/", ".");
     }
 
 

@@ -4,6 +4,7 @@ import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -13,6 +14,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
@@ -269,9 +271,6 @@ public class DTOHandlerTest {
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
     }
 
-    // ======== TypeCollector ======== //
-
-    // -------- capitalize -------- //
     @Test
     void capitalizeConvertsFirstCharacterToUpperCase() {
         assertEquals("Hello", DTOHandler.capitalize("hello"));
@@ -290,58 +289,22 @@ public class DTOHandlerTest {
 
     // -------- generateRandomValue -------- //
     @Test
-    void generateRandomValueAddSetterForBooleanField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+    void generateRandomValueAddSetterForBooleanField()  {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Boolean"), "isActive"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setIsActive(true)")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setIsActive(true)"));
     }
 
     @Test
-    void generateRandomValueAddSetterForCharacterField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+    void generateRandomValueAddSetterForCharacterField()  {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Character"), "initial"));
@@ -349,208 +312,94 @@ public class DTOHandlerTest {
         MethodDeclaration method = new MethodDeclaration();
         handler.method = method;
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setInitial('A')")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setInitial('A')"));
     }
 
     @Test
     void generateRandomValueAddSetterForDateField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Date"), "createdDate"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setCreatedDate(new Date())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setCreatedDate(new Date())"));
     }
 
     @Test
     void generateRandomValueAddSetterForIntegerField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Integer"), "count"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setCount(0)")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setCount(0)"));
     }
 
     @Test
     void generateRandomValueAddSetterForStringField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "message"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setMessage(\"Hello world\")")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setMessage(\"Hello world\")"));
     }
 
     @Test
     void generateRandomValueAddSetterForMapField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Map"), "testMap"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setTestMap(Map.of())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setTestMap(Map.of())"));
     }
 
     @Test
     void generateRandomValueAddSetterForSetField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Set"), "testSet"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setTestSet(Set.of())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setTestSet(Set.of())"));
     }
 
     @Test
-    void generateRandomValueAddSetterForUUIDField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
+    void generateRandomValueAddSetterForUUIDField(){
 
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "UUID"), "testUUID"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        DTOHandler.generateRandomValue(field, cu);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setTestUUID(UUID.randomUUID())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setTestUUID(UUID.randomUUID())"));
     }
 
     @Test

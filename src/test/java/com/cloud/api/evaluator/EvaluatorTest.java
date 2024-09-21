@@ -10,8 +10,6 @@ import com.github.javaparser.ast.expr.NullLiteralExpr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,9 +18,9 @@ class EvaluatorTest {
 
     private Map<String, Comparable> context;
     CompilationUnit dto = StaticJavaParser.parse(
-            getClass().getClassLoader().getResourceAsStream("sources/SimpleDTO.java"));
+            getClass().getClassLoader().getResourceAsStream("sources/com/csi/expressions/SimpleDTO.java"));
     CompilationUnit exp = StaticJavaParser.parse(
-            getClass().getClassLoader().getResourceAsStream("sources/SimpleDTOExpressions.java"));
+            getClass().getClassLoader().getResourceAsStream("sources/com/csi/expressions/SimpleDTOExpressions.java"));
 
     @BeforeEach
     void setUp() {

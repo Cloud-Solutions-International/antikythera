@@ -1,4 +1,4 @@
-package com.csi.vidaplus.ehr.ip.admissionwithcareplane.entity.dischargediettype;
+package com.csi.expressions;
 
 public class SimpleDTO {
 
