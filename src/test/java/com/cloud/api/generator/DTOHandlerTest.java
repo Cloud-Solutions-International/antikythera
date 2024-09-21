@@ -27,6 +27,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 import static com.cloud.api.generator.ClassProcessor.basePackage;
 import static org.junit.jupiter.api.Assertions.*;
@@ -435,5 +436,29 @@ public class DTOHandlerTest {
 
         assertFalse(method.getBody().get().getStatements().stream()
                 .anyMatch(stmt -> stmt.toString().contains("setEnumField")));
+    }
+
+
+    @Test
+    void extractCompleTypes() {
+
+        assertTrue(classProcessor.dependencies.isEmpty());
+        Optional<CompilationUnit> result = handler.javaParser.parse("class Test{}").getResult();
+        if (result.isPresent()) {
+            CompilationUnit cu = result.get();
+            FieldDeclaration field = StaticJavaParser
+                    .parseBodyDeclaration("Map<String, SimpleDTO> someList;")
+                    .asFieldDeclaration();
+            cu.getTypes().get(0).addMember(field);
+            cu.addImport("com.csi.dto.SimpleDTO");
+            handler.setCompilationUnit(cu);
+
+            classProcessor.solveTypeDependencies(field.getElementType(), cu);
+            assertEquals(classProcessor.dependencies.size(), 1);
+
+            // calling the same thing again should not change anything.
+            classProcessor.solveTypeDependencies(field.getElementType(), cu);
+            assertEquals(classProcessor.dependencies.size(), 1);
+        }
     }
 }

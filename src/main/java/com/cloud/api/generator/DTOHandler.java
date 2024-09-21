@@ -230,7 +230,7 @@ public class DTOHandler extends  ClassProcessor {
             field.setAnnotations(filteredAnnotations);
 
             extractEnums(field);
-            extractComplexType(field.getElementType(), cu);
+            solveTypeDependencies(field.getElementType(), cu);
 
             return super.visit(field, args);
         }
@@ -268,7 +268,7 @@ public class DTOHandler extends  ClassProcessor {
         public Visitable visit(MethodDeclaration method, Void args) {
             super.visit(method, args);
             method.getAnnotations().clear();
-            extractComplexType(method.getType(), cu);
+            solveTypeDependencies(method.getType(), cu);
             return method;
         }
     }

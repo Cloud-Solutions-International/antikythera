@@ -53,7 +53,23 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
-    void extractComplexType(Type type, CompilationUnit dependencyCu)  {
+    /**
+     * Find depedencies given a type
+     *
+     * For each type we encounter, we need to figure out if it's something from the java
+     * packages, an external dependency or something from the application under test.
+     *
+     * If it's a DTO in the AUT, we may need to copy it as well. Those that are identified
+     * as being local dependencies in the AUT are added to the dependencies set. Those are
+     * destined to be copied once parsing the controller has been completed.
+     *
+     * Types that are found in external jars are added to the externalDependencies set.
+     * These are not copied across with the generated tests.
+     *
+     * @param type the type to resolve
+     * @param dependencyCu the compilation unit inside which the type was encountered.
+     */
+    void solveTypeDependencies(Type type, CompilationUnit dependencyCu)  {
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
@@ -72,7 +88,7 @@ public class ClassProcessor extends AbstractCompiler {
                 for (Type t : secondaryType) {
                     // todo find out the proper way to indentify Type parameters like List<T>
                     if(t.asString().length() != 1 ) {
-                        extractComplexType(t, dependencyCu);
+                        solveTypeDependencies(t, dependencyCu);
                     }
                 }
             }
