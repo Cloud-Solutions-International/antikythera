@@ -219,7 +219,7 @@ public class RestControllerParser extends ClassProcessor {
                             MethodDeclaration method = member.asMethodDeclaration();
 
                             if (!method.isPrivate() && method.getName().asString().equals(methodCallExpr.getNameAsString())) {
-                                extractComplexType(method.getType(), dependencyCu);
+                                solveTypeDependencies(method.getType(), dependencyCu);
                             }
                         }
                     }
@@ -304,7 +304,7 @@ public class RestControllerParser extends ClassProcessor {
             if (md.isPublic()) {
                 Parameter requestBody = findRequestBody(md);
                 if (requestBody != null) {
-                    extractComplexType(requestBody.getType(), cu);
+                    solveTypeDependencies(requestBody.getType(), cu);
                 }
 
                 preConditions = new ArrayList<>();
@@ -339,11 +339,11 @@ public class RestControllerParser extends ClassProcessor {
                 }
 
                 if (returnType != null) {
-                    extractComplexType(returnType, cu);
+                    solveTypeDependencies(returnType, cu);
                 }
                 for (var param : md.getParameters()) {
                     parameterSet.put(param.getName().toString(), "");
-                    extractComplexType(param.getType(), cu);
+                    solveTypeDependencies(param.getType(), cu);
                 }
 
                 md.accept(new MethodBlockVisitor(), md);
