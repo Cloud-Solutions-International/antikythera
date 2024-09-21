@@ -1,18 +1,13 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.*;
 
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -27,15 +22,14 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -48,14 +42,7 @@ import java.util.Optional;
 public class DTOHandler extends  ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
-    /*
-     * The strategy followed is that we iterate through all the fields in the
-     * class and add them to a queue. Then we iterate through the items in
-     * the queue and call the copy method on each one. If an item has already
-     * been copied, it will be in the resolved set that is defined in the
-     * parent, so we will skip it.
-     */
-    private final JavaParser javaParser;
+
     private CompilationUnit cu;
 
     MethodDeclaration method = null;
@@ -63,12 +50,12 @@ public class DTOHandler extends  ClassProcessor{
     /**
      * Constructor to initialize the JavaParser and set things up
      */
-    public DTOHandler() {
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
-        this.javaParser = new JavaParser(parserConfiguration);
+    public DTOHandler() throws IOException {
+       super();
+    }
+
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
     }
 
     /**
@@ -77,35 +64,7 @@ public class DTOHandler extends  ClassProcessor{
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-        logger.info("\t"+relativePath);
-        Path sourcePath = Paths.get(basePath, relativePath);
-
-        FileInputStream in = new FileInputStream(sourcePath.toFile());
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        NodeList<ImportDeclaration> imports = cu.getImports();
-
-        if(resolved.contains(cu.toString())) {
-            return ;
-        }
-
-        expandWildCards(cu);
-        // remove unwanted imports. This is different from removing unused imports
-        removeUnwantedImports(imports);
-
-        solveTypes();
-        createFactory();
-
-        cu.accept(new TypeCollector(), null);
-
-        handleStaticImports(imports);
-        // remove unused imports. These are items in the import list that seem to be unused.
-        // there are no type declarations in the code that make use of the import.
-        removeUnusedImports(imports);
-
-        if(method != null) {
-            var variable = classToInstanceName(cu.getTypes().get(0));
-            method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
-        }
+        if (parseDTO(relativePath)) return;
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
         resolved.add(cu.toString());
@@ -114,6 +73,60 @@ public class DTOHandler extends  ClassProcessor{
             copyDependencies(dependency);
         }
         dependencies.clear();
+    }
+
+    public boolean parseDTO(String relativePath) throws FileNotFoundException {
+        logger.info("\t{}", relativePath);
+        Path sourcePath = Paths.get(basePath, relativePath);
+
+        // Check if the file exists
+        File file = sourcePath.toFile();
+        if (!file.exists()) {
+            // The file may not exist if the DTO is an inner class in a controller
+            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
+            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
+            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
+            sourcePath = Paths.get(basePath, controllerPath);
+        }
+
+        // Check again for the controller file
+        file = sourcePath.toFile();
+        if (!file.exists()) {
+            logger.error("Controller file not found: {}", sourcePath);
+            throw new FileNotFoundException(sourcePath.toString());
+        }
+
+        // Proceed with parsing the controller file
+        FileInputStream in = new FileInputStream(file);
+        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+
+        // Search for any inner class that ends with "Dto"
+        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
+
+        if (hasInnerDTO) {
+            logger.info("Found inner DTO class in controller: {}", relativePath);
+        }
+
+        if (resolved.contains(cu.toString())) {
+            return true;
+        }
+
+        expandWildCards(cu);
+        solveTypes();
+        createFactory();
+
+        cu.accept(new TypeCollector(), null);
+
+        handleStaticImports(cu.getImports());
+        removeUnusedImports(cu.getImports());
+
+        if (method != null) {
+            var variable = classToInstanceName(cu.getTypes().get(0));
+            method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
+        }
+
+        return false;
     }
 
     /**
@@ -126,6 +139,7 @@ public class DTOHandler extends  ClassProcessor{
         String className = cdecl.getNameAsString();
 
         if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+                && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
                 && className.toLowerCase().endsWith("to")) {
             String variable = classToInstanceName(cdecl);
 
@@ -222,9 +236,6 @@ public class DTOHandler extends  ClassProcessor{
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        // Find the CompilationUnit associated with the classDecl
-        cu = classDecl.findCompilationUnit().orElseThrow(() -> new IllegalStateException("CompilationUnit not found"));
-
         if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
@@ -242,25 +253,22 @@ public class DTOHandler extends  ClassProcessor{
      * it's type. If the type is defined in the application under test we copy it.
      */
     class TypeCollector extends ModifierVisitor<Void> {
+
         @Override
-        public Visitable visit(FieldDeclaration field, Void arg) {
+        public Visitable visit(FieldDeclaration field, Void args) {
 
-            try {
-                String fieldAsString = field.getElementType().toString();
-                if (fieldAsString.equals("DateScheduleUtil")
-                        || fieldAsString.equals("Logger")
-                        || fieldAsString.equals("Sort.Direction")) {
-                    return null;
-                }
-                field.getAnnotations().clear();
-                extractEnums(field);
-                extractComplexType(field.getElementType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + field.getElementType(), e);
 
+            String fieldAsString = field.getElementType().toString();
+            if (fieldAsString.equals("DateScheduleUtil")
+                    || fieldAsString.equals("Logger")
+                    || fieldAsString.equals("Sort.Direction")) {
+                return null;
             }
+            field.getAnnotations().clear();
+            extractEnums(field);
+            extractComplexType(field.getElementType(), cu);
 
-            return super.visit(field, arg);
+            return super.visit(field, args);
         }
 
         private void extractEnums(FieldDeclaration field) {
@@ -278,13 +286,20 @@ public class DTOHandler extends  ClassProcessor{
                 else if(initializer.isFieldAccessExpr()) {
                     findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
                 }
+                else if (initializer.isNameExpr()) {
+                    findImport(cu, initializer.asNameExpr().toString());
+                }
             }
             else {
                 generateRandomValue(field);
             }
         }
 
-        private void generateRandomValue(FieldDeclaration field) {
+        /**
+         * Generate random values for use in the factory method for a DTO
+         * @param field
+         */
+        void generateRandomValue(FieldDeclaration field) {
             TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
             if(!field.isStatic() && method != null) {
@@ -313,8 +328,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "Date":
                         if(field.getElementType().toString().contains(".")) {
                             setter.addArgument("new java.util.Date()");
-                        }
-                        else {
+                        } else {
                             setter.addArgument("new Date()");
                         }
                         break;
@@ -323,6 +337,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "double":
                         setter.addArgument("0.0");
                         break;
+
                     case "Float":
                     case "float":
                         setter.addArgument("0.0f");
@@ -332,6 +347,11 @@ public class DTOHandler extends  ClassProcessor{
                     case "int":
                         setter.addArgument("0");
                         break;
+
+                    case "Byte":
+                        setter.addArgument("(byte) 0");
+                        break;
+
                     case "List":
                         setter.addArgument("List.of()");
                         break;
@@ -340,6 +360,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "Long":
                         setter.addArgument("0L");
                         break;
+
                     case "String":
                         setter.addArgument("\"Hello world\"");
                         break;
@@ -347,6 +368,7 @@ public class DTOHandler extends  ClassProcessor{
                     case "Map":
                         setter.addArgument("Map.of()");
                         break;
+
                     case "Set":
                         setter.addArgument("Set.of()");
                         break;
@@ -355,14 +377,38 @@ public class DTOHandler extends  ClassProcessor{
                         setter.addArgument("UUID.randomUUID()");
                         break;
 
+                    case "LocalDate":
+                        setter.addArgument("LocalDate.now()");
+                        break;
+
+                    case "LocalDateTime":
+                        setter.addArgument("LocalDateTime.now()");
+                        break;
+
+                    case "Short":
+                        setter.addArgument("(short) 0");
+                        break;
+
+                    case "byte":
+                        setter.addArgument("new byte[] {0}");
+                        break;
+
+                    case "T":
+                        setter.addArgument("null");
+                        break;
+
+                    case "BigDecimal":
+                        setter.addArgument("BigDecimal.ZERO");
+                        break;
+
                     default:
                         if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
                             setter.addArgument("new " + type + "()");
-                        }
-                        else {
+                        } else {
                             setter = null;
                         }
                 }
+
                 if(setter != null) {
                     method.getBody().get().addStatement(setter);
                 }
@@ -374,14 +420,10 @@ public class DTOHandler extends  ClassProcessor{
         }
 
         @Override
-        public Visitable visit(MethodDeclaration method, Void arg) {
-            super.visit(method, arg);
-            try {
-                method.getAnnotations().clear();
-                extractComplexType(method.getType(), cu);
-            } catch (IOException e) {
-                throw new GeneratorException("Failed to extract complex type for " + method.getType(), e);
-            }
+        public Visitable visit(MethodDeclaration method, Void args) {
+            super.visit(method, args);
+            method.getAnnotations().clear();
+            extractComplexType(method.getType(), cu);
             return method;
         }
     }
@@ -390,11 +432,16 @@ public class DTOHandler extends  ClassProcessor{
         Settings.loadConfigMap();
 
         if (args.length != 1) {
-            System.err.println("Usage: java DTOHandler <base-path> <relative-path>");
-            System.exit(1);
-        }
+            logger.error("Usage: java DTOHandler <base-path> <relative-path>");
 
-        DTOHandler processor = new DTOHandler();
-        processor.copyDTO(args[0]);
+        }
+        else {
+            DTOHandler processor = new DTOHandler();
+            processor.copyDTO(args[0]);
+        }
+    }
+
+    public CompilationUnit getCompilationUnit() {
+        return cu;
     }
 }
