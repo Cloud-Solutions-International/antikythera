@@ -26,8 +26,8 @@ public class ClassProcessor extends AbstractCompiler {
      * parent, so we will skip it.
      */
     protected final Set<String> dependencies = new HashSet<>();
-    protected final Set<String> externalDependencies = new HashSet<>();
-    private static final Set<String> copied = new HashSet<>();
+    final Set<String> externalDependencies = new HashSet<>();
+    static final Set<String> copied = new HashSet<>();
 
     protected ClassProcessor() throws IOException {
         super();
