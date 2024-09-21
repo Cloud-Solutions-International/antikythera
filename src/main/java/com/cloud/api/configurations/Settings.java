@@ -2,16 +2,14 @@ package com.cloud.api.configurations;
 
 import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,7 +18,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Scanner;
 
 /**
@@ -44,7 +41,7 @@ public class Settings {
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
-                loadCfgConfig();
+                throw new FileNotFoundException(yamlFile.getPath());
             }
         }
     }
@@ -147,27 +144,6 @@ public class Settings {
     }
 
     /**
-     * Load configurations from props files
-     * @throws IOException
-     */
-    private static void loadCfgConfig() throws IOException {
-        try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
-            Properties props = new Properties();
-            props.load(fis);
-            String userDir = System.getProperty("user.home");
-            for (Map.Entry<Object, Object> prop : props.entrySet()) {
-                String key = (String) prop.getKey();
-                String value = (String) prop.getValue();
-                if (value != null) {
-                    value = value.replace("${USERDIR}", userDir);
-                    value = replaceEnvVariables(value);
-                    Settings.props.put(key, value);
-                }
-            }
-        }
-    }
-
-    /**
      * The value is checked for an environment variable and replaced if found.
      * The format is ${ENV_VAR_NAME}.
      *
@@ -197,26 +173,26 @@ public class Settings {
     }
 
     public static String[] getArtifacts() {
-        return get_deps("artifact_ids");
+        return getDependencies("artifact_ids");
     }
 
-    private static String[] get_deps(String artifact_ids) {
+    private static String[] getDependencies(String artifactIds) {
         Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
         if (deps instanceof String) {
             return ((String) deps).split(",");
         }
         Map<String, Object> dependencies = (Map<String, Object>) deps;
-        return ((List<String>) dependencies.get(artifact_ids)).toArray(new String[0]);
+        return ((List<String>) dependencies.get(artifactIds)).toArray(new String[0]);
     }
 
     public static String[] getJarFiles() {
-        return get_deps("jar_files");
+        return getDependencies("jar_files");
     }
 
     public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {
         @Override
         public Map<String, Object> deserialize(JsonParser p, DeserializationContext ctxt)
-                throws IOException, JsonProcessingException {
+                throws IOException {
             return p.readValueAs(LinkedHashMap.class);
         }
     }
