@@ -36,9 +36,17 @@ public class Evaluator {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
-            Comparable leftValue = evaluateExpression(left, context);
-            Comparable rightValue = evaluateExpression(right, context);
-            return evaluateBinaryExpression(binaryExpr.getOperator(), leftValue, rightValue);
+
+            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
+                return evaluateCondition(left, context) && evaluateCondition(right, context);
+            } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
+                return evaluateCondition(left, context) || evaluateCondition(right, context);
+            }
+            else {
+                Comparable leftValue = evaluateExpression(left, context);
+                Comparable rightValue = evaluateExpression(right, context);
+                return evaluateBinaryExpression(binaryExpr.getOperator(), leftValue, rightValue);
+            }
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isNameExpr()) {
