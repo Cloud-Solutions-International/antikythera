@@ -110,6 +110,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private void processRestController(File path) throws IOException {
+        testMethodNames = new HashSet<>();
         logger.info(path.toString());
         if (path.isDirectory()) {
             int i = 0;
@@ -313,7 +314,7 @@ public class RestControllerParser extends ClassProcessor {
                 if(md.getBody().isPresent()) {
                     identifyLocals(md.getBody().get());
                 }
-                testMethodNames = new HashSet<>();
+
                 logger.info("Method: {}\n", md.getName());
                 Type returnType = null;
                 Type methodType = md.getType();
@@ -389,7 +390,7 @@ public class RestControllerParser extends ClassProcessor {
                 if(parent.get() instanceof IfStmt) {
                     IfStmt ifStmt = (IfStmt) parent.get();
                     Expression condition = ifStmt.getCondition();
-                    if (evaluator.evaluateCondition(condition, context)) {
+                    if (context != null && evaluator.evaluateCondition(condition, context)) {
                         identifyReturnType(stmt, md);
                         buildPreconditions(md, condition);
                     }
@@ -402,7 +403,7 @@ public class RestControllerParser extends ClassProcessor {
                             // we have found ourselves a conditional return statement.
                             IfStmt ifStmt = (IfStmt) gramps.get();
                             Expression condition = ifStmt.getCondition();
-                            if (evaluator.evaluateCondition(condition, context)) {
+                            if (context != null && evaluator.evaluateCondition(condition, context)) {
                                 identifyReturnType(stmt, md);
                                 buildPreconditions(md, condition);
                             }
@@ -630,120 +631,130 @@ public class RestControllerParser extends ClassProcessor {
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
-                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
-                String paramClassName = requestBody.getTypeAsString();
+                if(requestBody != null) {
+                    String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                    String paramClassName = requestBody.getTypeAsString();
 
-                BlockStmt blockStmt = testMethod.getBody().get();
-                if(requestBody.getType().isClassOrInterfaceType()) {
-                    var cdecl = requestBody.getType().asClassOrInterfaceType();
-                    switch(cdecl.getNameAsString()) {
-                        case "List": {
-                            prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
-                            break;
+                    BlockStmt blockStmt = testMethod.getBody().get();
+                    if (requestBody.getType().isClassOrInterfaceType()) {
+                        var cdecl = requestBody.getType().asClassOrInterfaceType();
+                        switch (cdecl.getNameAsString()) {
+                            case "List": {
+                                prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
+                                break;
+                            }
+
+                            case "Set": {
+                                prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
+                                break;
+                            }
+
+                            case "Map": {
+                                prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
+                                break;
+                            }
+                            case "Integer":
+                            case "Long": {
+                                VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
+                                variableDeclarator.setInitializer("0");
+                                blockStmt.addStatement(new VariableDeclarationExpr(variableDeclarator));
+
+                                break;
+                            }
+
+                            case "MultipartFile": {
+                                dependencies.add("org.springframework.web.multipart.MultipartFile");
+                                ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
+                                VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
+                                MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
+                                methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
+                                variableDeclarator.setInitializer(methodCallExpr);
+                                testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                                break;
+                            }
+
+                            case "Object": {
+                                // SOme methods incorrectly have their DTO listed as of type Object. We will treat
+                                // as a String
+                                prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
+                                break;
+                            }
+
+                            default:
+                                ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
+                                VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
+                                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
+                                variableDeclarator.setInitializer(objectCreationExpr);
+                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                                blockStmt.addStatement(variableDeclarationExpr);
                         }
 
-                        case "Set": {
-                            prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
-                            break;
+                        for (Expression expr : preConditions) {
+                            if (expr.isMethodCallExpr()) {
+                                String s = expr.toString();
+                                if (s.contains("set")) {
+                                    String[] parts = s.split("\\.");
+                                    blockStmt.addStatement(String.format("req.%s;", parts[1]));
+                                }
+                            }
                         }
 
-                        case "Map": {
-                            prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
-                            break;
+                        if (cdecl.getNameAsString().equals("MultipartFile")) {
+                            makeGetCall.addArgument(new NameExpr("req"));
+                            testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
+                        } else {
+                            MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                            writeValueAsStringCall.addArgument(new NameExpr("req"));
+                            makeGetCall.addArgument(writeValueAsStringCall);
+                            testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
                         }
-                        case "Integer":
-                        case "Long": {
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
-                            variableDeclarator.setInitializer("0");
-                            blockStmt.addStatement(new VariableDeclarationExpr(variableDeclarator));
+                        makeGetCall.addArgument(new NameExpr("headers"));
 
-                            break;
-                        }
-
-                        case "MultipartFile": {
-                            dependencies.add("org.springframework.web.multipart.MultipartFile");
-                            ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
-                            methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
-                            break;
-                        }
-
-                        case "Object": {
-                            // SOme methods incorrectly have their DTO listed as of type Object. We will treat
-                            // as a String
-                            prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
-                            break;
-                        }
-
-                        default:
-                            ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
-                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
-                            variableDeclarator.setInitializer(objectCreationExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                            blockStmt.addStatement(variableDeclarationExpr);
                     }
+                    makeGetCall.addArgument(new StringLiteralExpr(path));
 
-                    for(Expression expr : preConditions) {
-                        if(expr.isMethodCallExpr()) {
-                            String s = expr.toString();
-                            if(s.contains("set")) {
-                                String[] parts = s.split("\\.");
-                                blockStmt.addStatement(String.format("req.%s;", parts[1]));
+                    gen.getType(0).addMember(testMethod);
+
+                    VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
+                    AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
+                    blockStmt.addStatement(new ExpressionStmt(assignExpr));
+
+
+                    addHttpStatusCheck(blockStmt, resp.getStatusCode());
+                    Type returnType = resp.getType();
+                    if (returnType != null) {
+                        // There maybe controllers that do not return a body. In that case the
+                        // return type will be null
+                        if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                            System.out.println();
+                        } else if (!
+                                (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                            Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                            if (respType.toString().equals("String")) {
+                                blockStmt.addStatement("String resp = response.getBody().asString();");
+                                if(resp.getResponse() != null) {
+                                    blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                                }
+                                else {
+                                    blockStmt.addStatement("Assert.assertNotNull(resp);");
+                                    logger.warn("Reponse body is empty for {}", md.getName());
+                                }
+                            } else {
+                                // todo get thsi back on line
+//                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+//                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+//                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+//                                variableDeclarator.setInitializer(methodCallExpr);
+//                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+//                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+//                                blockStmt.addStatement(expressionStmt);
                             }
                         }
                     }
-
-                    if (cdecl.getNameAsString().equals("MultipartFile")){
-                        makeGetCall.addArgument(new NameExpr("req"));
-                        testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
-                    }
-                    else {
-                        MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                        writeValueAsStringCall.addArgument(new NameExpr("req"));
-                        makeGetCall.addArgument(writeValueAsStringCall);
-                        testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
-                    }
-                    makeGetCall.addArgument(new NameExpr("headers"));
-
                 }
-                makeGetCall.addArgument(new StringLiteralExpr(path));
-
-                gen.getType(0).addMember(testMethod);
-
-                VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
-                AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
-                blockStmt.addStatement(new ExpressionStmt(assignExpr));
-
-
-                addHttpStatusCheck(blockStmt, resp.getStatusCode());
-                Type returnType = resp.getType();
-                if(returnType != null) {
-                    // There maybe controllers that do not return a body. In that case the
-                    // return type will be null
-                    if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                        System.out.println();
-                    } else if (!
-                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        if (respType.toString().equals("String")) {
-                            blockStmt.addStatement("String resp = response.getBody().asString();");
-                            blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
-                        } else {
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                            ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                            blockStmt.addStatement(expressionStmt);
-                        }
-                    }
+                else {
+                    logger.warn("No RequestBody found for {}", md.getName());
                 }
-
             }
         }
 
