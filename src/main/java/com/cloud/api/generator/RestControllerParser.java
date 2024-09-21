@@ -72,6 +72,7 @@ public class RestControllerParser extends ClassProcessor {
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
+    Map<String, Comparable> context;
 
     /**
      * Store the conditions that a controller may expect the input to meet.
@@ -109,7 +110,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private void processRestController(File path) throws IOException {
-        logger.debug(path.toString());
+        logger.info(path.toString());
         if (path.isDirectory()) {
             int i = 0;
             for (File f : path.listFiles()) {
@@ -300,6 +301,11 @@ public class RestControllerParser extends ClassProcessor {
             super.visit(md, arg);
 
             if (md.isPublic()) {
+                Parameter requestBody = findRequestBody(md);
+                if (requestBody != null) {
+                    extractComplexType(requestBody.getType(), cu);
+                }
+
                 preConditions = new ArrayList<>();
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
@@ -308,7 +314,7 @@ public class RestControllerParser extends ClassProcessor {
                     identifyLocals(md.getBody().get());
                 }
                 testMethodNames = new HashSet<>();
-                logger.debug("Method: {}\n", md.getName());
+                logger.info("Method: {}\n", md.getName());
                 Type returnType = null;
                 Type methodType = md.getType();
                 if (methodType.asString().contains("<")) {
@@ -366,7 +372,6 @@ public class RestControllerParser extends ClassProcessor {
      */
     private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
         Evaluator evaluator = new Evaluator();
-        Map<String, Comparable> context = new HashMap<>();
 
         /**
          * This method will be called once for each return statment inside the method block.
@@ -381,48 +386,65 @@ public class RestControllerParser extends ClassProcessor {
             if (parent.isPresent()) {
                 // the return statement will have a parent no matter what but the optionals approach
                 // requires the use of isPresent.
-
-                BlockStmt blockStmt = (BlockStmt) parent.get();
-                Optional<Node> gramps = blockStmt.getParentNode();
-                if (gramps.isPresent()) {
-                    if (gramps.get() instanceof IfStmt) {
-                        // we have found ourselves a conditional return statement.
-                        IfStmt ifStmt = (IfStmt) gramps.get();
-                        Expression condition = ifStmt.getCondition();
-                        if (evaluator.evaluateCondition(condition, context)) {
-                            identifyReturnType(stmt, md);
-                            buildPreconditions(md, condition);
-                        }
-                    }
-                    else if (gramps.get() instanceof MethodDeclaration) {
+                if(parent.get() instanceof IfStmt) {
+                    IfStmt ifStmt = (IfStmt) parent.get();
+                    Expression condition = ifStmt.getCondition();
+                    if (evaluator.evaluateCondition(condition, context)) {
                         identifyReturnType(stmt, md);
+                        buildPreconditions(md, condition);
                     }
                 }
-
+                else {
+                    BlockStmt blockStmt = (BlockStmt) parent.get();
+                    Optional<Node> gramps = blockStmt.getParentNode();
+                    if (gramps.isPresent()) {
+                        if (gramps.get() instanceof IfStmt) {
+                            // we have found ourselves a conditional return statement.
+                            IfStmt ifStmt = (IfStmt) gramps.get();
+                            Expression condition = ifStmt.getCondition();
+                            if (evaluator.evaluateCondition(condition, context)) {
+                                identifyReturnType(stmt, md);
+                                buildPreconditions(md, condition);
+                            }
+                        } else if (gramps.get() instanceof MethodDeclaration) {
+                            identifyReturnType(stmt, md);
+                        }
+                    }
+                }
             }
         }
 
         private void buildPreconditions(MethodDeclaration md, Expression expr) {
             if(expr instanceof BinaryExpr) {
-                buildPreconditions(md, expr.asBinaryExpr().getLeft());
-                buildPreconditions(md, expr.asBinaryExpr().getRight());
+                BinaryExpr binaryExpr = expr.asBinaryExpr();
+                if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND) || binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
+                    buildPreconditions(md, binaryExpr.getLeft());
+                    buildPreconditions(md, binaryExpr.getRight());
+                }
+                else {
+                    buildPreconditions(md, binaryExpr.getLeft());
+                    buildPreconditions(md, binaryExpr.getRight());
+                }
             }
             if(expr instanceof MethodCallExpr) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
                 Parameter reqBody = findRequestBody(md);
                 if(reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
                     try {
-                        String fullClassName = reqBody.resolve().describeType();
-                        String fieldName = classToInstanceName(mce.getName().asString().replace("get",""));
+                        if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
 
-                        DTOHandler handler = new DTOHandler();
-                        handler.compile(AbstractCompiler.classToPath(fullClassName));
-                        Map<String, FieldDeclaration> fields = getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
+                            String fullClassName = reqBody.resolve().describeType();
+                            String fieldName = classToInstanceName(mce.getName().asString().replace("get", ""));
 
-                        FieldDeclaration fieldDeclaration = fields.get(fieldName);
-                        if(fieldDeclaration != null) {
-                            MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
-                            preConditions.add(methodCall);
+                            DTOHandler handler = new DTOHandler();
+                            handler.compile(AbstractCompiler.classToPath(fullClassName));
+                            Map<String, FieldDeclaration> fields = getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
+
+                            FieldDeclaration fieldDeclaration = fields.get(fieldName);
+                            if (fieldDeclaration != null) {
+                                MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
+                                preConditions.add(methodCall);
+                            }
                         }
                     } catch (UnsolvedSymbolException e) {
                         logger.warn("Unsolved symbol exception");
@@ -695,26 +717,28 @@ public class RestControllerParser extends ClassProcessor {
 
                 addHttpStatusCheck(blockStmt, resp.getStatusCode());
                 Type returnType = resp.getType();
-                if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                    System.out.println();
-                } else if(!
-                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                    Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                    if (respType.toString().equals("String")) {
-                        blockStmt.addStatement("String resp = response.getBody().asString();");
-                        blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");",resp.getResponse().toString()));
-                    }
-                    else {
-                        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                        methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                        variableDeclarator.setInitializer(methodCallExpr);
-                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                        blockStmt.addStatement(expressionStmt);
+                if(returnType != null) {
+                    // There maybe controllers that do not return a body. In that case the
+                    // return type will be null
+                    if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                        System.out.println();
+                    } else if (!
+                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        if (respType.toString().equals("String")) {
+                            blockStmt.addStatement("String resp = response.getBody().asString();");
+                            blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                        } else {
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                            MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                            variableDeclarator.setInitializer(methodCallExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                            blockStmt.addStatement(expressionStmt);
+                        }
                     }
                 }
-
 
             }
         }
@@ -747,6 +771,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){
+        List<String> queryParams = new ArrayList<>();
 
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
@@ -754,34 +779,62 @@ public class RestControllerParser extends ClassProcessor {
                 String paramName = getParamName(param);
                 switch(param.getTypeAsString()) {
                     case "Boolean":
-                        path = path.replace('{' + paramName +'}', "false");
+                        if(paramString.startsWith("@RequestParam")) {
+                            queryParams.add(paramName +"=1");
+                        }
+                        else {
+                            path = path.replace('{' + paramName + '}', "false");
+                        }
                         break;
 
                     case "float":
                     case "Float":
                     case "double":
                     case "Double":
-                        path = path.replace('{' + paramName +'}', "1.0");
+                        if(paramString.startsWith("@RequestParam")) {
+                            queryParams.add(paramName +"=1");
+                        }
+                        else {
+                            path = path.replace('{' + paramName + '}', "1.0");
+                        }
                         break;
 
                     case "Integer":
                     case "int":
                     case "Long":
-                        path = path.replace('{' + paramName +'}', "1");
+                        if(paramString.startsWith("@RequestParam")) {
+                            queryParams.add(paramName +"=1");
+                        }
+                        else {
+                            path = path.replace('{' + paramName + '}', "1");
+                        }
                         break;
 
                     case "String":
-                        path = path.replace('{' + paramName +'}', "Ibuprofen");
+                        if(paramString.startsWith("@RequestParam")) {
+                            queryParams.add(paramName +"=Ibuprofen");
+                        }
+                        else {
+                            path = path.replace('{' + paramName + '}', "Ibuprofen");
+                        }
 
                     default:
                         // some get methods rely on an enum.
                         // todo handle this properly
-                        path = path.replace('{' + paramName +'}', "0");
+                        if(paramString.startsWith("@RequestParam")) {
+                            queryParams.add(paramName +"=0");
+                        }
+                        else {
+                            path = path.replace('{' + paramName + '}', "0");
+                        }
 
                 }
             }
         }
-        return path;
+        if(queryParams.isEmpty()) {
+            return path;
+        }
+        return path + "?" + String.join("&", queryParams);
     }
 
     private static String getParamName(Parameter param) {
