@@ -476,16 +476,20 @@ public class RestControllerParser extends ClassProcessor {
                             response.setType(StaticJavaParser.parseType("java.lang.String"));
                             response.setResponse(typeArg.asStringLiteralExpr().asString());
                         } else if (typeArg.isMethodCallExpr()) {
-                            MethodCallExpr methodCallExpr = null;
+                            MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
                             try {
-                                methodCallExpr = typeArg.asMethodCallExpr();
                                 Optional<Expression> scope = methodCallExpr.getScope();
                                 if (scope.isPresent()) {
                                     Type type = (scope.get().isFieldAccessExpr())
                                             ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
                                             : fields.get(scope.get().asNameExpr().getNameAsString());
-                                    extractTypeFromCall(type, methodCallExpr);
-                                    logger.debug(type.toString());
+                                    if(type != null) {
+                                        extractTypeFromCall(type, methodCallExpr);
+                                        logger.debug(type.toString());
+                                    }
+                                    else {
+                                        logger.debug("Type not found {}", scope.get());
+                                    }
                                 }
                             } catch (IOException e) {
                                 throw new GeneratorException("Exception while identifying dependencies", e);
@@ -863,13 +867,12 @@ public class RestControllerParser extends ClassProcessor {
      * @return the parameter identified as the RequestBody
      */
     private Parameter findRequestBody(MethodDeclaration md) {
-        Parameter requestBody = md.getParameter(0);
         for(var param : md.getParameters()) {
             if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
                 return param;
             }
         }
-        return requestBody;
+        return null;
     }
 
     /**

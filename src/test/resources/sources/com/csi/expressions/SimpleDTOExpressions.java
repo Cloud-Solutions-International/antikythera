@@ -1,3 +1,5 @@
+package com.csi.expressions;
+
 class SimpleDTOExpressions {
     void eval() {
         SimpleDTO dto = new SimpleDTO();
