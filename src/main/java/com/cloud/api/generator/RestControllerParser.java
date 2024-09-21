@@ -297,17 +297,20 @@ public class RestControllerParser extends ClassProcessor {
      * Visitor that will detect methods in the controller.
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        /**
+         * Prepares the ground for the MethodBLockVisitor to do it's work.
+         *
+         * reset the preConditions list
+         * identify the locals
+         * reset the context
+         */
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
 
             if (md.isPublic()) {
-                Parameter requestBody = findRequestBody(md);
-                if (requestBody != null) {
-                    solveTypeDependencies(requestBody.getType(), cu);
-                }
-
                 preConditions = new ArrayList<>();
+                buildContext(md);
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
@@ -315,7 +318,7 @@ public class RestControllerParser extends ClassProcessor {
                     identifyLocals(md.getBody().get());
                 }
 
-                logger.info("Method: {}\n", md.getName());
+                logger.info("Method: {}", md.getName());
                 Type returnType = null;
                 Type methodType = md.getType();
                 if (methodType.asString().contains("<")) {
@@ -347,6 +350,14 @@ public class RestControllerParser extends ClassProcessor {
                 }
 
                 md.accept(new MethodBlockVisitor(), md);
+            }
+        }
+
+        private void buildContext(MethodDeclaration md) {
+            context = new HashMap<>();
+            for(var param : md.getParameters()) {
+                context.put(param.getNameAsString(), null);
+                solveTypeDependencies(param.getType(), cu);
             }
         }
 
@@ -385,7 +396,7 @@ public class RestControllerParser extends ClassProcessor {
             Optional<Node> parent = stmt.getParentNode();
 
             if (parent.isPresent()) {
-                // the return statement will have a parent no matter what but the optionals approach
+                  // the return statement will have a parent no matter what but the optionals approach
                 // requires the use of isPresent.
                 if(parent.get() instanceof IfStmt) {
                     IfStmt ifStmt = (IfStmt) parent.get();
@@ -430,7 +441,7 @@ public class RestControllerParser extends ClassProcessor {
             if(expr instanceof MethodCallExpr) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
                 Parameter reqBody = findRequestBody(md);
-                if(reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
+                if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
                     try {
                         if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
 
@@ -878,6 +889,7 @@ public class RestControllerParser extends ClassProcessor {
      * @return the parameter identified as the RequestBody
      */
     private Parameter findRequestBody(MethodDeclaration md) {
+
         for(var param : md.getParameters()) {
             if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
                 return param;
