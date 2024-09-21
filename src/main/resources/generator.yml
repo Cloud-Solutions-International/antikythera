@@ -19,7 +19,7 @@ base_package: com.csi
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
-controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller.wound.AssessmentChartServiceWrite.java
+controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller
 
   #.admission.AdmissionServiceRead.java
 #.externaltransfer.ExternalTransferController.java
