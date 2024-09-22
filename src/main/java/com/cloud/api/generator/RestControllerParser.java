@@ -386,7 +386,7 @@ public class RestControllerParser extends ClassProcessor {
                             }
                         }
                         else {
-                            returnStatementVisitor(st, md, last);
+                            st.accept(new ReturnStatmentVisitor(), md);
                         }
                     }
                 }
@@ -402,14 +402,15 @@ public class RestControllerParser extends ClassProcessor {
         }
 
 
-        /**
-         * This method will be called once for each return statment inside the method block.
-         * @param statement A statement that maybe a return statement.
-         * @param md the method declaration that contains the return statement.
-         */
-
-        public void returnStatementVisitor(Statement statement, MethodDeclaration md, RepositoryQuery query) {
-            if(statement.isReturnStmt()) {
+        class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            /**
+             * This method will be called once for each return statment inside the method block.
+             *
+             * @param statement A statement that maybe a return statement.
+             * @param md        the method declaration that contains the return statement.
+             */
+            @Override
+            public void visit(ReturnStmt statement, MethodDeclaration md) {
                 ReturnStmt stmt = statement.asReturnStmt();
                 Optional<Node> parent = stmt.getParentNode();
                 try {
