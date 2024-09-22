@@ -37,12 +37,15 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -232,23 +235,37 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private static class VariableAssignmentVisitor extends VoidVisitorAdapter<NodeList<VariableDeclarator>> {
+    /**
+     * Listens for statements/expresions in variable assignment statement.
+     */
+    private static class VariableAssignmentVisitor extends GenericVisitorAdapter<RepositoryQuery, NodeList<VariableDeclarator>> {
+
+        /**
+         * This method will be called for each metdhod call expression associated with a variable assignment.
+         * @param mce method call expression, the result of which will be used in the variable assignment by the caller
+         * @param arg The list of variables that are being assigned.
+         *            Most likely to contain a single node
+         * @return A repository query, if the variable assignment is the result of a query execution or null.
+         */
         @Override
-        public void visit(MethodCallExpr mce, NodeList<VariableDeclarator> arg) {
-
-            String fieldName = mce.resolve().getClassName().toString();
-            RepositoryParser repository = respositories.get(fieldName);
-            if(repository != null) {
-                RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
-                try {
-                    repository.executeQuery(mce.getNameAsString(), q);
-                } catch (FileNotFoundException e) {
-                    logger.warn("Could not execute query {}", mce);
+        public RepositoryQuery visit(MethodCallExpr mce, NodeList<VariableDeclarator> arg) {
+            try {
+                String fieldName = mce.resolve().getClassName().toString();
+                RepositoryParser repository = respositories.get(fieldName);
+                if (repository != null) {
+                    RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
+                    try {
+                        ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
+                        q.setResultSet(rs);
+                    } catch (FileNotFoundException e) {
+                        logger.warn("Could not execute query {}", mce);
+                    }
+                    return q;
                 }
-                System.out.println("found a repo");
+            } catch (UnsolvedSymbolException e) {
+                logger.warn("Unsolved symbol exception {}", mce.asMethodCallExpr().toString());
             }
-
-            System.out.println("\t\t" + mce);
+            return null;
         }
     }
 
@@ -317,8 +334,15 @@ public class RestControllerParser extends ClassProcessor {
 
     /**
      * Visitor that will detect methods in the controller.
+     *
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        /*
+         * Every public method in the source code will result in a call to the visit(MethodDeclaration...)
+         * method of this class. In there will try to identify locals and whether any repository queries
+         * are being executed. Armed with that information we will then use the return statement visitor
+         * to identify the return type of the method and there after to generate the tests.
+         */
         Evaluator evaluator = new Evaluator();
 
         /**
@@ -343,12 +367,27 @@ public class RestControllerParser extends ClassProcessor {
                 Optional<BlockStmt> body = md.getBody();
                 if(body.isPresent()) {
                     logger.info("Method: {}", md.getName());
+                    RepositoryQuery last = null;
+
                     for(Statement st : body.get().getStatements()) {
                         NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
                         if (variables != null) {
-                            st.accept(new VariableAssignmentVisitor(), variables);
+                            /*
+                             * we have just encountered a variable assignmennt. Unfortunately it's very
+                             * hard to discover more information about that assignment from the expression,
+                             * so it's best to just pass it to the VariableAssignmentVisitor.
+                             *
+                             * If the variable assignment is associated with a repository query, the visitor
+                             * will return a non-null value.
+                             */
+                            RepositoryQuery query = st.accept(new VariableAssignmentVisitor(), variables);
+                            if(query != null && query.getResultSet() != null) {
+                                last = query;
+                            }
                         }
-                        returnStatementVisitor(st, md);
+                        else {
+                            returnStatementVisitor(st, md, last);
+                        }
                     }
                 }
             }
@@ -369,7 +408,7 @@ public class RestControllerParser extends ClassProcessor {
          * @param md the method declaration that contains the return statement.
          */
 
-        public void returnStatementVisitor(Statement statement, MethodDeclaration md) {
+        public void returnStatementVisitor(Statement statement, MethodDeclaration md, RepositoryQuery query) {
             if(statement.isReturnStmt()) {
                 ReturnStmt stmt = statement.asReturnStmt();
                 Optional<Node> parent = stmt.getParentNode();

@@ -168,6 +168,8 @@ public class Evaluator {
     /**
      * Identify local variables with in the block statement
      * @param stmt the method body block. Any variable declared here will be a local.
+     * @return the list of variables declared in the block statement. If we have mocked
+     *       the variable, we will return null.
      */
     public NodeList<VariableDeclarator> identifyLocals(Statement stmt) {
         if (stmt.isExpressionStmt()) {
