@@ -1,5 +1,6 @@
 package com.cloud.api.evaluator;
 
+import com.cloud.api.generator.EvaluatorException;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.BinaryExpr;
@@ -28,12 +29,13 @@ class EvaluatorTest {
 
         context = Evaluator.contextFactory(dto);
     }
+
     @Test
-    void testEqualsNull()   {
+    void testEqualsNull() throws EvaluatorException {
         Evaluator eval = new Evaluator();
         Expression methodCall = new MethodCallExpr(new NameExpr("dto"), "getHospital");
         Expression nullLiteral = new NullLiteralExpr();
         BinaryExpr condition = new BinaryExpr(methodCall, nullLiteral, BinaryExpr.Operator.EQUALS);
-        assertTrue(eval.evaluateCondition(condition, context, new HashMap<>()));
+        assertTrue(eval.evaluateCondition(condition, context));
     }
 }
