@@ -6,6 +6,8 @@ import com.cloud.api.generator.EvaluatorException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.Type;
@@ -167,23 +169,30 @@ public class Evaluator {
      * Identify local variables with in the block statement
      * @param stmt the method body block. Any variable declared here will be a local.
      */
-    public void identifyLocals(Statement stmt) {
+    public NodeList<VariableDeclarator> identifyLocals(Statement stmt) {
         if (stmt.isExpressionStmt()) {
             Expression expr = stmt.asExpressionStmt().getExpression();
             if (expr.isVariableDeclarationExpr()) {
                 VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-                for(var variable : varDeclExpr.getVariables()) {
+                NodeList<VariableDeclarator> variables = varDeclExpr.getVariables();
+                boolean solved = false;
+                for(var variable : variables) {
                     String t = variable.getType().toString();
                     Local local = new Local(varDeclExpr.getElementType());
                     Object mock = mocks.get(t);
                     if(mock != null) {
                         local.isMocked = true;
                         local.result = mock;
+                        solved = true;
                     }
                     locals.put(variable.getNameAsString(), local);
                 }
+                if (!solved) {
+                    return variables;
+                }
             }
         }
+        return null;
     }
 
     public Local getLocal(String s) {
