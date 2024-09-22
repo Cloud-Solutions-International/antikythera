@@ -33,6 +33,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
@@ -58,17 +59,13 @@ import org.slf4j.LoggerFactory;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
+    public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
     private final File controllers;
 
     Set<String> testMethodNames;
     private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
-    private final Map<String, ?> typeDefsForPathVars = Map.of(
-            "Integer", 1,
-            "int", 1,
-            "Long", 1L,
-            "String", "Ibuprofen"
-    );
+
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
@@ -86,7 +83,7 @@ public class RestControllerParser extends ClassProcessor {
      */
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
     private Map<String, Type> fields;
-    Map<String, Type> variables;
+
 
     /**
      * Creates a new RestControllerParser
@@ -237,9 +234,9 @@ public class RestControllerParser extends ClassProcessor {
 
 
     /**
-     * Will be called for each method of the controller.
+     * Will be called for each field of the controller.
+     * Primary purpose is to identify services and repositories that are being used in the controller.
      *
-     * Identifies the return types and the arguments of each method in the class.
      */
     private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
 
@@ -303,6 +300,8 @@ public class RestControllerParser extends ClassProcessor {
      * Visitor that will detect methods in the controller.
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        Evaluator evaluator = new Evaluator();
+
         /**
          * Prepares the ground for the MethodBLockVisitor to do it's work.
          *
@@ -316,46 +315,20 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
+
                 buildContext(md);
-                if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
+
+                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
                     return;
                 }
-                if(md.getBody().isPresent()) {
-                    identifyLocals(md.getBody().get());
-                }
-
-                logger.info("Method: {}", md.getName());
-                Type returnType = null;
-                Type methodType = md.getType();
-                if (methodType.asString().contains("<")) {
-                    if (!methodType.asString().endsWith("<Void>")) {
-                        if (methodType.isClassOrInterfaceType()
-                                && methodType.asClassOrInterfaceType().getTypeArguments().isPresent()
-                                && !methodType.asClassOrInterfaceType().getTypeArguments().get().get(0).toString().equals("Object")
-                        ) {
-                            returnType = methodType.asClassOrInterfaceType().getTypeArguments().get().get(0);
-                        } else {
-                            BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
-
-                        }
-                    }
-                } else {
-                    returnType = methodType;
-                    if (returnType.toString().equals("ResponseEntity")) {
-                        BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
-
+                Optional<BlockStmt> body = md.getBody();
+                if(body.isPresent()) {
+                    logger.info("Method: {}", md.getName());
+                    for(Statement st : body.get().getStatements()) {
+                        evaluator.identifyLocals(st);
+                        returnStatementVisitor(st, md);
                     }
                 }
-
-                if (returnType != null) {
-                    solveTypeDependencies(returnType, cu);
-                }
-                for (var param : md.getParameters()) {
-                    parameterSet.put(param.getName().toString(), "");
-                    solveTypeDependencies(param.getType(), cu);
-                }
-
-                md.accept(new MethodBlockVisitor(), md);
             }
         }
 
@@ -367,72 +340,51 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
-        /**
-         * Identify local variables with in the block statement
-         * @param blockStmt the method body block. Any variable declared ehre will be a local.
-         */
-        private void identifyLocals(BlockStmt blockStmt) {
-            variables = new HashMap<>();
-            for (var stmt : blockStmt.getStatements()) {
-                if (stmt.isExpressionStmt()) {
-                    Expression expr = stmt.asExpressionStmt().getExpression();
-                    if (expr.isVariableDeclarationExpr()) {
-                        VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-                        variables.put(varDeclExpr.getVariable(0).getNameAsString(), varDeclExpr.getElementType());
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * A visitor that will iterate through the block of a method and identify the return statements.
-     */
-    private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
-        Evaluator evaluator = new Evaluator();
 
         /**
          * This method will be called once for each return statment inside the method block.
-         * @param stmt the return statement
+         * @param statement A statement that maybe a return statement.
          * @param md the method declaration that contains the return statement.
          */
-        @Override
-        public void visit(ReturnStmt stmt, MethodDeclaration md) {
-            super.visit(stmt, md);
-            Optional<Node> parent = stmt.getParentNode();
-            try {
-                if (parent.isPresent() && !evaluatorUnsupported) {
-                    // the return statement will have a parent no matter what but the optionals approach
-                    // requires the use of isPresent.
-                    if (parent.get() instanceof IfStmt) {
-                        IfStmt ifStmt = (IfStmt) parent.get();
-                        Expression condition = ifStmt.getCondition();
-                        if (context != null && evaluator.evaluateCondition(condition, context, variables)) {
-                            identifyReturnType(stmt, md);
-                            buildPreconditions(md, condition);
-                        }
-                    } else {
-                        BlockStmt blockStmt = (BlockStmt) parent.get();
-                        Optional<Node> gramps = blockStmt.getParentNode();
-                        if (gramps.isPresent()) {
-                            if (gramps.get() instanceof IfStmt) {
-                                // we have found ourselves a conditional return statement.
-                                IfStmt ifStmt = (IfStmt) gramps.get();
-                                Expression condition = ifStmt.getCondition();
-                                if (context != null && evaluator.evaluateCondition(condition, context, variables)) {
-                                    identifyReturnType(stmt, md);
-                                    buildPreconditions(md, condition);
-                                }
-                            } else if (gramps.get() instanceof MethodDeclaration) {
+
+        public void returnStatementVisitor(Statement statement, MethodDeclaration md) {
+            if(statement.isReturnStmt()) {
+                ReturnStmt stmt = statement.asReturnStmt();
+                Optional<Node> parent = stmt.getParentNode();
+                try {
+                    if (parent.isPresent() && !evaluatorUnsupported) {
+                        // the return statement will have a parent no matter what but the optionals approach
+                        // requires the use of isPresent.
+                        if (parent.get() instanceof IfStmt) {
+                            IfStmt ifStmt = (IfStmt) parent.get();
+                            Expression condition = ifStmt.getCondition();
+                            if (context != null && evaluator.evaluateCondition(condition, context)) {
                                 identifyReturnType(stmt, md);
+                                buildPreconditions(md, condition);
+                            }
+                        } else {
+                            BlockStmt blockStmt = (BlockStmt) parent.get();
+                            Optional<Node> gramps = blockStmt.getParentNode();
+                            if (gramps.isPresent()) {
+                                if (gramps.get() instanceof IfStmt) {
+                                    // we have found ourselves a conditional return statement.
+                                    IfStmt ifStmt = (IfStmt) gramps.get();
+                                    Expression condition = ifStmt.getCondition();
+                                    if (context != null && evaluator.evaluateCondition(condition, context)) {
+                                        identifyReturnType(stmt, md);
+                                        buildPreconditions(md, condition);
+                                    }
+                                } else if (gramps.get() instanceof MethodDeclaration) {
+                                    identifyReturnType(stmt, md);
+                                }
                             }
                         }
                     }
+                } catch (EvaluatorException e) {
+                    logger.error("Evaluator exception");
+                    logger.error("\t{}", e.getMessage());
+                    evaluatorUnsupported = true;
                 }
-            } catch (EvaluatorException e) {
-                logger.error("Evaluator exception");
-                logger.error("\t{}", e.getMessage());
-                evaluatorUnsupported = true;
             }
         }
 
@@ -497,7 +449,7 @@ public class RestControllerParser extends ClassProcessor {
                             }
                         }
                         if (typeArg.isNameExpr()) {
-                            response.setType(variables.get(typeArg.asNameExpr().getNameAsString()));
+                            response.setType(evaluator.getLocal(typeArg.asNameExpr().getNameAsString()).getType());
                         } else if (typeArg.isStringLiteralExpr()) {
                             response.setType(StaticJavaParser.parseType("java.lang.String"));
                             response.setResponse(typeArg.asStringLiteralExpr().asString());
@@ -529,6 +481,11 @@ public class RestControllerParser extends ClassProcessor {
             return null;
         }
 
+        /**
+         * Create tests based on the method declarion and return type
+         * @param md
+         * @param returnType
+         */
         private void createTests(MethodDeclaration md, ControllerResponse returnType) {
             for (AnnotationExpr annotation : md.getAnnotations()) {
                 if (annotation.getNameAsString().equals("GetMapping") ) {
@@ -836,7 +793,7 @@ public class RestControllerParser extends ClassProcessor {
 
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
-            if(!paramString.startsWith("@RequestBody")){
+            if(!paramString.startsWith(ANNOTATION_REQUEST_BODY)){
                 String paramName = getParamName(param);
                 switch(param.getTypeAsString()) {
                     case "Boolean":
@@ -930,7 +887,6 @@ public class RestControllerParser extends ClassProcessor {
         }
         return null;
     }
-
     /**
      * Given an annotation for a method in a controller find the full path in the url
      * @param annotation a GetMapping, PostMapping etc
@@ -949,7 +905,6 @@ public class RestControllerParser extends ClassProcessor {
         }
         return getCommonPath();
     }
-
     /**
      * Each method in the controller will be a child of the main path for that controller
      * which is represented by the RequestMapping for that controller
