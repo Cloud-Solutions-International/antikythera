@@ -241,7 +241,7 @@ public class RestControllerParser extends ClassProcessor {
     private static class VariableAssignmentVisitor extends GenericVisitorAdapter<RepositoryQuery, NodeList<VariableDeclarator>> {
 
         /**
-         * This method will be called for each metdhod call expression associated with a variable assignment.
+         * This method will be called for each method call expression associated with a variable assignment.
          * @param mce method call expression, the result of which will be used in the variable assignment by the caller
          * @param arg The list of variables that are being assigned.
          *            Most likely to contain a single node
@@ -253,10 +253,23 @@ public class RestControllerParser extends ClassProcessor {
                 String fieldName = mce.resolve().getClassName().toString();
                 RepositoryParser repository = respositories.get(fieldName);
                 if (repository != null) {
+                    /*
+                     * This method call expression is associated with a repository query.
+                     */
                     RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
                     try {
                         ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
                         q.setResultSet(rs);
+                        /*
+                         * We have one more challenge; to find what path/request variables are being used in the query.
+                         */
+                        MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
+                        for(int i = 0, j = mce.getArguments().size() ; i < j ; i++) {
+                            q.getParameterMap().put(
+                                    RepositoryParser.camelToSnake(repoMethod.getParameter(i).getName().toString()),
+                                    mce.getArguments().get(i).toString()
+                            );
+                        }
                     } catch (FileNotFoundException e) {
                         logger.warn("Could not execute query {}", mce);
                     }
@@ -296,6 +309,10 @@ public class RestControllerParser extends ClassProcessor {
                     try {
                         String className = t.resolve().describe();
                         if (className.startsWith(basePackage)) {
+                            /*
+                             * At the moment only compatible with repositories that are direct part of the
+                             * application under test. Repositories from external jar files are not supported.
+                             */
                             ClassProcessor proc = new ClassProcessor();
                             proc.compile(AbstractCompiler.classToPath(className));
                             CompilationUnit cu = proc.getCompilationUnit();
@@ -305,6 +322,11 @@ public class RestControllerParser extends ClassProcessor {
                                     if (cdecl.getNameAsString().equals(shortName)) {
                                         for (var ext : cdecl.getExtendedTypes()) {
                                             if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                                /*
+                                                 * We have found a repository. Now we need to process it. Afterwards
+                                                 * it will be added to the repositories map, to be identified by the
+                                                 * field name.
+                                                 */
                                                 RepositoryParser parser = new RepositoryParser();
                                                 parser.compile(AbstractCompiler.classToPath(className));
                                                 parser.process();
@@ -344,6 +366,7 @@ public class RestControllerParser extends ClassProcessor {
          * to identify the return type of the method and there after to generate the tests.
          */
         Evaluator evaluator = new Evaluator();
+        RepositoryQuery last = null;
 
         /**
          * Prepares the ground for the MethodBLockVisitor to do it's work.
@@ -367,7 +390,7 @@ public class RestControllerParser extends ClassProcessor {
                 Optional<BlockStmt> body = md.getBody();
                 if(body.isPresent()) {
                     logger.info("Method: {}", md.getName());
-                    RepositoryQuery last = null;
+                    last = null;
 
                     for(Statement st : body.get().getStatements()) {
                         NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
@@ -653,7 +676,22 @@ public class RestControllerParser extends ClassProcessor {
             else {
                 ControllerRequest request = new ControllerRequest();
                 request.setPath(getPath(annotation).replace("\"", ""));
+                if (last != null && last.getResultSet() != null) {
+                    ResultSet rs = last.getResultSet();
+                    Map<String,String> paramMap = last.getParameterMap();
+                    try {
+                        if(rs.next()) {
+                            for(var bada : last.getRemoved()) {
+                                String[] parts = bada.split("\\.");
+                                bada = parts.length == 1 ? bada : parts[1];
 
+                                System.out.println("--> REMOVED column " + bada + " : " + paramMap.get(bada));
+                            }
+                        }
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
                 handlePathVariables(md, request);
                 makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
                 if(!request.getQueryParameters().isEmpty()) {
