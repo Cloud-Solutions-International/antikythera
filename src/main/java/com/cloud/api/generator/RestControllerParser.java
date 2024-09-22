@@ -232,6 +232,12 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
+    private static class VariableAssignmentVisitor extends VoidVisitorAdapter<NodeList<VariableDeclarator>> {
+        @Override
+        public void visit(MethodCallExpr mce, NodeList<VariableDeclarator> arg) {
+            System.out.println("\t\t" + mce);
+        }
+    }
 
     /**
      * Will be called for each field of the controller.
@@ -325,7 +331,10 @@ public class RestControllerParser extends ClassProcessor {
                 if(body.isPresent()) {
                     logger.info("Method: {}", md.getName());
                     for(Statement st : body.get().getStatements()) {
-                        evaluator.identifyLocals(st);
+                        NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
+                        if (variables != null) {
+                            st.accept(new VariableAssignmentVisitor(), variables);
+                        }
                         returnStatementVisitor(st, md);
                     }
                 }
