@@ -1,5 +1,9 @@
 package com.cloud.api.generator;
 
+import net.sf.jsqlparser.expression.Expression;
+
+import java.util.List;
+
 /**
  * Represents a query from a JPARepository
  */
@@ -10,6 +14,11 @@ public class RepositoryQuery {
      */
     boolean isNative;
     String query;
+
+    /**
+     * The list of columns that were removed from the query where clause or grouping.
+     */
+    private List<Expression> removed;
 
     public RepositoryQuery(String query, boolean isNative) {
         this.isNative = isNative;
@@ -24,4 +33,7 @@ public class RepositoryQuery {
         return query;
     }
 
+    public void setRemoved(List<Expression> removed) {
+        this.removed = removed;
+    }
 }

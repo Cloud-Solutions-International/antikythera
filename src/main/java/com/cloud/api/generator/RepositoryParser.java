@@ -65,7 +65,7 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * The queries that were identified in this repository
      */
-    private Map<MethodDeclaration, RepositoryQuery> queries;
+    private Map<String, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -115,6 +115,15 @@ public class RepositoryParser extends ClassProcessor{
         }
     }
 
+    /**
+     * Create a connection to the database.
+     *
+     * The connection will be shared among all instances of this class. Even if the
+     * credentials are provide the connection is setup only if the runQueries
+     * setting is true.
+     *
+     * @throws SQLException
+     */
     private static void createConnection() throws SQLException {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null && conn == null && runQueries) {
@@ -154,6 +163,10 @@ public class RepositoryParser extends ClassProcessor{
     }
 
 
+    /**
+     * Process the CompilationUnit to identify the queries.
+     * @throws IOException
+     */
     public void process() throws IOException {
         cu.accept(new Visitor(), null);
 
@@ -169,25 +182,45 @@ public class RepositoryParser extends ClassProcessor{
         }
     }
 
-    public void executeAllQueries() throws IOException {
+    public void executeAllQueries() throws IOException, SQLException {
         for (var entry : queries.entrySet()) {
-            executeQuery(entry);
+            ResultSet rs = executeQuery(entry.getKey(), entry.getValue());
+            if (rs != null) {
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();
+
+                for (int i = 1; i <= columnCount; i++) {
+                    System.out.print(metaData.getColumnName(i) + "\t");
+                }
+                System.out.println();
+
+                int i = 0;
+                while (rs.next() && i < 10) {
+                    for (int j = 1; j <= columnCount; j++) {
+                        System.out.print(rs.getString(j) + "\t");
+                    }
+                    System.out.println();
+                    i++;
+                }
+                rs.close();
+            }
         }
     }
 
     /**
      * Execute the query given in entry.value
-     * @param entry a Map.Entry containing the method declaration and the query that it represents
+     * @param method the name of the method that represents the query in the JPARepository interface
+     * @param rql the actual query
      * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
      */
-    private void executeQuery(Map.Entry<MethodDeclaration, RepositoryQuery> entry) throws FileNotFoundException {
-        RepositoryQuery rql = entry.getValue();
+    public ResultSet executeQuery(String method, RepositoryQuery rql) throws FileNotFoundException {
         try {
             RepositoryParser.createConnection();
             String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
-            convertFieldsToSnakeCase(stmt, entityCu);
+            List<Expression> removed = convertFieldsToSnakeCase(stmt, entityCu);
 
+            rql.setRemoved(removed);
 
             String sql = stmt.toString().replaceAll("\\?\\d+", "?");
             if(dialect.equals(ORACLE)) {
@@ -206,8 +239,7 @@ public class RepositoryParser extends ClassProcessor{
                     break;
                 }
             }
-
-            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + sql);
+            logger.debug("{} : {}",method , sql);
 
             if(runQueries) {
                 PreparedStatement prep = conn.prepareStatement(sql);
@@ -218,31 +250,14 @@ public class RepositoryParser extends ClassProcessor{
 
                 if (prep.execute()) {
                     ResultSet rs = prep.getResultSet();
-
-                    ResultSetMetaData metaData = rs.getMetaData();
-                    int columnCount = metaData.getColumnCount();
-
-                    for (int i = 1; i <= columnCount; i++) {
-                        System.out.print(metaData.getColumnName(i) + "\t");
-                    }
-                    System.out.println();
-
-                    int i = 0;
-                    while (rs.next() && i < 10) {
-                        for (int j = 1; j <= columnCount; j++) {
-                            System.out.print(rs.getString(j) + "\t");
-                        }
-                        System.out.println();
-                        i++;
-                    }
+                    return rs;
                 }
             }
 
-        } catch (JSQLParserException e) {
+        } catch (JSQLParserException | SQLException e) {
             logger.error("\tUnparsable: {}", rql.getQuery());
-        } catch (SQLException e) {
-            logger.error("\tSQL Error: {}", e.getMessage());
         }
+        return null;
     }
 
     /**
@@ -293,11 +308,13 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * Java field names need to be converted to snake case to match the table column.
      *
-     * @param stmt the sql statement
+     * @param stmt   the sql statement
      * @param entity a compilation unit representing the entity.
+     * @return
      * @throws FileNotFoundException
      */
-    private void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
+    private List<Expression> convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
+        List<Expression> removed = new ArrayList<>();
         if(stmt instanceof  Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
 
@@ -328,8 +345,6 @@ public class RepositoryParser extends ClassProcessor{
                 }
             }
 
-            List<Expression> removed = new ArrayList<>();
-
             if (select.getWhere() != null) {
                 select.setWhere(convertExpressionToSnakeCase(select.getWhere(), removed, true));
             }
@@ -352,9 +367,10 @@ public class RepositoryParser extends ClassProcessor{
             if (select.getHaving() != null) {
                 select.setHaving(convertExpressionToSnakeCase(select.getHaving(), removed, false));
             }
-
-            processJoins(entity, select);
+            removed.addAll(processJoins(entity, select));
         }
+
+        return removed;
     }
 
     /**
@@ -365,7 +381,8 @@ public class RepositoryParser extends ClassProcessor{
      * @param select the select statement
      * @throws FileNotFoundException if we are unable to find related entities.
      */
-    private void processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
+    private List<Expression> processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
+        List<Expression> removed = new ArrayList<>();
         List<CompilationUnit> units = new ArrayList<>();
         units.add(entity);
 
@@ -374,7 +391,7 @@ public class RepositoryParser extends ClassProcessor{
             for (int i = 0 ; i < joins.size() ; i++) {
                 Join j = joins.get(i);
                 if (j.getRightItem() instanceof ParenthesedSelect) {
-                    convertFieldsToSnakeCase(((ParenthesedSelect) j.getRightItem()).getSelectBody(), entity);
+                    removed = convertFieldsToSnakeCase(((ParenthesedSelect) j.getRightItem()).getSelectBody(), entity);
                 } else {
                     FromItem a = j.getRightItem();
                     // the toString() of this will look something like p.dischargeNurseRequest n
@@ -461,6 +478,7 @@ public class RepositoryParser extends ClassProcessor{
                 }
             }
         }
+        return removed;
     }
 
     /**
@@ -630,7 +648,7 @@ public class RepositoryParser extends ClassProcessor{
             }
 
             if(query != null) {
-                queries.put(n, new RepositoryQuery(cleanUp(query), nt));
+                queries.put(n.getNameAsString(), new RepositoryQuery(cleanUp(query), nt));
             }
             else {
                 List<String> components = extractComponents(methodName);
@@ -694,7 +712,7 @@ public class RepositoryParser extends ClassProcessor{
                         sql.append(" LIMIT 1");
                     }
                 }
-                queries.put(n, new RepositoryQuery(sql.toString(), true));
+                queries.put(n.getNameAsString(), new RepositoryQuery(sql.toString(), true));
             }
         }
 
@@ -763,5 +781,8 @@ public class RepositoryParser extends ClassProcessor{
         return sql;
     }
 
+    public Map<String, RepositoryQuery> getQueries() {
+        return queries;
+    }
 }
 
