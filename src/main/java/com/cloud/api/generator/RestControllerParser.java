@@ -235,6 +235,19 @@ public class RestControllerParser extends ClassProcessor {
     private static class VariableAssignmentVisitor extends VoidVisitorAdapter<NodeList<VariableDeclarator>> {
         @Override
         public void visit(MethodCallExpr mce, NodeList<VariableDeclarator> arg) {
+
+            String fieldName = mce.resolve().getClassName().toString();
+            RepositoryParser repository = respositories.get(fieldName);
+            if(repository != null) {
+                RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
+                try {
+                    repository.executeQuery(mce.getNameAsString(), q);
+                } catch (FileNotFoundException e) {
+                    logger.warn("Could not execute query {}", mce);
+                }
+                System.out.println("found a repo");
+            }
+
             System.out.println("\t\t" + mce);
         }
     }
@@ -277,7 +290,7 @@ public class RestControllerParser extends ClassProcessor {
                                             if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                                                 RepositoryParser parser = new RepositoryParser();
                                                 parser.compile(AbstractCompiler.classToPath(className));
-
+                                                parser.process();
                                                 respositories.put(shortName, parser);
                                                 break;
                                             }
