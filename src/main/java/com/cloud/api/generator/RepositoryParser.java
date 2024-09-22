@@ -218,7 +218,7 @@ public class RepositoryParser extends ClassProcessor{
             RepositoryParser.createConnection();
             String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
-            List<Expression> removed = convertFieldsToSnakeCase(stmt, entityCu);
+            List<String> removed = convertFieldsToSnakeCase(stmt, entityCu);
 
             rql.setRemoved(removed);
 
@@ -313,8 +313,8 @@ public class RepositoryParser extends ClassProcessor{
      * @return
      * @throws FileNotFoundException
      */
-    private List<Expression> convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
-        List<Expression> removed = new ArrayList<>();
+    private List<String> convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
+        List<String> removed = new ArrayList<>();
         if(stmt instanceof  Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
 
@@ -381,8 +381,8 @@ public class RepositoryParser extends ClassProcessor{
      * @param select the select statement
      * @throws FileNotFoundException if we are unable to find related entities.
      */
-    private List<Expression> processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
-        List<Expression> removed = new ArrayList<>();
+    private List<String> processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
+        List<String> removed = new ArrayList<>();
         List<CompilationUnit> units = new ArrayList<>();
         units.add(entity);
 
@@ -488,7 +488,7 @@ public class RepositoryParser extends ClassProcessor{
      * @param expr
      * @return the converted expression
      */
-    private Expression convertExpressionToSnakeCase(Expression expr, List<Expression> removed, boolean where) {
+    private Expression convertExpressionToSnakeCase(Expression expr, List<String> removed, boolean where) {
         if (expr instanceof AndExpression) {
             AndExpression andExpr = (AndExpression) expr;
             andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), removed, where));
@@ -499,7 +499,7 @@ public class RepositoryParser extends ClassProcessor{
             Column col = (Column) ine.getLeftExpression();
             if(where &&
                     !("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
-                removed.add(ine.getLeftExpression());
+                removed.add(camelToSnake(ine.getLeftExpression().toString()));
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
 
@@ -556,7 +556,7 @@ public class RepositoryParser extends ClassProcessor{
                 Column col = (Column) left;
                 if(where) {
                     if (!(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
-                        removed.add(left);
+                        removed.add(camelToSnake(left.toString()));
 
                         compare.setLeftExpression(new StringValue("1"));
                         compare.setRightExpression(new StringValue("1"));
@@ -784,5 +784,6 @@ public class RepositoryParser extends ClassProcessor{
     public Map<String, RepositoryQuery> getQueries() {
         return queries;
     }
+
 }
 
