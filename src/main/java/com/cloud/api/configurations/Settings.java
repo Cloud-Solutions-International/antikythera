@@ -2,6 +2,7 @@ package com.cloud.api.configurations;
 
 import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,8 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,6 +37,10 @@ public class Settings {
      */
     private Settings() {}
 
+    /**
+     * Load the configuration from a file.
+     * @throws IOException
+     */
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
@@ -106,12 +113,7 @@ public class Settings {
             String key = entry.getKey();
             Object value = entry.getValue();
             if (value != null && !key.equals("variables")) {
-                if (value instanceof String) {
-                    String v = (String) value;
-                    v = v.replace("${USERDIR}", userDir);
-                    v = replaceYamlVariables(v);
-                    target.put(key, replaceEnvVariables(v));
-                } else if (value instanceof Map) {
+                if (value instanceof Map) {
                     Map<String, Object> nestedMap = new HashMap<>();
                     replaceVariables((Map<String, Object>) value, nestedMap);
                     target.put(key, nestedMap);
@@ -123,6 +125,15 @@ public class Settings {
                         result.add(s);
                     }
                     target.put(key, result);
+                }
+                else if (value instanceof String) {
+                    String v = (String) value;
+                    v = v.replace("${USERDIR}", userDir);
+                    v = replaceYamlVariables(v);
+                    target.put(key, replaceEnvVariables(v));
+                }
+                else {
+                    target.put(key, value);
                 }
             }
         }
@@ -169,7 +180,19 @@ public class Settings {
     }
 
     public static Object getProperty(String key) {
-        return props.get(key);
+
+        Object property = props.get(key);
+        if(property != null) {
+            return property;
+        }
+        String[] parts = key.split("\\.");
+        if(parts.length > 1) {
+            Map<String, Object> map = (Map<String, Object>) props.get(parts[0]);
+            if(map != null) {
+                return map.get(parts[1]);
+            }
+        }
+        return null;
     }
 
     public static String[] getArtifacts() {
