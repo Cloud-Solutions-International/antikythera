@@ -26,13 +26,9 @@ import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+
 
 import java.util.Map;
 import java.util.Optional;
@@ -41,11 +37,10 @@ import java.util.Optional;
  * Recursively copy DTOs from the Application Under Test (AUT).
  *
  */
-public class DTOHandler extends  ClassProcessor{
+public class DTOHandler extends  ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
 
-    private CompilationUnit cu;
 
     MethodDeclaration method = null;
 
@@ -56,20 +51,15 @@ public class DTOHandler extends  ClassProcessor{
        super();
     }
 
-    public void setCompilationUnit(CompilationUnit cu) {
-        this.cu = cu;
-    }
-
     /**
      * Copy the DTO from the AUT.
      * @param relativePath a path name relative to the base path of the application.
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-        if (parseDTO(relativePath)) return;
+        parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-        resolved.add(cu.toString());
 
         for(String dependency : dependencies) {
             copyDependencies(dependency);
@@ -77,43 +67,8 @@ public class DTOHandler extends  ClassProcessor{
         dependencies.clear();
     }
 
-    public boolean parseDTO(String relativePath) throws FileNotFoundException {
-        logger.info("\t{}", relativePath);
-        Path sourcePath = Paths.get(basePath, relativePath);
-
-        // Check if the file exists
-        File file = sourcePath.toFile();
-        if (!file.exists()) {
-            // The file may not exist if the DTO is an inner class in a controller
-            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
-            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
-            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
-            sourcePath = Paths.get(basePath, controllerPath);
-        }
-
-        // Check again for the controller file
-        file = sourcePath.toFile();
-        if (!file.exists()) {
-            logger.error("Controller file not found: {}", sourcePath);
-            throw new FileNotFoundException(sourcePath.toString());
-        }
-
-        // Proceed with parsing the controller file
-        FileInputStream in = new FileInputStream(file);
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-        // Search for any inner class that ends with "Dto"
-        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
-
-        if (hasInnerDTO) {
-            logger.info("Found inner DTO class in controller: {}", relativePath);
-        }
-
-        if (resolved.contains(cu.toString())) {
-            return true;
-        }
-
+    public void parseDTO(String relativePath) throws FileNotFoundException {
+        compile(relativePath);
         expandWildCards(cu);
         solveTypes();
         createFactory();
@@ -127,12 +82,10 @@ public class DTOHandler extends  ClassProcessor{
             var variable = classToInstanceName(cu.getTypes().get(0));
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
-
-        return false;
     }
 
     /**
-     * Create a factory method for the DTO being processsed.
+     * Create a factory method for the DTO being processed.
      * Does not return anything but the 'method' field will have a non null value.
      * the visitor can add a setter for each field that it encounters.
      */
@@ -178,7 +131,6 @@ public class DTOHandler extends  ClassProcessor{
             }
         });
     }
-
 
     /**
      * Iterates through all the classes in the file and processes them.
@@ -266,9 +218,21 @@ public class DTOHandler extends  ClassProcessor{
                     || fieldAsString.equals("Sort.Direction")) {
                 return null;
             }
+
+
+            // Filter annotations to retain only @JsonFormat and @JsonIgnore
+            NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
+            for (AnnotationExpr annotation : field.getAnnotations()) {
+                String annotationName = annotation.getNameAsString();
+                if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+                    filteredAnnotations.add(annotation);
+                }
+            }
             field.getAnnotations().clear();
+            field.setAnnotations(filteredAnnotations);
+
             extractEnums(field);
-            extractComplexType(field.getElementType(), cu);
+            solveTypeDependencies(field.getElementType(), cu);
 
             // handle custom getters and setters
             String fieldName = field.getVariables().get(0).getNameAsString();
@@ -357,19 +321,38 @@ public class DTOHandler extends  ClassProcessor{
                 }
             }
             else {
-                generateRandomValue(field);
+                if(method != null) {
+                    MethodCallExpr setter = generateRandomValue(field, cu);
+                    if (setter != null) {
+                        method.getBody().get().addStatement(setter);
+                    }
+                }
             }
         }
 
-        /**
-         * Generate random values for use in the factory method for a DTO
-         * @param field
-         */
-        void generateRandomValue(FieldDeclaration field) {
-            TypeDeclaration<?> cdecl = cu.getTypes().get(0);
+        @Override
+        public Visitable visit(MethodDeclaration method, Void args) {
+            super.visit(method, args);
+            method.getAnnotations().clear();
+            solveTypeDependencies(method.getType(), cu);
+            return method;
+        }
+    }
 
-            if(!field.isStatic() && method != null) {
-                String instance = classToInstanceName(cdecl);
+    static String capitalize(String s) {
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    /**
+     * Generate random values for use in the factory method for a DTO
+     * @param field
+     */
+    public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
+
+        TypeDeclaration<?> cdecl = cu.getTypes().get(0);
+
+        if(!field.isStatic()) {
+            String instance = classToInstanceName(cdecl);
 
                 String fieldName = field.getVariables().get(0).getNameAsString();
                 MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
@@ -380,125 +363,111 @@ public class DTOHandler extends  ClassProcessor{
                     type = field.getVariables().get(0).getType().asArrayType().getComponentType().asString() + "[]";
                 }
 
-                switch (type) {
-                    case "boolean":
-                        if(fieldName.startsWith("is")) {
-                            setter = new MethodCallExpr(new NameExpr(instance), "set" +
-                                    capitalize(fieldName.replaceFirst("is","")));
-                        }
-                    case "Boolean":
-                        setter.addArgument("true");
-                        break;
+            switch (type) {
+                case "boolean":
+                    if(fieldName.startsWith("is")) {
+                        setter = new MethodCallExpr(new NameExpr(instance), "set" +
+                                capitalize(fieldName.replaceFirst("is","")));
+                    }
+                case "Boolean":
+                    setter.addArgument("true");
+                    break;
 
-                    case "Character":
-                        setter.addArgument("'A'");
-                        break;
+                case "Character":
+                    setter.addArgument("'A'");
+                    break;
 
-                    case "Date":
-                        if(field.getElementType().toString().contains(".")) {
-                            setter.addArgument("new java.util.Date()");
-                        } else {
-                            setter.addArgument("new Date()");
-                        }
-                        break;
+                case "Date":
+                    if(field.getElementType().toString().contains(".")) {
+                        setter.addArgument("new java.util.Date()");
+                    } else {
+                        setter.addArgument("new Date()");
+                    }
+                    break;
 
-                    case "Double":
-                    case "double":
-                        setter.addArgument("0.0");
-                        break;
+                case "Double":
+                case "double":
+                    setter.addArgument("0.0");
+                    break;
 
-                    case "Float":
-                    case "float":
-                        setter.addArgument("0.0f");
-                        break;
+                case "Float":
+                case "float":
+                    setter.addArgument("0.0f");
+                    break;
 
-                    case "Integer":
-                    case "int":
-                        setter.addArgument("0");
-                        break;
+                case "Integer":
+                case "int":
+                    setter.addArgument("0");
+                    break;
 
-                    case "Byte":
-                        setter.addArgument("(byte) 0");
-                        break;
+                case "Byte":
+                    setter.addArgument("(byte) 0");
+                    break;
 
-                    case "List":
-                        setter.addArgument("List.of()");
-                        break;
+                case "List":
+                    setter.addArgument("List.of()");
+                    break;
 
-                    case "long":
-                    case "Long":
-                        setter.addArgument("0L");
-                        break;
+                case "long":
+                case "Long":
+                    setter.addArgument("0L");
+                    break;
 
-                    case "String":
-                        setter.addArgument("\"Hello world\"");
-                        break;
+                case "String":
+                    setter.addArgument("\"Hello world\"");
+                    break;
 
-                    case "String[]":
-                        setter.addArgument("new String[] {\"Hello\", \"world\"}");
-                        break;
+                case "String[]":
+                    setter.addArgument("new String[] {\"Hello\", \"world\"}");
+                    break;
 
-                    case "Map":
-                        setter.addArgument("Map.of()");
-                        break;
+                case "Map":
+                    setter.addArgument("Map.of()");
+                    break;
 
-                    case "Set":
-                        setter.addArgument("Set.of()");
-                        break;
+                case "Set":
+                    setter.addArgument("Set.of()");
+                    break;
 
-                    case "UUID":
-                        setter.addArgument("UUID.randomUUID()");
-                        break;
+                case "UUID":
+                    setter.addArgument("UUID.randomUUID()");
+                    break;
 
-                    case "LocalDate":
-                        setter.addArgument("LocalDate.now()");
-                        break;
+                case "LocalDate":
+                    setter.addArgument("LocalDate.now()");
+                    break;
 
-                    case "LocalDateTime":
-                        setter.addArgument("LocalDateTime.now()");
-                        break;
+                case "LocalDateTime":
+                    setter.addArgument("LocalDateTime.now()");
+                    break;
 
-                    case "Short":
-                        setter.addArgument("(short) 0");
-                        break;
+                case "Short":
+                    setter.addArgument("(short) 0");
+                    break;
 
-                    case "byte":
-                        setter.addArgument("new byte[] {0}");
-                        break;
+                case "byte":
+                    setter.addArgument("new byte[] {0}");
+                    break;
 
-                    case "T":
-                        setter.addArgument("null");
-                        break;
+                case "T":
+                    setter.addArgument("null");
+                    break;
 
-                    case "BigDecimal":
-                        setter.addArgument("BigDecimal.ZERO");
-                        break;
+                case "BigDecimal":
+                    setter.addArgument("BigDecimal.ZERO");
+                    break;
 
-                    default:
-                        if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
-                            setter.addArgument("new " + type + "()");
-                        } else {
-                            setter = null;
-                        }
-                }
-
-                if(setter != null) {
-                    method.getBody().get().addStatement(setter);
-                }
+                default:
+                    if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
+                        setter.addArgument("new " + type + "()");
+                    } else {
+                        setter = null;
+                    }
             }
-        }
 
-        String capitalize(String s) {
-            return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+            return setter;
         }
-
-        @Override
-        public Visitable visit(MethodDeclaration method, Void args) {
-            super.visit(method, args);
-            method.getAnnotations().clear();
-            extractComplexType(method.getType(), cu);
-            return method;
-        }
+        return null;
     }
 
     public static void main(String[] args) throws IOException{
@@ -514,7 +483,4 @@ public class DTOHandler extends  ClassProcessor{
         }
     }
 
-    public CompilationUnit getCompilationUnit() {
-        return cu;
-    }
 }
