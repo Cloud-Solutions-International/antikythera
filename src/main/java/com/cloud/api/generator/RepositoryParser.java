@@ -234,9 +234,7 @@ public class RepositoryParser extends ClassProcessor{
             String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
 
-            List<String> removed = convertFieldsToSnakeCase(stmt, entityCu);
-
-            rql.setRemoved(removed);
+            convertFieldsToSnakeCase(stmt, entityCu);
 
             String sql = stmt.toString().replaceAll("\\?\\d+", "?");
             if(dialect.equals(ORACLE)) {
@@ -329,8 +327,8 @@ public class RepositoryParser extends ClassProcessor{
      * @return
      * @throws FileNotFoundException
      */
-    private List<String> convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
-        List<String> removed = new ArrayList<>();
+    private void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
+
         if(stmt instanceof  Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
 
@@ -362,31 +360,30 @@ public class RepositoryParser extends ClassProcessor{
             }
 
             if (select.getWhere() != null) {
-                select.setWhere(convertExpressionToSnakeCase(select.getWhere(), removed, true));
+                select.setWhere(convertExpressionToSnakeCase(select.getWhere(), true));
             }
 
             if (select.getGroupBy() != null) {
                 GroupByElement group = select.getGroupBy();
                 List<Expression> groupBy = group.getGroupByExpressions();
                 for (int i = 0; i < groupBy.size(); i++) {
-                    groupBy.set(i, convertExpressionToSnakeCase(groupBy.get(i), removed, false));
+                    groupBy.set(i, convertExpressionToSnakeCase(groupBy.get(i), false));
                 }
             }
 
             if (select.getOrderByElements() != null) {
                 List<OrderByElement> orderBy = select.getOrderByElements();
                 for (int i = 0; i < orderBy.size(); i++) {
-                    orderBy.get(i).setExpression(convertExpressionToSnakeCase(orderBy.get(i).getExpression(), removed, false));
+                    orderBy.get(i).setExpression(convertExpressionToSnakeCase(orderBy.get(i).getExpression(), false));
                 }
             }
 
             if (select.getHaving() != null) {
-                select.setHaving(convertExpressionToSnakeCase(select.getHaving(), removed, false));
+                select.setHaving(convertExpressionToSnakeCase(select.getHaving(), false));
             }
-            removed.addAll(processJoins(entity, select));
+            processJoins(entity, select);
         }
 
-        return removed;
     }
 
     /**
@@ -397,8 +394,7 @@ public class RepositoryParser extends ClassProcessor{
      * @param select the select statement
      * @throws FileNotFoundException if we are unable to find related entities.
      */
-    private List<String> processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
-        List<String> removed = new ArrayList<>();
+    private void processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
         List<CompilationUnit> units = new ArrayList<>();
         units.add(entity);
 
@@ -407,7 +403,7 @@ public class RepositoryParser extends ClassProcessor{
             for (int i = 0 ; i < joins.size() ; i++) {
                 Join j = joins.get(i);
                 if (j.getRightItem() instanceof ParenthesedSelect) {
-                    removed = convertFieldsToSnakeCase(((ParenthesedSelect) j.getRightItem()).getSelectBody(), entity);
+                    convertFieldsToSnakeCase(((ParenthesedSelect) j.getRightItem()).getSelectBody(), entity);
                 } else {
                     FromItem a = j.getRightItem();
                     // the toString() of this will look something like p.dischargeNurseRequest n
@@ -494,7 +490,6 @@ public class RepositoryParser extends ClassProcessor{
                 }
             }
         }
-        return removed;
     }
 
     /**
@@ -509,21 +504,21 @@ public class RepositoryParser extends ClassProcessor{
      * @param expr to be converted
      * @return the converted expression
      */
-    private Expression convertExpressionToSnakeCase(Expression expr, List<String> removed, boolean where) {
+    private Expression convertExpressionToSnakeCase(Expression expr, boolean where) {
         if (expr instanceof AndExpression) {
             AndExpression andExpr = (AndExpression) expr;
-            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), removed, where));
-            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), removed, where));
+            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), where));
+            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), where));
         }
         else if (expr instanceof Between) {
             Between between = (Between) expr;
-            between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression(), removed, where));
+            between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression(), where));
             Expression start = between.getBetweenExpressionStart();
             Expression end = between.getBetweenExpressionEnd();
 
             mapPlaceHolders(start, between.getLeftExpression().toString());
             mapPlaceHolders(end, between.getLeftExpression().toString());
-            removed.add(camelToSnake(between.getLeftExpression().toString()));
+            current.remove(camelToSnake(between.getLeftExpression().toString()));
             between.setBetweenExpressionStart(new LongValue("2"));
             between.setBetweenExpressionEnd(new LongValue("4"));
             between.setLeftExpression(new LongValue("3"));
@@ -533,7 +528,7 @@ public class RepositoryParser extends ClassProcessor{
             Column col = (Column) ine.getLeftExpression();
             if(where &&
                     !("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
-                removed.add(camelToSnake(ine.getLeftExpression().toString()));
+                current.remove(camelToSnake(ine.getLeftExpression().toString()));
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
 
@@ -541,38 +536,38 @@ public class RepositoryParser extends ClassProcessor{
                 ine.setRightExpression(rightExpression);
             }
             else {
-                ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression(), removed, where));
+                ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression(), where));
             }
         }
         else if (expr instanceof IsNullExpression) {
             IsNullExpression isNull = (IsNullExpression) expr;
-            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression(), removed, where));
+            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression(), where));
         }
         else if (expr instanceof ParenthesedExpressionList) {
             ParenthesedExpressionList pel = (ParenthesedExpressionList) expr;
             for(int i = 0 ; i < pel.size() ; i++) {
-                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i), removed, where));
+                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i), where));
             }
         }
         else if (expr instanceof CaseExpression) {
             CaseExpression ce = (CaseExpression) expr;
             for(int i = 0; i < ce.getWhenClauses().size(); i++) {
                 WhenClause when = ce.getWhenClauses().get(i);
-                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression(), removed, where));
-                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression(), removed, where));
+                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression(), where));
+                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression(), where));
             }
 
         }
         else if (expr instanceof WhenClause) {
             WhenClause wh = (WhenClause) expr;
-            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression(), removed, where));
+            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression(), where));
         }
         else if (expr instanceof Function) {
             Function function = (Function) expr;
             ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
             if(params != null) {
                 for (int i = 0; i < params.size(); i++) {
-                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i), removed, where));
+                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i), where));
                 }
             }
         }
@@ -591,12 +586,12 @@ public class RepositoryParser extends ClassProcessor{
 
                 if(col.getColumnName().equals("hospitalId")) {
                     compare.setRightExpression(new LongValue("59"));
-                    compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
                     return expr;
                 }
                 else if(col.getColumnName().equals("hospitalGroupId")) {
                     compare.setRightExpression(new LongValue("58"));
-                    compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
                     return expr;
                 }
                 else if (where){
@@ -604,7 +599,7 @@ public class RepositoryParser extends ClassProcessor{
                     // our object is to run a query to identify likely data. So removing as many
                     // components from the where clause is the way to go
 
-                    removed.add(name);
+                    current.remove(name);
                     compare.setLeftExpression(new StringValue("1"));
                     compare.setRightExpression(new StringValue("1"));
                     return expr;
@@ -612,14 +607,14 @@ public class RepositoryParser extends ClassProcessor{
             }
 
             // common fall through for everything
-            compare.setRightExpression(convertExpressionToSnakeCase(right, removed, where));
-            compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+            compare.setRightExpression(convertExpressionToSnakeCase(right, where));
+            compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
 
         }
         else if (expr instanceof BinaryExpression) {
             BinaryExpression binaryExpr = (BinaryExpression) expr;
-            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression(), removed, where));
-            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression(), removed, where));
+            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression(), where));
+            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression(), where));
         } else if (expr instanceof Column) {
             Column column = (Column) expr;
             String columnName = column.getColumnName();
