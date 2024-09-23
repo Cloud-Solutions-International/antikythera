@@ -10,6 +10,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
@@ -505,7 +506,7 @@ public class RepositoryParser extends ClassProcessor{
      * will get any results from query execution. Then the thing to do is to remove the
      * conditions.
      *
-     * @param expr
+     * @param expr to be converted
      * @return the converted expression
      */
     private Expression convertExpressionToSnakeCase(Expression expr, List<String> removed, boolean where) {
@@ -513,6 +514,19 @@ public class RepositoryParser extends ClassProcessor{
             AndExpression andExpr = (AndExpression) expr;
             andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), removed, where));
             andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), removed, where));
+        }
+        else if (expr instanceof Between) {
+            Between between = (Between) expr;
+            between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression(), removed, where));
+            Expression start = between.getBetweenExpressionStart();
+            Expression end = between.getBetweenExpressionEnd();
+
+            mapPlaceHolders(start, between.getLeftExpression().toString());
+            mapPlaceHolders(end, between.getLeftExpression().toString());
+            removed.add(camelToSnake(between.getLeftExpression().toString()));
+            between.setBetweenExpressionStart(new LongValue("2"));
+            between.setBetweenExpressionEnd(new LongValue("4"));
+            between.setLeftExpression(new LongValue("3"));
         }
         else if (expr instanceof  InExpression) {
             InExpression ine = (InExpression) expr;
@@ -572,11 +586,9 @@ public class RepositoryParser extends ClassProcessor{
             if(left instanceof Column && right instanceof JdbcParameter || right instanceof JdbcNamedParameter) {
                 Column col = (Column) left;
                 String name = camelToSnake(left.toString());
-                String placeHolder = right instanceof JdbcParameter
-                        ? ((JdbcParameter) right).getIndex().toString()
-                        : ((JdbcNamedParameter) right).getName() ;
 
-                current.getPlaceHolders().put(name, placeHolder);
+                mapPlaceHolders(right, name);
+
                 if(col.getColumnName().equals("hospitalId")) {
                     compare.setRightExpression(new LongValue("59"));
                     compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
@@ -617,6 +629,17 @@ public class RepositoryParser extends ClassProcessor{
             return column;
         }
         return expr;
+    }
+
+    private void mapPlaceHolders(Expression right, String name) {
+        String placeHolder = right instanceof JdbcParameter
+                ? ((JdbcParameter) right).getIndex().toString()
+                : ((JdbcNamedParameter) right).getName() ;
+
+        Map<String, List<String>> places = current.getPlaceHolders();
+        List<String> existing = places.getOrDefault(name, new ArrayList<>());
+        existing.add(placeHolder);
+        places.put(name, existing);
     }
 
     /**

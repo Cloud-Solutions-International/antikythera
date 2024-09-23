@@ -30,7 +30,7 @@ public class RepositoryQuery {
      */
     private List<String> removed;
 
-    private Map<String, String> placeHolders;
+    private Map<String, List<String>> placeHolders;
     /**
      * Represents the mapping of the request or path parameters to the query parameters.
      *
@@ -74,7 +74,7 @@ public class RepositoryQuery {
         return parameterMap;
     }
 
-    public Map<String, String> getPlaceHolders() {
+    public Map<String, List<String>> getPlaceHolders() {
         return placeHolders;
     }
 }
