@@ -603,7 +603,7 @@ public class RestControllerParser extends ClassProcessor {
             makeGetCall.addArgument(new NameExpr("headers"));
 
             if(md.getParameters().isEmpty()) {
-                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
+                makeGetCall.addArgument(new StringLiteralExpr(getPath(annotation).replace("\"", "")));
             }
             else {
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
@@ -892,17 +892,20 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path url component
      */
     private String getPath(AnnotationExpr annotation) {
+        String commonPath = getCommonPath();
         if (annotation.isSingleMemberAnnotationExpr()) {
-            return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
+            String memberValue = annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
+            return memberValue.startsWith("\"/") ? commonPath + memberValue : commonPath + "/" + memberValue;
         } else if (annotation.isNormalAnnotationExpr()) {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
                 if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
-                    return getCommonPath() + pair.getValue().toString();
+                    String pairValue = pair.getValue().toString();
+                    return commonPath + pairValue;
                 }
             }
         }
-        return getCommonPath();
+        return commonPath;
     }
 
     /**
