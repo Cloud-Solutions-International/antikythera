@@ -32,6 +32,7 @@ import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
 
+import net.sf.jsqlparser.util.deparser.StatementDeParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,6 +98,7 @@ public class RepositoryParser extends ClassProcessor{
      * The java parser type associated with the entity.
      */
     private Type entityType;
+    private RepositoryQuery current;
 
     public RepositoryParser() throws IOException {
         super();
@@ -137,14 +139,16 @@ public class RepositoryParser extends ClassProcessor{
     }
 
     public static void main(String[] args) throws IOException, SQLException {
-        Settings.loadConfigMap();
-        RepositoryParser parser = new RepositoryParser();
-        parser.compile(
-                AbstractCompiler.classToPath(
-                        "com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java")
-        );
-        parser.process();
-        parser.executeAllQueries();
+        if(args.length != 1) {
+            logger.error("Please specifiy the path to a repository class");
+        }
+        else {
+            Settings.loadConfigMap();
+            RepositoryParser parser = new RepositoryParser();
+            parser.compile(AbstractCompiler.classToPath(args[0]));
+            parser.process();
+            parser.executeAllQueries();
+        }
     }
 
     /**
@@ -178,10 +182,17 @@ public class RepositoryParser extends ClassProcessor{
                 entityType = t.get().get(0);
                 entityCu = findEntity(entityType);
                 table = findTableName(entityCu);
+
             }
         }
     }
 
+    /**
+     * Execute all the queries that were identified.
+     * This is usuefull only for visualization purposes.
+     * @throws IOException
+     * @throws SQLException
+     */
     public void executeAllQueries() throws IOException, SQLException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey(), entry.getValue());
@@ -212,12 +223,16 @@ public class RepositoryParser extends ClassProcessor{
      * @param method the name of the method that represents the query in the JPARepository interface
      * @param rql the actual query
      * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
+     * @return the result set if the query was executed successfully
      */
     public ResultSet executeQuery(String method, RepositoryQuery rql) throws FileNotFoundException {
         try {
+            current = rql;
+
             RepositoryParser.createConnection();
             String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
+
             List<String> removed = convertFieldsToSnakeCase(stmt, entityCu);
 
             rql.setRemoved(removed);
@@ -484,7 +499,12 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * Recursively convert field names in expressions to snake case
      *
-     * We violate SRP by also cleaning up some of the fields in the where clause
+     * We violate SRP by also cleaning up some of the fields in the where clause. What we
+     * hope to achieve through repository query parsing is to identify suitable data for
+     * our test cases. That means the more filters that we apply the less likely that we
+     * will get any results from query execution. Then the thing to do is to remove the
+     * conditions.
+     *
      * @param expr
      * @return the converted expression
      */
@@ -543,29 +563,20 @@ public class RepositoryParser extends ClassProcessor{
             }
         }
         else if (expr instanceof ComparisonOperator) {
-            // Most where clause and having clause stuff have their leaves here.
+            // this will be the leaf for Most WHERE clauses and HAVING clauses
             ComparisonOperator compare = (ComparisonOperator) expr;
 
             Expression left = compare.getLeftExpression();
             Expression right = compare.getRightExpression();
 
             if(left instanceof Column && right instanceof JdbcParameter || right instanceof JdbcNamedParameter) {
-                // we have a comparison so this is vary likely to be a part of the where clause.
-                // our object is to run a query to identify likely data. So removing as many
-                // components from the where clause is the way to go
                 Column col = (Column) left;
-                if(where) {
-                    if (!(col.getColumnName().equals("hospitalId") || col.getColumnName().equals("hospitalGroupId"))) {
-                        removed.add(camelToSnake(left.toString()));
+                String name = camelToSnake(left.toString());
+                String placeHolder = right instanceof JdbcParameter
+                        ? ((JdbcParameter) right).getIndex().toString()
+                        : ((JdbcNamedParameter) right).getName() ;
 
-                        compare.setLeftExpression(new StringValue("1"));
-                        compare.setRightExpression(new StringValue("1"));
-                        return expr;
-                    }
-                }
-
-                // Because we are not sure in which horder the hospital id and the group id may have been
-                // specified in the query we set them here when we encounter it.
+                current.getPlaceHolders().put(name, placeHolder);
                 if(col.getColumnName().equals("hospitalId")) {
                     compare.setRightExpression(new LongValue("59"));
                     compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
@@ -574,6 +585,16 @@ public class RepositoryParser extends ClassProcessor{
                 else if(col.getColumnName().equals("hospitalGroupId")) {
                     compare.setRightExpression(new LongValue("58"));
                     compare.setLeftExpression(convertExpressionToSnakeCase(left, removed, where));
+                    return expr;
+                }
+                else if (where){
+                    // we have a comparison so this is vary likely to be a part of the where clause.
+                    // our object is to run a query to identify likely data. So removing as many
+                    // components from the where clause is the way to go
+
+                    removed.add(name);
+                    compare.setLeftExpression(new StringValue("1"));
+                    compare.setRightExpression(new StringValue("1"));
                     return expr;
                 }
             }
@@ -604,7 +625,7 @@ public class RepositoryParser extends ClassProcessor{
      * @return
      */
     public static String camelToSnake(String str) {
-        if(str.toLowerCase().equals("patientpomr")) {
+        if(str.equalsIgnoreCase("patientpomr")) {
             return str;
         }
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
