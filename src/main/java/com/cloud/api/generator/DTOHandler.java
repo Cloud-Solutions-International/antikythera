@@ -310,6 +310,9 @@ public class DTOHandler extends  ClassProcessor{
                 String type = field.getElementType().isClassOrInterfaceType()
                         ? field.getElementType().asClassOrInterfaceType().getNameAsString()
                         : field.getElementType().asString();
+                if (field.getVariables().get(0).getType().toString().equals("String[]")) {
+                    type = field.getVariables().get(0).getType().asArrayType().getComponentType().asString() + "[]";
+                }
 
                 switch (type) {
                     case "boolean":
@@ -363,6 +366,10 @@ public class DTOHandler extends  ClassProcessor{
 
                     case "String":
                         setter.addArgument("\"Hello world\"");
+                        break;
+
+                    case "String[]":
+                        setter.addArgument("new String[] {\"Hello\", \"world\"}");
                         break;
 
                     case "Map":
