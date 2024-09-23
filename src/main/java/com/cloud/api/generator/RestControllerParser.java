@@ -642,7 +642,6 @@ public class RestControllerParser extends ClassProcessor {
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 if(requestBody != null) {
-                    String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
                     String paramClassName = requestBody.getTypeAsString();
 
                     if (requestBody.getType().isClassOrInterfaceType()) {
