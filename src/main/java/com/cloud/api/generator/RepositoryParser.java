@@ -52,19 +52,59 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Parses JPARespository subclasses to indentify the queries that they execute.
+ *
+ * These queries can then be used to determine what kind of data need to be sent
+ * to the controller for a valid response.
+ */
 public class RepositoryParser extends ClassProcessor{
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
-    private Map<MethodDeclaration, String> queries;
-    private Connection conn;
+    public static final String JPA_REPOSITORY = "JpaRepository";
+
+    /**
+     * The queries that were identified in this repository
+     */
+    private Map<MethodDeclaration, RepositoryQuery> queries;
+    /**
+     * The connection to the database established using the credentials in the configuration
+     */
+    private static Connection conn;
+    /**
+     * SQL dialect, at the moment oracle or postgresql as identified from the connection url
+     */
     private String dialect;
     private static final String ORACLE = "oracle";
     private static final String POSTGRESQL = "PG";
+    /**
+     * Whether queries should actually be executed or not.
+     * As determined by the configurations
+     */
+    private static boolean runQueries;
+    /**
+     * The java parser compilation unit associated with this entity.
+     *
+     * This is different from the 'cu' field in the AbstractClassProcessor. That field will
+     * represent the repository interface while the entityCu will represent the entity that
+     * is part of the type arguments
+     */
+    private CompilationUnit entityCu;
+    /**
+     * The table name associated with the entity
+     */
+    private String table;
+    /**
+     * The java parser type associated with the entity.
+     */
+    private Type entityType;
 
-    public RepositoryParser() throws IOException, SQLException {
+    public RepositoryParser() throws IOException {
         super();
         queries = new HashMap<>();
+
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null) {
+            runQueries = db.getOrDefault("run_queries", "false").toString().equals("true");
             String url = db.get("url").toString();
             if(url.contains(ORACLE)) {
                 dialect = ORACLE;
@@ -72,6 +112,14 @@ public class RepositoryParser extends ClassProcessor{
             else {
                 dialect = POSTGRESQL;
             }
+        }
+    }
+
+    private static void createConnection() throws SQLException {
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if(db != null && conn == null && runQueries) {
+            String url = db.get("url").toString();
+
             conn = DriverManager.getConnection(url, db.get("user").toString(), db.get("password").toString());
             try (java.sql.Statement statement = conn.createStatement()) {
                 statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
@@ -82,7 +130,12 @@ public class RepositoryParser extends ClassProcessor{
     public static void main(String[] args) throws IOException, SQLException {
         Settings.loadConfigMap();
         RepositoryParser parser = new RepositoryParser();
+        parser.compile(
+                AbstractCompiler.classToPath(
+                        "com.csi.vidaplus.ehr.ip.admissionwithcareplane.dao.discharge.DischargeDetailRepository.java")
+        );
         parser.process();
+        parser.executeAllQueries();
     }
 
     /**
@@ -100,36 +153,41 @@ public class RepositoryParser extends ClassProcessor{
         return count;
     }
 
-    private void process() throws IOException {
-        File f = new File("/home/raditha/workspaces/python/CSI/selenium/repos/EHR-IP/csi-ehr-ip-java-sev/src/main/java/com/csi/vidaplus/ehr/ip/admissionwithcareplane/dao/discharge/DischargeDetailRepository.java");
-        CompilationUnit cu = javaParser.parse(f).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+
+    public void process() throws IOException {
         cu.accept(new Visitor(), null);
 
         var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
         var parents = cls.getExtendedTypes();
-        if(!parents.isEmpty() && parents.get(0).toString().startsWith("JpaRepository")) {
+        if(!parents.isEmpty() && parents.get(0).toString().startsWith(JPA_REPOSITORY)) {
             Optional<NodeList<Type>> t = parents.get(0).getTypeArguments();
             if(t.isPresent()) {
-                Type entity = t.get().get(0);
-
-                CompilationUnit entityCu = findEntity(entity);
-
-                String table = findTableName(entityCu);
-
-                for (var entry : queries.entrySet()) {
-                    executeQuery(entry, entity, table, entityCu);
-                }
+                entityType = t.get().get(0);
+                entityCu = findEntity(entityType);
+                table = findTableName(entityCu);
             }
         }
     }
 
-    private void executeQuery(Map.Entry<MethodDeclaration, String> entry, Type entity, String table, CompilationUnit entityCu) throws FileNotFoundException {
-        String query = entry.getValue();
+    public void executeAllQueries() throws IOException {
+        for (var entry : queries.entrySet()) {
+            executeQuery(entry);
+        }
+    }
+
+    /**
+     * Execute the query given in entry.value
+     * @param entry a Map.Entry containing the method declaration and the query that it represents
+     * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
+     */
+    private void executeQuery(Map.Entry<MethodDeclaration, RepositoryQuery> entry) throws FileNotFoundException {
+        RepositoryQuery rql = entry.getValue();
         try {
-            query = query.replace(entity.asClassOrInterfaceType().getNameAsString(), table);
+            RepositoryParser.createConnection();
+            String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
             convertFieldsToSnakeCase(stmt, entityCu);
-            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + stmt);
+
 
             String sql = stmt.toString().replaceAll("\\?\\d+", "?");
             if(dialect.equals(ORACLE)) {
@@ -137,36 +195,51 @@ public class RepositoryParser extends ClassProcessor{
                         .replaceAll("(?i)false", "0");
             }
 
-            PreparedStatement prep = conn.prepareStatement(sql);
-
-            for(int j = 0 ; j < countPlaceholders(sql) ; j++) {
-                prep.setLong(j + 1, 1);
+            // if the sql contains more than 1 and clause we will delete '1' IN '1'
+            Pattern pattern = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(query);
+            int count = 0;
+            while (matcher.find()) {
+                count++;
+                if(count == 3) {
+                    sql = sql.replaceAll("'1' IN '1' AND", "");
+                    break;
+                }
             }
 
-            if(prep.execute()) {
-                ResultSet rs = prep.getResultSet();
+            System.out.println(entry.getKey().getNameAsString() +  "\n\t" + sql);
 
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
+            if(runQueries) {
+                PreparedStatement prep = conn.prepareStatement(sql);
 
-                // Print column names
-                for (int i = 1; i <= columnCount; i++) {
-                    System.out.print(metaData.getColumnName(i) + "\t");
+                for (int j = 0; j < countPlaceholders(sql); j++) {
+                    prep.setLong(j + 1, 1);
                 }
-                System.out.println();
 
-                int i = 0;
-                while(rs.next() && i < 10) {
-                    for (int j = 1; j <= columnCount; j++) {
-                        System.out.print(rs.getString(j) + "\t");
+                if (prep.execute()) {
+                    ResultSet rs = prep.getResultSet();
+
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    int columnCount = metaData.getColumnCount();
+
+                    for (int i = 1; i <= columnCount; i++) {
+                        System.out.print(metaData.getColumnName(i) + "\t");
                     }
                     System.out.println();
-                    i++;
+
+                    int i = 0;
+                    while (rs.next() && i < 10) {
+                        for (int j = 1; j <= columnCount; j++) {
+                            System.out.print(rs.getString(j) + "\t");
+                        }
+                        System.out.println();
+                        i++;
+                    }
                 }
             }
 
         } catch (JSQLParserException e) {
-            logger.error("\tUnparsable: {}", query);
+            logger.error("\tUnparsable: {}", rql.getQuery());
         } catch (SQLException e) {
             logger.error("\tSQL Error: {}", e.getMessage());
         }
@@ -175,6 +248,10 @@ public class RepositoryParser extends ClassProcessor{
     /**
      * Find the table name from the hibernate entity.
      * Usually the entity will have an annotation giving the actual name of the table.
+     *
+     * This method is made static because when processing joins there are multiple entities
+     * and there by multipe table names involved.
+     *
      * @param entityCu a compilation unit representing the entity
      * @return the table name as a string.
      */
@@ -407,6 +484,7 @@ public class RepositoryParser extends ClassProcessor{
                 removed.add(ine.getLeftExpression());
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
+
                 rightExpression.add(new StringValue("1"));
                 ine.setRightExpression(rightExpression);
             }
@@ -502,7 +580,11 @@ public class RepositoryParser extends ClassProcessor{
         return expr;
     }
 
-
+    /**
+     * Converts the fields in an Entity to snake case whcih is the usual pattern for columns
+     * @param str
+     * @return
+     */
     public static String camelToSnake(String str) {
         if(str.toLowerCase().equals("patientpomr")) {
             return str;
@@ -510,18 +592,23 @@ public class RepositoryParser extends ClassProcessor{
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
+    /**
+     * Visitor to iterate through the methods in the repository
+     */
     class Visitor extends VoidVisitorAdapter<Void> {
         @Override
         public void visit(MethodDeclaration n, Void arg) {
             super.visit(n, arg);
             String query = null;
+            String methodName = n.getNameAsString();
+            boolean nt = false;
 
             for (var ann : n.getAnnotations()) {
                 if (ann.getNameAsString().equals("Query")) {
                     if (ann.isSingleMemberAnnotationExpr()) {
                         query = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
                     } else if (ann.isNormalAnnotationExpr()) {
-                        boolean nt = false;
+
                         for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
                             if (pair.getNameAsString().equals("nativeQuery")) {
                                 if (pair.getValue().toString().equals("true")) {
@@ -543,12 +630,101 @@ public class RepositoryParser extends ClassProcessor{
             }
 
             if(query != null) {
-                query = cleanUp(query);
-                queries.put(n, query);
+                queries.put(n, new RepositoryQuery(cleanUp(query), nt));
             }
             else {
-                // todo the query needs to be built from the method name
+                List<String> components = extractComponents(methodName);
+                StringBuilder sql = new StringBuilder();
+                boolean top = false;
+                boolean ordering = false;
+                for(int i= 0 ; i < components.size() ; i++) {
+                    String component = components.get(i);
+                    switch(component) {
+                        case "findBy":
+                        case "get":
+                            sql.append("SELECT * FROM ")
+                                    .append(findTableName(entityCu).replace("\"",""))
+                                    .append(" WHERE ");
+
+                            break;
+                        case "findFirstBy":
+                        case "findTopBy":
+                            top = true;
+                            sql.append("SELECT * FROM ")
+                                    .append(findTableName(entityCu).replace("\"",""))
+                                    .append(" WHERE ");
+                            break;
+
+                        case "And":
+                        case "Or":
+                        case "Not":
+                            sql.append(component).append(" ");
+                            break;
+                        case "Containing":
+                        case "Like":
+                            sql.append(" LIKE '%?%'");
+                            break;
+                        case "OrderBy":
+                            ordering = true;
+                            sql.append(" ORDER BY ");
+                            break;
+                        case "":
+                            break;
+                        default:
+                            sql.append(camelToSnake(component));
+                            if(!ordering) {
+                                if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
+                                    sql.append(" In  (?) ");
+                                    i++;
+                                } else {
+                                    sql.append(" = ? ");
+                                }
+                            }
+                            else {
+                                sql.append(" ");
+                            }
+
+                    }
+                }
+                if(top) {
+                    if(dialect.equals(ORACLE)) {
+                        sql.append(" FETCH FIRST 1 ROWS ONLY");
+                    }
+                    else {
+                        sql.append(" LIMIT 1");
+                    }
+                }
+                queries.put(n, new RepositoryQuery(sql.toString(), true));
             }
+        }
+
+        /**
+         * Recursively search method names for sql components
+         * @param methodName name of the method
+         * @return a list of components
+         */
+        private  List<String> extractComponents(String methodName) {
+            List<String> components = new ArrayList<>();
+            String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|In|Desc|Not|Containing|Like|Or";
+            Pattern pattern = Pattern.compile(keywords);
+            Matcher matcher = pattern.matcher(methodName);
+
+            // Add spaces around each keyword
+            StringBuffer sb = new StringBuffer();
+            while (matcher.find()) {
+                matcher.appendReplacement(sb, " " + matcher.group() + " ");
+            }
+            matcher.appendTail(sb);
+
+            // Split the modified method name by spaces
+            String[] parts = sb.toString().split("\\s+");
+            for (String part : parts) {
+                if (!part.isEmpty()) {
+                    components.add(part);
+                }
+            }
+
+            return components;
         }
     }
 
@@ -558,9 +734,12 @@ public class RepositoryParser extends ClassProcessor{
      * @return the cleaned up sql as a string
      */
     private String cleanUp(String sql) {
-        // If a JPA query is using a projection, we will have a new keyword immediately after the select
-        // JSQL does not recognize this. So we will remove everything from the NEW keyword to the FROM
-        // keyword and replace it with the '*' character.
+        // If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
+        // the select JSQL does not recognize this. So lets remove everything starting at the NEW keyword
+        // and finishing at the FROM keyword. It will be replaced by  the '*' character.
+        //
+        // A second pattern is SELECT t FROM EntityClassName t ...
+
         // Use case-insensitive regex to find and replace the NEW keyword and the FROM keyword
         Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(sql);
@@ -573,6 +752,13 @@ public class RepositoryParser extends ClassProcessor{
 
         // Remove quotation marks
         sql = sql.replace("\"", "");
+
+        Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+        Matcher selectMatcher = selectPattern.matcher(sql);
+        if (selectMatcher.find()) {
+            sql = selectMatcher.replaceAll("SELECT * FROM $1 $2");
+            sql = sql.replace(" as "," ");
+        }
 
         return sql;
     }
