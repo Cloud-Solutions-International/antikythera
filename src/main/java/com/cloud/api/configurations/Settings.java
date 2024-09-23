@@ -40,7 +40,7 @@ public class Settings {
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
-            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
+            File yamlFile = new File(Settings.class.getClassLoader().getResource("csi-bm-invoice-generator.yml").getFile());
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
@@ -165,6 +165,22 @@ public class Settings {
                 }
             }
         }
+    }
+
+    public static Map<String, String> loadCustomMethodNames(String className, String fieldName) {
+        Map<String, String> methodNames = new HashMap<>();
+        Map<String, Object> dtoConfig = (Map<String, Object>) Settings.getProperty("DTO");
+        if (dtoConfig != null) {
+            Map<String, Object> classConfig = (Map<String, Object>) dtoConfig.get(className);
+            if (classConfig != null) {
+                Map<String, String> fieldConfig = (Map<String, String>) classConfig.get(fieldName);
+                if (fieldConfig != null) {
+                    methodNames.put("getter", fieldConfig.get("getter"));
+                    methodNames.put("setter", fieldConfig.get("setter"));
+                }
+            }
+        }
+        return methodNames;
     }
 
     /**
