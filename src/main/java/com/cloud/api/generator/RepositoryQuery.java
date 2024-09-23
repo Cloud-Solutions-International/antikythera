@@ -66,7 +66,7 @@ public class RepositoryQuery {
 
         public QueryMethodParameter(Parameter parameter, int index) {
             this.parameter = parameter;
-            parameter.getAnnotationByName("@Param").ifPresent(a ->
+            parameter.getAnnotationByName("Param").ifPresent(a ->
                 placeHolderName = a.asStringLiteralExpr().asString()
             );
             placeHolderId = new ArrayList<>();
@@ -81,13 +81,17 @@ public class RepositoryQuery {
         /**
          * The name of the argument as defined in the respository function
          */
-        Expression argument;
+        private Expression argument;
 
-        int index;
+        private int index;
 
         public QueryMethodArgument(Expression argument, int index) {
             this.argument = argument;
             this.index = index;
+        }
+
+        public Expression getArgument() {
+            return argument;
         }
     }
 

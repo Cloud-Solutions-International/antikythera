@@ -684,39 +684,13 @@ public class RestControllerParser extends ClassProcessor {
             else {
                 /*
                  * Non empty parameters.
-                 * We need to figure out if any of the path or request parameters are supposed to
-                 * match the values from the database.
-                 *
-                 * If the last field is not null that means there is likely to be a query associated
-                 * with those parameters.
-                 *
-                 * Mapping parameters works like this.
-                 *    Request or path parameter becomes an argument to a method call.
-                 *    The argument in the method call becomes a parameter for a place holder
-                 *    The place holder may have been removed though!
                  */
                 ControllerRequest request = new ControllerRequest();
                 request.setPath(getPath(annotation).replace("\"", ""));
-                if (last != null && last.getResultSet() != null) {
-                    ResultSet rs = last.getResultSet();
-                    List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
-                    List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
-                    try {
-                        if(rs.next()) {
-                            for(int i = 0 ; i < paramMap.size() ; i++) {
-                                RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
-                                RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
-                                String[] parts = param.columnName.split("\\.");
-                                String col = parts.length > 1 ? parts[1] : parts[0];
 
-                                System.out.println(param.columnName + " " + arg.argument + " " + rs.getObject(col) );
-                            }
-                        }
-                    } catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                handlePathVariables(md, request);
+                replaceURIVariablesFromDb(md, request);
+                handleURIVariables(md, request);
+
                 makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
                 if(!request.getQueryParameters().isEmpty()) {
                     body.addStatement("Map<String, String> queryParams = new HashMap<>();");
@@ -736,6 +710,61 @@ public class RestControllerParser extends ClassProcessor {
 
         }
 
+        /*
+         * Replace PathVariable and RequestParam values with the values from the database.
+         *
+          We need to figure out if any of the path or request parameters are supposed to
+         * match the values from the database.
+         *
+         * If the last field is not null that means there is likely to be a query associated
+         * with those parameters.
+         *
+         * Mapping parameters works like this.
+         *    Request or path parameter becomes an argument to a method call.
+         *    The argument in the method call becomes a parameter for a placeholder
+         *    The placeholder may have been removed though!
+         */
+        private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) {
+            if (last != null && last.getResultSet() != null) {
+                ResultSet rs = last.getResultSet();
+                List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
+                List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
+                try {
+                    if(rs.next()) {
+                        for(int i = 0 ; i < paramMap.size() ; i++) {
+                            RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
+                            RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
+                            String[] parts = param.columnName.split("\\.");
+                            String col = parts.length > 1 ? parts[1] : parts[0];
+
+                            logger.debug(param.columnName + " " + arg.getArgument() + " " + rs.getObject(col) );
+
+                            // finally try to match it against the path and request variables
+                            for(Parameter p : md.getParameters()) {
+                                Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
+                                Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
+                                if (requestParam.isPresent()) {
+                                    String name = getParamName(p);
+                                    if (name.equals(arg.getArgument().toString())) {
+                                        request.getQueryParameters().put(name, rs.getObject(col).toString());
+                                    }
+                                }
+                                else if (pathParam.isPresent()) {
+                                    String name = getParamName(p);
+                                    final String target = '{' + name + '}';
+                                    if (name.equals(arg.getArgument().toString())) {
+                                        request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
             httpWithBody(md, annotation, returnType, "makePost");
         }
@@ -748,7 +777,7 @@ public class RestControllerParser extends ClassProcessor {
 
             ControllerRequest request = new ControllerRequest();
             request.setPath(getPath(annotation).replace("\"", ""));
-            handlePathVariables(md, request);
+            handleURIVariables(md, request);
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
@@ -812,7 +841,6 @@ public class RestControllerParser extends ClassProcessor {
                             if (expr.isMethodCallExpr()) {
                                 String s = expr.toString();
                                 if (s.contains("set")) {
-                                    System.out.println(s.replaceFirst("^[^.]+\\.", "req."));
                                     body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
                                 }
                             }
@@ -912,69 +940,34 @@ public class RestControllerParser extends ClassProcessor {
         blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
     }
 
-    private void handlePathVariables(MethodDeclaration md, ControllerRequest request) {
-        String path = request.getPath();
-
+    private void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
-            if(!paramString.startsWith(ANNOTATION_REQUEST_BODY)){
-                String paramName = getParamName(param);
-                switch(param.getTypeAsString()) {
-                    case "Boolean":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"1");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "false");
-                        }
-                        break;
 
-                    case "float":
-                    case "Float":
-                    case "double":
-                    case "Double":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"1");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "1.0");
-                        }
-                        break;
-
-                    case "Integer":
-                    case "int":
-                    case "Long":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"1");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "1");
-                        }
-                        break;
-
-                    case "String":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"Ibuprofen");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "Ibuprofen");
-                        }
-
-                    default:
-                        // some get methods rely on an enum.
-                        // todo handle this properly
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"0");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "0");
-                        }
-
+            String paramName = getParamName(param);
+            if (paramString.startsWith("@RequestParam")) {
+                if (!request.getQueryParameters().containsKey(paramName)) {
+                    request.addQueryParameter(paramName, switch (param.getTypeAsString()) {
+                        case "Boolean" -> "1";
+                        case "float", "Float", "double", "Double" -> "1";
+                        case "Integer", "int", "Long" -> "1";
+                        case "String" -> "Ibuprofen";
+                        default -> "0";
+                    });
                 }
+            } else if (paramString.startsWith("@PathVariable")) {
+                final String target = '{' + paramName + '}';
+
+                String path = switch (param.getTypeAsString()) {
+                    case "Boolean" -> request.getPath().replace(target, "false");
+                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "1.0");
+                    case "Integer", "int", "Long" -> request.getPath().replace(target, "1");
+                    case "String" -> request.getPath().replace(target, "Ibuprofen");
+                    default -> request.getPath().replace(target, "0");
+                };
+                request.setPath(path);
             }
         }
-
-        request.setPath(path);
     }
 
     private static String getParamName(Parameter param) {
