@@ -30,6 +30,7 @@ public class RepositoryQuery {
      */
     private List<String> removed;
 
+    private Map<String, String> placeHolders;
     /**
      * Represents the mapping of the request or path parameters to the query parameters.
      *
@@ -41,6 +42,7 @@ public class RepositoryQuery {
         this.isNative = isNative;
         this.query = query;
         parameterMap = new HashMap<>();
+        placeHolders = new HashMap<>();
     }
 
     public boolean isNative() {
@@ -70,5 +72,9 @@ public class RepositoryQuery {
 
     public Map<String, String> getParameterMap() {
         return parameterMap;
+    }
+
+    public Map<String, String> getPlaceHolders() {
+        return placeHolders;
     }
 }
