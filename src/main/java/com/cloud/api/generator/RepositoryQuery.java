@@ -50,12 +50,17 @@ public class RepositoryQuery {
          */
         String columnName;
 
+        /**
+         * True if this column was removed from the WHERE clause or GROUP BY.
+         */
+        boolean removed;
+
         public QueryMethodParameter(Parameter parameter, int index) {
             this.parameter = parameter;
             this.columnName = RepositoryParser.camelToSnake(parameter.getName().toString());
-            parameter.getAnnotationByName("@Param").ifPresent(a -> {
-                placeHolderName = a.asStringLiteralExpr().asString();
-            });
+            parameter.getAnnotationByName("@Param").ifPresent(a ->
+                placeHolderName = a.asStringLiteralExpr().asString()
+            );
             placeHolderIndex = index;
         }
     }
@@ -93,10 +98,8 @@ public class RepositoryQuery {
      */
     private ResultSet resultSet;
 
-    /**
-     * The list of columns that were removed from the query where clause or grouping.
-     */
-    private List<String> removed;
+
+
 
     /**
      * Keeps track of what columns are being used in where clauses.
@@ -119,6 +122,7 @@ public class RepositoryQuery {
         this.isNative = isNative;
         this.query = query;
         methodParameters = new ArrayList<>();
+        methodArguments = new ArrayList<>();
         placeHolders = new HashMap<>();
     }
 
@@ -130,16 +134,16 @@ public class RepositoryQuery {
         return query;
     }
 
-    public void setRemoved(List<String> removed) {
-        this.removed = removed;
-    }
-
     /**
-     * Get a list of filters that were removed from the where clause
-     * @return
+     * Mark that the column was actually not used in the query filters.
+     * @param column
      */
-    public List<String> getRemoved() {
-        return removed;
+    public void remove(String column) {
+        for (QueryMethodParameter p : methodParameters) {
+            if (p.columnName.equals(column)) {
+                p.removed = true;
+            }
+        }
     }
 
     public ResultSet getResultSet() {

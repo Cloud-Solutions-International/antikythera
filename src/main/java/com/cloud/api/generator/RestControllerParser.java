@@ -700,13 +700,13 @@ public class RestControllerParser extends ClassProcessor {
                 if (last != null && last.getResultSet() != null) {
                     ResultSet rs = last.getResultSet();
                     List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
+                    List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
                     try {
                         if(rs.next()) {
-                            for(var bada : last.getRemoved()) {
-                                String[] parts = bada.split("\\.");
-                                bada = parts.length == 1 ? bada : parts[1];
-
-                                //System.out.println("--> REMOVED column " + bada + " : " + paramMap.get(bada));
+                            for(int i = 0 ; i < paramMap.size() ; i++) {
+                                RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
+                                RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
+                                System.out.println(param.columnName + " " + arg.argument + " " + rs.getObject(param.columnName) );
                             }
                         }
                     } catch (SQLException e) {
