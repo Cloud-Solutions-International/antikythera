@@ -786,6 +786,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){
+        path = path.replace(":.+", "");
         List<String> queryParams = new ArrayList<>();
 
         for(var param : md.getParameters()) {
