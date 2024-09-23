@@ -27,11 +27,7 @@ public class RepositoryQuery {
          * The name of the argument as defined in the respository function
          */
         Parameter parameter;
-        /**
-         * These numbers count from 0 upwards in the sql we will have to add 1
-         * because jdbc coutns from 1 onwards
-         */
-        int placeHolderIndex;
+
         /**
          * The name of the jdbc named parameter.
          * These can typicall be identified in the JPARepository function by the @Param annotation.
@@ -55,13 +51,26 @@ public class RepositoryQuery {
          */
         boolean removed;
 
+        /**
+         * Tracks usage of this column with numeric jdbc query parameters
+         * Unlike named parameters, numeric parameters can appear in multiple places. THough the same
+         * number can be used in two different places it's common to see programmers use two different ids.
+         * These numbers will start counting from 1, in keeping with the usual jdbc convention.
+         */
+        List<Integer> placeHolderId;
+
+        /**
+         * The position at which this parameter appears in the function parameters list.
+         */
+        int paramIndex;
+
         public QueryMethodParameter(Parameter parameter, int index) {
             this.parameter = parameter;
-            this.columnName = RepositoryParser.camelToSnake(parameter.getName().toString());
             parameter.getAnnotationByName("@Param").ifPresent(a ->
                 placeHolderName = a.asStringLiteralExpr().asString()
             );
-            placeHolderIndex = index;
+            placeHolderId = new ArrayList<>();
+            this.paramIndex = index;
         }
     }
 
@@ -98,17 +107,6 @@ public class RepositoryQuery {
      */
     private ResultSet resultSet;
 
-
-
-
-    /**
-     * Keeps track of what columns are being used in where clauses.
-     * For between conditions two place holders can be mapped to the same column hence the
-     * reason that we have a list of strings.
-     */
-
-    private Map<String, List<String>> placeHolders;
-
     /**
      * This is the list of parameters that are defined in the function signature
      */
@@ -123,7 +121,6 @@ public class RepositoryQuery {
         this.query = query;
         methodParameters = new ArrayList<>();
         methodArguments = new ArrayList<>();
-        placeHolders = new HashMap<>();
     }
 
     public boolean isNative() {
@@ -140,7 +137,7 @@ public class RepositoryQuery {
      */
     public void remove(String column) {
         for (QueryMethodParameter p : methodParameters) {
-            if (p.columnName.equals(column)) {
+            if (p != null && p.columnName != null && p.columnName.equals(column)) {
                 p.removed = true;
             }
         }
@@ -159,13 +156,5 @@ public class RepositoryQuery {
     }
     public List<QueryMethodArgument> getMethodArguments() {
         return methodArguments;
-    }
-
-    /**
-     * Get the place holders for the query
-     * @return
-     */
-    public Map<String, List<String>> getPlaceHolders() {
-        return placeHolders;
     }
 }
