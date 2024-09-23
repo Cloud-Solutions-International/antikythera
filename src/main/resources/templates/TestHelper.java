@@ -15,13 +15,17 @@ import io.restassured.http.Headers;
 import io.restassured.http.Method;
 import io.restassured.response.Response;
 import org.json.JSONObject;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.asserts.SoftAssert;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -95,6 +99,27 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makePost(MultipartFile file, Headers headers, String relativeUrl) throws IOException {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Headers filteredHeaders = new Headers(headers.asList().stream()
+                .filter(header -> !header.getName().equalsIgnoreCase("Content-Type"))
+                .collect(Collectors.toList()));
+
+        Response response = RestAssured.given()
+                .relaxedHTTPSValidation()
+                .headers(filteredHeaders)
+                .multiPart("file", file.getOriginalFilename(), file.getInputStream(), file.getContentType())
+                .when()
+                .request(Method.POST);
+
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected Response makePut(String body, Headers headers, String relativeUrl)  {
         APIRequester.setBaseURI(baseURI);
         APIRequester.setBasePath(relativeUrl);
@@ -149,5 +174,26 @@ public abstract class TestHelper extends APIBaseTest {
             relativeUrl = relativeUrl.replace("{" + pathVariable + "}", value.toString());
         }
         return relativeUrl;
+    }
+
+    protected MultipartFile uploadFile(String fileNameWithoutExtension) throws IOException {
+        Path dirPath = Paths.get("src/test/resources/uploads/");
+        Path filePath = null;
+        String contentType = "application/octet-stream";
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dirPath, fileNameWithoutExtension + ".*")) {
+            for (Path entry : stream) {
+                filePath = entry;
+                contentType = Files.probeContentType(filePath);
+                break;
+            }
+        }
+
+        if (filePath == null) {
+            throw new IOException("File not found: " + fileNameWithoutExtension);
+        }
+
+        byte[] content = Files.readAllBytes(filePath);
+        return new MockMultipartFile("file", filePath.getFileName().toString(), contentType, content);
     }
 }
