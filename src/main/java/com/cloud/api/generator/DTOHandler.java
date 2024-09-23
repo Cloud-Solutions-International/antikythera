@@ -20,6 +20,7 @@ import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -268,7 +270,71 @@ public class DTOHandler extends  ClassProcessor{
             extractEnums(field);
             extractComplexType(field.getElementType(), cu);
 
+            // handle custom getters and setters
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            String className = cu.getTypes().get(0).getNameAsString();
+            Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+
+            if(!methodNames.isEmpty()){
+                String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
+                String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
+
+                // Use custom getter and setter names
+                generateGetter(field, getterName);
+                generateSetter(field, setterName);
+
+            }
+
+
             return super.visit(field, args);
+        }
+
+        private void generateGetter(FieldDeclaration field, String getterName) {
+            // Create a new MethodDeclaration for the getter
+            MethodDeclaration getter = new MethodDeclaration();
+            getter.setName(getterName);
+            getter.setType(field.getElementType());
+            getter.setModifiers(Modifier.Keyword.PUBLIC);
+
+            // Create a ReturnStmt that returns the field's value
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            ReturnStmt returnStmt = new ReturnStmt(new NameExpr(fieldName));
+
+            // Add the ReturnStmt to the method body
+            BlockStmt body = new BlockStmt();
+            body.addStatement(returnStmt);
+            getter.setBody(body);
+
+            // Add the getter method to the class
+            ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(getter);
+        }
+
+        private void generateSetter(FieldDeclaration field, String setterName) {
+            // Create a new MethodDeclaration for the setter
+            MethodDeclaration setter = new MethodDeclaration();
+            setter.setName(setterName);
+            setter.setType(new VoidType());
+            setter.setModifiers(Modifier.Keyword.PUBLIC);
+
+            // Add a parameter to the method with the field's type and name
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            Parameter param = new Parameter(field.getElementType(), fieldName);
+            setter.addParameter(param);
+
+            // Create an AssignExpr that assigns the parameter value to the field
+            AssignExpr assignExpr = new AssignExpr(
+                    new NameExpr("this." + fieldName),
+                    new NameExpr(fieldName),
+                    AssignExpr.Operator.ASSIGN
+            );
+
+            // Add the AssignExpr to the method body
+            BlockStmt body = new BlockStmt();
+            body.addStatement(assignExpr);
+            setter.setBody(body);
+
+            // Add the setter method to the class
+            ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
         }
 
         private void extractEnums(FieldDeclaration field) {
