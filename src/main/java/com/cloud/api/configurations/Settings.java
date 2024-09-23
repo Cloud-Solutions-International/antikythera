@@ -9,9 +9,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,7 +21,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Scanner;
 
 /**
@@ -37,6 +37,10 @@ public class Settings {
      */
     private Settings() {}
 
+    /**
+     * Load the configuration from a file.
+     * @throws IOException
+     */
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
@@ -44,7 +48,7 @@ public class Settings {
             if (yamlFile.exists()) {
                 loadYamlConfig(yamlFile);
             } else {
-                loadCfgConfig();
+                throw new FileNotFoundException(yamlFile.getPath());
             }
         }
     }
@@ -109,12 +113,7 @@ public class Settings {
             String key = entry.getKey();
             Object value = entry.getValue();
             if (value != null && !key.equals("variables")) {
-                if (value instanceof String) {
-                    String v = (String) value;
-                    v = v.replace("${USERDIR}", userDir);
-                    v = replaceYamlVariables(v);
-                    target.put(key, replaceEnvVariables(v));
-                } else if (value instanceof Map) {
+                if (value instanceof Map) {
                     Map<String, Object> nestedMap = new HashMap<>();
                     replaceVariables((Map<String, Object>) value, nestedMap);
                     target.put(key, nestedMap);
@@ -126,6 +125,15 @@ public class Settings {
                         result.add(s);
                     }
                     target.put(key, result);
+                }
+                else if (value instanceof String) {
+                    String v = (String) value;
+                    v = v.replace("${USERDIR}", userDir);
+                    v = replaceYamlVariables(v);
+                    target.put(key, replaceEnvVariables(v));
+                }
+                else {
+                    target.put(key, value);
                 }
             }
         }
@@ -144,27 +152,6 @@ public class Settings {
             value = value.replace(key, varValue);
         }
         return value;
-    }
-
-    /**
-     * Load configurations from props files
-     * @throws IOException
-     */
-    private static void loadCfgConfig() throws IOException {
-        try (InputStream fis = Settings.class.getClassLoader().getResourceAsStream("generator.cfg")) {
-            Properties props = new Properties();
-            props.load(fis);
-            String userDir = System.getProperty("user.home");
-            for (Map.Entry<Object, Object> prop : props.entrySet()) {
-                String key = (String) prop.getKey();
-                String value = (String) prop.getValue();
-                if (value != null) {
-                    value = value.replace("${USERDIR}", userDir);
-                    value = replaceEnvVariables(value);
-                    Settings.props.put(key, value);
-                }
-            }
-        }
     }
 
     public static Map<String, String> loadCustomMethodNames(String className, String fieldName) {
@@ -209,33 +196,42 @@ public class Settings {
     }
 
     public static Object getProperty(String key) {
-        return props.get(key);
+
+        Object property = props.get(key);
+        if(property != null) {
+            return property;
+        }
+        String[] parts = key.split("\\.");
+        if(parts.length > 1) {
+            Map<String, Object> map = (Map<String, Object>) props.get(parts[0]);
+            if(map != null) {
+                return map.get(parts[1]);
+            }
+        }
+        return null;
     }
 
     public static String[] getArtifacts() {
-        return get_deps("artifact_ids");
+        return getDependencies("artifact_ids");
     }
 
-    private static String[] get_deps(String artifact_ids) {
+    private static String[] getDependencies(String artifactIds) {
         Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
-        if (deps == null) {
-            return new String[0];
-        }
         if (deps instanceof String) {
             return ((String) deps).split(",");
         }
         Map<String, Object> dependencies = (Map<String, Object>) deps;
-        return ((List<String>) dependencies.get(artifact_ids)).toArray(new String[0]);
+        return ((List<String>) dependencies.get(artifactIds)).toArray(new String[0]);
     }
 
     public static String[] getJarFiles() {
-        return get_deps("jar_files");
+        return getDependencies("jar_files");
     }
 
     public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {
         @Override
         public Map<String, Object> deserialize(JsonParser p, DeserializationContext ctxt)
-                throws IOException, JsonProcessingException {
+                throws IOException {
             return p.readValueAs(LinkedHashMap.class);
         }
     }
