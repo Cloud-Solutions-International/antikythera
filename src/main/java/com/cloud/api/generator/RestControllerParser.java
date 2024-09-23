@@ -396,7 +396,7 @@ public class RestControllerParser extends ClassProcessor {
                         NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
                         if (variables != null) {
                             /*
-                             * we have just encountered a variable assignmennt. Unfortunately it's very
+                             * we have just encountered a variable assignment. Unfortunately it's very
                              * hard to discover more information about that assignment from the expression,
                              * so it's best to just pass it to the VariableAssignmentVisitor.
                              *
@@ -425,6 +425,10 @@ public class RestControllerParser extends ClassProcessor {
         }
 
 
+        /**
+         * Nested inner class to handle return statements.
+         *
+         */
         class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
             /**
              * This method will be called once for each return statment inside the method block.
