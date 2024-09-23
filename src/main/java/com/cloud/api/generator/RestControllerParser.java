@@ -573,10 +573,10 @@ public class RestControllerParser extends ClassProcessor {
             makeGetCall.addArgument(new NameExpr("headers"));
 
             if(md.getParameters().isEmpty()) {
-                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
+                makeGetCall.addArgument(new StringLiteralExpr(getPath(annotation)));
             }
             else {
-                String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                String path = handlePathVariables(md, getPath(annotation));
                 makeGetCall.addArgument(new StringLiteralExpr(path));
             }
             VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
@@ -602,7 +602,7 @@ public class RestControllerParser extends ClassProcessor {
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 if(requestBody != null) {
-                    String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
+                    String path = handlePathVariables(md, getPath(annotation));
                     String paramClassName = requestBody.getTypeAsString();
 
                     BlockStmt blockStmt = testMethod.getBody().get();
@@ -756,6 +756,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private String handlePathVariables(MethodDeclaration md, String path){
+        path = path.replace(":.+", "");
         List<String> queryParams = new ArrayList<>();
 
         for(var param : md.getParameters()) {
@@ -861,18 +862,21 @@ public class RestControllerParser extends ClassProcessor {
      * @param annotation a GetMapping, PostMapping etc
      * @return the path url component
      */
-    private String getPath(AnnotationExpr annotation) {
+    String getPath(AnnotationExpr annotation) {
+        String commonPath = getCommonPath();
         if (annotation.isSingleMemberAnnotationExpr()) {
-            return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
+            String memberValue = annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
+            return (memberValue.startsWith("\"/") ? commonPath + memberValue : commonPath + "/" + memberValue).replace("\"", "");
         } else if (annotation.isNormalAnnotationExpr()) {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
                 if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
-                    return getCommonPath() + pair.getValue().toString();
+                    String pairValue = pair.getValue().toString();
+                    return (commonPath + pairValue).replace("\"", "");
                 }
             }
         }
-        return getCommonPath();
+        return commonPath.replace("\"", "");
     }
 
     /**
@@ -881,7 +885,7 @@ public class RestControllerParser extends ClassProcessor {
      *
      * @return the path from the RequestMapping Annotation or an empty string
      */
-    private String getCommonPath() {
+    String getCommonPath() {
         for (var classAnnotation : cu.getTypes().get(0).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
