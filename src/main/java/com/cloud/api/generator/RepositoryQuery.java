@@ -30,7 +30,14 @@ public class RepositoryQuery {
      */
     private List<String> removed;
 
+    /**
+     * Keeps track of what columns are being used in where clauses.
+     * For between conditions two place holders can be mapped to the same column hence the
+     * reason that we have a list of strings.
+     */
+
     private Map<String, List<String>> placeHolders;
+
     /**
      * Represents the mapping of the request or path parameters to the query parameters.
      *
@@ -57,10 +64,13 @@ public class RepositoryQuery {
         this.removed = removed;
     }
 
+    /**
+     * Get a list of filters that were removed from the where clause
+     * @return
+     */
     public List<String> getRemoved() {
         return removed;
     }
-
 
     public ResultSet getResultSet() {
         return resultSet;
@@ -74,6 +84,10 @@ public class RepositoryQuery {
         return parameterMap;
     }
 
+    /**
+     * Get the place holders for the query
+     * @return
+     */
     public Map<String, List<String>> getPlaceHolders() {
         return placeHolders;
     }
