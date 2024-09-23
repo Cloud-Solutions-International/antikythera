@@ -627,14 +627,24 @@ public class RepositoryParser extends ClassProcessor{
     }
 
     private void mapPlaceHolders(Expression right, String name) {
-        String placeHolder = right instanceof JdbcParameter
-                ? ((JdbcParameter) right).getIndex().toString()
-                : ((JdbcNamedParameter) right).getName() ;
+        if(right instanceof  JdbcParameter) {
+            int pos = ((JdbcParameter) right).getIndex();
+            RepositoryQuery.QueryMethodParameter params = current.getMethodParameters().get(pos - 1);
+            params.placeHolderId.add(pos);
+            params.columnName = name;
 
-        Map<String, List<String>> places = current.getPlaceHolders();
-        List<String> existing = places.getOrDefault(name, new ArrayList<>());
-        existing.add(placeHolder);
-        places.put(name, existing);
+            System.out.println("Mapping " + name + " to " + params.parameter.getName());
+        }
+        else {
+            String placeHolder = ((JdbcNamedParameter) right).getName();
+            for(RepositoryQuery.QueryMethodParameter p : current.getMethodParameters()) {
+                if(p.placeHolderName.equals(placeHolder)) {
+                    p.columnName = name;
+                    System.out.println("Mapping " + name + " to " + p.parameter.getName());
+                    break;
+                }
+            }
+        }
     }
 
     /**

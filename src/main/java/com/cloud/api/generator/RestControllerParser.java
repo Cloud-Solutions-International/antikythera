@@ -258,8 +258,6 @@ public class RestControllerParser extends ClassProcessor {
                      */
                     RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
                     try {
-                        ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
-                        q.setResultSet(rs);
                         /*
                          * We have one more challenge; to find the parameters that are being used in the repository
                          * method. These will then have to be mapped to the jdbc place holders and reverse mapped
@@ -271,6 +269,8 @@ public class RestControllerParser extends ClassProcessor {
                             q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
                         }
 
+                        ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
+                        q.setResultSet(rs);
                     } catch (FileNotFoundException e) {
                         logger.warn("Could not execute query {}", mce);
                     }
@@ -706,7 +706,10 @@ public class RestControllerParser extends ClassProcessor {
                             for(int i = 0 ; i < paramMap.size() ; i++) {
                                 RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
                                 RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
-                                System.out.println(param.columnName + " " + arg.argument + " " + rs.getObject(param.columnName) );
+                                String[] parts = param.columnName.split("\\.");
+                                String col = parts.length > 1 ? parts[1] : parts[0];
+
+                                System.out.println(param.columnName + " " + arg.argument + " " + rs.getObject(col) );
                             }
                         }
                     } catch (SQLException e) {
