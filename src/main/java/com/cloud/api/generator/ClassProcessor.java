@@ -54,7 +54,7 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     /**
-     * Find depedencies given a type
+     * Find dependencies given a type
      *
      * For each type we encounter, we need to figure out if it's something from the java
      * packages, an external dependency or something from the application under test.

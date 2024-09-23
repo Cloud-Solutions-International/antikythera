@@ -261,22 +261,23 @@ public class RestControllerParser extends ClassProcessor {
                         ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
                         q.setResultSet(rs);
                         /*
-                         * We have one more challenge; to find what path/request variables are being used in the query.
+                         * We have one more challenge; to find the parameters that are being used in the repository
+                         * method. These will then have to be mapped to the jdbc place holders and reverse mapped
+                         * to the arguments that are passed in when the method is actually being called.
                          */
                         MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
                         for(int i = 0, j = mce.getArguments().size() ; i < j ; i++) {
-                            q.getParameterMap().put(
-                                    RepositoryParser.camelToSnake(repoMethod.getParameter(i).getName().toString()),
-                                    mce.getArguments().get(i).toString()
-                            );
+                            q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
+                            q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
                         }
+
                     } catch (FileNotFoundException e) {
                         logger.warn("Could not execute query {}", mce);
                     }
                     return q;
                 }
             } catch (UnsolvedSymbolException e) {
-                logger.warn("Unsolved symbol exception {}", mce.asMethodCallExpr().toString());
+                logger.warn("Unsolved symbol exception {}", mce.asMethodCallExpr());
             }
             return null;
         }
@@ -292,8 +293,8 @@ public class RestControllerParser extends ClassProcessor {
         /**
          * The field visitor will be used to identify the repositories that are being used in the controller.
          *
-         * @param field
-         * @param arg
+         * @param field the field to inspect
+         * @param arg not used
          */
         @Override
         public void visit(FieldDeclaration field, Void arg) {
@@ -363,7 +364,7 @@ public class RestControllerParser extends ClassProcessor {
          * Every public method in the source code will result in a call to the visit(MethodDeclaration...)
          * method of this class. In there will try to identify locals and whether any repository queries
          * are being executed. Armed with that information we will then use the return statement visitor
-         * to identify the return type of the method and there after to generate the tests.
+         * to identify the return type of the method and thereafter to generate the tests.
          */
         Evaluator evaluator = new Evaluator();
         RepositoryQuery last = null;
@@ -675,21 +676,37 @@ public class RestControllerParser extends ClassProcessor {
             BlockStmt body = testMethod.getBody().get();
 
             if(md.getParameters().isEmpty()) {
+                /*
+                 * Empty parameters are very easy.
+                 */
                 makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
             }
             else {
+                /*
+                 * Non empty parameters.
+                 * We need to figure out if any of the path or request parameters are supposed to
+                 * match the values from the database.
+                 *
+                 * If the last field is not null that means there is likely to be a query associated
+                 * with those parameters.
+                 *
+                 * Mapping parameters works like this.
+                 *    Request or path parameter becomes an argument to a method call.
+                 *    The argument in the method call becomes a parameter for a place holder
+                 *    The place holder may have been removed though!
+                 */
                 ControllerRequest request = new ControllerRequest();
                 request.setPath(getPath(annotation).replace("\"", ""));
                 if (last != null && last.getResultSet() != null) {
                     ResultSet rs = last.getResultSet();
-                    Map<String,String> paramMap = last.getParameterMap();
+                    List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
                     try {
                         if(rs.next()) {
                             for(var bada : last.getRemoved()) {
                                 String[] parts = bada.split("\\.");
                                 bada = parts.length == 1 ? bada : parts[1];
 
-                                System.out.println("--> REMOVED column " + bada + " : " + paramMap.get(bada));
+                                //System.out.println("--> REMOVED column " + bada + " : " + paramMap.get(bada));
                             }
                         }
                     } catch (SQLException e) {
@@ -1031,7 +1048,6 @@ public class RestControllerParser extends ClassProcessor {
         }
         return "";
     }
-
 }
 
 

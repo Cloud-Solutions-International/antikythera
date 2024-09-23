@@ -1,6 +1,10 @@
 package com.cloud.api.generator;
 
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.Expression;
+
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +13,70 @@ import java.util.Map;
  * Represents a query from a JPARepository
  */
 public class RepositoryQuery {
+
+    /**
+     * Represents a parameter in the query method.
+     *
+     * Lets get the normenclature sorted out. Though arguments and parameters are used interchangeably
+     * they have a subtle difference.
+     *     An argument is the value that is passed to a function when it is called.
+     *     A parameter refers to the variable that is used in the function declaration
+     */
+    static class QueryMethodParameter {
+        /**
+         * The name of the argument as defined in the respository function
+         */
+        Parameter parameter;
+        /**
+         * These numbers count from 0 upwards in the sql we will have to add 1
+         * because jdbc coutns from 1 onwards
+         */
+        int placeHolderIndex;
+        /**
+         * The name of the jdbc named parameter.
+         * These can typicall be identified in the JPARepository function by the @Param annotation.
+         * If they are used along side custom queries, the query will have a place holder that starts
+         * with the : character and matches the name of the parameter.
+         * example:
+         *     select u from User u where u.firstname = :firstname or u.lastname = :lastname
+         *     User findByLastnameOrFirstname(@Param("lastname") String lastname,
+         *                                  @Param("firstname") String firstname);
+         */
+        String placeHolderName;
+
+        /**
+         * Typically column names in SQL are camel_cased.
+         * Those mappings will be saved here.
+         */
+        String columnName;
+
+        public QueryMethodParameter(Parameter parameter, int index) {
+            this.parameter = parameter;
+            this.columnName = RepositoryParser.camelToSnake(parameter.getName().toString());
+            parameter.getAnnotationByName("@Param").ifPresent(a -> {
+                placeHolderName = a.asStringLiteralExpr().asString();
+            });
+            placeHolderIndex = index;
+        }
+    }
+
+    /**
+     * Represents a argument in a call to a query method
+     */
+    static class QueryMethodArgument {
+        /**
+         * The name of the argument as defined in the respository function
+         */
+        Expression argument;
+
+        int index;
+
+        public QueryMethodArgument(Expression argument, int index) {
+            this.argument = argument;
+            this.index = index;
+        }
+    }
+
     /**
      * Whether the query is native or not.
      * This is the value of the native flag to the @Query annotation.
@@ -39,16 +107,18 @@ public class RepositoryQuery {
     private Map<String, List<String>> placeHolders;
 
     /**
-     * Represents the mapping of the request or path parameters to the query parameters.
-     *
-     * The key is the name of the parameter in the query.
+     * This is the list of parameters that are defined in the function signature
      */
-    private Map<String, String> parameterMap;
+    private List<QueryMethodParameter> methodParameters;
+    /**
+     * This is the list of arguments that are passed to the function when being called.
+     */
+    private List<QueryMethodArgument> methodArguments;
 
     public RepositoryQuery(String query, boolean isNative) {
         this.isNative = isNative;
         this.query = query;
-        parameterMap = new HashMap<>();
+        methodParameters = new ArrayList<>();
         placeHolders = new HashMap<>();
     }
 
@@ -80,8 +150,11 @@ public class RepositoryQuery {
         this.resultSet = resultSet;
     }
 
-    public Map<String, String> getParameterMap() {
-        return parameterMap;
+    public List<QueryMethodParameter> getMethodParameters() {
+        return methodParameters;
+    }
+    public List<QueryMethodArgument> getMethodArguments() {
+        return methodArguments;
     }
 
     /**
