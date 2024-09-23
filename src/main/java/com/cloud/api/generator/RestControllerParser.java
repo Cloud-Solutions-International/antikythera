@@ -3,7 +3,6 @@ package com.cloud.api.generator;
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
 import com.cloud.api.evaluator.Evaluator;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
@@ -49,8 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
@@ -62,16 +59,6 @@ public class RestControllerParser extends ClassProcessor {
 
     Set<String> testMethodNames;
     private CompilationUnit gen;
-    private HashMap<String, Object> parameterSet;
-    private final Map<String, ?> typeDefsForPathVars = Map.of(
-            "Integer", 1,
-            "int", 1,
-            "Long", 1L,
-            "String", "Ibuprofen"
-    );
-    private final Path dataPath;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
     Map<String, Comparable> context;
 
     /**
@@ -94,13 +81,6 @@ public class RestControllerParser extends ClassProcessor {
     public RestControllerParser(File controllers) throws IOException {
         super();
         this.controllers = controllers;
-
-        dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
-
-        // Check if the dataPath directory exists, if not, create it
-        if (!Files.exists(dataPath)) {
-            Files.createDirectories(dataPath);
-        }
         Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
 
     }
@@ -122,20 +102,11 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
-            Matcher matcher = controllerPattern.matcher(path.toString());
-
-            String controllerName = null;
-            if (matcher.find()) {
-                controllerName = matcher.group(1);
-            }
-            parameterSet = new HashMap<>();
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
-            File file = new File(dataPath + File.separator + controllerName + "Params.json");
-            objectMapper.writeValue(file, parameterSet);
         }
     }
 
@@ -342,7 +313,6 @@ public class RestControllerParser extends ClassProcessor {
                     solveTypeDependencies(returnType, cu);
                 }
                 for (var param : md.getParameters()) {
-                    parameterSet.put(param.getName().toString(), "");
                     solveTypeDependencies(param.getType(), cu);
                 }
 
