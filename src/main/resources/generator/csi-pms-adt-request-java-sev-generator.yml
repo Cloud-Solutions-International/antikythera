@@ -19,7 +19,7 @@ base_package: com.csi
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
-controllers: com.csi.pms.adt.request.controller.AdtRequestHeaderController.java
+controllers: com.csi.pms.adt.request.controller
 #.externaltransfer.ExternalTransferController.java
 
 # Path to output the generated test project
@@ -45,7 +45,7 @@ dependencies:
 # Url.properties file in the resources folder, and that file in turn will be copied to the
 # generated tests project.
 #
-application.host: https://vidaqa.cloudsolutions.com.sa/csi-api/csi-java-pms-adt
+application.host: https://vidaqa.cloudsolutions.com.sa/csi-api/csi-pms-adt-request
 #
 # the veresion of the application if any. ~ means no versioning
 # This setting will also be copied to the Url.properties file
@@ -60,3 +60,7 @@ database:
   user: C##xstrm
   password: p08642xs
   schema: EH_IP
+  run_queries: true
+
+skip :
+  - com.csi.pms.adt.request.controller.TempController.java
