@@ -751,26 +751,28 @@ public class RestControllerParser extends ClassProcessor {
                     for(int i = 0 ; i < paramMap.size() ; i++) {
                         RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
                         RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
-                        String[] parts = param.getColumnName().split("\\.");
-                        String col = parts.length > 1 ? parts[1] : parts[0];
 
-                        logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col) );
+                        if(param.getColumnName() != null) {
+                            String[] parts = param.getColumnName().split("\\.");
+                            String col = parts.length > 1 ? parts[1] : parts[0];
 
-                        // finally try to match it against the path and request variables
-                        for(Parameter p : md.getParameters()) {
-                            Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
-                            Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
-                            if (requestParam.isPresent()) {
-                                String name = getParamName(p);
-                                if (name.equals(arg.getArgument().toString())) {
-                                    request.getQueryParameters().put(name, rs.getObject(col).toString());
-                                }
-                            }
-                            else if (pathParam.isPresent()) {
-                                String name = getParamName(p);
-                                final String target = '{' + name + '}';
-                                if (name.equals(arg.getArgument().toString())) {
-                                    request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
+                            logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col));
+
+                            // finally try to match it against the path and request variables
+                            for (Parameter p : md.getParameters()) {
+                                Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
+                                Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
+                                if (requestParam.isPresent()) {
+                                    String name = getParamName(p);
+                                    if (name.equals(arg.getArgument().toString())) {
+                                        request.getQueryParameters().put(name, rs.getObject(col).toString());
+                                    }
+                                } else if (pathParam.isPresent()) {
+                                    String name = getParamName(p);
+                                    final String target = '{' + name + '}';
+                                    if (name.equals(arg.getArgument().toString())) {
+                                        request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
+                                    }
                                 }
                             }
                         }
