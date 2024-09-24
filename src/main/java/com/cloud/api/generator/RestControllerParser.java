@@ -3,6 +3,7 @@ package com.cloud.api.generator;
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
 import com.cloud.api.evaluator.Evaluator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
@@ -32,15 +33,19 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,17 +53,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import net.sf.jsqlparser.statement.select.ExceptOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
+    public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
     private final File controllers;
 
     Set<String> testMethodNames;
     private CompilationUnit gen;
+    private HashMap<String, Object> parameterSet;
+
+    private final Path dataPath;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
     Map<String, Comparable> context;
     private boolean evaluatorUnsupported = false;
     File current;
@@ -73,7 +87,7 @@ public class RestControllerParser extends ClassProcessor {
      */
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
     private Map<String, Type> fields;
-    Map<String, Type> variables;
+
 
     /**
      * Creates a new RestControllerParser
@@ -83,6 +97,13 @@ public class RestControllerParser extends ClassProcessor {
     public RestControllerParser(File controllers) throws IOException {
         super();
         this.controllers = controllers;
+
+        dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
+
+        // Check if the dataPath directory exists, if not, create it
+        if (!Files.exists(dataPath)) {
+            Files.createDirectories(dataPath);
+        }
         Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
 
     }
@@ -105,11 +126,20 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
+            Matcher matcher = controllerPattern.matcher(path.toString());
+
+            String controllerName = null;
+            if (matcher.find()) {
+                controllerName = matcher.group(1);
+            }
+            parameterSet = new HashMap<>();
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
+            File file = new File(dataPath + File.separator + controllerName + "Params.json");
+            objectMapper.writeValue(file, parameterSet);
         }
     }
 
@@ -206,19 +236,18 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-
     /**
-     * Will be called for each method of the controller.
+     * Will be called for each field of the controller.
+     * Primary purpose is to identify services and repositories that are being used in the controller.
      *
-     * Identifies the return types and the arguments of each method in the class.
      */
     private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
 
         /**
          * The field visitor will be used to identify the repositories that are being used in the controller.
          *
-         * @param field
-         * @param arg
+         * @param field the field to inspect
+         * @param arg not used
          */
         @Override
         public void visit(FieldDeclaration field, Void arg) {
@@ -234,6 +263,10 @@ public class RestControllerParser extends ClassProcessor {
                     try {
                         String className = t.resolve().describe();
                         if (className.startsWith(basePackage)) {
+                            /*
+                             * At the moment only compatible with repositories that are direct part of the
+                             * application under test. Repositories from external jar files are not supported.
+                             */
                             ClassProcessor proc = new ClassProcessor();
                             proc.compile(AbstractCompiler.classToPath(className));
                             CompilationUnit cu = proc.getCompilationUnit();
@@ -243,9 +276,14 @@ public class RestControllerParser extends ClassProcessor {
                                     if (cdecl.getNameAsString().equals(shortName)) {
                                         for (var ext : cdecl.getExtendedTypes()) {
                                             if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                                /*
+                                                 * We have found a repository. Now we need to process it. Afterwards
+                                                 * it will be added to the repositories map, to be identified by the
+                                                 * field name.
+                                                 */
                                                 RepositoryParser parser = new RepositoryParser();
                                                 parser.compile(AbstractCompiler.classToPath(className));
-
+                                                parser.process();
                                                 respositories.put(shortName, parser);
                                                 break;
                                             }
@@ -272,8 +310,74 @@ public class RestControllerParser extends ClassProcessor {
 
     /**
      * Visitor that will detect methods in the controller.
+     *
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        /*
+         * Every public method in the source code will result in a call to the visit(MethodDeclaration...)
+         * method of this class. In there will try to identify locals and whether any repository queries
+         * are being executed. Armed with that information we will then use the return statement visitor
+         * to identify the return type of the method and thereafter to generate the tests.
+         */
+        Evaluator evaluator = new Evaluator();
+        RepositoryQuery last = null;
+
+        /**
+         * This method will be called for each method call expression associated with a variable assignment.
+         * @param node a node from an expression statement, which may have a method call expression.
+         *             The result of which will be used in the variable assignment by the caller
+         * @param arg The list of variables that are being assigned.
+         *            Most likely to contain a single node
+         * @return A repository query, if the variable assignment is the result of a query execution or null.
+         */
+        public RepositoryQuery processMCE(Node node, NodeList<VariableDeclarator> arg) {
+
+            if (node instanceof MethodCallExpr) {
+                MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
+                Optional<Expression> scope = mce.getScope();
+                if(scope.isPresent()) {
+                    var x = fields.get(scope.get().toString());
+                    if (x != null) {
+                        RepositoryParser repository = respositories.get(x.toString());
+                        if (repository != null) {
+                            /*
+                             * This method call expression is associated with a repository query.
+                             */
+                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
+                            try {
+                                /*
+                                 * We have one more challenge; to find the parameters that are being used in the repository
+                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
+                                 * to the arguments that are passed in when the method is actually being called.
+                                 */
+                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
+                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
+                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
+                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
+                                }
+
+                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
+                                q.setResultSet(rs);
+                            } catch (Exception e) {
+                                logger.warn(e.getMessage());
+                                logger.warn("Could not execute query {}", mce);
+                            }
+                            return q;
+                        }
+                    }
+                }
+            }
+            else {
+                for(Node n : node.getChildNodes()) {
+                    RepositoryQuery q = processMCE(n, arg);
+                    if(q != null) {
+                        return q;
+                    }
+                }
+            }
+            return null;
+        }
+
         /**
          * Prepares the ground for the MethodBLockVisitor to do it's work.
          *
@@ -287,45 +391,36 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
+
                 buildContext(md);
-                if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
+
+                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
                     return;
                 }
-                if(md.getBody().isPresent()) {
-                    identifyLocals(md.getBody().get());
-                }
+                Optional<BlockStmt> body = md.getBody();
+                if(body.isPresent()) {
+                    logger.info("Method: {}", md.getName());
+                    last = null;
 
-                logger.info("Method: {}", md.getName());
-                Type returnType = null;
-                Type methodType = md.getType();
-                if (methodType.asString().contains("<")) {
-                    if (!methodType.asString().endsWith("<Void>")) {
-                        if (methodType.isClassOrInterfaceType()
-                                && methodType.asClassOrInterfaceType().getTypeArguments().isPresent()
-                                && !methodType.asClassOrInterfaceType().getTypeArguments().get().get(0).toString().equals("Object")
-                        ) {
-                            returnType = methodType.asClassOrInterfaceType().getTypeArguments().get().get(0);
-                        } else {
-                            BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
-
+                    for(Statement st : body.get().getStatements()) {
+                        NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
+                        if (variables != null && st.isExpressionStmt()) {
+                            /*
+                             * we have just encountered a variable assignment.
+                             *
+                             * If the variable assignment is associated with a repository query, the visitor
+                             * will return a non-null value.
+                             */
+                            RepositoryQuery query = processMCE(st, variables);
+                            if (query != null && query.getResultSet() != null) {
+                                last = query;
+                            }
+                        }
+                        else {
+                            st.accept(new ReturnStatmentVisitor(), md);
                         }
                     }
-                } else {
-                    returnType = methodType;
-                    if (returnType.toString().equals("ResponseEntity")) {
-                        BlockStmt blockStmt = md.getBody().orElseThrow(() -> new IllegalStateException("Method body not found"));
-
-                    }
                 }
-
-                if (returnType != null) {
-                    solveTypeDependencies(returnType, cu);
-                }
-                for (var param : md.getParameters()) {
-                    solveTypeDependencies(param.getType(), cu);
-                }
-
-                md.accept(new MethodBlockVisitor(), md);
             }
         }
 
@@ -337,72 +432,56 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
-        /**
-         * Identify local variables with in the block statement
-         * @param blockStmt the method body block. Any variable declared ehre will be a local.
-         */
-        private void identifyLocals(BlockStmt blockStmt) {
-            variables = new HashMap<>();
-            for (var stmt : blockStmt.getStatements()) {
-                if (stmt.isExpressionStmt()) {
-                    Expression expr = stmt.asExpressionStmt().getExpression();
-                    if (expr.isVariableDeclarationExpr()) {
-                        VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-                        variables.put(varDeclExpr.getVariable(0).getNameAsString(), varDeclExpr.getElementType());
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * A visitor that will iterate through the block of a method and identify the return statements.
-     */
-    private class MethodBlockVisitor extends VoidVisitorAdapter<MethodDeclaration> {
-        Evaluator evaluator = new Evaluator();
 
         /**
-         * This method will be called once for each return statment inside the method block.
-         * @param stmt the return statement
-         * @param md the method declaration that contains the return statement.
+         * Nested inner class to handle return statements.
+         *
          */
-        @Override
-        public void visit(ReturnStmt stmt, MethodDeclaration md) {
-            super.visit(stmt, md);
-            Optional<Node> parent = stmt.getParentNode();
-            try {
-                if (parent.isPresent() && !evaluatorUnsupported) {
-                    // the return statement will have a parent no matter what but the optionals approach
-                    // requires the use of isPresent.
-                    if (parent.get() instanceof IfStmt) {
-                        IfStmt ifStmt = (IfStmt) parent.get();
-                        Expression condition = ifStmt.getCondition();
-                        if (context != null && evaluator.evaluateCondition(condition, context, variables)) {
-                            identifyReturnType(stmt, md);
-                            buildPreconditions(md, condition);
-                        }
-                    } else {
-                        BlockStmt blockStmt = (BlockStmt) parent.get();
-                        Optional<Node> gramps = blockStmt.getParentNode();
-                        if (gramps.isPresent()) {
-                            if (gramps.get() instanceof IfStmt) {
-                                // we have found ourselves a conditional return statement.
-                                IfStmt ifStmt = (IfStmt) gramps.get();
-                                Expression condition = ifStmt.getCondition();
-                                if (context != null && evaluator.evaluateCondition(condition, context, variables)) {
-                                    identifyReturnType(stmt, md);
-                                    buildPreconditions(md, condition);
-                                }
-                            } else if (gramps.get() instanceof MethodDeclaration) {
+        class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            /**
+             * This method will be called once for each return statment inside the method block.
+             *
+             * @param statement A statement that maybe a return statement.
+             * @param md        the method declaration that contains the return statement.
+             */
+            @Override
+            public void visit(ReturnStmt statement, MethodDeclaration md) {
+                ReturnStmt stmt = statement.asReturnStmt();
+                Optional<Node> parent = stmt.getParentNode();
+                try {
+                    if (parent.isPresent() && !evaluatorUnsupported) {
+                        // the return statement will have a parent no matter what but the optionals approach
+                        // requires the use of isPresent.
+                        if (parent.get() instanceof IfStmt) {
+                            IfStmt ifStmt = (IfStmt) parent.get();
+                            Expression condition = ifStmt.getCondition();
+                            if (context != null && evaluator.evaluateCondition(condition, context)) {
                                 identifyReturnType(stmt, md);
+                                buildPreconditions(md, condition);
+                            }
+                        } else {
+                            BlockStmt blockStmt = (BlockStmt) parent.get();
+                            Optional<Node> gramps = blockStmt.getParentNode();
+                            if (gramps.isPresent()) {
+                                if (gramps.get() instanceof IfStmt) {
+                                    // we have found ourselves a conditional return statement.
+                                    IfStmt ifStmt = (IfStmt) gramps.get();
+                                    Expression condition = ifStmt.getCondition();
+                                    if (context != null && evaluator.evaluateCondition(condition, context)) {
+                                        identifyReturnType(stmt, md);
+                                        buildPreconditions(md, condition);
+                                    }
+                                } else if (gramps.get() instanceof MethodDeclaration) {
+                                    identifyReturnType(stmt, md);
+                                }
                             }
                         }
                     }
+                } catch (EvaluatorException e) {
+                    logger.error("Evaluator exception");
+                    logger.error("\t{}", e.getMessage());
+                    evaluatorUnsupported = true;
                 }
-            } catch (EvaluatorException e) {
-                logger.error("Evaluator exception");
-                logger.error("\t{}", e.getMessage());
-                evaluatorUnsupported = true;
             }
         }
 
@@ -455,66 +534,49 @@ public class RestControllerParser extends ClassProcessor {
         }
         private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null) {
+            if (expression != null && expression.isObjectCreationExpr()) {
                 ControllerResponse response = new ControllerResponse();
-                if (expression.isObjectCreationExpr()) {
-                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for(Expression typeArg : objectCreationExpr.getArguments()) {
-                            if (typeArg.isFieldAccessExpr()) {
-                                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                                    response.setStatusCode(fae.getNameAsString());
-                                }
-                            }
-                            if (typeArg.isNameExpr()) {
-                                response.setType(variables.get(typeArg.asNameExpr().getNameAsString()));
-                            } else if (typeArg.isStringLiteralExpr()) {
-                                response.setType(StaticJavaParser.parseType("java.lang.String"));
-                                response.setResponse(typeArg.asStringLiteralExpr().asString());
-                            } else if (typeArg.isMethodCallExpr()) {
-                                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                                try {
-                                    Optional<Expression> scope = methodCallExpr.getScope();
-                                    if (scope.isPresent()) {
-                                        Type type = (scope.get().isFieldAccessExpr())
-                                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                                : fields.get(scope.get().asNameExpr().getNameAsString());
-                                        if(type != null) {
-                                            extractTypeFromCall(type, methodCallExpr);
-                                            logger.debug(type.toString());
-                                        }
-                                        else {
-                                            logger.debug("Type not found {}", scope.get());
-                                        }
-                                    }
-                                } catch (IOException e) {
-                                    throw new GeneratorException("Exception while identifying dependencies", e);
-                                }
+                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                    for(Expression typeArg : objectCreationExpr.getArguments()) {
+                        if (typeArg.isFieldAccessExpr()) {
+                            FieldAccessExpr fae = typeArg.asFieldAccessExpr();
+                            if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
+                                response.setStatusCode(fae.getNameAsString());
                             }
                         }
-                    }
-                } else if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-                    try {
-                        Optional<Expression> scope = methodCallExpr.getScope();
-                        if (scope.isPresent()) {
-                            Type type = (scope.get().isFieldAccessExpr())
-                                    ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                    : fields.get(md.getType().asString());
-                            if(type != null) {
-                                extractTypeFromCall(type, methodCallExpr);
-                                logger.debug(type.toString());
+                        if (typeArg.isNameExpr()) {
+                            String nameAsString = typeArg.asNameExpr().getNameAsString();
+                            if(nameAsString != null && evaluator.getLocal(nameAsString) != null) {
+                                response.setType(evaluator.getLocal(nameAsString).getType());
                             }
                             else {
-                                logger.debug("Type not found {}", scope.get());
+                                logger.warn("NameExpr is null in identify return type");
+                            }
+                        } else if (typeArg.isStringLiteralExpr()) {
+                            response.setType(StaticJavaParser.parseType("java.lang.String"));
+                            response.setResponse(typeArg.asStringLiteralExpr().asString());
+                        } else if (typeArg.isMethodCallExpr()) {
+                            MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
+                            try {
+                                Optional<Expression> scope = methodCallExpr.getScope();
+                                if (scope.isPresent()) {
+                                    Type type = (scope.get().isFieldAccessExpr())
+                                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                            : fields.get(scope.get().asNameExpr().getNameAsString());
+                                    if(type != null) {
+                                        extractTypeFromCall(type, methodCallExpr);
+                                        logger.debug(type.toString());
+                                    }
+                                    else {
+                                        logger.debug("Type not found {}", scope.get());
+                                    }
+                                }
+                            } catch (IOException e) {
+                                throw new GeneratorException("Exception while identifying dependencies", e);
                             }
                         }
-                    } catch (IOException e) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
                     }
-                } else if (expression.isNameExpr()) {
-                    response.setType(variables.get(expression.asNameExpr().getNameAsString()));
                 }
                 createTests(md, response);
                 return response;
@@ -522,6 +584,11 @@ public class RestControllerParser extends ClassProcessor {
             return null;
         }
 
+        /**
+         * Create tests based on the method declarion and return type
+         * @param md
+         * @param returnType
+         */
         private void createTests(MethodDeclaration md, ControllerResponse returnType) {
             for (AnnotationExpr annotation : md.getAnnotations()) {
                 if (annotation.getNameAsString().equals("GetMapping") ) {
@@ -592,7 +659,7 @@ public class RestControllerParser extends ClassProcessor {
             }
 
             if (testMethodNames.contains(testName)) {
-                testName += "_" + (char)('A' + testMethodNames.size() -1);
+                testName += "_" + (char)('A' + testMethodNames.size()  % 26 -1);
             }
             testMethodNames.add(testName);
             testMethod.setName(testName);
@@ -615,20 +682,32 @@ public class RestControllerParser extends ClassProcessor {
             httpWithoutBody(md, annotation, "makeGet");
         }
 
-        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call) {
+        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call)  {
             MethodDeclaration testMethod = buildTestMethod(md);
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
             makeGetCall.addArgument(new NameExpr("headers"));
             BlockStmt body = testMethod.getBody().get();
 
             if(md.getParameters().isEmpty()) {
-                makeGetCall.addArgument(new StringLiteralExpr(getPath(annotation)));
+                /*
+                 * Empty parameters are very easy.
+                 */
+                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
             }
             else {
+                /*
+                 * Non empty parameters.
+                 */
                 ControllerRequest request = new ControllerRequest();
                 request.setPath(getPath(annotation).replace("\"", ""));
 
-                handlePathVariables(md, request);
+                try {
+                    replaceURIVariablesFromDb(md, request);
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
+                handleURIVariables(md, request);
+
                 makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
                 if(!request.getQueryParameters().isEmpty()) {
                     body.addStatement("Map<String, String> queryParams = new HashMap<>();");
@@ -648,6 +727,60 @@ public class RestControllerParser extends ClassProcessor {
 
         }
 
+        /*
+         * Replace PathVariable and RequestParam values with the values from the database.
+         *
+          We need to figure out if any of the path or request parameters are supposed to
+         * match the values from the database.
+         *
+         * If the last field is not null that means there is likely to be a query associated
+         * with those parameters.
+         *
+         * Mapping parameters works like this.
+         *    Request or path parameter becomes an argument to a method call.
+         *    The argument in the method call becomes a parameter for a placeholder
+         *    The placeholder may have been removed though!
+         */
+        private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
+            if (last != null && last.getResultSet() != null) {
+                ResultSet rs = last.getResultSet();
+                List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
+                List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
+
+                if(rs.next()) {
+                    for(int i = 0 ; i < paramMap.size() ; i++) {
+                        RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
+                        RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
+
+                        if(param.getColumnName() != null) {
+                            String[] parts = param.getColumnName().split("\\.");
+                            String col = parts.length > 1 ? parts[1] : parts[0];
+
+                            logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col));
+
+                            // finally try to match it against the path and request variables
+                            for (Parameter p : md.getParameters()) {
+                                Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
+                                Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
+                                if (requestParam.isPresent()) {
+                                    String name = getParamName(p);
+                                    if (name.equals(arg.getArgument().toString())) {
+                                        request.getQueryParameters().put(name, rs.getObject(col).toString());
+                                    }
+                                } else if (pathParam.isPresent()) {
+                                    String name = getParamName(p);
+                                    final String target = '{' + name + '}';
+                                    if (name.equals(arg.getArgument().toString())) {
+                                        request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
             httpWithBody(md, annotation, returnType, "makePost");
         }
@@ -660,7 +793,7 @@ public class RestControllerParser extends ClassProcessor {
 
             ControllerRequest request = new ControllerRequest();
             request.setPath(getPath(annotation).replace("\"", ""));
-            handlePathVariables(md, request);
+            handleURIVariables(md, request);
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
@@ -724,8 +857,7 @@ public class RestControllerParser extends ClassProcessor {
                             if (expr.isMethodCallExpr()) {
                                 String s = expr.toString();
                                 if (s.contains("set")) {
-                                    String[] parts = s.split("\\.");
-                                    body.addStatement(String.format("req.%s;", parts[1]));
+                                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
                                 }
                             }
                         }
@@ -765,19 +897,19 @@ public class RestControllerParser extends ClassProcessor {
                     System.out.println("bada 2");
                 } else if (!
                         (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                    if (returnType.isClassOrInterfaceType()) {
-                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        if (respType.toString().equals("String")) {
-                            body.addStatement("String resp = response.getBody().asString();");
-                            if (resp.getResponse() != null) {
-                                body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
-                            } else {
-                                body.addStatement("Assert.assertNotNull(resp);");
-                                logger.warn("Reponse body is empty for {}", md.getName());
-                            }
-                        } else {
-                            System.out.println("bada 1");
-                            // todo get thsi back on line
+                    Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                    if (respType.toString().equals("String")) {
+                        body.addStatement("String resp = response.getBody().asString();");
+                        if(resp.getResponse() != null) {
+                            body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                        }
+                        else {
+                            body.addStatement("Assert.assertNotNull(resp);");
+                            logger.warn("Reponse body is empty for {}", md.getName());
+                        }
+                    } else {
+                        System.out.println("bada 1");
+                        // todo get thsi back on line
 //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
 //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
 //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
@@ -785,7 +917,6 @@ public class RestControllerParser extends ClassProcessor {
 //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
 //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
 //                                body.addStatement(expressionStmt);
-                        }
                     }
                 }
             }
@@ -825,69 +956,34 @@ public class RestControllerParser extends ClassProcessor {
         blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
     }
 
-    private void handlePathVariables(MethodDeclaration md, ControllerRequest request) {
-        String path = request.getPath().replace(":.+", "");
-
+    private void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
-            if(!paramString.startsWith("@RequestBody")){
-                String paramName = getParamName(param);
-                switch(param.getTypeAsString()) {
-                    case "Boolean":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"1");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "false");
-                        }
-                        break;
 
-                    case "float":
-                    case "Float":
-                    case "double":
-                    case "Double":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"1");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "1.0");
-                        }
-                        break;
-
-                    case "Integer":
-                    case "int":
-                    case "Long":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"1");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "1");
-                        }
-                        break;
-
-                    case "String":
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"Ibuprofen");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "Ibuprofen");
-                        }
-
-                    default:
-                        // some get methods rely on an enum.
-                        // todo handle this properly
-                        if(paramString.startsWith("@RequestParam")) {
-                            request.addQueryParameter(paramName ,"0");
-                        }
-                        else {
-                            path = path.replace('{' + paramName + '}', "0");
-                        }
-
+            String paramName = getParamName(param);
+            if (paramString.startsWith("@RequestParam")) {
+                if (!request.getQueryParameters().containsKey(paramName)) {
+                    request.addQueryParameter(paramName, switch (param.getTypeAsString()) {
+                        case "Boolean" -> "1";
+                        case "float", "Float", "double", "Double" -> "1";
+                        case "Integer", "int", "Long" -> "1";
+                        case "String" -> "Ibuprofen";
+                        default -> "0";
+                    });
                 }
+            } else if (paramString.startsWith("@PathVariable")) {
+                final String target = '{' + paramName + '}';
+
+                String path = switch (param.getTypeAsString()) {
+                    case "Boolean" -> request.getPath().replace(target, "false");
+                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "1.0");
+                    case "Integer", "int", "Long" -> request.getPath().replace(target, "1");
+                    case "String" -> request.getPath().replace(target, "Ibuprofen");
+                    default -> request.getPath().replace(target, "0");
+                };
+                request.setPath(path);
             }
         }
-
-        request.setPath(path);
     }
 
     private static String getParamName(Parameter param) {
@@ -924,36 +1020,31 @@ public class RestControllerParser extends ClassProcessor {
         }
         return null;
     }
-
     /**
      * Given an annotation for a method in a controller find the full path in the url
      * @param annotation a GetMapping, PostMapping etc
      * @return the path url component
      */
-    String getPath(AnnotationExpr annotation) {
-        String commonPath = getCommonPath();
+    private String getPath(AnnotationExpr annotation) {
         if (annotation.isSingleMemberAnnotationExpr()) {
-            String memberValue = annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
-            return (memberValue.startsWith("\"/") ? commonPath + memberValue : commonPath + "/" + memberValue).replace("\"", "");
+            return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
         } else if (annotation.isNormalAnnotationExpr()) {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
                 if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
-                    String pairValue = pair.getValue().toString();
-                    return (commonPath + pairValue).replace("\"", "");
+                    return getCommonPath() + pair.getValue().toString();
                 }
             }
         }
-        return commonPath.replace("\"", "");
+        return getCommonPath();
     }
-
     /**
      * Each method in the controller will be a child of the main path for that controller
      * which is represented by the RequestMapping for that controller
      *
      * @return the path from the RequestMapping Annotation or an empty string
      */
-    String getCommonPath() {
+    private String getCommonPath() {
         for (var classAnnotation : cu.getTypes().get(0).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
@@ -969,7 +1060,6 @@ public class RestControllerParser extends ClassProcessor {
         }
         return "";
     }
-
 }
 
 
