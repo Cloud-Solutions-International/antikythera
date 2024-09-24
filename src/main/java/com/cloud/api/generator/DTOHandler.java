@@ -2,14 +2,12 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.*;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
@@ -17,6 +15,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+
+
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -220,7 +221,71 @@ public class DTOHandler extends  ClassProcessor {
             extractEnums(field);
             solveTypeDependencies(field.getElementType(), cu);
 
+            // handle custom getters and setters
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            String className = cu.getTypes().get(0).getNameAsString();
+            Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+
+            if(!methodNames.isEmpty()){
+                String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
+                String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
+
+                // Use custom getter and setter names
+                generateGetter(field, getterName);
+                generateSetter(field, setterName);
+
+            }
+
+
             return super.visit(field, args);
+        }
+
+        private void generateGetter(FieldDeclaration field, String getterName) {
+            // Create a new MethodDeclaration for the getter
+            MethodDeclaration getter = new MethodDeclaration();
+            getter.setName(getterName);
+            getter.setType(field.getElementType());
+            getter.setModifiers(Modifier.Keyword.PUBLIC);
+
+            // Create a ReturnStmt that returns the field's value
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            ReturnStmt returnStmt = new ReturnStmt(new NameExpr(fieldName));
+
+            // Add the ReturnStmt to the method body
+            BlockStmt body = new BlockStmt();
+            body.addStatement(returnStmt);
+            getter.setBody(body);
+
+            // Add the getter method to the class
+            ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(getter);
+        }
+
+        private void generateSetter(FieldDeclaration field, String setterName) {
+            // Create a new MethodDeclaration for the setter
+            MethodDeclaration setter = new MethodDeclaration();
+            setter.setName(setterName);
+            setter.setType(new VoidType());
+            setter.setModifiers(Modifier.Keyword.PUBLIC);
+
+            // Add a parameter to the method with the field's type and name
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            Parameter param = new Parameter(field.getElementType(), fieldName);
+            setter.addParameter(param);
+
+            // Create an AssignExpr that assigns the parameter value to the field
+            AssignExpr assignExpr = new AssignExpr(
+                    new NameExpr("this." + fieldName),
+                    new NameExpr(fieldName),
+                    AssignExpr.Operator.ASSIGN
+            );
+
+            // Add the AssignExpr to the method body
+            BlockStmt body = new BlockStmt();
+            body.addStatement(assignExpr);
+            setter.setBody(body);
+
+            // Add the setter method to the class
+            ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
         }
 
         private void extractEnums(FieldDeclaration field) {
@@ -275,17 +340,22 @@ public class DTOHandler extends  ClassProcessor {
         if (!field.isStatic()) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
             String instance = classToInstanceName(cdecl);
-
             String fieldName = field.getVariables().get(0).getNameAsString();
             MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
             String type = field.getElementType().isClassOrInterfaceType()
                     ? field.getElementType().asClassOrInterfaceType().getNameAsString()
                     : field.getElementType().asString();
 
-            // Use ternary operator to handle both array and non-array cases
+            String className = cu.getTypes().get(0).getNameAsString();
+            Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+
             String argument = switch (type) {
                 case "boolean" -> {
-                    if (fieldName.startsWith("is")) {
+                    if(!methodNames.isEmpty()) {
+                        String setterName = methodNames.get("setter");
+                        setter = new MethodCallExpr(new NameExpr(instance), setterName);
+                    }
+                    if (fieldName.startsWith("is") && methodNames.isEmpty()) {
                         setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName.replaceFirst("is", "")));
                     }
                     yield isArray ? "new boolean[] {true, false}" : "true";
@@ -308,6 +378,9 @@ public class DTOHandler extends  ClassProcessor {
                 case "LocalDateTime" -> isArray ? "new LocalDateTime[] {LocalDateTime.now(), LocalDateTime.now()}" : "LocalDateTime.now()";
                 case "Short" -> isArray ? "new Short[] {(short) 0, (short) 1}" : "(short) 0";
                 case "byte" -> isArray ? "new byte[][] {new byte[] {0}, new byte[] {1}}" : "new byte[] {0}";
+                case "List" -> "List.of()";
+                case "Map" -> "Map.of()";
+                case "Set" -> "Set.of()";
                 case "T" -> "null";
                 case "BigDecimal" -> isArray ? "new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ONE}" : "BigDecimal.ZERO";
                 default -> {
@@ -326,7 +399,6 @@ public class DTOHandler extends  ClassProcessor {
         }
         return null;
     }
-
 
     public static void main(String[] args) throws IOException{
         Settings.loadConfigMap();
