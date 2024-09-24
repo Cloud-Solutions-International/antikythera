@@ -10,6 +10,7 @@ import com.github.javaparser.ast.expr.NullLiteralExpr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,6 +34,6 @@ class EvaluatorTest {
         Expression methodCall = new MethodCallExpr(new NameExpr("dto"), "getHospital");
         Expression nullLiteral = new NullLiteralExpr();
         BinaryExpr condition = new BinaryExpr(methodCall, nullLiteral, BinaryExpr.Operator.EQUALS);
-        assertTrue(eval.evaluateCondition(condition, context));
+        assertTrue(eval.evaluateCondition(condition, context, new HashMap<>()));
     }
 }
