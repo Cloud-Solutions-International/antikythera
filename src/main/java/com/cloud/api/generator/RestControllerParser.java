@@ -6,7 +6,10 @@ import com.cloud.api.evaluator.Evaluator;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.*;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -57,6 +60,8 @@ public class RestControllerParser extends ClassProcessor {
     Set<String> testMethodNames;
     private CompilationUnit gen;
     Map<String, Comparable> context;
+    private boolean evaluatorUnsupported = false;
+    File current;
 
     /**
      * Store the conditions that a controller may expect the input to meet.
@@ -87,6 +92,7 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     private void processRestController(File path) throws IOException {
+        current = path;
         testMethodNames = new HashSet<>();
         logger.info(path.toString());
         if (path.isDirectory()) {
@@ -124,6 +130,9 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
         gen.addImport("java.io.IOException");
         gen.addImport("java.util.List");
+        gen.addImport("java.util.Map");
+        gen.addImport("java.util.Date");
+        gen.addImport("java.util.HashMap");
         gen.addImport("io.restassured.http.Method");
         gen.addImport("io.restassured.response.Response");
         gen.addImport("com.cloud.core.annotations.TestCaseType");
@@ -265,17 +274,20 @@ public class RestControllerParser extends ClassProcessor {
      * Visitor that will detect methods in the controller.
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        /**
+         * Prepares the ground for the MethodBLockVisitor to do it's work.
+         *
+         * reset the preConditions list
+         * identify the locals
+         * reset the context
+         */
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-
+            evaluatorUnsupported = false;
             if (md.isPublic()) {
-                Parameter requestBody = findRequestBody(md);
-                if (requestBody != null) {
-                    solveTypeDependencies(requestBody.getType(), cu);
-                }
-
                 preConditions = new ArrayList<>();
+                buildContext(md);
                 if (md.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("ExceptionHandler"))) {
                     return;
                 }
@@ -283,7 +295,7 @@ public class RestControllerParser extends ClassProcessor {
                     identifyLocals(md.getBody().get());
                 }
 
-                logger.info("Method: {}\n", md.getName());
+                logger.info("Method: {}", md.getName());
                 Type returnType = null;
                 Type methodType = md.getType();
                 if (methodType.asString().contains("<")) {
@@ -314,6 +326,14 @@ public class RestControllerParser extends ClassProcessor {
                 }
 
                 md.accept(new MethodBlockVisitor(), md);
+            }
+        }
+
+        private void buildContext(MethodDeclaration md) {
+            context = new HashMap<>();
+            for(var param : md.getParameters()) {
+                context.put(param.getNameAsString(), null);
+                solveTypeDependencies(param.getType(), cu);
             }
         }
 
@@ -350,35 +370,39 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(ReturnStmt stmt, MethodDeclaration md) {
             super.visit(stmt, md);
             Optional<Node> parent = stmt.getParentNode();
-
-            if (parent.isPresent()) {
-                // the return statement will have a parent no matter what but the optionals approach
-                // requires the use of isPresent.
-                if(parent.get() instanceof IfStmt) {
-                    IfStmt ifStmt = (IfStmt) parent.get();
-                    Expression condition = ifStmt.getCondition();
-                    if (context != null && evaluator.evaluateCondition(condition, context)) {
-                        identifyReturnType(stmt, md);
-                        buildPreconditions(md, condition);
-                    }
-                }
-                else {
-                    BlockStmt blockStmt = (BlockStmt) parent.get();
-                    Optional<Node> gramps = blockStmt.getParentNode();
-                    if (gramps.isPresent()) {
-                        if (gramps.get() instanceof IfStmt) {
-                            // we have found ourselves a conditional return statement.
-                            IfStmt ifStmt = (IfStmt) gramps.get();
-                            Expression condition = ifStmt.getCondition();
-                            if (context != null && evaluator.evaluateCondition(condition, context)) {
-                                identifyReturnType(stmt, md);
-                                buildPreconditions(md, condition);
-                            }
-                        } else if (gramps.get() instanceof MethodDeclaration) {
+            try {
+                if (parent.isPresent() && !evaluatorUnsupported) {
+                    // the return statement will have a parent no matter what but the optionals approach
+                    // requires the use of isPresent.
+                    if (parent.get() instanceof IfStmt) {
+                        IfStmt ifStmt = (IfStmt) parent.get();
+                        Expression condition = ifStmt.getCondition();
+                        if (context != null && evaluator.evaluateCondition(condition, context, variables)) {
                             identifyReturnType(stmt, md);
+                            buildPreconditions(md, condition);
+                        }
+                    } else {
+                        BlockStmt blockStmt = (BlockStmt) parent.get();
+                        Optional<Node> gramps = blockStmt.getParentNode();
+                        if (gramps.isPresent()) {
+                            if (gramps.get() instanceof IfStmt) {
+                                // we have found ourselves a conditional return statement.
+                                IfStmt ifStmt = (IfStmt) gramps.get();
+                                Expression condition = ifStmt.getCondition();
+                                if (context != null && evaluator.evaluateCondition(condition, context, variables)) {
+                                    identifyReturnType(stmt, md);
+                                    buildPreconditions(md, condition);
+                                }
+                            } else if (gramps.get() instanceof MethodDeclaration) {
+                                identifyReturnType(stmt, md);
+                            }
                         }
                     }
                 }
+            } catch (EvaluatorException e) {
+                logger.error("Evaluator exception");
+                logger.error("\t{}", e.getMessage());
+                evaluatorUnsupported = true;
             }
         }
 
@@ -397,7 +421,7 @@ public class RestControllerParser extends ClassProcessor {
             if(expr instanceof MethodCallExpr) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
                 Parameter reqBody = findRequestBody(md);
-                if(reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
+                if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
                     try {
                         if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
 
@@ -417,7 +441,11 @@ public class RestControllerParser extends ClassProcessor {
                     } catch (UnsolvedSymbolException e) {
                         logger.warn("Unsolved symbol exception");
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+                        logger.error("Current controller: {}", current);
+                        if(Settings.getProperty("dependencies.on_error").toString().equals("exit")) {
+                            throw new GeneratorException("Exception while identifying dependencies", e);
+                        }
+                        logger.error(e.getMessage());
                     }
                 }
             }
@@ -568,17 +596,28 @@ public class RestControllerParser extends ClassProcessor {
             MethodDeclaration testMethod = buildTestMethod(md);
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
             makeGetCall.addArgument(new NameExpr("headers"));
+            BlockStmt body = testMethod.getBody().get();
 
             if(md.getParameters().isEmpty()) {
                 makeGetCall.addArgument(new StringLiteralExpr(getPath(annotation)));
             }
             else {
-                String path = handlePathVariables(md, getPath(annotation));
-                makeGetCall.addArgument(new StringLiteralExpr(path));
+                ControllerRequest request = new ControllerRequest();
+                request.setPath(getPath(annotation).replace("\"", ""));
+
+                handlePathVariables(md, request);
+                makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
+                if(!request.getQueryParameters().isEmpty()) {
+                    body.addStatement("Map<String, String> queryParams = new HashMap<>();");
+                    for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
+                        body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
+                    }
+                    makeGetCall.addArgument(new NameExpr("queryParams"));
+                }
             }
             VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
             AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
-            BlockStmt body = testMethod.getBody().get();
+
             body.addStatement(new ExpressionStmt(assignExpr));
 
             addCheckStatus(testMethod);
@@ -593,16 +632,18 @@ public class RestControllerParser extends ClassProcessor {
         private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse resp, String call) {
 
             MethodDeclaration testMethod = buildTestMethod(md);
-            MethodCallExpr makeGetCall = new MethodCallExpr(call);
+            MethodCallExpr makePost = new MethodCallExpr(call);
+            BlockStmt body = testMethod.getBody().get();
 
+            ControllerRequest request = new ControllerRequest();
+            request.setPath(getPath(annotation).replace("\"", ""));
+            handlePathVariables(md, request);
 
             if(md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 if(requestBody != null) {
-                    String path = handlePathVariables(md, getPath(annotation));
                     String paramClassName = requestBody.getTypeAsString();
 
-                    BlockStmt blockStmt = testMethod.getBody().get();
                     if (requestBody.getType().isClassOrInterfaceType()) {
                         var cdecl = requestBody.getType().asClassOrInterfaceType();
                         switch (cdecl.getNameAsString()) {
@@ -624,7 +665,7 @@ public class RestControllerParser extends ClassProcessor {
                             case "Long": {
                                 VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
                                 variableDeclarator.setInitializer("0");
-                                blockStmt.addStatement(new VariableDeclarationExpr(variableDeclarator));
+                                body.addStatement(new VariableDeclarationExpr(variableDeclarator));
 
                                 break;
                             }
@@ -653,7 +694,7 @@ public class RestControllerParser extends ClassProcessor {
                                 ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
                                 variableDeclarator.setInitializer(objectCreationExpr);
                                 VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                                blockStmt.addStatement(variableDeclarationExpr);
+                                body.addStatement(variableDeclarationExpr);
                         }
 
                         for (Expression expr : preConditions) {
@@ -661,68 +702,81 @@ public class RestControllerParser extends ClassProcessor {
                                 String s = expr.toString();
                                 if (s.contains("set")) {
                                     String[] parts = s.split("\\.");
-                                    blockStmt.addStatement(String.format("req.%s;", parts[1]));
+                                    body.addStatement(String.format("req.%s;", parts[1]));
                                 }
                             }
                         }
 
                         if (cdecl.getNameAsString().equals("MultipartFile")) {
-                            makeGetCall.addArgument(new NameExpr("req"));
+                            makePost.addArgument(new NameExpr("req"));
                             testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
                         } else {
                             MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
                             writeValueAsStringCall.addArgument(new NameExpr("req"));
-                            makeGetCall.addArgument(writeValueAsStringCall);
+                            makePost.addArgument(writeValueAsStringCall);
                             testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
-                        }
-                        makeGetCall.addArgument(new NameExpr("headers"));
-
-                    }
-                    makeGetCall.addArgument(new StringLiteralExpr(path));
-
-                    gen.getType(0).addMember(testMethod);
-
-                    VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
-                    AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
-                    blockStmt.addStatement(new ExpressionStmt(assignExpr));
-
-
-                    addHttpStatusCheck(blockStmt, resp.getStatusCode());
-                    Type returnType = resp.getType();
-                    if (returnType != null) {
-                        // There maybe controllers that do not return a body. In that case the
-                        // return type will be null
-                        if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                            System.out.println();
-                        } else if (!
-                                (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                            if (returnType.isClassOrInterfaceType()) {
-                                Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                                if (respType.toString().equals("String")) {
-                                    blockStmt.addStatement("String resp = response.getBody().asString();");
-                                    if (resp.getResponse() != null) {
-                                        blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
-                                    } else {
-                                        blockStmt.addStatement("Assert.assertNotNull(resp);");
-                                        logger.warn("Reponse body is empty for {}", md.getName());
-                                    }
-                                } else {
-                                    // todo get thsi back on line
-                                    //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                                    //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                                    //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                                    //                                variableDeclarator.setInitializer(methodCallExpr);
-                                    //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                                    //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                                    //                                blockStmt.addStatement(expressionStmt);
-                                }
-                            }
                         }
                     }
                 }
                 else {
+                    makePost.addArgument(new StringLiteralExpr(""));
                     logger.warn("No RequestBody found for {}", md.getName());
                 }
+            }
+
+            prepareRequest(makePost, request, body);
+
+            gen.getType(0).addMember(testMethod);
+
+            VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
+            AssignExpr assignExpr = new AssignExpr(responseVar, makePost, AssignExpr.Operator.ASSIGN);
+            body.addStatement(new ExpressionStmt(assignExpr));
+
+
+            addHttpStatusCheck(body, resp.getStatusCode());
+            Type returnType = resp.getType();
+            if (returnType != null) {
+                // There maybe controllers that do not return a body. In that case the
+                // return type will be null
+                if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                    System.out.println("bada 2");
+                } else if (!
+                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                    if (returnType.isClassOrInterfaceType()) {
+                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        if (respType.toString().equals("String")) {
+                            body.addStatement("String resp = response.getBody().asString();");
+                            if (resp.getResponse() != null) {
+                                body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                            } else {
+                                body.addStatement("Assert.assertNotNull(resp);");
+                                logger.warn("Reponse body is empty for {}", md.getName());
+                            }
+                        } else {
+                            System.out.println("bada 1");
+                            // todo get thsi back on line
+//                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+//                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+//                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+//                                variableDeclarator.setInitializer(methodCallExpr);
+//                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+//                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+//                                body.addStatement(expressionStmt);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void prepareRequest(MethodCallExpr makePost, ControllerRequest request, BlockStmt body) {
+            makePost.addArgument(new NameExpr("headers"));
+            makePost.addArgument(new StringLiteralExpr(request.getPath()));
+            if(!request.getQueryParameters().isEmpty()) {
+                body.addStatement("Map<String, String> queryParams = new HashMap<>();");
+                for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
+                    body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
+                }
+                makePost.addArgument(new NameExpr("queryParams"));
             }
         }
 
@@ -739,23 +793,17 @@ public class RestControllerParser extends ClassProcessor {
 
     private void addHttpStatusCheck(BlockStmt blockStmt, int statusCode)
     {
-        // Create a method call expression for response.getStatusCode()
         MethodCallExpr getStatusCodeCall = new MethodCallExpr(new NameExpr("response"), "getStatusCode");
 
-        // Create a binary expression to compare the status code with 200
-        BinaryExpr comparison = new BinaryExpr(getStatusCodeCall, new IntegerLiteralExpr(statusCode), BinaryExpr.Operator.EQUALS);
+        MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
+        assertTrueCall.addArgument(new IntegerLiteralExpr(statusCode));
+        assertTrueCall.addArgument(getStatusCodeCall);
 
-        // Create a method call expression for Assert.assertTrue
-        MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
-        assertTrueCall.addArgument(comparison);
-
-        // Add the assertTrue call to the block statement
         blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
     }
 
-    private String handlePathVariables(MethodDeclaration md, String path){
-        path = path.replace(":.+", "");
-        List<String> queryParams = new ArrayList<>();
+    private void handlePathVariables(MethodDeclaration md, ControllerRequest request) {
+        String path = request.getPath().replace(":.+", "");
 
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
@@ -764,7 +812,7 @@ public class RestControllerParser extends ClassProcessor {
                 switch(param.getTypeAsString()) {
                     case "Boolean":
                         if(paramString.startsWith("@RequestParam")) {
-                            queryParams.add(paramName +"=1");
+                            request.addQueryParameter(paramName ,"1");
                         }
                         else {
                             path = path.replace('{' + paramName + '}', "false");
@@ -776,7 +824,7 @@ public class RestControllerParser extends ClassProcessor {
                     case "double":
                     case "Double":
                         if(paramString.startsWith("@RequestParam")) {
-                            queryParams.add(paramName +"=1");
+                            request.addQueryParameter(paramName ,"1");
                         }
                         else {
                             path = path.replace('{' + paramName + '}', "1.0");
@@ -787,7 +835,7 @@ public class RestControllerParser extends ClassProcessor {
                     case "int":
                     case "Long":
                         if(paramString.startsWith("@RequestParam")) {
-                            queryParams.add(paramName +"=1");
+                            request.addQueryParameter(paramName ,"1");
                         }
                         else {
                             path = path.replace('{' + paramName + '}', "1");
@@ -796,7 +844,7 @@ public class RestControllerParser extends ClassProcessor {
 
                     case "String":
                         if(paramString.startsWith("@RequestParam")) {
-                            queryParams.add(paramName +"=Ibuprofen");
+                            request.addQueryParameter(paramName ,"Ibuprofen");
                         }
                         else {
                             path = path.replace('{' + paramName + '}', "Ibuprofen");
@@ -806,7 +854,7 @@ public class RestControllerParser extends ClassProcessor {
                         // some get methods rely on an enum.
                         // todo handle this properly
                         if(paramString.startsWith("@RequestParam")) {
-                            queryParams.add(paramName +"=0");
+                            request.addQueryParameter(paramName ,"0");
                         }
                         else {
                             path = path.replace('{' + paramName + '}', "0");
@@ -815,10 +863,8 @@ public class RestControllerParser extends ClassProcessor {
                 }
             }
         }
-        if(queryParams.isEmpty()) {
-            return path;
-        }
-        return path + "?" + String.join("&", queryParams);
+
+        request.setPath(path);
     }
 
     private static String getParamName(Parameter param) {
@@ -847,6 +893,7 @@ public class RestControllerParser extends ClassProcessor {
      * @return the parameter identified as the RequestBody
      */
     private Parameter findRequestBody(MethodDeclaration md) {
+
         for(var param : md.getParameters()) {
             if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
                 return param;
