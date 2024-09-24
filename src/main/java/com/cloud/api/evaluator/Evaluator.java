@@ -1,13 +1,19 @@
 package com.cloud.api.evaluator;
 
+import com.cloud.api.generator.EvaluatorException;
+import com.cloud.api.generator.RestControllerParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class Evaluator {
+    private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
 
     public static Map<String, Comparable> contextFactory(CompilationUnit cu) {
         Map<String, Comparable> context = new HashMap<>();
@@ -31,34 +37,42 @@ public class Evaluator {
         return context;
     }
 
-    public boolean evaluateCondition(Expression condition, Map<String, Comparable> context) {
+    public boolean evaluateCondition(Expression condition, Map<String, Comparable> context, Map<String, Type> variables) throws EvaluatorException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
 
             if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
-                return evaluateCondition(left, context) && evaluateCondition(right, context);
+                return evaluateCondition(left, context, variables) && evaluateCondition(right, context, variables);
             } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                return evaluateCondition(left, context) || evaluateCondition(right, context);
+                return evaluateCondition(left, context, variables) || evaluateCondition(right, context, variables);
             }
             else {
-                Comparable leftValue = evaluateExpression(left, context);
-                Comparable rightValue = evaluateExpression(right, context);
+                Comparable leftValue = evaluateExpression(left, context, variables);
+                Comparable rightValue = evaluateExpression(right, context, variables);
                 return evaluateBinaryExpression(binaryExpr.getOperator(), leftValue, rightValue);
             }
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isNameExpr()) {
             String name = condition.asNameExpr().getNameAsString();
-            return (boolean) context.getOrDefault(name, false);
+            Boolean value = (Boolean) context.getOrDefault(name, null);
+            return value != null ? value : false;
         }
-
+        else if(condition.isUnaryExpr()) {
+            UnaryExpr unaryExpr = condition.asUnaryExpr();
+            Expression expr = unaryExpr.getExpression();
+            if(expr.isNameExpr() && variables.containsKey(expr.asNameExpr().getNameAsString())) {
+                return false;
+            }
+            logger.warn("Unary expression not supported yet");
+        }
 
         return false;
     }
 
-    private Comparable evaluateExpression(Expression expr, Map<String, Comparable> context) {
+    private Comparable evaluateExpression(Expression expr, Map<String, Comparable> context, Map<String, Type> variables) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return context.get(name);
@@ -72,6 +86,11 @@ public class Evaluator {
         }
         else if(expr.isMethodCallExpr()) {
             MethodCallExpr mc = expr.asMethodCallExpr();
+            // todo fix this hack
+            String parts = mc.getScope().get().toString().split("\\.")[0];
+            if(variables.containsKey(parts)) {
+                throw new EvaluatorException("Method call involving variables not supported yet");
+            }
             if(mc.getNameAsString().startsWith("get")) {
                 return context.get(mc.getNameAsString().substring(3).toLowerCase());
             }
@@ -80,7 +99,7 @@ public class Evaluator {
         return null;
     }
 
-    private boolean evaluateBinaryExpression(BinaryExpr.Operator operator, Comparable leftValue, Comparable rightValue) {
+    private boolean evaluateBinaryExpression(BinaryExpr.Operator operator, Comparable leftValue, Comparable rightValue) throws EvaluatorException {
         switch (operator) {
             case EQUALS:
                 if(leftValue == null && rightValue == null) return true;
@@ -99,6 +118,9 @@ public class Evaluator {
             case GREATER:
                 return (int) leftValue > (int) rightValue;
             case LESS_EQUALS:
+                if(leftValue == null) {
+                    throw new EvaluatorException("Left value is null - probably because evaluator is not completed yet");
+                }
                 return (int) leftValue <= (int) rightValue;
             case GREATER_EQUALS:
                 return (int) leftValue >= (int) rightValue;
