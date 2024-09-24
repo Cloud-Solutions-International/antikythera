@@ -455,43 +455,66 @@ public class RestControllerParser extends ClassProcessor {
         }
         private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null && expression.isObjectCreationExpr()) {
+            if (expression != null) {
                 ControllerResponse response = new ControllerResponse();
-                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                    for(Expression typeArg : objectCreationExpr.getArguments()) {
-                        if (typeArg.isFieldAccessExpr()) {
-                            FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                            if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                                response.setStatusCode(fae.getNameAsString());
-                            }
-                        }
-                        if (typeArg.isNameExpr()) {
-                            response.setType(variables.get(typeArg.asNameExpr().getNameAsString()));
-                        } else if (typeArg.isStringLiteralExpr()) {
-                            response.setType(StaticJavaParser.parseType("java.lang.String"));
-                            response.setResponse(typeArg.asStringLiteralExpr().asString());
-                        } else if (typeArg.isMethodCallExpr()) {
-                            MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                            try {
-                                Optional<Expression> scope = methodCallExpr.getScope();
-                                if (scope.isPresent()) {
-                                    Type type = (scope.get().isFieldAccessExpr())
-                                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                            : fields.get(scope.get().asNameExpr().getNameAsString());
-                                    if(type != null) {
-                                        extractTypeFromCall(type, methodCallExpr);
-                                        logger.debug(type.toString());
-                                    }
-                                    else {
-                                        logger.debug("Type not found {}", scope.get());
-                                    }
+                if (expression.isObjectCreationExpr()) {
+                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                        for(Expression typeArg : objectCreationExpr.getArguments()) {
+                            if (typeArg.isFieldAccessExpr()) {
+                                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
+                                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
+                                    response.setStatusCode(fae.getNameAsString());
                                 }
-                            } catch (IOException e) {
-                                throw new GeneratorException("Exception while identifying dependencies", e);
+                            }
+                            if (typeArg.isNameExpr()) {
+                                response.setType(variables.get(typeArg.asNameExpr().getNameAsString()));
+                            } else if (typeArg.isStringLiteralExpr()) {
+                                response.setType(StaticJavaParser.parseType("java.lang.String"));
+                                response.setResponse(typeArg.asStringLiteralExpr().asString());
+                            } else if (typeArg.isMethodCallExpr()) {
+                                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
+                                try {
+                                    Optional<Expression> scope = methodCallExpr.getScope();
+                                    if (scope.isPresent()) {
+                                        Type type = (scope.get().isFieldAccessExpr())
+                                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                                : fields.get(scope.get().asNameExpr().getNameAsString());
+                                        if(type != null) {
+                                            extractTypeFromCall(type, methodCallExpr);
+                                            logger.debug(type.toString());
+                                        }
+                                        else {
+                                            logger.debug("Type not found {}", scope.get());
+                                        }
+                                    }
+                                } catch (IOException e) {
+                                    throw new GeneratorException("Exception while identifying dependencies", e);
+                                }
                             }
                         }
                     }
+                } else if (expression.isMethodCallExpr()) {
+                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
+                    try {
+                        Optional<Expression> scope = methodCallExpr.getScope();
+                        if (scope.isPresent()) {
+                            Type type = (scope.get().isFieldAccessExpr())
+                                    ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                    : fields.get(md.getType().asString());
+                            if(type != null) {
+                                extractTypeFromCall(type, methodCallExpr);
+                                logger.debug(type.toString());
+                            }
+                            else {
+                                logger.debug("Type not found {}", scope.get());
+                            }
+                        }
+                    } catch (IOException e) {
+                        throw new GeneratorException("Exception while identifying dependencies", e);
+                    }
+                } else if (expression.isNameExpr()) {
+                    response.setType(variables.get(expression.asNameExpr().getNameAsString()));
                 }
                 createTests(md, response);
                 return response;
