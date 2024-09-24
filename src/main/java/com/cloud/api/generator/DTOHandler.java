@@ -161,6 +161,7 @@ public class DTOHandler extends  ClassProcessor {
                 classDecl.getImplementedTypes().clear();
             }
             else if(typeDeclaration.isEnumDeclaration()) {
+                typeDeclaration.getMethods().forEach(Node::remove);
                 for (var annotation : typeDeclaration.getAnnotations()) {
                     if(annotation.getNameAsString().equals("AllArgsConstructor")) {
                         ImportDeclaration importDeclaration = new ImportDeclaration("lombok.AllArgsConstructor", false, false);
