@@ -154,6 +154,22 @@ public class Settings {
         return value;
     }
 
+    public static Map<String, String> loadCustomMethodNames(String className, String fieldName) {
+        Map<String, String> methodNames = new HashMap<>();
+        Map<String, Object> dtoConfig = (Map<String, Object>) Settings.getProperty("DTO");
+        if (dtoConfig != null) {
+            Map<String, Object> classConfig = (Map<String, Object>) dtoConfig.get(className);
+            if (classConfig != null) {
+                Map<String, String> fieldConfig = (Map<String, String>) classConfig.get(fieldName);
+                if (fieldConfig != null) {
+                    methodNames.put("getter", fieldConfig.get("getter"));
+                    methodNames.put("setter", fieldConfig.get("setter"));
+                }
+            }
+        }
+        return methodNames;
+    }
+
     /**
      * The value is checked for an environment variable and replaced if found.
      * The format is ${ENV_VAR_NAME}.
