@@ -57,7 +57,8 @@ public class Evaluator {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isNameExpr()) {
             String name = condition.asNameExpr().getNameAsString();
-            return (boolean) context.getOrDefault(name, false);
+            Boolean value = (Boolean) context.getOrDefault(name, null);
+            return value != null ? value : false;
         }
         else if(condition.isUnaryExpr()) {
             UnaryExpr unaryExpr = condition.asUnaryExpr();
