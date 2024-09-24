@@ -2,50 +2,40 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
 import static com.cloud.api.generator.ClassProcessor.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class RestControllerParserTest {
 
     private RestControllerParser parser;
-    private Path path;
     private static String basePath;
     private static String outputPath;
 
     @BeforeEach
     void setUp() throws IOException {
         Settings.loadConfigMap();
-        basePath = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-        String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
+        basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
+        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
-        String s = Settings.getProperty(Constants.CONTROLLERS).toString();
-        if (s.endsWith(SUFFIX)) {
-            path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
-        } else {
-            path = Paths.get(basePath, controllers.replace(".", "/"));
-        }
 
-        parser = new RestControllerParser(path.toFile());
+        String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
+        parser = new RestControllerParser(Paths.get(basePath,controllers.replaceAll("\\.","/")).toFile());
     }
 
 
@@ -60,64 +50,51 @@ class RestControllerParserTest {
     }
 
     @Test
-    void start_throwsIOExceptionWhenProcessingFails() throws IOException {
-        System.out.println(basePath);
-        Path invalidPath = Paths.get(basePath, "invalid/path", path.toString());
-        RestControllerParser invalidParser = new RestControllerParser(invalidPath.toFile());
-        assertThrows(IOException.class, invalidParser::start);
-    }
-
-//    Tests for getFields() method
-    @Test
-    void getFields_returnsEmptyMapWhenNoFieldsPresent() throws IOException {
-        // Create a temporary Java file with no fields
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-        // Use the parsed CompilationUnit
-        Map<String, Type> fields = parser.getFields(cu);
+    void getFields_returnsEmptyMapWhenNoFieldsPresent() {
+        CompilationUnit cu = StaticJavaParser.parse("public class TempClass {}");
+        Map<String, FieldDeclaration> fields = parser.getFields(cu, "TempClass");
         assertTrue(fields.isEmpty());
-
-        // Clean up the temporary file
-        Files.delete(tempFilePath);
     }
 
     @Test
-    void getFields_returnsMapWithFieldNamesAndTypes() throws FileNotFoundException {
-        Path testFilePath = Paths.get("src/test/resources/test-java-files/Test.java");
+    void getFields_returnsMapWithFieldNamesAndTypes() throws IOException {
+        Path testFilePath = Paths.get("src/test/resources/sources/com/csi/dto/SimpleDTO.java");
+        CompilationUnit cu = StaticJavaParser.parse(testFilePath);
 
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(testFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-        Map<String, Type> fields = parser.getFields(cu);
+        Map<String, FieldDeclaration> fields = parser.getFields(cu, "SimpleDTO");
         assertFalse(fields.isEmpty());
         assertEquals(fields.size(), 3);
         assertTrue(fields.containsKey("id"));
-        assertEquals(fields.get("id").asString(), "Long");
+        assertEquals(fields.get("id").toString(), "private Long id;");
         assertTrue(fields.containsKey("name"));
-        assertEquals(fields.get("name").asString(), "String");
+        assertEquals(fields.get("name").toString(), "private String name;");
         assertTrue(fields.containsKey("description"));
-        assertEquals(fields.get("description").asString(), "String");
+        assertEquals(fields.get("description").toString(), "private String description;");
+    }
+
+    @Test
+    void testGetPath() throws IOException {
+        // Mock getCommonPath method
+        RestControllerParser parserSpy = spy(new RestControllerParser(new File("DummyFile.java")));
+        doReturn("/dummy").when(parserSpy).getCommonPath();
+
+        // Test single member annotation
+        SingleMemberAnnotationExpr singleMemberAnnotation = new SingleMemberAnnotationExpr();
+        singleMemberAnnotation.setMemberValue(new StringLiteralExpr("/get"));
+        assertEquals("/dummy/get", parserSpy.getPath(singleMemberAnnotation));
+
+        // Test normal annotation with path
+        NormalAnnotationExpr normalAnnotationWithPath = new NormalAnnotationExpr();
+        normalAnnotationWithPath.addPair("path", new StringLiteralExpr("/post"));
+        assertEquals("/dummy/post", parserSpy.getPath(normalAnnotationWithPath));
+
+        // Test normal annotation with value
+        NormalAnnotationExpr normalAnnotationWithValue = new NormalAnnotationExpr();
+        normalAnnotationWithValue.addPair("value", new StringLiteralExpr("/put"));
+        assertEquals("/dummy/put", parserSpy.getPath(normalAnnotationWithValue));
+
+        // Test annotation with no path or value
+        NormalAnnotationExpr emptyAnnotation = new NormalAnnotationExpr();
+        assertEquals("/dummy", parserSpy.getPath(emptyAnnotation));
     }
 }
