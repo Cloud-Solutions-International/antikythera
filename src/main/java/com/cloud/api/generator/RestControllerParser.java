@@ -57,6 +57,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import net.sf.jsqlparser.statement.select.ExceptOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -236,54 +237,6 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     /**
-     * Listens for statements/expresions in variable assignment statement.
-     */
-    private static class VariableAssignmentVisitor extends GenericVisitorAdapter<RepositoryQuery, NodeList<VariableDeclarator>> {
-
-        /**
-         * This method will be called for each method call expression associated with a variable assignment.
-         * @param mce method call expression, the result of which will be used in the variable assignment by the caller
-         * @param arg The list of variables that are being assigned.
-         *            Most likely to contain a single node
-         * @return A repository query, if the variable assignment is the result of a query execution or null.
-         */
-        @Override
-        public RepositoryQuery visit(MethodCallExpr mce, NodeList<VariableDeclarator> arg) {
-            try {
-                String fieldName = mce.resolve().getClassName().toString();
-                RepositoryParser repository = respositories.get(fieldName);
-                if (repository != null) {
-                    /*
-                     * This method call expression is associated with a repository query.
-                     */
-                    RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
-                    try {
-                        /*
-                         * We have one more challenge; to find the parameters that are being used in the repository
-                         * method. These will then have to be mapped to the jdbc place holders and reverse mapped
-                         * to the arguments that are passed in when the method is actually being called.
-                         */
-                        MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
-                        for(int i = 0, j = mce.getArguments().size() ; i < j ; i++) {
-                            q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
-                            q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
-                        }
-
-                        ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
-                        q.setResultSet(rs);
-                    } catch (FileNotFoundException e) {
-                        logger.warn("Could not execute query {}", mce);
-                    }
-                    return q;
-                }
-            } catch (UnsolvedSymbolException e) {
-                logger.warn("Unsolved symbol exception {}", mce.asMethodCallExpr());
-            }
-            return null;
-        }
-    }
-
-    /**
      * Will be called for each field of the controller.
      * Primary purpose is to identify services and repositories that are being used in the controller.
      *
@@ -370,6 +323,61 @@ public class RestControllerParser extends ClassProcessor {
         RepositoryQuery last = null;
 
         /**
+         * This method will be called for each method call expression associated with a variable assignment.
+         * @param node a node from an expression statement, which may have a method call expression.
+         *             The result of which will be used in the variable assignment by the caller
+         * @param arg The list of variables that are being assigned.
+         *            Most likely to contain a single node
+         * @return A repository query, if the variable assignment is the result of a query execution or null.
+         */
+        public RepositoryQuery processMCE(Node node, NodeList<VariableDeclarator> arg) {
+
+            if (node instanceof MethodCallExpr) {
+                MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
+                Optional<Expression> scope = mce.getScope();
+                if(scope.isPresent()) {
+                    var x = fields.get(scope.get().toString());
+                    if (x != null) {
+                        RepositoryParser repository = respositories.get(x.toString());
+                        if (repository != null) {
+                            /*
+                             * This method call expression is associated with a repository query.
+                             */
+                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
+                            try {
+                                /*
+                                 * We have one more challenge; to find the parameters that are being used in the repository
+                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
+                                 * to the arguments that are passed in when the method is actually being called.
+                                 */
+                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
+                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
+                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
+                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
+                                }
+
+                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
+                                q.setResultSet(rs);
+                            } catch (FileNotFoundException e) {
+                                logger.warn("Could not execute query {}", mce);
+                            }
+                            return q;
+                        }
+                    }
+                }
+            }
+            else {
+                for(Node n : node.getChildNodes()) {
+                    RepositoryQuery q = processMCE(n, arg);
+                    if(q != null) {
+                        return q;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /**
          * Prepares the ground for the MethodBLockVisitor to do it's work.
          *
          * reset the preConditions list
@@ -395,17 +403,15 @@ public class RestControllerParser extends ClassProcessor {
 
                     for(Statement st : body.get().getStatements()) {
                         NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
-                        if (variables != null) {
+                        if (variables != null && st.isExpressionStmt()) {
                             /*
-                             * we have just encountered a variable assignment. Unfortunately it's very
-                             * hard to discover more information about that assignment from the expression,
-                             * so it's best to just pass it to the VariableAssignmentVisitor.
+                             * we have just encountered a variable assignment.
                              *
                              * If the variable assignment is associated with a repository query, the visitor
                              * will return a non-null value.
                              */
-                            RepositoryQuery query = st.accept(new VariableAssignmentVisitor(), variables);
-                            if(query != null && query.getResultSet() != null) {
+                            RepositoryQuery query = processMCE(st, variables);
+                            if (query != null && query.getResultSet() != null) {
                                 last = query;
                             }
                         }
@@ -646,7 +652,7 @@ public class RestControllerParser extends ClassProcessor {
             }
 
             if (testMethodNames.contains(testName)) {
-                testName += "_" + (char)('A' + testMethodNames.size() -1);
+                testName += "_" + (char)('A' + testMethodNames.size()  % 26 -1);
             }
             testMethodNames.add(testName);
             testMethod.setName(testName);
@@ -734,10 +740,10 @@ public class RestControllerParser extends ClassProcessor {
                         for(int i = 0 ; i < paramMap.size() ; i++) {
                             RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
                             RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
-                            String[] parts = param.columnName.split("\\.");
+                            String[] parts = param.getColumnName().split("\\.");
                             String col = parts.length > 1 ? parts[1] : parts[0];
 
-                            logger.debug(param.columnName + " " + arg.getArgument() + " " + rs.getObject(col) );
+                            logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col) );
 
                             // finally try to match it against the path and request variables
                             for(Parameter p : md.getParameters()) {
