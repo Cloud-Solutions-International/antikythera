@@ -105,6 +105,16 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
+            String p = path.toString().replace("/",".");
+            List<String> skip = (List<String>) Settings.getProperty("skip");
+            if(skip != null) {
+                for(String s : skip) {
+                    if (p.endsWith(s)) {
+                        return;
+                    }
+                }
+            }
+
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
