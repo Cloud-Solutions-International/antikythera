@@ -776,7 +776,6 @@ public class RestControllerParser extends ClassProcessor {
                         }
                     }
                 }
-
             }
         }
 
