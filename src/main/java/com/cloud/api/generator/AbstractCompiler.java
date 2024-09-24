@@ -150,10 +150,19 @@ public class AbstractCompiler {
             throw new FileNotFoundException(sourcePath.toString());
         }
 
+//        // Proceed with parsing the controller file
+//        FileInputStream in = new FileInputStream(file);
+//        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+//        resolved.put(className, cu);
+
         // Proceed with parsing the controller file
-        FileInputStream in = new FileInputStream(file);
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        resolved.put(className, cu);
+        try (FileInputStream in = new FileInputStream(file)) {
+            cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+            resolved.put(className, cu);
+        } catch (IOException e) {
+            logger.error("Error reading file: {}", sourcePath, e);
+            throw new FileNotFoundException(sourcePath.toString());
+        }
 
         // Search for any inner class that ends with "Dto"
         boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
