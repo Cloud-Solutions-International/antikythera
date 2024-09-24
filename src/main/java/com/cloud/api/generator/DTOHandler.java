@@ -377,12 +377,13 @@ public class DTOHandler extends  ClassProcessor {
                 case "LocalDate" -> isArray ? "new LocalDate[] {LocalDate.now(), LocalDate.now()}" : "LocalDate.now()";
                 case "LocalDateTime" -> isArray ? "new LocalDateTime[] {LocalDateTime.now(), LocalDateTime.now()}" : "LocalDateTime.now()";
                 case "Short" -> isArray ? "new Short[] {(short) 0, (short) 1}" : "(short) 0";
-                case "byte" -> isArray ? "new byte[][] {new byte[] {0}, new byte[] {1}}" : "new byte[] {0}";
+                case "byte" -> isArray ? "new byte[] {(byte) 0, (byte) 1}" : "(byte) 0";
                 case "List" -> "List.of()";
                 case "Map" -> "Map.of()";
                 case "Set" -> "Set.of()";
                 case "T" -> "null";
                 case "BigDecimal" -> isArray ? "new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ONE}" : "BigDecimal.ZERO";
+                case "EnumSet", "Class" -> { yield null; }
                 default -> {
                     if (!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
                         yield isArray ? "new " + type + "[] {}" : "new " + type + "()";
