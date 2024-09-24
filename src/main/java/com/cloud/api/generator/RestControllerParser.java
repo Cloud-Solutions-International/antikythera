@@ -742,19 +742,19 @@ public class RestControllerParser extends ClassProcessor {
                     System.out.println("bada 2");
                 } else if (!
                         (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                    Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                    if (respType.toString().equals("String")) {
-                        body.addStatement("String resp = response.getBody().asString();");
-                        if(resp.getResponse() != null) {
-                            body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
-                        }
-                        else {
-                            body.addStatement("Assert.assertNotNull(resp);");
-                            logger.warn("Reponse body is empty for {}", md.getName());
-                        }
-                    } else {
-                        System.out.println("bada 1");
-                        // todo get thsi back on line
+                    if (returnType.isClassOrInterfaceType()) {
+                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        if (respType.toString().equals("String")) {
+                            body.addStatement("String resp = response.getBody().asString();");
+                            if (resp.getResponse() != null) {
+                                body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                            } else {
+                                body.addStatement("Assert.assertNotNull(resp);");
+                                logger.warn("Reponse body is empty for {}", md.getName());
+                            }
+                        } else {
+                            System.out.println("bada 1");
+                            // todo get thsi back on line
 //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
 //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
 //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
@@ -762,6 +762,7 @@ public class RestControllerParser extends ClassProcessor {
 //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
 //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
 //                                body.addStatement(expressionStmt);
+                        }
                     }
                 }
             }
