@@ -6,10 +6,7 @@ import com.cloud.api.evaluator.Evaluator;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.*;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -697,6 +694,10 @@ public class RestControllerParser extends ClassProcessor {
                         // return type will be null
                         if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                             System.out.println();
+                        } else if (returnType.toString().equals("boolean")) {
+                            ImportDeclaration importDeclaration = new ImportDeclaration("com.cloud.api.dto.BooleanMessageResponseDTO", false, false);
+                            cu.addImport(importDeclaration);
+                            blockStmt.addStatement("BooleanMessageResponseDTO resp = (BooleanMessageResponseDTO) response.getBody();");
                         } else if (!
                                 (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
                             Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
