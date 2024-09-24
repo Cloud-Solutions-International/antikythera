@@ -1,0 +1,48 @@
+# This file contains the configurations for Antikythera. You can use environment variables
+# anywhere in this file. For example ${HOME} will be replaced with the value of the HOME
+# environment variable.
+
+variables:
+  projects_folder: /home/zeinab/Documents/CSI_main/Tasks/
+  m2_folder: /home/zeinab/.m2/repository
+
+# Points to top level folder of the application under test. This is a file system path.
+base_path: ${projects_folder}/Billing/csi-bm-approval-java-service/src/main/java
+
+# Add the base path to the src/main/java folder of csi-project
+# The top level package for your project. As an example for the pharmacy project it is
+# com.csi.phr
+base_package: com.csi.bm.approval
+#.vidaplus.ehr
+
+# The controllers settings determines where the controllers can be found. If you
+# specify a package name it will iterate through all the controllers in that
+# package. If you specify an individual controller it will only generate tests
+# for that single controller
+controllers: com.csi.bm.approval.controller.
+#.externaltransfer.ExternalTransferController.java
+
+# Path to output the generated test project
+output_path: /tmp/csi-bm-approval-java-service
+
+# Dependencies configuration
+dependencies:
+  artifact_ids:
+    - csi-bm-approval-java-service
+    - csi-services
+    - csi-microservices-base
+    - csi-common
+    - csi-base-util
+    - csi-actor-client
+  jar_files:
+    - ${m2_folder}/com/csi/bm/csi-bm-billing-java-service/0.0.3/csi-bm-billing-java-service-0.0.3.jar
+    - ${m2_folder}/com/csi/csi-microservices-base/1.1.2/csi-microservices-base-1.1.2.jar
+    - ${m2_folder}/com/csi/common/csi-common/4.2.1.15-17/csi-common-4.2.1.15-17.jar
+    - ${m2_folder}/com/csi/csi-base-util/1.1.2/csi-base-util-1.1.2.jar
+    - ${m2_folder}/com/csi/csi-actor-client/1.1.2/csi-actor-client-1.1.2.jar
+
+database:
+  url: jdbc:oracle:thin:@//10.201.215.50:1521/VQPDB.hmg.local
+  user: C##xstrm
+  password: p08642xs
+  schema: EH_IP

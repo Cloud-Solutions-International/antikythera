@@ -4,10 +4,10 @@ import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
-
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -17,6 +17,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSol
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.utils.Log;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,10 +29,6 @@ import java.util.Set;
 
 public class ClassProcessor {
 
-    /*
-     * this is made static because multiple classes may have the same dependency
-     * and we don't want to spend time copying them multiple times.
-     */
     protected static final Set<String> resolved = new HashSet<>();
     protected static String basePackage;
     protected static String basePath;
@@ -40,13 +37,6 @@ public class ClassProcessor {
     protected final Set<String> dependencies = new HashSet<>();
     protected final Set<String> externalDependencies = new HashSet<>();
 
-    /*
-     * The strategy followed is that we iterate through all the fields in the
-     * class and add them to a queue. Then we iterate through the items in
-     * the queue and call the copy method on each one. If an item has already
-     * been copied, it will be in the resolved set that is defined in the
-     * parent, so we will skip it.
-     */
     protected JavaParser javaParser;
     protected JavaSymbolSolver symbolResolver;
     protected CombinedTypeSolver combinedTypeSolver;
@@ -70,13 +60,10 @@ public class ClassProcessor {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
+        // Log to check symbol resolution
+        Log.setAdapter(new Log.StandardOutStandardErrorAdapter());
     }
 
-    /**
-     * Copy a dependency from the application under test.
-     *
-     * @param nameAsString
-     */
     protected void copyDependencies(String nameAsString) throws IOException {
         if (nameAsString.endsWith("SUCCESS") || nameAsString.startsWith("org.springframework") || externalDependencies.contains(nameAsString)) {
             return;
@@ -89,7 +76,6 @@ public class ClassProcessor {
     }
 
     protected void extractComplexType(Type type, CompilationUnit dependencyCu)  {
-
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
 
@@ -97,15 +83,10 @@ public class ClassProcessor {
             NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
             if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
-                /*
-                 * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
-                 */
-
                 return;
             }
             if (secondaryType != null) {
                 for (Type t : secondaryType) {
-                    // todo find out the proper way to indentify Type parameters like List<T>
                     if(t.asString().length() != 1 ) {
                         extractComplexType(t, dependencyCu);
                     }
@@ -130,22 +111,8 @@ public class ClassProcessor {
         }
     }
 
-    /**
-     * Resolves an import.
-     *
-     * @param dependencyCu the compilation unit with the imports
-     * @param mainType the data type to search for
-     * @return true if a matching import was found.
-     */
     protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
-        /*
-         * Iterates through the imports declared in the compilation unit to see if any match.
-         * if an import is found it's added to the dependency list but we also need to check
-         * whether the import comes from an external jar file. In that case we do not need to
-         * copy the DTO across with the generated tests
-         */
         for (var ref2 : dependencyCu.getImports()) {
-
             String[] parts = ref2.getNameAsString().split("\\.");
             if (parts[parts.length - 1].equals(mainType)) {
                 dependencies.add(ref2.getNameAsString());
@@ -203,7 +170,6 @@ public class ClassProcessor {
             }
         }
         for(String s : wildCards) {
-            // setting asterisk as true and then switching it off is to overcome a bug in javaparser
             ImportDeclaration impl = new ImportDeclaration(s, false, true);
             cu.addImport(impl);
             impl.setAsterisk(false);
@@ -212,16 +178,16 @@ public class ClassProcessor {
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(
-                importDeclaration ->
-                {
+                importDeclaration -> {
                     String nameAsString = importDeclaration.getNameAsString();
                     return (
                             !dependencies.contains(nameAsString) &&
                                     !externalDependencies.contains(nameAsString) &&
                                     !nameAsString.contains("lombok") &&
                                     !nameAsString.startsWith("java.") &&
-                                    !(importDeclaration.isStatic() && nameAsString.contains("constants.")));
+                                    !(importDeclaration.isStatic() && nameAsString.contains("constants."))
+                    );
                 }
-            );
+        );
     }
 }
