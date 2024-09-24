@@ -20,8 +20,11 @@ base_package: com.csi
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
 controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller
-
-  #.admission.AdmissionServiceRead.java
+  #.referral.ReferralService.java
+#.checklist.CheckListController.java
+#  .apgarscore.ApgaScoreServiceRead.java
+#.dischargediettype.DischargeDietTypeController.java
+#.admission.AdmissionServiceRead.java
 #.externaltransfer.ExternalTransferController.java
 
 # Path to output the generated test project
