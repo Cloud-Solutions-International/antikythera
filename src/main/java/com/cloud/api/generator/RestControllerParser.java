@@ -358,7 +358,8 @@ public class RestControllerParser extends ClassProcessor {
 
                                 ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
                                 q.setResultSet(rs);
-                            } catch (FileNotFoundException e) {
+                            } catch (Exception e) {
+                                logger.warn(e.getMessage());
                                 logger.warn("Could not execute query {}", mce);
                             }
                             return q;
@@ -545,7 +546,13 @@ public class RestControllerParser extends ClassProcessor {
                             }
                         }
                         if (typeArg.isNameExpr()) {
-                            response.setType(evaluator.getLocal(typeArg.asNameExpr().getNameAsString()).getType());
+                            String nameAsString = typeArg.asNameExpr().getNameAsString();
+                            if(nameAsString != null && evaluator.getLocal(nameAsString) != null) {
+                                response.setType(evaluator.getLocal(nameAsString).getType());
+                            }
+                            else {
+                                logger.warn("NameExpr is null in identify return type");
+                            }
                         } else if (typeArg.isStringLiteralExpr()) {
                             response.setType(StaticJavaParser.parseType("java.lang.String"));
                             response.setResponse(typeArg.asStringLiteralExpr().asString());
@@ -675,7 +682,7 @@ public class RestControllerParser extends ClassProcessor {
             httpWithoutBody(md, annotation, "makeGet");
         }
 
-        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call) {
+        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call)  {
             MethodDeclaration testMethod = buildTestMethod(md);
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
             makeGetCall.addArgument(new NameExpr("headers"));
@@ -694,7 +701,11 @@ public class RestControllerParser extends ClassProcessor {
                 ControllerRequest request = new ControllerRequest();
                 request.setPath(getPath(annotation).replace("\"", ""));
 
-                replaceURIVariablesFromDb(md, request);
+                try {
+                    replaceURIVariablesFromDb(md, request);
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
                 handleURIVariables(md, request);
 
                 makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
@@ -730,44 +741,42 @@ public class RestControllerParser extends ClassProcessor {
          *    The argument in the method call becomes a parameter for a placeholder
          *    The placeholder may have been removed though!
          */
-        private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) {
+        private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
             if (last != null && last.getResultSet() != null) {
                 ResultSet rs = last.getResultSet();
                 List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
                 List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
-                try {
-                    if(rs.next()) {
-                        for(int i = 0 ; i < paramMap.size() ; i++) {
-                            RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
-                            RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
-                            String[] parts = param.getColumnName().split("\\.");
-                            String col = parts.length > 1 ? parts[1] : parts[0];
 
-                            logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col) );
+                if(rs.next()) {
+                    for(int i = 0 ; i < paramMap.size() ; i++) {
+                        RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
+                        RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
+                        String[] parts = param.getColumnName().split("\\.");
+                        String col = parts.length > 1 ? parts[1] : parts[0];
 
-                            // finally try to match it against the path and request variables
-                            for(Parameter p : md.getParameters()) {
-                                Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
-                                Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
-                                if (requestParam.isPresent()) {
-                                    String name = getParamName(p);
-                                    if (name.equals(arg.getArgument().toString())) {
-                                        request.getQueryParameters().put(name, rs.getObject(col).toString());
-                                    }
+                        logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col) );
+
+                        // finally try to match it against the path and request variables
+                        for(Parameter p : md.getParameters()) {
+                            Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
+                            Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
+                            if (requestParam.isPresent()) {
+                                String name = getParamName(p);
+                                if (name.equals(arg.getArgument().toString())) {
+                                    request.getQueryParameters().put(name, rs.getObject(col).toString());
                                 }
-                                else if (pathParam.isPresent()) {
-                                    String name = getParamName(p);
-                                    final String target = '{' + name + '}';
-                                    if (name.equals(arg.getArgument().toString())) {
-                                        request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
-                                    }
+                            }
+                            else if (pathParam.isPresent()) {
+                                String name = getParamName(p);
+                                final String target = '{' + name + '}';
+                                if (name.equals(arg.getArgument().toString())) {
+                                    request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
                                 }
                             }
                         }
                     }
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
                 }
+
             }
         }
 
