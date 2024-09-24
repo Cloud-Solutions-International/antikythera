@@ -286,20 +286,23 @@ public class RepositoryParser extends ClassProcessor{
      */
     private static String findTableName(CompilationUnit entityCu) {
         String table = null;
-
-        for(var ann : entityCu.getTypes().get(0).getAnnotations()) {
-            if(ann.getNameAsString().equals("Table")) {
-                if(ann.isNormalAnnotationExpr()) {
-                    for(var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                        if(pair.getNameAsString().equals("name")) {
-                            table = pair.getValue().toString();
+        if(entityCu != null) {
+            for (var ann : entityCu.getTypes().get(0).getAnnotations()) {
+                if (ann.getNameAsString().equals("Table")) {
+                    if (ann.isNormalAnnotationExpr()) {
+                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                            if (pair.getNameAsString().equals("name")) {
+                                table = pair.getValue().toString();
+                            }
                         }
+                    } else {
+                        table = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
                     }
                 }
-                else {
-                    table = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
-                }
             }
+        }
+        else {
+            logger.warn("Compilation unit is null");
         }
         return table;
     }
@@ -707,51 +710,56 @@ public class RepositoryParser extends ClassProcessor{
                 boolean ordering = false;
                 for(int i= 0 ; i < components.size() ; i++) {
                     String component = components.get(i);
-                    switch(component) {
-                        case "findBy":
-                        case "get":
-                            sql.append("SELECT * FROM ")
-                                    .append(findTableName(entityCu).replace("\"",""))
-                                    .append(" WHERE ");
+                    String tableName = findTableName(entityCu);
+                    if(tableName != null){
+                        switch (component) {
+                            case "findBy":
+                            case "get":
+                                sql.append("SELECT * FROM ")
+                                        .append(tableName.replace("\"", ""))
+                                        .append(" WHERE ");
 
-                            break;
-                        case "findFirstBy":
-                        case "findTopBy":
-                            top = true;
-                            sql.append("SELECT * FROM ")
-                                    .append(findTableName(entityCu).replace("\"",""))
-                                    .append(" WHERE ");
-                            break;
+                                break;
+                            case "findFirstBy":
+                            case "findTopBy":
+                                top = true;
+                                sql.append("SELECT * FROM ")
+                                        .append(tableName.replace("\"", ""))
+                                        .append(" WHERE ");
+                                break;
 
-                        case "And":
-                        case "Or":
-                        case "Not":
-                            sql.append(component).append(" ");
-                            break;
-                        case "Containing":
-                        case "Like":
-                            sql.append(" LIKE '%?%'");
-                            break;
-                        case "OrderBy":
-                            ordering = true;
-                            sql.append(" ORDER BY ");
-                            break;
-                        case "":
-                            break;
-                        default:
-                            sql.append(camelToSnake(component));
-                            if(!ordering) {
-                                if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
-                                    sql.append(" In  (?) ");
-                                    i++;
+                            case "And":
+                            case "Or":
+                            case "Not":
+                                sql.append(component).append(" ");
+                                break;
+                            case "Containing":
+                            case "Like":
+                                sql.append(" LIKE '%?%'");
+                                break;
+                            case "OrderBy":
+                                ordering = true;
+                                sql.append(" ORDER BY ");
+                                break;
+                            case "":
+                                break;
+                            default:
+                                sql.append(camelToSnake(component));
+                                if (!ordering) {
+                                    if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
+                                        sql.append(" In  (?) ");
+                                        i++;
+                                    } else {
+                                        sql.append(" = ? ");
+                                    }
                                 } else {
-                                    sql.append(" = ? ");
+                                    sql.append(" ");
                                 }
-                            }
-                            else {
-                                sql.append(" ");
-                            }
 
+                        }
+                    }
+                    else {
+                        logger.warn("Table name cannot be null");
                     }
                 }
                 if(top) {
