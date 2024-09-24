@@ -151,7 +151,7 @@ public class DTOHandler extends  ClassProcessor {
                 classDecl.getMethods().forEach(Node::remove);
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
-                    if(findImport(cu, parent.getName().asString())) {
+                    if(findImport(cu, parent.getName().asString()) || parent.resolve().describe().startsWith("java.lang")) {
                         return;
                     }
                     String className = cu.getPackageDeclaration().get().getNameAsString() + "." + parent.getNameAsString();
