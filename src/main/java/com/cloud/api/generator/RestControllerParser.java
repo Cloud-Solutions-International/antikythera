@@ -524,15 +524,18 @@ public class RestControllerParser extends ClassProcessor {
                     if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                         System.out.println();
                     } else if(!
-                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                        Type resp = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        VariableDeclarator variableDeclarator = new VariableDeclarator(resp, "resp");
-                        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                        methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                        variableDeclarator.setInitializer(methodCallExpr);
-                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                        testMethod.getBody().get().addStatement(expressionStmt);
+                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture") || returnType.toString().equals("?"))
+                    ) {
+                            Type resp = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                            VariableDeclarator variableDeclarator = new VariableDeclarator(resp, "resp");
+                            MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                            variableDeclarator.setInitializer(methodCallExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                            testMethod.getBody().get().addStatement(expressionStmt);
+                    } else {
+                        logger.error("Incompatble return type for method: {}", md.getName());
                     }
                 }
             }
