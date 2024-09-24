@@ -694,31 +694,28 @@ public class RestControllerParser extends ClassProcessor {
                         // return type will be null
                         if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                             System.out.println();
-                        } else if (returnType.toString().equals("boolean")) {
-                            ImportDeclaration importDeclaration = new ImportDeclaration("com.cloud.api.dto.BooleanMessageResponseDTO", false, false);
-                            cu.addImport(importDeclaration);
-                            blockStmt.addStatement("BooleanMessageResponseDTO resp = (BooleanMessageResponseDTO) response.getBody();");
                         } else if (!
                                 (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                            Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                            if (respType.toString().equals("String")) {
-                                blockStmt.addStatement("String resp = response.getBody().asString();");
-                                if(resp.getResponse() != null) {
-                                    blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                            if (returnType.isClassOrInterfaceType()) {
+                                Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                                if (respType.toString().equals("String")) {
+                                    blockStmt.addStatement("String resp = response.getBody().asString();");
+                                    if (resp.getResponse() != null) {
+                                        blockStmt.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                                    } else {
+                                        blockStmt.addStatement("Assert.assertNotNull(resp);");
+                                        logger.warn("Reponse body is empty for {}", md.getName());
+                                    }
+                                } else {
+                                    // todo get thsi back on line
+                                    //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                                    //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                                    //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                                    //                                variableDeclarator.setInitializer(methodCallExpr);
+                                    //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                                    //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                                    //                                blockStmt.addStatement(expressionStmt);
                                 }
-                                else {
-                                    blockStmt.addStatement("Assert.assertNotNull(resp);");
-                                    logger.warn("Reponse body is empty for {}", md.getName());
-                                }
-                            } else {
-                                // todo get thsi back on line
-//                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-//                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-//                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-//                                variableDeclarator.setInitializer(methodCallExpr);
-//                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-//                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-//                                blockStmt.addStatement(expressionStmt);
                             }
                         }
                     }
