@@ -14,6 +14,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -83,7 +84,6 @@ public class RestControllerParser extends ClassProcessor {
     public void start() throws IOException {
         processRestController(controllers);
     }
-
     private void processRestController(File path) throws IOException {
         logger.debug(path.toString());
         if (path.isDirectory()) {
@@ -104,7 +104,34 @@ public class RestControllerParser extends ClassProcessor {
             }
             parameterSet = new HashMap<>();
             FileInputStream in = new FileInputStream(path);
-            cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+
+            // Log the content of the file
+            String fileContent = new String(in.readAllBytes());
+            logger.debug("File content:\n{}", fileContent);
+
+            // Validate the file content
+            String trimmedContent = fileContent.trim();
+            if (!trimmedContent.startsWith("package") && !trimmedContent.startsWith("import") && !trimmedContent.startsWith("class")) {
+                // Skip comments at the beginning of the file
+                int packageIndex = fileContent.indexOf("package");
+                if (packageIndex == -1) {
+                    logger.error("Invalid Java file content:\n{}", fileContent);
+                    throw new IllegalStateException("Invalid Java file content");
+                }
+                fileContent = fileContent.substring(packageIndex);
+            }
+
+            // Parse the file content
+            try {
+//                cu = JavaParser.parse(fileContent);
+                JavaParser javaParser = new JavaParser();
+                cu = javaParser.parse(fileContent).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+            } catch (Exception e) {
+                logger.error("Error parsing file: {}", e.getMessage());
+                logger.error("File content causing error:\n{}", fileContent);
+                throw e;
+            }
+
             if (cu.getPackageDeclaration().isPresent()) {
                 processRestController(cu.getPackageDeclaration().get());
             }
@@ -112,7 +139,6 @@ public class RestControllerParser extends ClassProcessor {
             objectMapper.writeValue(file, parameterSet);
         }
     }
-
     protected Map<String, Type> getFields(CompilationUnit cu) {
         Map<String, Type> fields = new HashMap<>();
         for (var type : cu.getTypes()) {
@@ -265,7 +291,17 @@ public class RestControllerParser extends ClassProcessor {
                             MethodDeclaration method = member.asMethodDeclaration();
 
                             if (!method.isPrivate() && method.getName().asString().equals(methodCallExpr.getNameAsString())) {
-                                extractComplexType(method.getType(), dependencyCu);
+                                Type methodReturnType = method.getType();
+                                if (methodReturnType.isArrayType()) {
+                                    // Handle ArrayType
+                                    extractComplexType(methodReturnType.asArrayType().getComponentType(), dependencyCu);
+                                } else if (methodReturnType.isClassOrInterfaceType()) {
+                                    // Handle ClassOrInterfaceType
+                                    extractComplexType(methodReturnType.asClassOrInterfaceType(), dependencyCu);
+                                } else {
+                                    // Handle other types if necessary
+                                    extractComplexType(methodReturnType, dependencyCu);
+                                }
                             }
                         }
                     }
@@ -296,7 +332,9 @@ public class RestControllerParser extends ClassProcessor {
                 Type methodType = md.getType();
                 if (methodType.asString().contains("<")) {
                     if (!methodType.asString().endsWith("<Void>")) {
-                        if (methodType.isClassOrInterfaceType()
+                        if (methodType.isArrayType()) {
+                            returnType = methodType.asArrayType();
+                        } else if (methodType.isClassOrInterfaceType()
                                 && methodType.asClassOrInterfaceType().getTypeArguments().isPresent()
                                 && !methodType.asClassOrInterfaceType().getTypeArguments().get().get(0).toString().equals("Object")
                         ) {
@@ -438,77 +476,66 @@ public class RestControllerParser extends ClassProcessor {
             MethodDeclaration testMethod = buildTestMethod(md);
             MethodCallExpr makeGetCall = new MethodCallExpr(call);
 
-
-            if(md.getParameters().isNonEmpty()) {
+            if (md.getParameters().isNonEmpty()) {
                 Parameter requestBody = findRequestBody(md);
                 String path = handlePathVariables(md, getPath(annotation).replace("\"", ""));
-                String paramClassName = requestBody.getTypeAsString();
+                Type paramType = requestBody.getType();
 
-                if(requestBody.getType().isClassOrInterfaceType()) {
-                    var cdecl = requestBody.getType().asClassOrInterfaceType();
-                    switch(cdecl.getNameAsString()) {
-                        case "List": {
-                            prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
+                if (paramType.isArrayType()) {
+                    prepareBody("java.util.List", paramType.asArrayType().getComponentType(), "List.of", testMethod);
+                } else if (paramType.isClassOrInterfaceType()) {
+                    var cdecl = paramType.asClassOrInterfaceType();
+                    switch (cdecl.getNameAsString()) {
+                        case "List":
+                            prepareBody("java.util.List", cdecl, "List.of", testMethod);
                             break;
-                        }
-
-                        case "Set": {
-                            prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
+                        case "Set":
+                            prepareBody("java.util.Set", cdecl, "Set.of", testMethod);
                             break;
-                        }
-
-                        case "Map": {
-                            prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
+                        case "Map":
+                            prepareBody("java.util.Map", cdecl, "Map.of", testMethod);
                             break;
-                        }
                         case "Integer":
-                        case "Long": {
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
-                            variableDeclarator.setInitializer("0");
-                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
-
+                        case "Long":
+                            VariableDeclarator longVariableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
+                            longVariableDeclarator.setInitializer("0");
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(longVariableDeclarator));
                             break;
-                        }
-
-                        case "MultipartFile": {
+                        case "MultipartFile":
                             dependencies.add("org.springframework.web.multipart.MultipartFile");
                             ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
+                            VariableDeclarator multipartFileVariableDeclarator = new VariableDeclarator(multipartFile, "req");
                             MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
                             methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                            multipartFileVariableDeclarator.setInitializer(methodCallExpr);
+                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(multipartFileVariableDeclarator));
                             break;
-                        }
-
-                        case "Object": {
-                            // SOme methods incorrectly have their DTO listed as of type Object. We will treat
-                            // as a String
+                        case "Object":
                             prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
                             break;
-                        }
-
                         default:
-                            ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
+                            ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, cdecl.getNameAsString());
+                            VariableDeclarator defaultVariableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
                             ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
-                            variableDeclarator.setInitializer(objectCreationExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            defaultVariableDeclarator.setInitializer(objectCreationExpr);
+                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(defaultVariableDeclarator);
                             testMethod.getBody().get().addStatement(variableDeclarationExpr);
                     }
 
-                    if (cdecl.getNameAsString().equals("MultipartFile")){
+                    if (cdecl.getNameAsString().equals("MultipartFile")) {
                         makeGetCall.addArgument(new NameExpr("req"));
                         testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
-                    }
-                    else {
-                        MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                        writeValueAsStringCall.addArgument(new NameExpr("req"));
-                        makeGetCall.addArgument(writeValueAsStringCall);
-                        testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                    } else {
+                        try {
+                            MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+                            writeValueAsStringCall.addArgument(new NameExpr("req"));
+                            makeGetCall.addArgument(writeValueAsStringCall);
+                            testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+                        } catch (Exception e) {
+                            logger.error("Error parsing expression: {}", e.getMessage());
+                        }
                     }
                     makeGetCall.addArgument(new NameExpr("headers"));
-
                 }
                 makeGetCall.addArgument(new StringLiteralExpr(path));
 
@@ -520,34 +547,52 @@ public class RestControllerParser extends ClassProcessor {
 
                 addCheckStatus(testMethod);
 
-                if(returnType != null) {
-                    if(returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                if (returnType != null) {
+                    if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                         System.out.println();
-                    } else if(!
-                            (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                        Type resp = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        VariableDeclarator variableDeclarator = new VariableDeclarator(resp, "resp");
+                    } else if (!(returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                        Type resp;
+                        if (returnType.isArrayType()) {
+                            resp = new ClassOrInterfaceType(null, returnType.asArrayType().getComponentType().asString() + "[]");
+                        } else if (returnType.isWildcardType()) {
+                            resp = new ClassOrInterfaceType(null, "?");
+                        } else {
+                            resp = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        }
+                        VariableDeclarator responseVariableDeclarator = new VariableDeclarator(resp, "resp");
                         MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                        methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                        variableDeclarator.setInitializer(methodCallExpr);
-                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                        if (returnType.isArrayType()) {
+                            methodCallExpr.addArgument(returnType.asArrayType().getComponentType().asString() + "[].class");
+                        } else if (returnType.isWildcardType()) {
+                            methodCallExpr.addArgument(String.valueOf(String.class));
+                        } else {
+                            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                        }
+                        responseVariableDeclarator.setInitializer(methodCallExpr);
+                        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(responseVariableDeclarator);
                         ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
                         testMethod.getBody().get().addStatement(expressionStmt);
                     }
                 }
             }
         }
-
-        private void prepareBody(String e, ClassOrInterfaceType paramClassName, String name, MethodDeclaration testMethod) {
+        private void prepareBody(String e, Type paramType, String name, MethodDeclaration testMethod) {
             dependencies.add(e);
-            VariableDeclarator variableDeclarator = new VariableDeclarator(paramClassName, "req");
-            MethodCallExpr methodCallExpr = new MethodCallExpr(name);
-            variableDeclarator.setInitializer(methodCallExpr);
+            VariableDeclarator variableDeclarator;
+            if (paramType.isArrayType()) {
+                variableDeclarator = new VariableDeclarator(paramType, "req");
+                MethodCallExpr methodCallExpr = new MethodCallExpr(name);
+                ArrayCreationExpr arrayCreationExpr = new ArrayCreationExpr(paramType.asArrayType().getComponentType());
+                methodCallExpr.addArgument(arrayCreationExpr);
+               variableDeclarator.setInitializer(methodCallExpr);
+            } else {
+                variableDeclarator = new VariableDeclarator(paramType, "req");
+                MethodCallExpr methodCallExpr = new MethodCallExpr(name);
+                variableDeclarator.setInitializer(methodCallExpr);
+            }
             VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-
             testMethod.getBody().get().addStatement(variableDeclarationExpr);
         }
-    }
 
     private String handlePathVariables(MethodDeclaration md, String path){
         for(var param : md.getParameters()) {
@@ -653,7 +698,7 @@ public class RestControllerParser extends ClassProcessor {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();
                 } else {
                     var memberValue = classAnnotation.asSingleMemberAnnotationExpr().getMemberValue();
-                    if(memberValue.isArrayInitializerExpr()) {
+                    if (memberValue.isArrayInitializerExpr()) {
                         return memberValue.asArrayInitializerExpr().getValues().get(0).toString();
                     }
                     return classAnnotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
@@ -661,5 +706,7 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
         return "";
+
+    }
     }
 }
