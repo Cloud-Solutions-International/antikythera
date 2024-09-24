@@ -516,8 +516,8 @@ public class RepositoryParser extends ClassProcessor{
             Expression start = between.getBetweenExpressionStart();
             Expression end = between.getBetweenExpressionEnd();
 
-            mapPlaceHolders(start, between.getLeftExpression().toString());
-            mapPlaceHolders(end, between.getLeftExpression().toString());
+            mapPlaceHolders(start, camelToSnake(between.getLeftExpression().toString()));
+            mapPlaceHolders(end, camelToSnake(between.getLeftExpression().toString()));
             current.remove(camelToSnake(between.getLeftExpression().toString()));
             between.setBetweenExpressionStart(new LongValue("2"));
             between.setBetweenExpressionEnd(new LongValue("4"));
@@ -528,6 +528,7 @@ public class RepositoryParser extends ClassProcessor{
             Column col = (Column) ine.getLeftExpression();
             if(where &&
                     !("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
+                mapPlaceHolders(ine.getRightExpression(), camelToSnake(col.toString()));
                 current.remove(camelToSnake(ine.getLeftExpression().toString()));
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
@@ -631,7 +632,7 @@ public class RepositoryParser extends ClassProcessor{
             int pos = ((JdbcParameter) right).getIndex();
             RepositoryQuery.QueryMethodParameter params = current.getMethodParameters().get(pos - 1);
             params.placeHolderId.add(pos);
-            params.columnName = name;
+            params.setColumnName(name);
 
             System.out.println("Mapping " + name + " to " + params.parameter.getName());
         }
@@ -639,7 +640,7 @@ public class RepositoryParser extends ClassProcessor{
             String placeHolder = ((JdbcNamedParameter) right).getName();
             for(RepositoryQuery.QueryMethodParameter p : current.getMethodParameters()) {
                 if(p.placeHolderName.equals(placeHolder)) {
-                    p.columnName = name;
+                    p.setColumnName(name);
                     System.out.println("Mapping " + name + " to " + p.parameter.getName());
                     break;
                 }

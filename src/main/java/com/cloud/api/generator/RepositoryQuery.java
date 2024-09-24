@@ -44,7 +44,7 @@ public class RepositoryQuery {
          * Typically column names in SQL are camel_cased.
          * Those mappings will be saved here.
          */
-        String columnName;
+        private String columnName;
 
         /**
          * True if this column was removed from the WHERE clause or GROUP BY.
@@ -71,6 +71,14 @@ public class RepositoryQuery {
             );
             placeHolderId = new ArrayList<>();
             this.paramIndex = index;
+        }
+
+        public String getColumnName() {
+            return columnName;
+        }
+
+        public void setColumnName(String columnName) {
+            this.columnName = columnName;
         }
     }
 
