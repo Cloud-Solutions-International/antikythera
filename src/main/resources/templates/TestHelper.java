@@ -30,6 +30,7 @@ import java.nio.file.Paths;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -120,11 +121,38 @@ public abstract class TestHelper extends APIBaseTest {
         return response;
     }
 
+    protected Response makePost(String body, Headers headers, String relativeUrl, Map<String, String> queryParams)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers)
+                .queryParams(queryParams)
+                .body(body)
+                .when().request(Method.POST);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
     protected Response makePut(String body, Headers headers, String relativeUrl)  {
         APIRequester.setBaseURI(baseURI);
         APIRequester.setBasePath(relativeUrl);
 
         Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).body(body).when().request(Method.PUT);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
+    protected Response makePut(String body, Headers headers, String relativeUrl, Map<String, String> queryParams)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers)
+                .body(body).when().queryParams(queryParams)
+                .request(Method.PUT);
         APIRequester.resetBasePath();
         APIRequester.resetBaseURI();
 
@@ -137,6 +165,34 @@ public abstract class TestHelper extends APIBaseTest {
         APIRequester.setBasePath(relativeUrl);
 
         Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers).when().request(Method.GET);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
+
+    protected Response makeGet( Headers headers, String relativeUrl, Map<String, String> queryParams)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation()
+                .headers(headers).when()
+                .queryParams(queryParams)
+                .request(Method.GET);
+        APIRequester.resetBasePath();
+        APIRequester.resetBaseURI();
+
+        return response;
+    }
+
+    protected Response makeDelete( Headers headers, String relativeUrl, Map<String, String> queryParams)  {
+        APIRequester.setBaseURI(baseURI);
+        APIRequester.setBasePath(relativeUrl);
+
+        Response response = RestAssured.given().relaxedHTTPSValidation().headers(headers)
+                .when().queryParams(queryParams)
+                .request(Method.DELETE);
         APIRequester.resetBasePath();
         APIRequester.resetBaseURI();
 
