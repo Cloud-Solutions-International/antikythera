@@ -153,7 +153,7 @@ public class DTOHandler extends  ClassProcessor {
                 classDecl.getMethods().forEach(Node::remove);
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
-                    if(findImport(cu, parent.getName().asString())) {
+                    if(findImport(cu, parent.getName().asString()) || parent.resolve().describe().startsWith("java.lang")) {
                         return;
                     }
                     String className = cu.getPackageDeclaration().get().getNameAsString() + "." + parent.getNameAsString();
@@ -348,124 +348,66 @@ public class DTOHandler extends  ClassProcessor {
      * @param field
      */
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
-
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
-        if(!field.isStatic()) {
+        if (!field.isStatic()) {
             String instance = classToInstanceName(cdecl);
-
-                String fieldName = field.getVariables().get(0).getNameAsString();
-                MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
-                String type = field.getElementType().isClassOrInterfaceType()
-                        ? field.getElementType().asClassOrInterfaceType().getNameAsString()
-                        : field.getElementType().asString();
-                if (field.getVariables().get(0).getType().toString().equals("String[]")) {
-                    type = field.getVariables().get(0).getType().asArrayType().getComponentType().asString() + "[]";
-                }
-
-            switch (type) {
-                case "boolean":
-                    if(fieldName.startsWith("is")) {
-                        setter = new MethodCallExpr(new NameExpr(instance), "set" +
-                                capitalize(fieldName.replaceFirst("is","")));
-                    }
-                case "Boolean":
-                    setter.addArgument("true");
-                    break;
-
-                case "Character":
-                    setter.addArgument("'A'");
-                    break;
-
-                case "Date":
-                    if(field.getElementType().toString().contains(".")) {
-                        setter.addArgument("new java.util.Date()");
-                    } else {
-                        setter.addArgument("new Date()");
-                    }
-                    break;
-
-                case "Double":
-                case "double":
-                    setter.addArgument("0.0");
-                    break;
-
-                case "Float":
-                case "float":
-                    setter.addArgument("0.0f");
-                    break;
-
-                case "Integer":
-                case "int":
-                    setter.addArgument("0");
-                    break;
-
-                case "Byte":
-                    setter.addArgument("(byte) 0");
-                    break;
-
-                case "List":
-                    setter.addArgument("List.of()");
-                    break;
-
-                case "long":
-                case "Long":
-                    setter.addArgument("0L");
-                    break;
-
-                case "String":
-                    setter.addArgument("\"Hello world\"");
-                    break;
-
-                case "String[]":
-                    setter.addArgument("new String[] {\"Hello\", \"world\"}");
-                    break;
-
-                case "Map":
-                    setter.addArgument("Map.of()");
-                    break;
-
-                case "Set":
-                    setter.addArgument("Set.of()");
-                    break;
-
-                case "UUID":
-                    setter.addArgument("UUID.randomUUID()");
-                    break;
-
-                case "LocalDate":
-                    setter.addArgument("LocalDate.now()");
-                    break;
-
-                case "LocalDateTime":
-                    setter.addArgument("LocalDateTime.now()");
-                    break;
-
-                case "Short":
-                    setter.addArgument("(short) 0");
-                    break;
-
-                case "byte":
-                    setter.addArgument("new byte[] {0}");
-                    break;
-
-                case "T":
-                    setter.addArgument("null");
-                    break;
-
-                case "BigDecimal":
-                    setter.addArgument("BigDecimal.ZERO");
-                    break;
-
-                default:
-                    if(!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
-                        setter.addArgument("new " + type + "()");
-                    } else {
-                        setter = null;
-                    }
+            String fieldName = field.getVariables().get(0).getNameAsString();
+            MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
+            String type = field.getElementType().isClassOrInterfaceType()
+                    ? field.getElementType().asClassOrInterfaceType().getNameAsString()
+                    : field.getElementType().asString();
+            if (field.getVariables().get(0).getType().toString().equals("String[]")) {
+                type = field.getVariables().get(0).getType().asArrayType().getComponentType().asString() + "[]";
             }
 
-            return setter;
+            String className = cu.getTypes().get(0).getNameAsString();
+            Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+
+            String argument = switch (type) {
+                case "boolean" -> {
+                    if(!methodNames.isEmpty()) {
+                        String setterName = methodNames.get("setter");
+                        setter = new MethodCallExpr(new NameExpr(instance), setterName);
+                    }
+                    if (fieldName.startsWith("is") && methodNames.isEmpty()) {
+                        setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName.replaceFirst("is", "")));
+                    }
+                    yield "true";
+                }
+                case "Boolean" -> "true";
+                case "Character" -> "'A'";
+                case "Date" -> field.getElementType().toString().contains(".") ? "new java.util.Date()" : "new Date()";
+                case "Double", "double" -> "0.0";
+                case "Float", "float" -> "0.0f";
+                case "Integer", "int" -> "0";
+                case "Byte" -> "(byte) 0";
+                case "List" -> "List.of()";
+                case "long", "Long" -> "0L";
+                case "String" -> "\"Hello world\"";
+                case "String[]" -> "new String[] {\"Hello\", \"world\"}";
+                case "Map" -> "Map.of()";
+                case "Set" -> "Set.of()";
+                case "UUID" -> "UUID.randomUUID()";
+                case "LocalDate" -> "LocalDate.now()";
+                case "LocalDateTime" -> "LocalDateTime.now()";
+                case "Short" -> "(short) 0";
+                case "byte" -> "new byte[] {0}";
+                case "T" -> "null";
+                case "BigDecimal" -> "BigDecimal.ZERO";
+                default -> {
+                    if (!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
+                        yield "new " + type + "()";
+                    } else {
+                        yield null;
+                    }
+                }
+            };
+
+            if (argument != null) {
+                setter.addArgument(argument);
+                return setter;
+            }
         }
         return null;
     }
