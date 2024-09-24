@@ -225,6 +225,7 @@ public class ClassProcessor extends AbstractCompiler {
                  nameAsString.contains("lombok") ||
                  nameAsString.startsWith("java.") ||
                  nameAsString.startsWith("com.fasterxml.jackson") ||
+                nameAsString.startsWith("org.springframework.util") ||
                  (importDeclaration.isStatic() && nameAsString.contains("constants.")));
         });
     }
