@@ -11,11 +11,13 @@ import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -55,6 +57,9 @@ public class DTOHandler extends  ClassProcessor {
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
+//        if (relativePath.contains("SearchParams")){
+//            return;
+//        }
         parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
@@ -70,6 +75,14 @@ public class DTOHandler extends  ClassProcessor {
         expandWildCards(cu);
         solveTypes();
         createFactory();
+
+        // two ways in which this problem can be solved.
+        // one is that we can get the types from the compilation unit (cu) and then check that the
+        // type is not an inner class (isInnerClass) and call the accept method only for the ones
+        // that are not inner classes
+
+        // the second approach is the inside the visitor, we can check if the node is an inner class
+        // or not. If it's an inner class we can skip the process. That can be done with the parent
 
         cu.accept(new TypeCollector(), null);
 
@@ -91,9 +104,9 @@ public class DTOHandler extends  ClassProcessor {
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
         String className = cdecl.getNameAsString();
 
-        if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+        if (cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
                 && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
-                && className.toLowerCase().endsWith("to")) {
+                && className.toLowerCase().endsWith("dto")) {
             String variable = classToInstanceName(cdecl);
 
             method = new MethodDeclaration();
@@ -109,12 +122,47 @@ public class DTOHandler extends  ClassProcessor {
 
             method.setBody(body);
 
-        }
-        else {
+            boolean noArgConstructorExists = cdecl.getConstructors().stream()
+                    .anyMatch(constructor -> constructor.getParameters().isEmpty());
+
+
+            if (!noArgConstructorExists) {
+                ConstructorDeclaration noArgConstructor = new ConstructorDeclaration();
+                noArgConstructor.setName(className);
+                noArgConstructor.setModifiers(Modifier.Keyword.PUBLIC);
+                cdecl.asClassOrInterfaceDeclaration().addMember(noArgConstructor);
+            }
+            boolean allArgsConstructorExists = cdecl.getConstructors().stream()
+                    .anyMatch(constructor -> constructor.getParameters().size() == cdecl.getFields().size());
+
+            if (!allArgsConstructorExists) {
+                ConstructorDeclaration allArgsConstructor = new ConstructorDeclaration();
+                allArgsConstructor.setName(className);
+                allArgsConstructor.setModifiers(Modifier.Keyword.PUBLIC);
+
+                for (FieldDeclaration field : cdecl.getFields()) {
+                    for (VariableDeclarator var : field.getVariables()) {
+                        allArgsConstructor.addParameter(field.getElementType(), var.getNameAsString());
+                    }
+                }
+
+                BlockStmt constructorBody = new BlockStmt();
+                for (FieldDeclaration field : cdecl.getFields()) {
+                    for (VariableDeclarator var : field.getVariables()) {
+                        AssignExpr assignExpr = new AssignExpr(
+                                new FieldAccessExpr(new ThisExpr(), var.getNameAsString()),
+                                new NameExpr(var.getNameAsString()),
+                                AssignExpr.Operator.ASSIGN
+                        );
+                        constructorBody.addStatement(assignExpr);
+                    }
+                }
+                allArgsConstructor.setBody(constructorBody);
+                cdecl.asClassOrInterfaceDeclaration().addMember(allArgsConstructor);
+            }        } else {
             method = null;
         }
     }
-
     void handleStaticImports(NodeList<ImportDeclaration> imports) {
         imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
         {
@@ -208,7 +256,10 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-
+            // Check if the field is part of an inner class
+            if (!isInnerClass(field)) {
+                return null;
+            }
 
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
@@ -216,7 +267,6 @@ public class DTOHandler extends  ClassProcessor {
                     || fieldAsString.equals("Sort.Direction")) {
                 return null;
             }
-
 
             // Filter annotations to retain only @JsonFormat and @JsonIgnore
             NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
@@ -235,6 +285,17 @@ public class DTOHandler extends  ClassProcessor {
             return super.visit(field, args);
         }
 
+        private boolean isInnerClass(Node node) {
+            Node parent = node.getParentNode().orElse(null);
+            while (parent != null) {
+                if (parent instanceof ClassOrInterfaceDeclaration) {
+                    return true;
+                }
+                parent = parent.getParentNode().orElse(null);
+            }
+            return false;
+        }
+
         private void extractEnums(FieldDeclaration field) {
             Optional<Expression> expr = field.getVariables().get(0).getInitializer();
             if (expr.isPresent()) {
@@ -246,16 +307,13 @@ public class DTOHandler extends  ClassProcessor {
                     if (nameExpr.isPresent() && nameExpr.get().isFieldAccessExpr()) {
                         findImport(cu, nameExpr.get().asFieldAccessExpr().getScope().toString());
                     }
-                }
-                else if(initializer.isFieldAccessExpr()) {
+                } else if (initializer.isFieldAccessExpr()) {
                     findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
-                }
-                else if (initializer.isNameExpr()) {
+                } else if (initializer.isNameExpr()) {
                     findImport(cu, initializer.asNameExpr().toString());
                 }
-            }
-            else {
-                if(method != null) {
+            } else {
+                if (method != null) {
                     MethodCallExpr setter = generateRandomValue(field, cu);
                     if (setter != null) {
                         method.getBody().get().addStatement(setter);
@@ -266,13 +324,17 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(MethodDeclaration method, Void args) {
+            // Check if the method is part of an inner class
+            if (isInnerClass(method)) {
+                return null;
+            }
+
             super.visit(method, args);
             method.getAnnotations().clear();
             solveTypeDependencies(method.getType(), cu);
             return method;
         }
     }
-
     static String capitalize(String s) {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
