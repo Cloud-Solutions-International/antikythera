@@ -1,0 +1,59 @@
+# This file contains the configurations for Antikythera. You can use environment variables
+# anywhere in this file. For example ${HOME} will be replaced with the value of the HOME
+# environment variable.
+
+variables:
+  projects_folder: /home/ishrath/CSI_repos
+  m2_folder: /home/ishrath/.m2/repository
+
+# Points to top level folder of the application under test. This is a file system path.
+base_path: ${projects_folder}/RMS/csi-rms-resource-registry-java-sev/src/main/java
+
+# Add the base path to the src/main/java folder of csi-project
+# The top level package for your project. As an example for the pharmacy project it is
+# com.csi.phr
+base_package: com.csi.resource.registry
+
+# The controllers settings determines where the controllers can be found. If you
+# specify a package name it will iterate through all the controllers in that
+# package. If you specify an individual controller it will only generate tests
+# for that single controller
+controllers: com.csi.resource.registry.controller
+
+# Path to output the generated test project
+output_path: /tmp/csi-resource-registry-tests
+
+# Dependencies configuration
+dependencies:
+  artifact_ids:
+    - csi-microservices-base
+    - csi-base-util
+    - csi-microservices-plugin-springboot
+    - csi-rms-schedule-api
+    - csi-common
+    - csi-actor-client
+    - csi-persistence-event-core
+  jar_files:
+    - ${m2_folder}/com/csi/csi-microservices-base/1.0.0/csi-microservices-base-1.0.0.jar
+    - ${m2_folder}/com/csi/csi-base-util/1.0.3/csi-base-util-1.0.3.jar
+    - ${m2_folder}/com/csi/csi-microservices-plugin-springboot/1.0.1/csi-microservices-plugin-springboot-1.0.1.jar
+    - ${m2_folder}/com/csi/rms/csi-rms-schedule-api/4.2.1.0-17/csi-rms-schedule-api-4.2.1.0-17.jar
+    - ${m2_folder}/com/csi/common/csi-common/2.2.0/csi-common-2.2.0.jar
+    - ${m2_folder}/com/csi/csi-actor-client/1.0.0/csi-actor-client-1.0.0.jar
+    - ${m2_folder}/com/csi/csi-persistence-event-core/1.0.0/csi-persistence-event-core-1.0.0.jar
+
+  # what should be done if a dependency cannot be found? options are log and exit
+  # if you don't have the jar files locally you may want to try the log option.
+  # not all dependencies need to be resolved to generate tests.
+on_error: log
+#
+# use the database settings to connect and try out the queries extracted from JPARepository
+#
+database:
+  url: jdbc:oracle:thin:@//10.201.215.50:1521/VQPDB.hmg.local
+  user: C##xstrm
+  password: p08642xs
+  schema: EH_IP
+  run_queries: true
+
+log_level: DEBUG
