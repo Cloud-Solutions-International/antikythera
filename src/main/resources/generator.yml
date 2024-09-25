@@ -68,3 +68,7 @@ database:
 
 log_level: DEBUG
 
+finch:
+  - ${projects_folder}/AUT/Finch/src/main/java/com/csi/microservices/base/to/Metadata.java
+  - ${projects_folder}/AUT/Finch/src/main/java/com/csi/microservices/base/to/Tenant.java
+  -
