@@ -3,7 +3,7 @@
 # environment variable.
 
 variables:
-  projects_folder: /home/raditha/workspaces/python/CSI/selenium/repos
+  projects_folder: /home/raditha/workspace/python/CSI/selenium/repos
   m2_folder: /home/raditha/.m2/repository
 
 # Points to top level folder of the application under test. This is a file system path.
@@ -69,4 +69,4 @@ database:
 log_level: DEBUG
 
 finch:
-  - ${projects_folder}/AUT/finch/src/main/java/
+  - ${projects_folder}/AUT/Finch/src/main/java/

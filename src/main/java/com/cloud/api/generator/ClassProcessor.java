@@ -29,7 +29,7 @@ public class ClassProcessor extends AbstractCompiler {
     final Set<String> externalDependencies = new HashSet<>();
     static final Set<String> copied = new HashSet<>();
 
-    protected ClassProcessor() throws IOException {
+    public ClassProcessor() throws IOException {
         super();
     }
 
