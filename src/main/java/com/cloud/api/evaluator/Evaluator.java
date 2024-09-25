@@ -34,16 +34,15 @@ public class Evaluator {
     /**
      * Local variables within the block statement.
      */
-    private final Map<String, Local> locals ;
+    private final Map<String, Variable> locals ;
 
-    private final Map<String, Object> fields;
+    private final Map<String, Variable> fields;
     Map<String, Object> arguments;
     static Map<String, Object> finches;
 
     static {
         try {
-            File f = new File(Evaluator.class.getClassLoader().getResource("mock.json").getFile());
-            mocks = new ObjectMapper().readTree(f);
+
             List<String> scouts = (List<String>) Settings.getProperty("finch");
             if(scouts != null) {
                 Evaluator.finches = new HashMap<>();
@@ -55,6 +54,7 @@ public class Evaluator {
             }
 
         } catch (Exception e) {
+            e.printStackTrace();
             logger.warn("mocks could not be loaded");
         }
     }
@@ -65,10 +65,12 @@ public class Evaluator {
         arguments = new HashMap<>();
     }
 
-    private Object getValue(String name) {
-        Local local = locals.get(name);
-        if(local != null) {
-            return local.result;
+    public Object getValue(String name) {
+        if (locals != null) {
+            Variable local = locals.get(name);
+            if(local != null) {
+                return local.value;
+            }
         }
 
         Object value = arguments.get(name);
@@ -220,11 +222,11 @@ public class Evaluator {
                 boolean solved = false;
                 for(var variable : variables) {
                     String t = variable.getType().toString();
-                    Local local = new Local(varDeclExpr.getElementType());
+                    Variable local = new Variable(varDeclExpr.getElementType());
                     Object mock = mocks.get(t);
                     if(mock != null) {
                         local.isMocked = true;
-                        local.result = mock;
+                        local.value = mock;
                         solved = true;
                     }
                     locals.put(variable.getNameAsString(), local);
@@ -237,7 +239,7 @@ public class Evaluator {
         return null;
     }
 
-    public Local getLocal(String s) {
+    public Variable getLocal(String s) {
         return locals.get(s);
     }
 
@@ -245,13 +247,18 @@ public class Evaluator {
         arguments.put(nameAsString, o);
     }
 
-    public static class Local {
+    public void setField(String nameAsString, Type t) {
+        Variable f = new Variable(t);
+        fields.put(nameAsString, f);
+    }
+
+    public static class Variable {
         private boolean isNull;
         private Type type;
-        private Object result;
+        private Object value;
         private boolean isMocked;
 
-        public Local(Type type) {
+        public Variable(Type type) {
             this.type = type;
             isNull = true;
         }
@@ -259,5 +266,9 @@ public class Evaluator {
         public Type getType() {
             return type;
         }
+    }
+
+    public Map<String, Variable> getFields() {
+        return fields;
     }
 }

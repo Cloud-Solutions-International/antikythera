@@ -69,4 +69,4 @@ database:
 log_level: DEBUG
 
 finch:
-  - ${projects_folder}/AUT/Finch/src/main/java/
+  - ${projects_folder}/AUT/finch/src/main/java/
