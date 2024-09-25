@@ -19,7 +19,8 @@ base_package: com.csi.bm.approval
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
-controllers: com.csi.bm.approval.controller.
+controllers: com.csi.bm.approval.controller.PreAuthController.java
+#.admission.AdmissionServiceRead.java
 #.externaltransfer.ExternalTransferController.java
 
 # Path to output the generated test project
@@ -35,7 +36,7 @@ dependencies:
     - csi-base-util
     - csi-actor-client
   jar_files:
-    - ${m2_folder}/com/csi/bm/csi-bm-billing-java-service/0.0.3/csi-bm-billing-java-service-0.0.3.jar
+    - ${m2_folder}/com/csi/bm/csi-bm-approval-java-service/0.0.3/csi-bm-approval-java-service-0.0.3.jar
     - ${m2_folder}/com/csi/csi-microservices-base/1.1.2/csi-microservices-base-1.1.2.jar
     - ${m2_folder}/com/csi/common/csi-common/4.2.1.15-17/csi-common-4.2.1.15-17.jar
     - ${m2_folder}/com/csi/csi-base-util/1.1.2/csi-base-util-1.1.2.jar
