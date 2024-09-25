@@ -37,7 +37,7 @@ public class Evaluator {
     private final Map<String, Local> locals ;
 
     private final Map<String, Object> fields;
-
+    Map<String, Object> arguments;
     static Map<String, Object> finches;
 
     static {
@@ -62,6 +62,22 @@ public class Evaluator {
     public Evaluator (){
         locals = new HashMap<>();
         fields = new HashMap<>();
+        arguments = new HashMap<>();
+    }
+
+    private Object getValue(String name) {
+        Local local = locals.get(name);
+        if(local != null) {
+            return local.result;
+        }
+
+        Object value = arguments.get(name);
+        if(value != null) {
+            return value;
+        }
+
+        value = fields.get(name);
+        return value;
     }
 
     public static Map<String, Comparable> contextFactory(CompilationUnit cu) {
@@ -86,27 +102,33 @@ public class Evaluator {
         return context;
     }
 
-    public boolean evaluateCondition(Expression condition, Map<String, Comparable> context) throws EvaluatorException {
+    public boolean evaluateCondition(Expression condition) throws EvaluatorException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
 
             if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
-                return evaluateCondition(left, context) && evaluateCondition(right, context);
+                return evaluateCondition(left) && evaluateCondition(right);
             } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                return evaluateCondition(left, context) || evaluateCondition(right, context);
+                return evaluateCondition(left) || evaluateCondition(right);
             }
             else {
-                Comparable leftValue = evaluateExpression(left, context);
-                Comparable rightValue = evaluateExpression(right, context);
-                return evaluateBinaryExpression(binaryExpr.getOperator(), leftValue, rightValue);
+                Object leftValue = evaluateExpression(left);
+                Object rightValue = evaluateExpression(right);
+                if (leftValue instanceof Comparable && rightValue instanceof Comparable) {
+                    return evaluateBinaryExpression(binaryExpr.getOperator(),
+                            (Comparable) leftValue, (Comparable) rightValue);
+                }
+                else {
+                    logger.warn("{} , {} not comparable", leftValue, rightValue);
+                }
             }
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isNameExpr()) {
             String name = condition.asNameExpr().getNameAsString();
-            Boolean value = (Boolean) context.getOrDefault(name, null);
+            Boolean value = (Boolean) getValue(name);
             return value != null ? value : false;
         }
         else if(condition.isUnaryExpr()) {
@@ -121,10 +143,10 @@ public class Evaluator {
         return false;
     }
 
-    private Comparable evaluateExpression(Expression expr, Map<String, Comparable> context) throws EvaluatorException {
+    private Object evaluateExpression(Expression expr) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
-            return context.get(name);
+            return getValue(name);
         } else if (expr.isLiteralExpr()) {
             if (expr.isBooleanLiteralExpr()) {
                 return expr.asBooleanLiteralExpr().getValue();
@@ -141,7 +163,7 @@ public class Evaluator {
                 throw new EvaluatorException("Method call involving variables not supported yet");
             }
             if(mc.getNameAsString().startsWith("get")) {
-                return context.get(mc.getNameAsString().substring(3).toLowerCase());
+                return getValue(mc.getNameAsString().substring(3).toLowerCase());
             }
         }
 
@@ -217,6 +239,10 @@ public class Evaluator {
 
     public Local getLocal(String s) {
         return locals.get(s);
+    }
+
+    public void setArgument(String nameAsString, Object o) {
+        arguments.put(nameAsString, o);
     }
 
     public static class Local {
