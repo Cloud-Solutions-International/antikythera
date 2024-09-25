@@ -684,9 +684,6 @@ public class RepositoryParser extends ClassProcessor{
                             if (pair.getNameAsString().equals("nativeQuery")) {
                                 if (pair.getValue().toString().equals("true")) {
                                     nt = true;
-                                    System.out.println("\tNative Query");
-                                } else {
-                                    System.out.println("\tJPQL Query");
                                 }
                             }
                         }
