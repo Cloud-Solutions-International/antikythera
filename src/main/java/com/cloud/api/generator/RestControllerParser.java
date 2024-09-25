@@ -83,11 +83,6 @@ public class RestControllerParser extends ClassProcessor {
     List<Expression> preConditions;
 
     /**
-     * Maintains a list of repositories that we have already encountered.
-     */
-    private static Map<String, RepositoryParser> respositories = new HashMap<>();
-
-    /**
      * Creates a new RestControllerParser
      *
      * @param controllers either a folder containing many controllers or a single controller
@@ -251,61 +246,30 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(FieldDeclaration field, Void arg) {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
-                if (variable.getType().isClassOrInterfaceType()) {
-                    String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
-                    if (respositories.containsKey(shortName)) {
-                        return;
-                    }
-
-                    Type t = variable.getType().asClassOrInterfaceType();
-                    try {
-                        String className = t.resolve().describe();
-
-                        if (className.startsWith(basePackage)) {
-                            /*
-                             * At the moment only compatible with repositories that are direct part of the
-                             * application under test. Repositories from external jar files are not supported.
-                             */
-                            ClassProcessor proc = new ClassProcessor();
-                            proc.compile(AbstractCompiler.classToPath(className));
-                            CompilationUnit cu = proc.getCompilationUnit();
-                            for (var typeDecl : cu.getTypes()) {
-                                if (typeDecl.isClassOrInterfaceDeclaration()) {
-                                    ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                                    if (cdecl.getNameAsString().equals(shortName)) {
-                                        for (var ext : cdecl.getExtendedTypes()) {
-                                            if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                                /*
-                                                 * We have found a repository. Now we need to process it. Afterwards
-                                                 * it will be added to the repositories map, to be identified by the
-                                                 * field name.
-                                                 */
-                                                RepositoryParser parser = new RepositoryParser();
-                                                parser.compile(AbstractCompiler.classToPath(className));
-                                                parser.process();
-                                                respositories.put(shortName, parser);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                try {
+                    if (variable.getType().isClassOrInterfaceType()) {
+                        String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
+                        if (Evaluator.getRespositories().containsKey(shortName)) {
+                            return;
                         }
-                    } catch (UnsolvedSymbolException e) {
-                        logger.debug("ignore {}", t);
-                    } catch (IOException e) {
-                        String action = Settings.getProperty("dependencies.on_error").toString();
-                        if(action == null || action.equals("exit")) {
-                            throw new GeneratorException("Exception while processing fields", e);
-                        }
-                        logger.error("Exception while processing fields");
-                        logger.error("\t{}",e.getMessage());
+                        Type t = variable.getType().asClassOrInterfaceType();
+                        evaluator.identifyFieldVariables(t, shortName);
                     }
+                     evaluator.setField(variable.getNameAsString(), field.getElementType());
+                } catch (UnsolvedSymbolException e) {
+                    logger.debug("ignore {}", variable);
+                } catch (IOException e) {
+                    String action = Settings.getProperty("dependencies.on_error").toString();
+                    if(action == null || action.equals("exit")) {
+                        throw new GeneratorException("Exception while processing fields", e);
+                    }
+                    logger.error("Exception while processing fields");
+                    logger.error("\t{}",e.getMessage());
                 }
-                evaluator.setField(variable.getNameAsString(), field.getElementType());
-
             }
         }
+
+
     }
 
     /**
@@ -338,7 +302,7 @@ public class RestControllerParser extends ClassProcessor {
                     Map<String, Evaluator.Variable> fields = evaluator.getFields();
                     var obj = fields.get(scope.get().toString());
                     if (obj != null) {
-                        RepositoryParser repository = respositories.get(obj.toString());
+                        RepositoryParser repository = Evaluator.getRespositories().get(obj.toString());
                         if (repository != null) {
                             /*
                              * This method call expression is associated with a repository query.
@@ -366,10 +330,12 @@ public class RestControllerParser extends ClassProcessor {
                         }
                         else {
                             try {
-                                Class<?> clazz = obj.getClass();
-                                Method method = clazz.getMethod(mce.getNameAsString(), String.class);
-                                Object result = method.invoke(obj);
-                                System.out.println(result);
+                                if(obj.getValue() != null) {
+                                    Class<?> clazz = obj.getValue().getClass();
+                                    Method method = clazz.getMethod(mce.getNameAsString());
+                                    Object result = method.invoke(obj);
+                                    System.out.println(result);
+                                }
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
