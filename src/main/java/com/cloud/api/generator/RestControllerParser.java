@@ -295,8 +295,9 @@ public class RestControllerParser extends ClassProcessor {
                     } catch (UnsolvedSymbolException e) {
                         logger.debug("ignore {}", t);
                     } catch (IOException e) {
-                        String action = Settings.getProperty("dependencies.on_error").toString();
-                        if(action == null || action.equals("exit")) {
+
+                        Object action = Settings.getProperty("dependencies.on_error");
+                        if(action == null || action.toString().equals("exit")) {
                             throw new GeneratorException("Exception while processing fields", e);
                         }
                         logger.error("Exception while processing fields");
