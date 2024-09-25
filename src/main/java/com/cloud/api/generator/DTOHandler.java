@@ -57,9 +57,9 @@ public class DTOHandler extends  ClassProcessor {
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
-//        if (relativePath.contains("SearchParams")){
-//            return;
-//        }
+        if (relativePath.contains("SearchParams")){
+            return;
+        }
         parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
@@ -76,15 +76,15 @@ public class DTOHandler extends  ClassProcessor {
         solveTypes();
         createFactory();
 
-        // two ways in which this problem can be solved.
-        // one is that we can get the types from the compilation unit (cu) and then check that the
-        // type is not an inner class (isInnerClass) and call the accept method only for the ones
-        // that are not inner classes
-
-        // the second approach is the inside the visitor, we can check if the node is an inner class
-        // or not. If it's an inner class we can skip the process. That can be done with the parent
-
-        cu.accept(new TypeCollector(), null);
+        for( var  t : cu.getTypes()) {
+            if(t.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                if(!cdecl.isInnerClass()) {
+                    cdecl.accept(new TypeCollector(), null);
+                    cu.accept(new TypeCollector(), null);
+                }
+            }
+        }
 
         handleStaticImports(cu.getImports());
         removeUnusedImports(cu.getImports());
@@ -122,44 +122,8 @@ public class DTOHandler extends  ClassProcessor {
 
             method.setBody(body);
 
-            boolean noArgConstructorExists = cdecl.getConstructors().stream()
-                    .anyMatch(constructor -> constructor.getParameters().isEmpty());
-
-
-            if (!noArgConstructorExists) {
-                ConstructorDeclaration noArgConstructor = new ConstructorDeclaration();
-                noArgConstructor.setName(className);
-                noArgConstructor.setModifiers(Modifier.Keyword.PUBLIC);
-                cdecl.asClassOrInterfaceDeclaration().addMember(noArgConstructor);
-            }
-            boolean allArgsConstructorExists = cdecl.getConstructors().stream()
-                    .anyMatch(constructor -> constructor.getParameters().size() == cdecl.getFields().size());
-
-            if (!allArgsConstructorExists) {
-                ConstructorDeclaration allArgsConstructor = new ConstructorDeclaration();
-                allArgsConstructor.setName(className);
-                allArgsConstructor.setModifiers(Modifier.Keyword.PUBLIC);
-
-                for (FieldDeclaration field : cdecl.getFields()) {
-                    for (VariableDeclarator var : field.getVariables()) {
-                        allArgsConstructor.addParameter(field.getElementType(), var.getNameAsString());
                     }
-                }
-
-                BlockStmt constructorBody = new BlockStmt();
-                for (FieldDeclaration field : cdecl.getFields()) {
-                    for (VariableDeclarator var : field.getVariables()) {
-                        AssignExpr assignExpr = new AssignExpr(
-                                new FieldAccessExpr(new ThisExpr(), var.getNameAsString()),
-                                new NameExpr(var.getNameAsString()),
-                                AssignExpr.Operator.ASSIGN
-                        );
-                        constructorBody.addStatement(assignExpr);
-                    }
-                }
-                allArgsConstructor.setBody(constructorBody);
-                cdecl.asClassOrInterfaceDeclaration().addMember(allArgsConstructor);
-            }        } else {
+        else {
             method = null;
         }
     }
@@ -228,16 +192,27 @@ public class DTOHandler extends  ClassProcessor {
      * @param classDecl the class to which we are going to add lombok annotations
      * @param annotations the existing annotations (which will probably be empty)
      */
-    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
+
+    private void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
         String[] annotationsToAdd;
-        if (classDecl.getFields().size()<=255) {
+        if (classDecl.getFields().size() <= 255) {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
         } else {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
+        // Check existing annotations
+        boolean hasNoArgsConstructor = annotations.stream()
+                .anyMatch(annotation -> annotation.getNameAsString().equals("NoArgsConstructor"));
+        boolean hasAllArgsConstructor = annotations.stream()
+                .anyMatch(annotation -> annotation.getNameAsString().equals("AllArgsConstructor"));
+
+        if (classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
+                if ((annotation.equals("NoArgsConstructor") && hasNoArgsConstructor) ||
+                        (annotation.equals("AllArgsConstructor") && hasAllArgsConstructor)) {
+                    continue;
+                }
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
                 cu.addImport(importDeclaration);
                 NormalAnnotationExpr annotationExpr = new NormalAnnotationExpr();
@@ -256,11 +231,6 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-            // Check if the field is part of an inner class
-            if (!isInnerClass(field)) {
-                return null;
-            }
-
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
                     || fieldAsString.equals("Logger")
@@ -283,17 +253,6 @@ public class DTOHandler extends  ClassProcessor {
             solveTypeDependencies(field.getElementType(), cu);
 
             return super.visit(field, args);
-        }
-
-        private boolean isInnerClass(Node node) {
-            Node parent = node.getParentNode().orElse(null);
-            while (parent != null) {
-                if (parent instanceof ClassOrInterfaceDeclaration) {
-                    return true;
-                }
-                parent = parent.getParentNode().orElse(null);
-            }
-            return false;
         }
 
         private void extractEnums(FieldDeclaration field) {
@@ -324,10 +283,6 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(MethodDeclaration method, Void args) {
-            // Check if the method is part of an inner class
-            if (isInnerClass(method)) {
-                return null;
-            }
 
             super.visit(method, args);
             method.getAnnotations().clear();
