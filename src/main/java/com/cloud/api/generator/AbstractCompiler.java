@@ -135,34 +135,12 @@ public class AbstractCompiler {
 
         // Check if the file exists
         File file = sourcePath.toFile();
-//        if (!file.exists()) {
-//            return;
-            // The file may not exist if the DTO is an inner class in a controller
-//            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
-//            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
-//            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
-//            sourcePath = Paths.get(basePath, controllerPath);
-//        }
-
-        // Check again for the controller file
-//        file = sourcePath.toFile();
-//        if (!file.exists()) {
-//            logger.error("Controller file not found: {}", sourcePath);
-//            throw new FileNotFoundException(sourcePath.toString());
-//        }
 
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         resolved.put(className, cu);
 
-        // Search for any inner class that ends with "Dto"
-//        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-//                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
-//
-//        if (hasInnerDTO) {
-//            logger.info("Found inner DTO class in controller: {}", relativePath);
-//        }
     }
 
     /**
