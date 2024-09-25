@@ -71,7 +71,7 @@ public class RestControllerParser extends ClassProcessor {
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
-    Map<String, Comparable> context;
+
     private boolean evaluatorUnsupported = false;
     File current;
 
@@ -423,9 +423,9 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildContext(MethodDeclaration md) {
-            context = new HashMap<>();
+
             for(var param : md.getParameters()) {
-                context.put(param.getNameAsString(), null);
+                evaluator.setArgument(param.getNameAsString(), null);
                 solveTypeDependencies(param.getType(), cu);
             }
         }
@@ -453,7 +453,7 @@ public class RestControllerParser extends ClassProcessor {
                         if (parent.get() instanceof IfStmt) {
                             IfStmt ifStmt = (IfStmt) parent.get();
                             Expression condition = ifStmt.getCondition();
-                            if (context != null && evaluator.evaluateCondition(condition, context)) {
+                            if (evaluator.evaluateCondition(condition)) {
                                 identifyReturnType(stmt, md);
                                 buildPreconditions(md, condition);
                             }
@@ -465,7 +465,7 @@ public class RestControllerParser extends ClassProcessor {
                                     // we have found ourselves a conditional return statement.
                                     IfStmt ifStmt = (IfStmt) gramps.get();
                                     Expression condition = ifStmt.getCondition();
-                                    if (context != null && evaluator.evaluateCondition(condition, context)) {
+                                    if (evaluator.evaluateCondition(condition)) {
                                         identifyReturnType(stmt, md);
                                         buildPreconditions(md, condition);
                                     }
