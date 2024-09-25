@@ -897,7 +897,7 @@ public class RestControllerParser extends ClassProcessor {
                 if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                     System.out.println("bada 2");
                 } else if (!
-                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
+                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture") || returnType.toString().equals("?"))) {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                     if (respType.toString().equals("String")) {
                         body.addStatement("String resp = response.getBody().asString();");
