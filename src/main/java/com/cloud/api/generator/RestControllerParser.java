@@ -40,6 +40,7 @@ import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -74,6 +75,7 @@ public class RestControllerParser extends ClassProcessor {
 
     private boolean evaluatorUnsupported = false;
     File current;
+    private Evaluator evaluator;
 
     /**
      * Store the conditions that a controller may expect the input to meet.
@@ -84,8 +86,6 @@ public class RestControllerParser extends ClassProcessor {
      * Maintains a list of repositories that we have already encountered.
      */
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
-    private Map<String, Type> fields;
-
 
     /**
      * Creates a new RestControllerParser
@@ -166,8 +166,8 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.annotations.TestCaseType");
         gen.addImport("com.cloud.core.enums.TestType");
 
-        fields = new HashMap<>();
 
+        evaluator = new Evaluator();
         /*
          * There is a very valid reason for doing this in two steps.
          * We want to make sure that all the repositories are identified before we start processing the methods.
@@ -260,6 +260,7 @@ public class RestControllerParser extends ClassProcessor {
                     Type t = variable.getType().asClassOrInterfaceType();
                     try {
                         String className = t.resolve().describe();
+
                         if (className.startsWith(basePackage)) {
                             /*
                              * At the moment only compatible with repositories that are direct part of the
@@ -301,7 +302,8 @@ public class RestControllerParser extends ClassProcessor {
                         logger.error("\t{}",e.getMessage());
                     }
                 }
-                fields.put(variable.getNameAsString(), field.getElementType());
+                evaluator.setField(variable.getNameAsString(), field.getElementType());
+
             }
         }
     }
@@ -317,7 +319,6 @@ public class RestControllerParser extends ClassProcessor {
          * are being executed. Armed with that information we will then use the return statement visitor
          * to identify the return type of the method and thereafter to generate the tests.
          */
-        Evaluator evaluator = new Evaluator();
         RepositoryQuery last = null;
 
         /**
@@ -328,15 +329,16 @@ public class RestControllerParser extends ClassProcessor {
          *            Most likely to contain a single node
          * @return A repository query, if the variable assignment is the result of a query execution or null.
          */
-        public RepositoryQuery processMCE(Node node, NodeList<VariableDeclarator> arg) {
+        public Object processMethodCallExpression(Node node, NodeList<VariableDeclarator> arg) {
 
             if (node instanceof MethodCallExpr) {
                 MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
                 Optional<Expression> scope = mce.getScope();
                 if(scope.isPresent()) {
-                    var x = fields.get(scope.get().toString());
-                    if (x != null) {
-                        RepositoryParser repository = respositories.get(x.toString());
+                    Map<String, Evaluator.Variable> fields = evaluator.getFields();
+                    var obj = fields.get(scope.get().toString());
+                    if (obj != null) {
+                        RepositoryParser repository = respositories.get(obj.toString());
                         if (repository != null) {
                             /*
                              * This method call expression is associated with a repository query.
@@ -362,12 +364,32 @@ public class RestControllerParser extends ClassProcessor {
                             }
                             return q;
                         }
+                        else {
+                            try {
+                                Class<?> clazz = obj.getClass();
+                                Method method = clazz.getMethod(mce.getNameAsString(), String.class);
+                                Object result = method.invoke(obj);
+                                System.out.println(result);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            return evaluator.getValue(scope.get().toString());
+                        }
+                    }
+                    else {
+                        if(scope.get().isMethodCallExpr()) {
+                            return processMethodCallExpression(scope.get(), arg);
+                        }
+                        Object val = evaluator.getValue(scope.get().toString());
+                        if(val != null) {
+                            System.out.println("bada");
+                        }
                     }
                 }
             }
             else {
                 for(Node n : node.getChildNodes()) {
-                    RepositoryQuery q = processMCE(n, arg);
+                    Object q = processMethodCallExpression(n, arg);
                     if(q != null) {
                         return q;
                     }
@@ -401,17 +423,18 @@ public class RestControllerParser extends ClassProcessor {
                     last = null;
 
                     for(Statement st : body.get().getStatements()) {
-                        NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
-                        if (variables != null && st.isExpressionStmt()) {
+                        //NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
+                        if (st.isExpressionStmt()) {
                             /*
                              * we have just encountered a variable assignment.
                              *
                              * If the variable assignment is associated with a repository query, the visitor
                              * will return a non-null value.
                              */
-                            RepositoryQuery query = processMCE(st, variables);
-                            if (query != null && query.getResultSet() != null) {
-                                last = query;
+                            Object query = processMethodCallExpression(st, null);
+                            if (query != null && query instanceof RepositoryQuery &&
+                                    ((RepositoryQuery)query).getResultSet() != null) {
+                                last = (RepositoryQuery)query;
                             }
                         }
                         else {
@@ -559,15 +582,18 @@ public class RestControllerParser extends ClassProcessor {
                             try {
                                 Optional<Expression> scope = methodCallExpr.getScope();
                                 if (scope.isPresent()) {
-                                    Type type = (scope.get().isFieldAccessExpr())
-                                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                            : fields.get(scope.get().asNameExpr().getNameAsString());
-                                    if(type != null) {
-                                        extractTypeFromCall(type, methodCallExpr);
-                                        logger.debug(type.toString());
+                                    Expression exprScope = scope.get();
+                                    Map<String, Evaluator.Variable> fields = evaluator.getFields();
+
+                                    Evaluator.Variable variable = (exprScope.isFieldAccessExpr())
+                                            ? fields.get(exprScope.asFieldAccessExpr().getNameAsString())
+                                            : fields.get(exprScope.asNameExpr().getNameAsString());
+                                    if(variable != null) {
+                                        extractTypeFromCall(variable.getType(), methodCallExpr);
+                                        logger.debug(variable.getType().toString());
                                     }
                                     else {
-                                        logger.debug("Type not found {}", scope.get());
+                                        logger.debug("Type not found {}", exprScope);
                                     }
                                 }
                             } catch (IOException e) {
