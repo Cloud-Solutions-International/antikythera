@@ -19,6 +19,7 @@ public class ControllerResponse {
         statusCodes.put("UNAUTHORIZED", 401);
         statusCodes.put("FORBIDDEN", 403);
         statusCodes.put("NOT_FOUND", 404);
+        statusCodes.put("NOT_ACCEPTABLE", 406);
         statusCodes.put("CONFLICT", 409);
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
     }
