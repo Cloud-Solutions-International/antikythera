@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 public class Finch {
+    static Map<String, Object> classes = new HashMap<>();
 
     public static void main(String[] args) throws Exception {
 
