@@ -147,11 +147,22 @@ public class RestControllerParser extends ClassProcessor {
         cu.accept(new ControllerFieldVisitor(), null);
         cu.accept(new ControllerMethodVisitor(), null);
 
-        for (String s : dependencies) {
-            gen.addImport(s);
+        Set<String> originalImports = new HashSet<>();
+
+        for(var imp : cu.getImports()) {
+            originalImports.add(imp.getNameAsString());
         }
+
+        for (String s : dependencies) {
+            if(originalImports.contains(s)) {
+                gen.addImport(s);
+            }
+        }
+
         for(String s: externalDependencies) {
-            gen.addImport(s);
+            if(originalImports.contains(s)) {
+                gen.addImport(s);
+            }
         }
 
         fileContent.append(gen.toString()).append("\n");
