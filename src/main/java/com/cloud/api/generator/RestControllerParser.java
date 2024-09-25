@@ -37,7 +37,6 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
-import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
@@ -57,7 +56,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.javaparser.resolution.UnsolvedSymbolException;
-import net.sf.jsqlparser.statement.select.ExceptOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
