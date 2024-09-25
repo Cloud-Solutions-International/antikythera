@@ -145,7 +145,7 @@ public class AbstractCompiler {
      * Build a map of all the fields in a class by field name.
      * Warning: Most of the time you should use a Visitor instead of this method
      *
-     * @param cu
+     * @param cu Compilation unit
      * @String className
      * @return
      */
