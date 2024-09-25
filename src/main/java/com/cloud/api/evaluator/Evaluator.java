@@ -36,6 +36,8 @@ public class Evaluator {
      */
     private final Map<String, Local> locals ;
 
+    private final Map<String, Object> fields;
+
     static Map<String, Object> finches;
 
     static {
@@ -43,12 +45,15 @@ public class Evaluator {
             File f = new File(Evaluator.class.getClassLoader().getResource("mock.json").getFile());
             mocks = new ObjectMapper().readTree(f);
             List<String> scouts = (List<String>) Settings.getProperty("finch");
-            Evaluator.finches = new HashMap<>();
+            if(scouts != null) {
+                Evaluator.finches = new HashMap<>();
 
-            for(String scout : scouts) {
-                Map<String, Object> finches = Finch.loadClasses(new File(scout));
-                Evaluator.finches.putAll(finches);
+                for(String scout : scouts) {
+                    Map<String, Object> finches = Finch.loadClasses(new File(scout));
+                    Evaluator.finches.putAll(finches);
+                }
             }
+
         } catch (Exception e) {
             logger.warn("mocks could not be loaded");
         }
@@ -56,6 +61,7 @@ public class Evaluator {
 
     public Evaluator (){
         locals = new HashMap<>();
+        fields = new HashMap<>();
     }
 
     public static Map<String, Comparable> contextFactory(CompilationUnit cu) {
