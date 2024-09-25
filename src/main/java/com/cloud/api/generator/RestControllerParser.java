@@ -950,6 +950,10 @@ public class RestControllerParser extends ClassProcessor {
             for (var pair : normalAnnotation.getPairs()) {
                 if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
                     String pairValue = pair.getValue().toString();
+                    String[] parts = pairValue.split(",");
+                    if(parts.length == 2) {
+                        return parts[0].substring(1).replace("\"","").strip();
+                    }
                     return (commonPath + pairValue).replace("\"", "");
                 }
             }
