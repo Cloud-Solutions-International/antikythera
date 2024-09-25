@@ -1,6 +1,7 @@
 package com.cloud.api.evaluator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.finch.Finch;
 import com.cloud.api.generator.EvaluatorException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.io.File;
 
@@ -34,10 +36,19 @@ public class Evaluator {
      */
     private final Map<String, Local> locals ;
 
+    static Map<String, Object> finches;
+
     static {
         try {
             File f = new File(Evaluator.class.getClassLoader().getResource("mock.json").getFile());
             mocks = new ObjectMapper().readTree(f);
+            List<String> scouts = (List<String>) Settings.getProperty("finch");
+            Evaluator.finches = new HashMap<>();
+
+            for(String scout : scouts) {
+                Map<String, Object> finches = Finch.loadClasses(new File(scout));
+                Evaluator.finches.putAll(finches);
+            }
         } catch (Exception e) {
             logger.warn("mocks could not be loaded");
         }
