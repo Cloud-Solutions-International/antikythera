@@ -1,13 +1,17 @@
 package com.cloud.api.evaluator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.constants.Constants;
 import com.cloud.api.finch.Finch;
+import com.cloud.api.generator.AbstractCompiler;
+import com.cloud.api.generator.ClassProcessor;
 import com.cloud.api.generator.EvaluatorException;
 
+import com.cloud.api.generator.RepositoryParser;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.Statement;
@@ -16,6 +20,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +44,13 @@ public class Evaluator {
     private final Map<String, Variable> fields;
     Map<String, Object> arguments;
     static Map<String, Object> finches;
+
+
+    /**
+     * Maintains a list of repositories that we have already encountered.
+     */
+    private static Map<String, RepositoryParser> respositories = new HashMap<>();
+
 
     static {
         try {
@@ -239,6 +251,48 @@ public class Evaluator {
         return null;
     }
 
+    public void identifyFieldVariables(Type t, String shortName) throws IOException {
+        String className = t.resolve().describe();
+
+        if (className.startsWith(Settings.getProperty(Constants.BASE_PACKAGE).toString())) {
+            /*
+             * At the moment only compatible with repositories that are direct part of the
+             * application under test. Repositories from external jar files are not supported.
+             */
+            if(finches.get(className) != null) {
+                Variable v = new Variable(t);
+                v.value = finches.get(className);
+                fields.put(shortName, v);
+            }
+            else {
+                ClassProcessor proc = new ClassProcessor();
+                proc.compile(AbstractCompiler.classToPath(className));
+                CompilationUnit cu = proc.getCompilationUnit();
+                for (var typeDecl : cu.getTypes()) {
+                    if (typeDecl.isClassOrInterfaceDeclaration()) {
+                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                        if (cdecl.getNameAsString().equals(shortName)) {
+                            for (var ext : cdecl.getExtendedTypes()) {
+                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                    /*
+                                     * We have found a repository. Now we need to process it. Afterwards
+                                     * it will be added to the repositories map, to be identified by the
+                                     * field name.
+                                     */
+                                    RepositoryParser parser = new RepositoryParser();
+                                    parser.compile(AbstractCompiler.classToPath(className));
+                                    parser.process();
+                                    respositories.put(shortName, parser);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public Variable getLocal(String s) {
         return locals.get(s);
     }
@@ -266,9 +320,21 @@ public class Evaluator {
         public Type getType() {
             return type;
         }
+
+        public Object getValue() {
+            return value;
+        }
     }
 
     public Map<String, Variable> getFields() {
         return fields;
+    }
+
+    public Map<String, Object> getFinches() {
+        return finches;
+    }
+
+    public static Map<String, RepositoryParser> getRespositories() {
+        return respositories;
     }
 }
