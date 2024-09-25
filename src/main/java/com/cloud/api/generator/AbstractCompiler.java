@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 
@@ -89,6 +90,14 @@ public class AbstractCompiler {
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
+        }
+
+        Object f = Settings.getProperty("finch");
+        if(f != null) {
+            List<String> finch = (List<String>) f;
+            for(String path : finch) {
+                combinedTypeSolver.add(new JavaParserTypeSolver(path));
+            }
         }
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
