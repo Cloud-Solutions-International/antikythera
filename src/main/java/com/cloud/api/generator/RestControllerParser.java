@@ -247,15 +247,7 @@ public class RestControllerParser extends ClassProcessor {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 try {
-                    if (variable.getType().isClassOrInterfaceType()) {
-                        String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
-                        if (Evaluator.getRespositories().containsKey(shortName)) {
-                            return;
-                        }
-                        Type t = variable.getType().asClassOrInterfaceType();
-                        evaluator.identifyFieldVariables(t, shortName);
-                    }
-                     evaluator.setField(variable.getNameAsString(), field.getElementType());
+                    evaluator.identifyFieldVariables(variable);
                 } catch (UnsolvedSymbolException e) {
                     logger.debug("ignore {}", variable);
                 } catch (IOException e) {
@@ -334,7 +326,7 @@ public class RestControllerParser extends ClassProcessor {
                                     Class<?> clazz = obj.getValue().getClass();
                                     Method method = clazz.getMethod(mce.getNameAsString());
                                     Object result = method.invoke(obj);
-                                    System.out.println(result);
+                                    return result;
                                 }
                             } catch (Exception e) {
                                 e.printStackTrace();
@@ -389,7 +381,7 @@ public class RestControllerParser extends ClassProcessor {
                     last = null;
 
                     for(Statement st : body.get().getStatements()) {
-                        //NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
+                        NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
                         if (st.isExpressionStmt()) {
                             /*
                              * we have just encountered a variable assignment.

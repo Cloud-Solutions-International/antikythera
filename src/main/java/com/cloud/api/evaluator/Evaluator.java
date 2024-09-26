@@ -235,12 +235,6 @@ public class Evaluator {
                 for(var variable : variables) {
                     String t = variable.getType().toString();
                     Variable local = new Variable(varDeclExpr.getElementType());
-                    Object mock = mocks.get(t);
-                    if(mock != null) {
-                        local.isMocked = true;
-                        local.value = mock;
-                        solved = true;
-                    }
                     locals.put(variable.getNameAsString(), local);
                 }
                 if (!solved) {
@@ -251,39 +245,46 @@ public class Evaluator {
         return null;
     }
 
-    public void identifyFieldVariables(Type t, String shortName) throws IOException {
-        String className = t.resolve().describe();
-
-        if (className.startsWith(Settings.getProperty(Constants.BASE_PACKAGE).toString())) {
-            /*
-             * At the moment only compatible with repositories that are direct part of the
-             * application under test. Repositories from external jar files are not supported.
-             */
-            if(finches.get(className) != null) {
-                Variable v = new Variable(t);
-                v.value = finches.get(className);
-                fields.put(shortName, v);
+    public void identifyFieldVariables(VariableDeclarator variable) throws IOException {
+        if (variable.getType().isClassOrInterfaceType()) {
+            String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
+            if (Evaluator.getRespositories().containsKey(shortName)) {
+                return;
             }
-            else {
-                ClassProcessor proc = new ClassProcessor();
-                proc.compile(AbstractCompiler.classToPath(className));
-                CompilationUnit cu = proc.getCompilationUnit();
-                for (var typeDecl : cu.getTypes()) {
-                    if (typeDecl.isClassOrInterfaceDeclaration()) {
-                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                        if (cdecl.getNameAsString().equals(shortName)) {
-                            for (var ext : cdecl.getExtendedTypes()) {
-                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                    /*
-                                     * We have found a repository. Now we need to process it. Afterwards
-                                     * it will be added to the repositories map, to be identified by the
-                                     * field name.
-                                     */
-                                    RepositoryParser parser = new RepositoryParser();
-                                    parser.compile(AbstractCompiler.classToPath(className));
-                                    parser.process();
-                                    respositories.put(shortName, parser);
-                                    break;
+            Type t = variable.getType().asClassOrInterfaceType();
+            String className = t.resolve().describe();
+
+            if (className.startsWith(Settings.getProperty(Constants.BASE_PACKAGE).toString())) {
+                /*
+                 * At the moment only compatible with repositories that are direct part of the
+                 * application under test. Repositories from external jar files are not supported.
+                 */
+                if(finches.get(className) != null) {
+                    Variable v = new Variable(t);
+                    v.value = finches.get(className);
+                    fields.put(variable.getNameAsString(), v);
+                }
+                else {
+                    ClassProcessor proc = new ClassProcessor();
+                    proc.compile(AbstractCompiler.classToPath(className));
+                    CompilationUnit cu = proc.getCompilationUnit();
+                    for (var typeDecl : cu.getTypes()) {
+                        if (typeDecl.isClassOrInterfaceDeclaration()) {
+                            ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                            if (cdecl.getNameAsString().equals(shortName)) {
+                                for (var ext : cdecl.getExtendedTypes()) {
+                                    if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                        /*
+                                         * We have found a repository. Now we need to process it. Afterwards
+                                         * it will be added to the repositories map, to be identified by the
+                                         * field name.
+                                         */
+                                        RepositoryParser parser = new RepositoryParser();
+                                        parser.compile(AbstractCompiler.classToPath(className));
+                                        parser.process();
+                                        respositories.put(variable.getNameAsString(), parser);
+                                        break;
+                                    }
                                 }
                             }
                         }
