@@ -418,7 +418,7 @@ public class RestControllerParser extends ClassProcessor {
         private void buildContext(MethodDeclaration md) {
 
             for(var param : md.getParameters()) {
-                evaluator.setArgument(param.getNameAsString(), null);
+                evaluator.setArgument(param.getType(), null);
                 solveTypeDependencies(param.getType(), cu);
             }
         }
