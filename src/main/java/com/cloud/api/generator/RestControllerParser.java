@@ -277,81 +277,93 @@ public class RestControllerParser extends ClassProcessor {
          */
         RepositoryQuery last = null;
 
-        /**
-         * This method will be called for each method call expression associated with a variable assignment.
-         * @param node a node from an expression statement, which may have a method call expression.
-         *             The result of which will be used in the variable assignment by the caller
-         * @param arg The list of variables that are being assigned.
-         *            Most likely to contain a single node
-         * @return A repository query, if the variable assignment is the result of a query execution or null.
-         */
-        public Object processMethodCallExpression(Node node, NodeList<VariableDeclarator> arg) {
-
-            if (node instanceof MethodCallExpr) {
-                MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
-                Optional<Expression> scope = mce.getScope();
-                if(scope.isPresent()) {
-                    Map<String, Evaluator.Variable> fields = evaluator.getFields();
-                    var obj = fields.get(scope.get().toString());
+        private Object processMethodCallExpression(List<Node> nodes) {
+            if(nodes.size() == 3) {
+                if(nodes.get(2) instanceof MethodCallExpr) {
+                    evaluator.createVariable(nodes);
+                }
+                return "";
+            }
+            else {
+                for (Node node : nodes) {
+                    Object obj = processMethodCallExpression(node.getChildNodes());
                     if (obj != null) {
-                        RepositoryParser repository = Evaluator.getRespositories().get(obj.toString());
-                        if (repository != null) {
-                            /*
-                             * This method call expression is associated with a repository query.
-                             */
-                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
-                            try {
-                                /*
-                                 * We have one more challenge; to find the parameters that are being used in the repository
-                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
-                                 * to the arguments that are passed in when the method is actually being called.
-                                 */
-                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
-                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
-                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
-                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
-                                }
-
-                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
-                                q.setResultSet(rs);
-                            } catch (Exception e) {
-                                logger.warn(e.getMessage());
-                                logger.warn("Could not execute query {}", mce);
-                            }
-                            return q;
-                        }
-                        else {
-                            try {
-                                if(obj.getValue() != null) {
-                                    Class<?> clazz = obj.getValue().getClass();
-                                    Method method = clazz.getMethod(mce.getNameAsString());
-                                    Object result = method.invoke(obj);
-                                    return result;
-                                }
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            return evaluator.getValue(scope.get().toString());
-                        }
-                    }
-                    else {
-                        if(scope.get().isMethodCallExpr()) {
-                            return processMethodCallExpression(scope.get(), arg);
-                        }
-                        Object val = evaluator.getValue(scope.get().toString());
-                        if(val != null) {
-                            System.out.println("bada");
-                        }
+                        return obj;
                     }
                 }
             }
+
+            return null;
+        }
+
+        public Object processMethodCallExpression(Statement st) {
+
+            if (st.isExpressionStmt()) {
+                return processMethodCallExpression(st.getChildNodes());
+//                MethodCallExpr mce = ((MethodCallExpr) expressionStmt).asMethodCallExpr();
+//                Optional<Expression> scope = mce.getScope();
+//                if(scope.isPresent()) {
+//                    Map<String, Evaluator.Variable> fields = evaluator.getFields();
+//                    var obj = fields.get(scope.get().toString());
+//                    if (obj != null) {
+//                        RepositoryParser repository = Evaluator.getRespositories().get(obj.toString());
+//                        if (repository != null) {
+//                            /*
+//                             * This method call expression is associated with a repository query.
+//                             */
+//                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
+//                            try {
+//                                /*
+//                                 * We have one more challenge; to find the parameters that are being used in the repository
+//                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
+//                                 * to the arguments that are passed in when the method is actually being called.
+//                                 */
+//                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
+//                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
+//                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
+//                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
+//                                }
+//
+//                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
+//                                q.setResultSet(rs);
+//                            } catch (Exception e) {
+//                                logger.warn(e.getMessage());
+//                                logger.warn("Could not execute query {}", mce);
+//                            }
+//                            return q;
+//                        }
+//                        else {
+//                            try {
+//                                if(obj.getValue() != null) {
+//                                    Class<?> clazz = obj.getValue().getClass();
+//                                    Method method = clazz.getMethod(mce.getNameAsString());
+//                                    Object result = method.invoke(obj);
+//                                    return result;
+//                                }
+//                            } catch (Exception e) {
+//                                e.printStackTrace();
+//                            }
+//                            return evaluator.getValue(scope.get().toString());
+//                        }
+//                    }
+//                    else {
+//                        if(scope.get().isMethodCallExpr()) {
+//                            return processMethodCallExpression(scope.get(), arg);
+//                        }
+//                        Object val = evaluator.getValue(scope.get().toString());
+//                        if(val != null) {
+//                            System.out.println("bada");
+//                        }
+//                    }
+//                }
+            }
             else {
-                for(Node n : node.getChildNodes()) {
-                    Object q = processMethodCallExpression(n, arg);
-                    if(q != null) {
-                        return q;
-                    }
-                }
+//                for(Node n : node.getChildNodes()) {
+//                    Object q = processMethodCallExpression(n, arg);
+//                    if(q != null) {
+//                        return q;
+//                    }
+//                }
             }
             return null;
         }
@@ -381,7 +393,7 @@ public class RestControllerParser extends ClassProcessor {
                     last = null;
 
                     for(Statement st : body.get().getStatements()) {
-                        NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
+
                         if (st.isExpressionStmt()) {
                             /*
                              * we have just encountered a variable assignment.
@@ -389,7 +401,7 @@ public class RestControllerParser extends ClassProcessor {
                              * If the variable assignment is associated with a repository query, the visitor
                              * will return a non-null value.
                              */
-                            Object query = processMethodCallExpression(st, null);
+                            Object query = processMethodCallExpression(st);
                             if (query != null && query instanceof RepositoryQuery &&
                                     ((RepositoryQuery)query).getResultSet() != null) {
                                 last = (RepositoryQuery)query;
