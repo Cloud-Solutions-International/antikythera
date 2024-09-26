@@ -10,17 +10,20 @@ import com.cloud.api.generator.EvaluatorException;
 import com.cloud.api.generator.RepositoryParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -219,27 +222,40 @@ public class Evaluator {
         locals.clear();
     }
 
-    /**
-     * Identify local variables with in the block statement
-     * @param stmt the method body block. Any variable declared here will be a local.
-     * @return the list of variables declared in the block statement. If we have mocked
-     *       the variable, we will return null.
-     */
-    public NodeList<VariableDeclarator> identifyLocals(Statement stmt) {
-        if (stmt.isExpressionStmt()) {
-            Expression expr = stmt.asExpressionStmt().getExpression();
-            if (expr.isVariableDeclarationExpr()) {
-                VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-                NodeList<VariableDeclarator> variables = varDeclExpr.getVariables();
-                boolean solved = false;
-                for(var variable : variables) {
-                    String t = variable.getType().toString();
-                    Variable local = new Variable(varDeclExpr.getElementType());
-                    locals.put(variable.getNameAsString(), local);
+    public Object createVariable(List<Node> nodes) {
+        if(nodes.get(0) instanceof ClassOrInterfaceType) {
+
+            String varName = ((SimpleName) nodes.get(1)).toString();
+
+            Variable v = locals.get(varName);
+            if(v == null) {
+                v = new Variable(cdecl);
+                locals.put(varName, v);
+            }
+            try {
+                MethodCallExpr mce = (MethodCallExpr) nodes.get(2);
+                List<Node> children = mce.getChildNodes();
+
+                for(Node child : children) {
+                    if (child instanceof MethodCallExpr) {
+                        MethodCallExpr mc = (MethodCallExpr) child;
+                        Object result = null;
+
+                        Class<?> clazz = mc.getClass();
+
+                        if (v.getValue() != null) {
+                            ClassOrInterfaceType cdecl = (ClassOrInterfaceType) nodes.get(0);
+                            String name = cdecl.resolve().describe();
+
+                            Method method = clazz.getMethod(mc.getNameAsString());
+                            result = method.invoke(v);
+                            clazz = result.getClass();
+                        }
+                    }
                 }
-                if (!solved) {
-                    return variables;
-                }
+                return result;
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
         return null;
@@ -324,6 +340,14 @@ public class Evaluator {
 
         public Object getValue() {
             return value;
+        }
+
+        public void setValue(Object value) {
+            this.value = value;
+        }
+
+        public void setType(Type type) {
+            this.type = type;
         }
     }
 
