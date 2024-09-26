@@ -45,7 +45,7 @@ public class Evaluator {
     private final Map<String, Variable> locals ;
 
     private final Map<String, Variable> fields;
-    Map<String, Object> arguments;
+    Map<Type, Variable> arguments;
     static Map<String, Object> finches;
 
 
@@ -88,12 +88,13 @@ public class Evaluator {
             }
         }
 
-        Object value = arguments.get(name);
+        Variable value = arguments.get(name);
         if(value != null) {
             return value;
         }
 
         value = fields.get(name);
+        if(value != null) return value.value;
         return value;
     }
 
@@ -229,31 +230,27 @@ public class Evaluator {
 
             Variable v = locals.get(varName);
             if(v == null) {
-                v = new Variable(cdecl);
+                v = new Variable( (ClassOrInterfaceType) nodes.get(0));
                 locals.put(varName, v);
             }
             try {
                 MethodCallExpr mce = (MethodCallExpr) nodes.get(2);
                 List<Node> children = mce.getChildNodes();
+                Object result = null;
 
                 for(Node child : children) {
                     if (child instanceof MethodCallExpr) {
-                        MethodCallExpr mc = (MethodCallExpr) child;
-                        Object result = null;
+                        MethodCallExpr nexpr = (MethodCallExpr) child;
+                        Object value = getValue(nexpr.getScope().get().toString());
+                        System.out.println(nexpr);
 
-                        Class<?> clazz = mc.getClass();
-
-                        if (v.getValue() != null) {
-                            ClassOrInterfaceType cdecl = (ClassOrInterfaceType) nodes.get(0);
-                            String name = cdecl.resolve().describe();
-
-                            Method method = clazz.getMethod(mc.getNameAsString());
-                            result = method.invoke(v);
-                            clazz = result.getClass();
-                        }
+                        Class<?> clazz = value.getClass();
+                        Method method = clazz.getMethod(nexpr.getNameAsString());
+                        result = method.invoke(value);
+                        System.out.println(result);
                     }
                 }
-                return result;
+                return null;
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -314,8 +311,16 @@ public class Evaluator {
         return locals.get(s);
     }
 
-    public void setArgument(String nameAsString, Object o) {
-        arguments.put(nameAsString, o);
+    public void setArgument(Type type, Object o) {
+        Variable old = arguments.get(type);
+        if(old != null) {
+            old.setValue(o);
+        }
+        else {
+            Variable v = new Variable(type);
+            v.setValue(o);
+            arguments.put(type, v);
+        }
     }
 
     public void setField(String nameAsString, Type t) {
