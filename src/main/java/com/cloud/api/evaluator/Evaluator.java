@@ -17,7 +17,6 @@ import com.github.javaparser.ast.expr.*;
 
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import org.slf4j.Logger;
@@ -56,6 +55,7 @@ public class Evaluator {
      */
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
 
+    private String scope;
 
     static {
         try {
@@ -135,7 +135,7 @@ public class Evaluator {
         return false;
     }
 
-    Object evaluateExpression(Expression expr) throws EvaluatorException {
+    public Object evaluateExpression(Expression expr) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(name);
@@ -147,37 +147,50 @@ public class Evaluator {
             } else if (expr.isStringLiteralExpr()) {
                 return expr.asStringLiteralExpr().getValue();
             }
-        } else if (expr.isMethodCallExpr()) {
-            MethodCallExpr mc = expr.asMethodCallExpr();
-            String methodName = mc.getNameAsString();
-            List<Expression> arguments = mc.getArguments();
-            Object[] argValues = new Object[arguments.size()];
-
-            for (int i = 0; i < arguments.size(); i++) {
-                argValues[i] = evaluateExpression(arguments.get(i));
-            }
-
-            try {
-                if (mc.getScope().isPresent()) {
-                    Expression scopeExpr = mc.getScope().get();
-                    ResolvedMethodDeclaration resolvedMethod = mc.resolve();
-                    ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
-
-                    if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
-                        // Handle static method calls from java.lang package
-                        Class<?> clazz = Class.forName(declaringType.getQualifiedName());
-                        Method method = clazz.getMethod(methodName, getParameterTypes(argValues));
-                        return method.invoke(null, argValues);
-                    } else {
-                        // Handle method calls on objects
-                        Object scope = evaluateExpression(scopeExpr);
-                        Method method = scope.getClass().getMethod(methodName, getParameterTypes(argValues));
-                        return method.invoke(scope, argValues);
-                    }
+        } else if (expr.isVariableDeclarationExpr()) {
+            VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
+            for (var decl : varDeclExpr.getVariables()) {
+                if (decl.getInitializer().isPresent() && decl.getInitializer().get().isMethodCallExpr()) {
+                    MethodCallExpr methodCall = decl.getInitializer().get().asMethodCallExpr();
+                    return evaluateMethodCall(methodCall);
                 }
-            } catch (Exception e) {
-                throw new EvaluatorException("Error evaluating method call: " + mc, e);
             }
+        } else if (expr.isMethodCallExpr()) {
+            MethodCallExpr methodCall = expr.asMethodCallExpr();
+            return evaluateMethodCall(methodCall);
+        }
+        return null;
+    }
+
+    private Object evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
+        String methodName = methodCall.getNameAsString();
+        List<Expression> arguments = methodCall.getArguments();
+        Object[] argValues = new Object[arguments.size()];
+
+        for (int i = 0; i < arguments.size(); i++) {
+            argValues[i] = evaluateExpression(arguments.get(i));
+        }
+
+        try {
+            if (methodCall.getScope().isPresent()) {
+                Expression scopeExpr = methodCall.getScope().get();
+                ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
+                ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
+
+                if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
+                    // Handle static method calls from java.lang package
+                    Class<?> clazz = Class.forName(declaringType.getQualifiedName());
+                    Method method = clazz.getMethod(methodName, getParameterTypes(argValues));
+                    return method.invoke(null, argValues);
+                } else {
+                    // Handle method calls on objects
+                    Object scope = evaluateExpression(scopeExpr);
+                    Method method = scope.getClass().getMethod(methodName, getParameterTypes(argValues));
+                    return method.invoke(scope, argValues);
+                }
+            }
+        } catch (Exception e) {
+            throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
         }
         return null;
     }
@@ -371,5 +384,9 @@ public class Evaluator {
 
     public static Map<String, RepositoryParser> getRespositories() {
         return respositories;
+    }
+
+    public void setScope(String scope) {
+        this.scope = scope;
     }
 }

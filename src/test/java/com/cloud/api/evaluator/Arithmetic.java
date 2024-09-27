@@ -1,7 +1,7 @@
 package com.cloud.api.evaluator;
 
 
-public class Arithmatic {
+public class Arithmetic {
     private String a = "number10";
 
     private int calculate(int b) {
@@ -10,12 +10,12 @@ public class Arithmatic {
     }
 
     public static void main(String args[]) {
-        Arithmatic arithmatic = new Arithmatic();
-        doStuff(arithmatic);
+        Arithmetic arithmetic = new Arithmetic();
+        doStuff(arithmetic);
     }
 
-    private static void doStuff(Arithmatic arithmatic) {
-        int a = arithmatic.calculate(Integer.parseInt("10"));
+    private static void doStuff(Arithmetic arithmetic) {
+        int a = arithmetic.calculate(Integer.parseInt("10"));
         System.out.println(a);
     }
 }
