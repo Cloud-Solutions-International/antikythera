@@ -62,7 +62,7 @@ public class HelloEvaluator extends AbstractCompiler {
         MethodDeclaration helloName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
         evaluator.setScope("helloName");
 
-        AntikytheraRunTime.Variable v = new AntikytheraRunTime.Variable("World");
+        Variable v = new Variable("World");
         AntikytheraRunTime.push(v);
         evaluator.executeMethod(helloName);
     }
