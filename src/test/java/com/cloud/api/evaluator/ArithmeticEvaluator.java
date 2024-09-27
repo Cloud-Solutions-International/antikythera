@@ -68,12 +68,8 @@ public class ArithmeticEvaluator extends AbstractCompiler {
         cu.accept(new ControllerFieldVisitor(), null);
 
         MethodDeclaration doStuffMethod = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
-        List<Statement> statements = doStuffMethod.getBody().orElseThrow().getStatements();
-
         evaluator.setScope("arithmetic");
 
-        for (Statement stmt : statements) {
-            evaluator.evaluateExpression(stmt.asExpressionStmt().getExpression());
-        }
+        evaluator.executeMethod(doStuffMethod);
     }
 }

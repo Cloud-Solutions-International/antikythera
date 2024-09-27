@@ -2,6 +2,7 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
+import com.cloud.api.evaluator.AntikytheraRunTime;
 import com.cloud.api.evaluator.Evaluator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
@@ -551,9 +552,9 @@ public class RestControllerParser extends ClassProcessor {
                                 Optional<Expression> scope = methodCallExpr.getScope();
                                 if (scope.isPresent()) {
                                     Expression exprScope = scope.get();
-                                    Map<String, Evaluator.Variable> fields = evaluator.getFields();
+                                    Map<String, AntikytheraRunTime.Variable> fields = evaluator.getFields();
 
-                                    Evaluator.Variable variable = (exprScope.isFieldAccessExpr())
+                                    AntikytheraRunTime.Variable variable = (exprScope.isFieldAccessExpr())
                                             ? fields.get(exprScope.asFieldAccessExpr().getNameAsString())
                                             : fields.get(exprScope.asNameExpr().getNameAsString());
                                     if(variable != null) {

@@ -26,6 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.cloud.api.evaluator.AntikytheraRunTime;
+
+
 
 /**
  * Sets up the Java Parser and maintains a cache of the clases that have been compiled.
@@ -51,10 +54,6 @@ public class AbstractCompiler {
      */
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
 
-    /**
-     * Keeps track of all the classes that we have compiled
-     */
-    protected static final Map<String, CompilationUnit> resolved = new HashMap<>();
     /**
      * The base package for the AUT.
      * It helps to identify if a class we are looking at is something we should
@@ -134,7 +133,7 @@ public class AbstractCompiler {
     public void compile(String relativePath) throws FileNotFoundException {
         String className = pathToClass(relativePath);
 
-        cu = resolved.get(className);
+        cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             return;
         }
@@ -162,7 +161,7 @@ public class AbstractCompiler {
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        resolved.put(className, cu);
+        AntikytheraRunTime.addClass(className, cu);
 
         // Search for any inner class that ends with "Dto"
         boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
