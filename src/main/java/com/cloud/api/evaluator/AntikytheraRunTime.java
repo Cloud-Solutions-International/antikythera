@@ -3,7 +3,9 @@ package com.cloud.api.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.type.Type;
 
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Stack;
 
@@ -12,7 +14,7 @@ public class AntikytheraRunTime {
      * Keeps track of all the classes that we have compiled
      */
     protected static final Map<String, CompilationUnit> resolved = new HashMap<>();
-    protected static final Stack<Variable> stack = new Stack<>();
+    protected static final Deque<Variable> stack = new LinkedList<>();
 
     public static final CompilationUnit getCompilationUnit(String cls) {
         return resolved.get(cls);
@@ -34,6 +36,10 @@ public class AntikytheraRunTime {
             this.type = type;
         }
 
+        public Variable(Object value) {
+            this.value = value;
+        }
+
         public Type getType() {
             return type;
         }
@@ -49,6 +55,14 @@ public class AntikytheraRunTime {
         public void setType(Type type) {
             this.type = type;
         }
+    }
+
+    public static void push(Variable variable) {
+        stack.push(variable);
+    }
+
+    public static Variable pop() {
+        return stack.removeLast();
     }
 
 }
