@@ -126,6 +126,16 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
+            String p = path.toString().replace("/",".");
+            List<String> skip = (List<String>) Settings.getProperty("skip");
+            if(skip != null) {
+                for(String s : skip) {
+                    if (p.endsWith(s)) {
+                        return;
+                    }
+                }
+            }
+
             Matcher matcher = controllerPattern.matcher(path.toString());
 
             String controllerName = null;
@@ -1059,6 +1069,11 @@ public class RestControllerParser extends ClassProcessor {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
                 if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
+                    String pairValue = pair.getValue().toString();
+                    String[] parts = pairValue.split(",");
+                    if(parts.length == 2) {
+                        return parts[0].substring(1).replace("\"","").strip();
+                    }
                     return getCommonPath() + pair.getValue().toString();
                 }
             }

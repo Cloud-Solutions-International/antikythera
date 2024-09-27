@@ -4,10 +4,13 @@ import com.cloud.api.configurations.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.*;
-
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -352,15 +355,13 @@ public class DTOHandler extends  ClassProcessor {
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
 
         if (!field.isStatic()) {
+            boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
             String instance = classToInstanceName(cdecl);
             String fieldName = field.getVariables().get(0).getNameAsString();
             MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
             String type = field.getElementType().isClassOrInterfaceType()
                     ? field.getElementType().asClassOrInterfaceType().getNameAsString()
                     : field.getElementType().asString();
-            if (field.getVariables().get(0).getType().toString().equals("String[]")) {
-                type = field.getVariables().get(0).getType().asArrayType().getComponentType().asString() + "[]";
-            }
 
             String className = cu.getTypes().get(0).getNameAsString();
             Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
@@ -374,31 +375,35 @@ public class DTOHandler extends  ClassProcessor {
                     if (fieldName.startsWith("is") && methodNames.isEmpty()) {
                         setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName.replaceFirst("is", "")));
                     }
-                    yield "true";
+                    yield isArray ? "new boolean[] {true, false}" : "true";
                 }
-                case "Boolean" -> "true";
-                case "Character" -> "'A'";
-                case "Date" -> field.getElementType().toString().contains(".") ? "new java.util.Date()" : "new Date()";
-                case "Double", "double" -> "0.0";
-                case "Float", "float" -> "0.0f";
-                case "Integer", "int" -> "0";
-                case "Byte" -> "(byte) 0";
+                case "Boolean" -> isArray ? "new Boolean[] {true, false}" : "true";
+                case "Character" -> isArray ? "new Character[] {'A', 'B'}" : "'A'";
+                case "Date" -> isArray
+                        ? (field.getElementType().toString().contains(".")
+                        ? "new java.util.Date[] {new java.util.Date(), new java.util.Date()}"
+                        : "new Date[] {new Date(), new Date()}")
+                        : (field.getElementType().toString().contains(".") ? "new java.util.Date()" : "new Date()");
+                case "Double", "double" -> isArray ? "new Double[] {0.0, 1.0}" : "0.0";
+                case "Float", "float" -> isArray ? "new Float[] {0.0f, 1.0f}" : "0.0f";
+                case "Integer", "int" -> isArray ? "new Integer[] {0, 1}" : "0";
+                case "Byte" -> isArray ? "new Byte[] {(byte) 0, (byte) 1}" : "(byte) 0";
+                case "String" -> isArray ? "new String[] {\"Hello\", \"World\"}" : "\"Hello world\"";
+                case "Long", "long" -> isArray ? "new Long[] {0L, 1L}" : "0L";
+                case "UUID" -> isArray ? "new UUID[] {UUID.randomUUID(), UUID.randomUUID()}" : "UUID.randomUUID()";
+                case "LocalDate" -> isArray ? "new LocalDate[] {LocalDate.now(), LocalDate.now()}" : "LocalDate.now()";
+                case "LocalDateTime" -> isArray ? "new LocalDateTime[] {LocalDateTime.now(), LocalDateTime.now()}" : "LocalDateTime.now()";
+                case "Short" -> isArray ? "new Short[] {(short) 0, (short) 1}" : "(short) 0";
+                case "byte" -> isArray ? "new byte[] {(byte) 0, (byte) 1}" : "(byte) 0";
                 case "List" -> "List.of()";
-                case "long", "Long" -> "0L";
-                case "String" -> "\"Hello world\"";
-                case "String[]" -> "new String[] {\"Hello\", \"world\"}";
                 case "Map" -> "Map.of()";
                 case "Set" -> "Set.of()";
-                case "UUID" -> "UUID.randomUUID()";
-                case "LocalDate" -> "LocalDate.now()";
-                case "LocalDateTime" -> "LocalDateTime.now()";
-                case "Short" -> "(short) 0";
-                case "byte" -> "new byte[] {0}";
                 case "T" -> "null";
-                case "BigDecimal" -> "BigDecimal.ZERO";
+                case "BigDecimal" -> isArray ? "new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ONE}" : "BigDecimal.ZERO";
+                case "EnumSet", "Class" -> { yield null; }
                 default -> {
                     if (!field.resolve().getType().asReferenceType().getTypeDeclaration().get().isEnum()) {
-                        yield "new " + type + "()";
+                        yield isArray ? "new " + type + "[] {}" : "new " + type + "()";
                     } else {
                         yield null;
                     }
