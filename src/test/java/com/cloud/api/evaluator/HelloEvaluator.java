@@ -55,15 +55,24 @@ public class HelloEvaluator extends AbstractCompiler {
         CompilationUnit cu = javaParser.parse(new File("src/test/java/com/cloud/api/evaluator/Hello.java")).getResult().get();
         cu.accept(new ControllerFieldVisitor(), null);
 
+        Variable u = new Variable("upper cased");
+        AntikytheraRunTime.push(u);
+        MethodDeclaration helloUpper = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloUpper")).orElseThrow();
+        evaluator.setScope("helloUpper");
+        evaluator.executeMethod(helloUpper);
+
         MethodDeclaration helloWorld = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
         evaluator.setScope("helloWorld");
         evaluator.executeMethod(helloWorld);
 
         MethodDeclaration helloName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
         evaluator.setScope("helloName");
-
         Variable v = new Variable("World");
         AntikytheraRunTime.push(v);
         evaluator.executeMethod(helloName);
+
+        AntikytheraRunTime.push(v);
+        MethodDeclaration helloChained = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloChained")).orElseThrow();
+        evaluator.executeMethod(helloChained);
     }
 }

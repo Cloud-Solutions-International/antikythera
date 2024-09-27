@@ -142,7 +142,12 @@ public class Evaluator {
             for (var decl : varDeclExpr.getVariables()) {
                 if (decl.getInitializer().isPresent() && decl.getInitializer().get().isMethodCallExpr()) {
                     MethodCallExpr methodCall = decl.getInitializer().get().asMethodCallExpr();
-                    return evaluateMethodCall(methodCall);
+                    Variable v = evaluateMethodCall(methodCall);
+                    if (v != null) {
+                        v.setType(decl.getType());
+                        locals.put(decl.getNameAsString(), v);
+                    }
+                    return v;
                 }
             }
         } else if (expr.isBinaryExpr()) {
@@ -160,17 +165,30 @@ public class Evaluator {
     }
 
     private Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
-        String methodName = methodCall.getNameAsString();
-        List<Expression> arguments = methodCall.getArguments();
-        Variable[] argValues = new Variable[arguments.size()];
+        Optional<Expression> scope = methodCall.getScope();
+        Object scopeValue = null;
 
-        for (int i = 0; i < arguments.size(); i++) {
-            argValues[i] = evaluateExpression(arguments.get(i));
-        }
+        if (scope.isPresent()) {
+            Expression scopeExpr = scope.get();
+            if (scopeExpr.isMethodCallExpr()) {
+                /*
+                 * Chanined method calls
+                 */
+                scopeValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
 
-        try {
-            if (methodCall.getScope().isPresent()) {
-                Expression scopeExpr = methodCall.getScope().get();
+
+                new MethodCallExpr();
+            }
+
+            try {
+                String methodName = methodCall.getNameAsString();
+                List<Expression> arguments = methodCall.getArguments();
+                Variable[] argValues = new Variable[arguments.size()];
+
+                for (int i = 0; i < arguments.size(); i++) {
+                    argValues[i] = evaluateExpression(arguments.get(i));
+                }
+
 
                 Class<?>[] paramTypes = new Class<?>[argValues.length];
                 Object[] args = new Object[argValues.length];
@@ -183,38 +201,39 @@ public class Evaluator {
                     /*
                      * System. stuff need special treatment
                      */
-
                     Class<?> systemClass = Class.forName("java.lang.System");
                     Field outField = systemClass.getField("out");
                     Class<?> printStreamClass = outField.getType();
                     Method printlnMethod = printStreamClass.getMethod("println", paramTypes);
                     printlnMethod.invoke(outField.get(null), args);
-                }
-                else {
+                } else {
                     ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
                     ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
 
                     if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
                         Class<?> clazz = Class.forName(declaringType.getQualifiedName());
                         Method method = clazz.getMethod(methodName, paramTypes);
-                        return new Variable(method.invoke(null, args));
+                        Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
+                        AntikytheraRunTime.push(v);
+                        return v;
                     } else {
-                        if (scopeExpr.toString().equals(scope)) {
+                        if (scopeExpr.toString().equals(this.scope)) {
                             Optional<Node> method = resolvedMethod.toAst();
                             if (method.isPresent()) {
                                 System.out.println(method);
                                 executeMethod((MethodDeclaration) method.get());
                             }
                         } else {
-                            Object scope = evaluateExpression(scopeExpr);
-                            Method method = scope.getClass().getMethod(methodName, paramTypes);
-                            return new Variable(method.invoke(scope, args));
+                            Object obj = evaluateExpression(scopeExpr);
+                            Method method = obj.getClass().getMethod(methodName, paramTypes);
+                            return new Variable(method.invoke(obj, args));
                         }
                     }
                 }
+
+            } catch (Exception e) {
+                throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
             }
-        } catch (Exception e) {
-            throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
         }
         return null;
     }
@@ -402,14 +421,32 @@ public class Evaluator {
     public void executeMethod(MethodDeclaration md) throws EvaluatorException {
         List<Statement> statements = md.getBody().orElseThrow().getStatements();
         NodeList<Parameter> parameters = md.getParameters();
+        locals.clear();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
 
-            locals.put(p.getNameAsString(), AntikytheraRunTime.pop());
+            /*
+             * Our implementation differs from a standard Expression Evaluation engine in that we do not
+             * throw an exception if the stack is empty.
+             *
+             * The primary purpose of this is to generate tests. Those tests are sometimes generated for
+             * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
+             * allow the developer to make a few manual edits that's more than enougn.
+             */
+            if (AntikytheraRunTime.isEmptyStack()) {
+                logger.warn("Stack is empty");
+            }
+            else {
+                locals.put(p.getNameAsString(), AntikytheraRunTime.pop());
+            }
         }
 
         for (Statement stmt : statements) {
             evaluateExpression(stmt.asExpressionStmt().getExpression());
+        }
+
+        if (!AntikytheraRunTime.isEmptyStack()) {
+            AntikytheraRunTime.pop();
         }
     }
 }

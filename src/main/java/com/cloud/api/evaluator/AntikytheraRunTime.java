@@ -34,4 +34,8 @@ public class AntikytheraRunTime {
         return stack.removeLast();
     }
 
+    public static boolean isEmptyStack() {
+        return stack.isEmpty();
+    }
+
 }
