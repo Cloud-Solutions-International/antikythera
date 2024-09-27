@@ -2,8 +2,8 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
-import com.cloud.api.evaluator.AntikytheraRunTime;
 import com.cloud.api.evaluator.Evaluator;
+import com.cloud.api.evaluator.Variable;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -41,7 +41,6 @@ import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -552,9 +551,9 @@ public class RestControllerParser extends ClassProcessor {
                                 Optional<Expression> scope = methodCallExpr.getScope();
                                 if (scope.isPresent()) {
                                     Expression exprScope = scope.get();
-                                    Map<String, AntikytheraRunTime.Variable> fields = evaluator.getFields();
+                                    Map<String, Variable> fields = evaluator.getFields();
 
-                                    AntikytheraRunTime.Variable variable = (exprScope.isFieldAccessExpr())
+                                    Variable variable = (exprScope.isFieldAccessExpr())
                                             ? fields.get(exprScope.asFieldAccessExpr().getNameAsString())
                                             : fields.get(exprScope.asNameExpr().getNameAsString());
                                     if(variable != null) {

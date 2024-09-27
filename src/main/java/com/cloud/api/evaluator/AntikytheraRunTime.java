@@ -1,13 +1,11 @@
 package com.cloud.api.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.type.Type;
 
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Stack;
 
 public class AntikytheraRunTime {
     /**
@@ -26,35 +24,6 @@ public class AntikytheraRunTime {
 
     public static void reset() {
         resolved.clear();
-    }
-
-    public static class Variable {
-        private Type type;
-        private Object value;
-
-        public Variable(Type type) {
-            this.type = type;
-        }
-
-        public Variable(Object value) {
-            this.value = value;
-        }
-
-        public Type getType() {
-            return type;
-        }
-
-        public Object getValue() {
-            return value;
-        }
-
-        public void setValue(Object value) {
-            this.value = value;
-        }
-
-        public void setType(Type type) {
-            this.type = type;
-        }
     }
 
     public static void push(Variable variable) {
