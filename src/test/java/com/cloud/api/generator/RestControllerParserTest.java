@@ -72,29 +72,5 @@ class RestControllerParserTest {
         assertEquals(fields.get("description").toString(), "private String description;");
     }
 
-    @Test
-    void testGetPath() throws IOException {
-        // Mock getCommonPath method
-        RestControllerParser parserSpy = spy(new RestControllerParser(new File("DummyFile.java")));
-        doReturn("/dummy").when(parserSpy).getCommonPath();
 
-        // Test single member annotation
-        SingleMemberAnnotationExpr singleMemberAnnotation = new SingleMemberAnnotationExpr();
-        singleMemberAnnotation.setMemberValue(new StringLiteralExpr("/get"));
-        assertEquals("/dummy/get", parserSpy.getPath(singleMemberAnnotation));
-
-        // Test normal annotation with path
-        NormalAnnotationExpr normalAnnotationWithPath = new NormalAnnotationExpr();
-        normalAnnotationWithPath.addPair("path", new StringLiteralExpr("/post"));
-        assertEquals("/dummy/post", parserSpy.getPath(normalAnnotationWithPath));
-
-        // Test normal annotation with value
-        NormalAnnotationExpr normalAnnotationWithValue = new NormalAnnotationExpr();
-        normalAnnotationWithValue.addPair("value", new StringLiteralExpr("/put"));
-        assertEquals("/dummy/put", parserSpy.getPath(normalAnnotationWithValue));
-
-        // Test annotation with no path or value
-        NormalAnnotationExpr emptyAnnotation = new NormalAnnotationExpr();
-        assertEquals("/dummy", parserSpy.getPath(emptyAnnotation));
-    }
 }

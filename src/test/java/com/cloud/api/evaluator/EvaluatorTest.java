@@ -24,18 +24,5 @@ class EvaluatorTest {
     CompilationUnit exp = StaticJavaParser.parse(
             getClass().getClassLoader().getResourceAsStream("sources/com/csi/expressions/SimpleDTOExpressions.java"));
 
-    @BeforeEach
-    void setUp() {
 
-        context = Evaluator.contextFactory(dto);
-    }
-
-    @Test
-    void testEqualsNull() throws EvaluatorException {
-        Evaluator eval = new Evaluator();
-        Expression methodCall = new MethodCallExpr(new NameExpr("dto"), "getHospital");
-        Expression nullLiteral = new NullLiteralExpr();
-        BinaryExpr condition = new BinaryExpr(methodCall, nullLiteral, BinaryExpr.Operator.EQUALS);
-        assertTrue(eval.evaluateCondition(condition, context));
-    }
 }

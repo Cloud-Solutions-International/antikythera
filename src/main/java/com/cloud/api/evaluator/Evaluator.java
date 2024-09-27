@@ -1,7 +1,6 @@
 package com.cloud.api.evaluator;
 
 import com.cloud.api.configurations.Settings;
-import com.cloud.api.constants.Constants;
 import com.cloud.api.finch.Finch;
 import com.cloud.api.generator.AbstractCompiler;
 import com.cloud.api.generator.ClassProcessor;
@@ -11,14 +10,16 @@ import com.cloud.api.generator.RepositoryParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
+
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
-import com.github.javaparser.ast.stmt.Statement;
+
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.io.File;
+import java.util.Optional;
 
 /**
  * Expression evaluator engine.
@@ -57,11 +59,9 @@ public class Evaluator {
 
     static {
         try {
-
+            Evaluator.finches = new HashMap<>();
             List<String> scouts = (List<String>) Settings.getProperty("finch");
             if(scouts != null) {
-                Evaluator.finches = new HashMap<>();
-
                 for(String scout : scouts) {
                     Map<String, Object> finches = Finch.loadClasses(new File(scout));
                     Evaluator.finches.putAll(finches);
@@ -98,47 +98,23 @@ public class Evaluator {
         return value;
     }
 
-    public static Map<String, Comparable> contextFactory(CompilationUnit cu) {
-        Map<String, Comparable> context = new HashMap<>();
-        cu.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(VariableDeclarationExpr n, Void arg) {
-                n.getVariables().forEach(v -> {
-                    if (v.getInitializer().isPresent()) {
-                        Expression initializer = v.getInitializer().get();
-                        if (initializer.isBooleanLiteralExpr()) {
-                            context.put(v.getNameAsString(), initializer.asBooleanLiteralExpr().getValue());
-                        } else if (initializer.isIntegerLiteralExpr()) {
-                            context.put(v.getNameAsString(), Integer.parseInt(initializer.asIntegerLiteralExpr().getValue()));
-                        }
-
-                    }
-                });
-                super.visit(n, arg);
-            }
-        }, null);
-        return context;
-    }
-
     public boolean evaluateCondition(Expression condition) throws EvaluatorException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
 
-            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
+            if (binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
                 return evaluateCondition(left) && evaluateCondition(right);
-            } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
+            } else if (binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
                 return evaluateCondition(left) || evaluateCondition(right);
-            }
-            else {
+            } else {
                 Object leftValue = evaluateExpression(left);
                 Object rightValue = evaluateExpression(right);
                 if (leftValue instanceof Comparable && rightValue instanceof Comparable) {
                     return evaluateBinaryExpression(binaryExpr.getOperator(),
                             (Comparable) leftValue, (Comparable) rightValue);
-                }
-                else {
+                } else {
                     logger.warn("{} , {} not comparable", leftValue, rightValue);
                 }
             }
@@ -148,20 +124,18 @@ public class Evaluator {
             String name = condition.asNameExpr().getNameAsString();
             Boolean value = (Boolean) getValue(name);
             return value != null ? value : false;
-        }
-        else if(condition.isUnaryExpr()) {
+        } else if (condition.isUnaryExpr()) {
             UnaryExpr unaryExpr = condition.asUnaryExpr();
             Expression expr = unaryExpr.getExpression();
-            if(expr.isNameExpr() && locals.containsKey(expr.asNameExpr().getNameAsString())) {
-                return false;
+            if (unaryExpr.getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
+                return !evaluateCondition(expr);
             }
             logger.warn("Unary expression not supported yet");
         }
-
         return false;
     }
 
-    private Object evaluateExpression(Expression expr) throws EvaluatorException {
+    Object evaluateExpression(Expression expr) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(name);
@@ -170,22 +144,50 @@ public class Evaluator {
                 return expr.asBooleanLiteralExpr().getValue();
             } else if (expr.isIntegerLiteralExpr()) {
                 return Integer.parseInt(expr.asIntegerLiteralExpr().getValue());
+            } else if (expr.isStringLiteralExpr()) {
+                return expr.asStringLiteralExpr().getValue();
             }
-
-        }
-        else if(expr.isMethodCallExpr()) {
+        } else if (expr.isMethodCallExpr()) {
             MethodCallExpr mc = expr.asMethodCallExpr();
-            // todo fix this hack
-            String parts = mc.getScope().get().toString().split("\\.")[0];
-            if(locals.containsKey(parts)) {
-                throw new EvaluatorException("Method call involving variables not supported yet");
+            String methodName = mc.getNameAsString();
+            List<Expression> arguments = mc.getArguments();
+            Object[] argValues = new Object[arguments.size()];
+
+            for (int i = 0; i < arguments.size(); i++) {
+                argValues[i] = evaluateExpression(arguments.get(i));
             }
-            if(mc.getNameAsString().startsWith("get")) {
-                return getValue(mc.getNameAsString().substring(3).toLowerCase());
+
+            try {
+                if (mc.getScope().isPresent()) {
+                    Expression scopeExpr = mc.getScope().get();
+                    ResolvedMethodDeclaration resolvedMethod = mc.resolve();
+                    ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
+
+                    if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
+                        // Handle static method calls from java.lang package
+                        Class<?> clazz = Class.forName(declaringType.getQualifiedName());
+                        Method method = clazz.getMethod(methodName, getParameterTypes(argValues));
+                        return method.invoke(null, argValues);
+                    } else {
+                        // Handle method calls on objects
+                        Object scope = evaluateExpression(scopeExpr);
+                        Method method = scope.getClass().getMethod(methodName, getParameterTypes(argValues));
+                        return method.invoke(scope, argValues);
+                    }
+                }
+            } catch (Exception e) {
+                throw new EvaluatorException("Error evaluating method call: " + mc, e);
             }
         }
-
         return null;
+    }
+
+    private Class<?>[] getParameterTypes(Object[] args) {
+        Class<?>[] types = new Class<?>[args.length];
+        for (int i = 0; i < args.length; i++) {
+            types[i] = args[i].getClass();
+        }
+        return types;
     }
 
     private boolean evaluateBinaryExpression(BinaryExpr.Operator operator, Comparable leftValue, Comparable rightValue) throws EvaluatorException {
@@ -267,37 +269,40 @@ public class Evaluator {
             Type t = variable.getType().asClassOrInterfaceType();
             String className = t.resolve().describe();
 
-            if (className.startsWith(Settings.getProperty(Constants.BASE_PACKAGE).toString())) {
-                /*
-                 * At the moment only compatible with repositories that are direct part of the
-                 * application under test. Repositories from external jar files are not supported.
-                 */
-                if(finches.get(className) != null) {
-                    Variable v = new Variable(t);
-                    v.value = finches.get(className);
-                    fields.put(variable.getNameAsString(), v);
+
+            if(finches.get(className) != null) {
+                Variable v = new Variable(t);
+                v.value = finches.get(className);
+                fields.put(variable.getNameAsString(), v);
+            }
+            else if (className.startsWith("java")) {
+                Variable v = new Variable(t);
+                Optional<Expression> init = variable.getInitializer();
+                if(init.isPresent()) {
+                    v.setValue(init.get());
                 }
-                else {
-                    ClassProcessor proc = new ClassProcessor();
-                    proc.compile(AbstractCompiler.classToPath(className));
-                    CompilationUnit cu = proc.getCompilationUnit();
-                    for (var typeDecl : cu.getTypes()) {
-                        if (typeDecl.isClassOrInterfaceDeclaration()) {
-                            ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                            if (cdecl.getNameAsString().equals(shortName)) {
-                                for (var ext : cdecl.getExtendedTypes()) {
-                                    if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                        /*
-                                         * We have found a repository. Now we need to process it. Afterwards
-                                         * it will be added to the repositories map, to be identified by the
-                                         * field name.
-                                         */
-                                        RepositoryParser parser = new RepositoryParser();
-                                        parser.compile(AbstractCompiler.classToPath(className));
-                                        parser.process();
-                                        respositories.put(variable.getNameAsString(), parser);
-                                        break;
-                                    }
+                fields.put(variable.getNameAsString(), v);
+            }
+            else {
+                ClassProcessor proc = new ClassProcessor();
+                proc.compile(AbstractCompiler.classToPath(className));
+                CompilationUnit cu = proc.getCompilationUnit();
+                for (var typeDecl : cu.getTypes()) {
+                    if (typeDecl.isClassOrInterfaceDeclaration()) {
+                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                        if (cdecl.getNameAsString().equals(shortName)) {
+                            for (var ext : cdecl.getExtendedTypes()) {
+                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                    /*
+                                     * We have found a repository. Now we need to process it. Afterwards
+                                     * it will be added to the repositories map, to be identified by the
+                                     * field name.
+                                     */
+                                    RepositoryParser parser = new RepositoryParser();
+                                    parser.compile(AbstractCompiler.classToPath(className));
+                                    parser.process();
+                                    respositories.put(variable.getNameAsString(), parser);
+                                    break;
                                 }
                             }
                         }
