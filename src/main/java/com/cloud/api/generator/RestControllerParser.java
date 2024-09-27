@@ -305,8 +305,9 @@ public class RestControllerParser extends ClassProcessor {
                     } catch (UnsolvedSymbolException e) {
                         logger.debug("ignore {}", t);
                     } catch (IOException e) {
-                        String action = Settings.getProperty("dependencies.on_error").toString();
-                        if(action == null || action.equals("exit")) {
+
+                        Object action = Settings.getProperty("dependencies.on_error");
+                        if(action == null || action.toString().equals("exit")) {
                             throw new GeneratorException("Exception while processing fields", e);
                         }
                         logger.error("Exception while processing fields");
@@ -932,28 +933,32 @@ public class RestControllerParser extends ClassProcessor {
                 // return type will be null
                 if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                     System.out.println("bada 2");
-                } else if (!
-                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                    Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                    if (respType.toString().equals("String")) {
-                        body.addStatement("String resp = response.getBody().asString();");
-                        if(resp.getResponse() != null) {
-                            body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                } else
+                {
+                    List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
+                    if (! IncompatibleReturnTypes.contains(returnType.toString()))
+                    {
+                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        if (respType.toString().equals("String")) {
+                            body.addStatement("String resp = response.getBody().asString();");
+                            if(resp.getResponse() != null) {
+                                body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                            }
+                            else {
+                                body.addStatement("Assert.assertNotNull(resp);");
+                                logger.warn("Reponse body is empty for {}", md.getName());
+                            }
+                        } else {
+                            System.out.println("bada 1");
+                            // todo get thsi back on line
+                            //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                            //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                            //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                            //                                variableDeclarator.setInitializer(methodCallExpr);
+                            //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                            //                                body.addStatement(expressionStmt);
                         }
-                        else {
-                            body.addStatement("Assert.assertNotNull(resp);");
-                            logger.warn("Reponse body is empty for {}", md.getName());
-                        }
-                    } else {
-                        System.out.println("bada 1");
-                        // todo get thsi back on line
-//                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-//                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-//                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-//                                variableDeclarator.setInitializer(methodCallExpr);
-//                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-//                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-//                                body.addStatement(expressionStmt);
                     }
                 }
             }
