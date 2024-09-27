@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.evaluator.AntikytheraRunTime;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.*;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -31,14 +32,14 @@ class ClassProcessorTest {
         imports.add(new ImportDeclaration("com.otherpackage.OtherClass", false, false));
         classProcessor = new ClassProcessor();
         handler = mock(DTOHandler.class);
-        ClassProcessor.resolved.clear();
+        AntikytheraRunTime.reset();
     }
 
 
     @Test
     void copyDependencies_doesNotCopySpringDataDomain() throws IOException {
         classProcessor.copyDependencies("org.springframework.data.domain.Page");
-        assertFalse(ClassProcessor.resolved.containsKey("org.springframework.data.domain.Page"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("org.springframework.data.domain.Page"));
         verify(handler, never()).copyDTO(anyString());
     }
 
@@ -63,7 +64,7 @@ class ClassProcessorTest {
     void copyDependencies_doesNotCopyNonBasePackageDependency() throws IOException {
         ClassProcessor.basePackage = "com.example";
         classProcessor.copyDependencies("com.otherpackage.OtherClass");
-        assertFalse(ClassProcessor.resolved.containsKey("com.otherpackage.OtherClass"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("com.otherpackage.OtherClass"));
         verify(handler, never()).copyDTO(anyString());
     }
 

@@ -1,5 +1,6 @@
 package com.cloud.api.generator;
 
+import com.cloud.api.evaluator.AntikytheraRunTime;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -48,8 +49,7 @@ public class ClassProcessor extends AbstractCompiler {
             DTOHandler handler = new DTOHandler();
             handler.copyDTO(classToPath(nameAsString));
 
-            AbstractCompiler.resolved.put(nameAsString, handler.getCompilationUnit());
-
+            AntikytheraRunTime.addClass(nameAsString, handler.getCompilationUnit());
         }
     }
 
