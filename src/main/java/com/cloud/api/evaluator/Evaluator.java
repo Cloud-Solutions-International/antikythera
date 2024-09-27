@@ -18,6 +18,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -46,13 +47,17 @@ public class Evaluator {
      */
     private static JsonNode mocks;
     /**
-     * Local variables within the block statement.
+     * Local variables.
+     *
+     * These are specific to a block statement. A block statement may also be an
+     * entire method. The primary key will be the hashcode of the block statement.
      */
-    private final Map<String, Variable> locals ;
+    private final Map<Integer, Map<String, Variable>> locals ;
 
     private final Map<String, Variable> fields;
     static Map<String, Object> finches;
 
+    private Variable returnValue;
 
     /**
      * Maintains a list of repositories that we have already encountered.
@@ -71,7 +76,6 @@ public class Evaluator {
                     Evaluator.finches.putAll(finches);
                 }
             }
-
         } catch (Exception e) {
             e.printStackTrace();
             logger.warn("mocks could not be loaded");
@@ -84,15 +88,11 @@ public class Evaluator {
 
     }
 
-    public Variable getValue(String name) {
-        if (locals != null) {
-            Variable local = locals.get(name);
-            if(local != null) {
-                return local;
-            }
+    public Variable getValue(Node n, String name) {
+        Variable value = getLocal(n, name);
+        if (value == null) {
+            return fields.get(name);
         }
-
-        Variable value = fields.get(name);
         return value;
     }
 
@@ -110,7 +110,7 @@ public class Evaluator {
 
         } else if (condition.isNameExpr()) {
             String name = condition.asNameExpr().getNameAsString();
-            return getValue(name);
+            return getValue(condition, name);
 
         } else if (condition.isUnaryExpr()) {
             UnaryExpr unaryExpr = condition.asUnaryExpr();
@@ -128,7 +128,7 @@ public class Evaluator {
     public Variable evaluateExpression(Expression expr) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
-            return getValue(name);
+            return getValue(expr, name);
         } else if (expr.isLiteralExpr()) {
             if (expr.isBooleanLiteralExpr()) {
                 return new Variable(expr.asBooleanLiteralExpr().getValue());
@@ -145,7 +145,7 @@ public class Evaluator {
                     Variable v = evaluateMethodCall(methodCall);
                     if (v != null) {
                         v.setType(decl.getType());
-                        locals.put(decl.getNameAsString(), v);
+                        setLocal(methodCall, decl.getNameAsString(), v);
                     }
                     return v;
                 }
@@ -162,6 +162,58 @@ public class Evaluator {
             return evaluateMethodCall(methodCall);
         }
         return null;
+    }
+
+    public Variable getLocal(Node node, String name) {
+        Variable v = null;
+        Node n = node;
+
+        while(true) {
+            BlockStmt block = findBlockStatement(n);
+            int hash = (block != null) ? block.hashCode() : 0;
+
+            Map<String, Variable> locals = this.locals.get(hash);
+            if (locals != null) {
+                v = locals.get(name);
+                return v;
+            }
+            if(n instanceof MethodDeclaration) {
+                locals = this.locals.get(hash);
+                if (locals != null) {
+                    v = locals.get(name);
+                    return v;
+                }
+                break;
+            }
+            n = block.getParentNode().orElse(null);
+            if(n == null) {
+                break;
+            }
+        }
+        return null;
+    }
+
+    private void setLocal(Node node, String nameAsString, Variable v) {
+        BlockStmt block = findBlockStatement(node);
+        int hash = (block != null) ? block.hashCode() : 0;
+
+        Map<String, Variable> locals = this.locals.get(hash);
+        if(locals == null) {
+            locals = new HashMap<>();
+            this.locals.put(hash, locals);
+        }
+        locals.put(nameAsString, v);
+    }
+
+    private static BlockStmt findBlockStatement(Node expr) {
+        Node currentNode = expr;
+        while (currentNode != null) {
+            if (currentNode instanceof BlockStmt) {
+                return (BlockStmt) currentNode;
+            }
+            currentNode = currentNode.getParentNode().orElse(null);
+        }
+        return null; // No block statement found
     }
 
     private Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
@@ -311,10 +363,10 @@ public class Evaluator {
 
             String varName = ((SimpleName) nodes.get(1)).toString();
 
-            Variable v = locals.get(varName);
+            Variable v = getLocal(nodes.get(0), varName);
             if(v == null) {
                 v = new Variable( (ClassOrInterfaceType) nodes.get(0));
-                locals.put(varName, v);
+                setLocal(nodes.get(0), varName, v);
             }
             try {
                 MethodCallExpr mce = (MethodCallExpr) nodes.get(2);
@@ -324,7 +376,8 @@ public class Evaluator {
                 for(Node child : children) {
                     if (child instanceof MethodCallExpr) {
                         MethodCallExpr nexpr = (MethodCallExpr) child;
-                        Object value = getValue(nexpr.getScope().get().toString());
+                        Expression expression = nexpr.getScope().get();
+                        Object value = getValue(expression, expression.toString());
                         System.out.println(nexpr);
 
                         Class<?> clazz = value.getClass();
@@ -393,10 +446,6 @@ public class Evaluator {
         }
     }
 
-    public Variable getLocal(String s) {
-        return locals.get(s);
-    }
-
     public void setField(String nameAsString, Type t) {
         Variable f = new Variable(t);
         fields.put(nameAsString, f);
@@ -422,6 +471,7 @@ public class Evaluator {
         List<Statement> statements = md.getBody().orElseThrow().getStatements();
         NodeList<Parameter> parameters = md.getParameters();
         locals.clear();
+        returnValue = null;
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
 
@@ -437,7 +487,7 @@ public class Evaluator {
                 logger.warn("Stack is empty");
             }
             else {
-                locals.put(p.getNameAsString(), AntikytheraRunTime.pop());
+                setLocal(md.getBody().get(), p.getNameAsString(), AntikytheraRunTime.pop());
             }
         }
 
@@ -447,6 +497,7 @@ public class Evaluator {
 
         if (!AntikytheraRunTime.isEmptyStack()) {
             AntikytheraRunTime.pop();
+
         }
     }
 }

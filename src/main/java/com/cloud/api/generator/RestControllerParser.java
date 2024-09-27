@@ -536,8 +536,8 @@ public class RestControllerParser extends ClassProcessor {
                         }
                         if (typeArg.isNameExpr()) {
                             String nameAsString = typeArg.asNameExpr().getNameAsString();
-                            if(nameAsString != null && evaluator.getLocal(nameAsString) != null) {
-                                response.setType(evaluator.getLocal(nameAsString).getType());
+                            if(nameAsString != null && evaluator.getLocal(typeArg, nameAsString) != null) {
+                                response.setType(evaluator.getLocal(typeArg, nameAsString).getType());
                             }
                             else {
                                 logger.warn("NameExpr is null in identify return type");
