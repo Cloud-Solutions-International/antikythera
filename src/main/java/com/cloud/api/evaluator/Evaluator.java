@@ -12,9 +12,11 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
@@ -43,10 +45,10 @@ public class Evaluator {
     /**
      * Local variables within the block statement.
      */
-    private final Map<String, Variable> locals ;
+    private final Map<String, AntikytheraRunTime.Variable> locals ;
 
-    private final Map<String, Variable> fields;
-    Map<Type, Variable> arguments;
+    private final Map<String, AntikytheraRunTime.Variable> fields;
+    Map<Type, AntikytheraRunTime.Variable> arguments;
     static Map<String, Object> finches;
 
 
@@ -82,19 +84,19 @@ public class Evaluator {
 
     public Object getValue(String name) {
         if (locals != null) {
-            Variable local = locals.get(name);
+            AntikytheraRunTime.Variable local = locals.get(name);
             if(local != null) {
-                return local.value;
+                return local.getValue();
             }
         }
 
-        Variable value = arguments.get(name);
+        AntikytheraRunTime.Variable value = arguments.get(name);
         if(value != null) {
             return value;
         }
 
         value = fields.get(name);
-        if(value != null) return value.value;
+        if(value != null) return value.getValue();
         return value;
     }
 
@@ -178,15 +180,22 @@ public class Evaluator {
                 ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
 
                 if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
-                    // Handle static method calls from java.lang package
                     Class<?> clazz = Class.forName(declaringType.getQualifiedName());
                     Method method = clazz.getMethod(methodName, getParameterTypes(argValues));
                     return method.invoke(null, argValues);
                 } else {
-                    // Handle method calls on objects
-                    Object scope = evaluateExpression(scopeExpr);
-                    Method method = scope.getClass().getMethod(methodName, getParameterTypes(argValues));
-                    return method.invoke(scope, argValues);
+                    if(scopeExpr.toString().equals(scope)) {
+                        Optional<Node> method = resolvedMethod.toAst();
+                        if (method.isPresent()) {
+                            System.out.println(method);
+                            executeMethod((MethodDeclaration) method.get());
+                        }
+                    }
+                    else {
+                        Object scope = evaluateExpression(scopeExpr);
+                        Method method = scope.getClass().getMethod(methodName, getParameterTypes(argValues));
+                        return method.invoke(scope, argValues);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -243,9 +252,9 @@ public class Evaluator {
 
             String varName = ((SimpleName) nodes.get(1)).toString();
 
-            Variable v = locals.get(varName);
+            AntikytheraRunTime.Variable v = locals.get(varName);
             if(v == null) {
-                v = new Variable( (ClassOrInterfaceType) nodes.get(0));
+                v = new AntikytheraRunTime.Variable( (ClassOrInterfaceType) nodes.get(0));
                 locals.put(varName, v);
             }
             try {
@@ -284,12 +293,12 @@ public class Evaluator {
 
 
             if(finches.get(className) != null) {
-                Variable v = new Variable(t);
-                v.value = finches.get(className);
+                AntikytheraRunTime.Variable v = new AntikytheraRunTime.Variable(t);
+                v.setValue(finches.get(className));
                 fields.put(variable.getNameAsString(), v);
             }
             else if (className.startsWith("java")) {
-                Variable v = new Variable(t);
+                AntikytheraRunTime.Variable v = new AntikytheraRunTime.Variable(t);
                 Optional<Expression> init = variable.getInitializer();
                 if(init.isPresent()) {
                     v.setValue(init.get());
@@ -325,56 +334,28 @@ public class Evaluator {
         }
     }
 
-    public Variable getLocal(String s) {
+    public AntikytheraRunTime.Variable getLocal(String s) {
         return locals.get(s);
     }
 
     public void setArgument(Type type, Object o) {
-        Variable old = arguments.get(type);
+        AntikytheraRunTime.Variable old = arguments.get(type);
         if(old != null) {
             old.setValue(o);
         }
         else {
-            Variable v = new Variable(type);
+            AntikytheraRunTime.Variable v = new AntikytheraRunTime.Variable(type);
             v.setValue(o);
             arguments.put(type, v);
         }
     }
 
     public void setField(String nameAsString, Type t) {
-        Variable f = new Variable(t);
+        AntikytheraRunTime.Variable f = new AntikytheraRunTime.Variable(t);
         fields.put(nameAsString, f);
     }
 
-    public static class Variable {
-        private boolean isNull;
-        private Type type;
-        private Object value;
-        private boolean isMocked;
-
-        public Variable(Type type) {
-            this.type = type;
-            isNull = true;
-        }
-
-        public Type getType() {
-            return type;
-        }
-
-        public Object getValue() {
-            return value;
-        }
-
-        public void setValue(Object value) {
-            this.value = value;
-        }
-
-        public void setType(Type type) {
-            this.type = type;
-        }
-    }
-
-    public Map<String, Variable> getFields() {
+    public Map<String, AntikytheraRunTime.Variable> getFields() {
         return fields;
     }
 
@@ -388,5 +369,12 @@ public class Evaluator {
 
     public void setScope(String scope) {
         this.scope = scope;
+    }
+
+    public void executeMethod(MethodDeclaration md) throws EvaluatorException {
+        List<Statement> statements = md.getBody().orElseThrow().getStatements();
+        for (Statement stmt : statements) {
+            evaluateExpression(stmt.asExpressionStmt().getExpression());
+        }
     }
 }
