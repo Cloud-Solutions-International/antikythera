@@ -11,8 +11,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 
@@ -25,7 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +52,6 @@ public class Evaluator {
     private final Map<String, AntikytheraRunTime.Variable> locals ;
 
     private final Map<String, AntikytheraRunTime.Variable> fields;
-    Map<Type, AntikytheraRunTime.Variable> arguments;
     static Map<String, Object> finches;
 
 
@@ -79,75 +82,61 @@ public class Evaluator {
     public Evaluator (){
         locals = new HashMap<>();
         fields = new HashMap<>();
-        arguments = new HashMap<>();
+
     }
 
-    public Object getValue(String name) {
+    public AntikytheraRunTime.Variable getValue(String name) {
         if (locals != null) {
             AntikytheraRunTime.Variable local = locals.get(name);
             if(local != null) {
-                return local.getValue();
+                return local;
             }
         }
 
-        AntikytheraRunTime.Variable value = arguments.get(name);
-        if(value != null) {
-            return value;
-        }
-
-        value = fields.get(name);
-        if(value != null) return value.getValue();
+        AntikytheraRunTime.Variable value = fields.get(name);
         return value;
     }
 
-    public boolean evaluateCondition(Expression condition) throws EvaluatorException {
+    public AntikytheraRunTime.Variable evaluateCondition(Expression condition) throws EvaluatorException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
 
-            if (binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
-                return evaluateCondition(left) && evaluateCondition(right);
-            } else if (binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                return evaluateCondition(left) || evaluateCondition(right);
-            } else {
-                Object leftValue = evaluateExpression(left);
-                Object rightValue = evaluateExpression(right);
-                if (leftValue instanceof Comparable && rightValue instanceof Comparable) {
-                    return evaluateBinaryExpression(binaryExpr.getOperator(),
-                            (Comparable) leftValue, (Comparable) rightValue);
-                } else {
-                    logger.warn("{} , {} not comparable", leftValue, rightValue);
-                }
-            }
+            return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
+
         } else if (condition.isBooleanLiteralExpr()) {
-            return condition.asBooleanLiteralExpr().getValue();
+
+            return new AntikytheraRunTime.Variable(condition.asBooleanLiteralExpr().getValue());
+
         } else if (condition.isNameExpr()) {
             String name = condition.asNameExpr().getNameAsString();
-            Boolean value = (Boolean) getValue(name);
-            return value != null ? value : false;
+            return getValue(name);
+
         } else if (condition.isUnaryExpr()) {
             UnaryExpr unaryExpr = condition.asUnaryExpr();
             Expression expr = unaryExpr.getExpression();
             if (unaryExpr.getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
-                return !evaluateCondition(expr);
+                AntikytheraRunTime.Variable v = evaluateCondition(expr);
+                v.setValue(!(Boolean)v.getValue());
+                return v;
             }
             logger.warn("Unary expression not supported yet");
         }
-        return false;
+        return null;
     }
 
-    public Object evaluateExpression(Expression expr) throws EvaluatorException {
+    public AntikytheraRunTime.Variable evaluateExpression(Expression expr) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(name);
         } else if (expr.isLiteralExpr()) {
             if (expr.isBooleanLiteralExpr()) {
-                return expr.asBooleanLiteralExpr().getValue();
+                return new AntikytheraRunTime.Variable(expr.asBooleanLiteralExpr().getValue());
             } else if (expr.isIntegerLiteralExpr()) {
-                return Integer.parseInt(expr.asIntegerLiteralExpr().getValue());
+                return new AntikytheraRunTime.Variable(Integer.parseInt(expr.asIntegerLiteralExpr().getValue()));
             } else if (expr.isStringLiteralExpr()) {
-                return expr.asStringLiteralExpr().getValue();
+                return new AntikytheraRunTime.Variable(expr.asStringLiteralExpr().getValue());
             }
         } else if (expr.isVariableDeclarationExpr()) {
             VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
@@ -157,6 +146,13 @@ public class Evaluator {
                     return evaluateMethodCall(methodCall);
                 }
             }
+        } else if (expr.isBinaryExpr()) {
+            BinaryExpr binaryExpr = expr.asBinaryExpr();
+            Expression left = binaryExpr.getLeft();
+            Expression right = binaryExpr.getRight();
+
+            return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
+
         } else if (expr.isMethodCallExpr()) {
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
@@ -164,10 +160,10 @@ public class Evaluator {
         return null;
     }
 
-    private Object evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
+    private AntikytheraRunTime.Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
         String methodName = methodCall.getNameAsString();
         List<Expression> arguments = methodCall.getArguments();
-        Object[] argValues = new Object[arguments.size()];
+        AntikytheraRunTime.Variable[] argValues = new AntikytheraRunTime.Variable[arguments.size()];
 
         for (int i = 0; i < arguments.size(); i++) {
             argValues[i] = evaluateExpression(arguments.get(i));
@@ -176,25 +172,45 @@ public class Evaluator {
         try {
             if (methodCall.getScope().isPresent()) {
                 Expression scopeExpr = methodCall.getScope().get();
-                ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
-                ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
 
-                if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
-                    Class<?> clazz = Class.forName(declaringType.getQualifiedName());
-                    Method method = clazz.getMethod(methodName, getParameterTypes(argValues));
-                    return method.invoke(null, argValues);
-                } else {
-                    if(scopeExpr.toString().equals(scope)) {
-                        Optional<Node> method = resolvedMethod.toAst();
-                        if (method.isPresent()) {
-                            System.out.println(method);
-                            executeMethod((MethodDeclaration) method.get());
+                Class<?>[] paramTypes = new Class<?>[argValues.length];
+                Object[] args = new Object[argValues.length];
+                for (int i = 0; i < argValues.length; i++) {
+                    paramTypes[i] = argValues[i].getValue().getClass();
+                    args[i] = argValues[i].getValue();
+                }
+
+                if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
+                    /*
+                     * System. stuff need special treatment
+                     */
+
+                    Class<?> systemClass = Class.forName("java.lang.System");
+                    Field outField = systemClass.getField("out");
+                    Class<?> printStreamClass = outField.getType();
+                    Method printlnMethod = printStreamClass.getMethod("println", paramTypes);
+                    printlnMethod.invoke(outField.get(null), args);
+                }
+                else {
+                    ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
+                    ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
+
+                    if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
+                        Class<?> clazz = Class.forName(declaringType.getQualifiedName());
+                        Method method = clazz.getMethod(methodName, paramTypes);
+                        return new AntikytheraRunTime.Variable(method.invoke(null, args));
+                    } else {
+                        if (scopeExpr.toString().equals(scope)) {
+                            Optional<Node> method = resolvedMethod.toAst();
+                            if (method.isPresent()) {
+                                System.out.println(method);
+                                executeMethod((MethodDeclaration) method.get());
+                            }
+                        } else {
+                            Object scope = evaluateExpression(scopeExpr);
+                            Method method = scope.getClass().getMethod(methodName, paramTypes);
+                            return new AntikytheraRunTime.Variable(method.invoke(scope, args));
                         }
-                    }
-                    else {
-                        Object scope = evaluateExpression(scopeExpr);
-                        Method method = scope.getClass().getMethod(methodName, getParameterTypes(argValues));
-                        return method.invoke(scope, argValues);
                     }
                 }
             }
@@ -204,42 +220,67 @@ public class Evaluator {
         return null;
     }
 
-    private Class<?>[] getParameterTypes(Object[] args) {
-        Class<?>[] types = new Class<?>[args.length];
-        for (int i = 0; i < args.length; i++) {
-            types[i] = args[i].getClass();
-        }
-        return types;
-    }
+    private AntikytheraRunTime.Variable evaluateBinaryExpression(BinaryExpr.Operator operator, Expression leftValue, Expression rightValue) throws EvaluatorException {
+        AntikytheraRunTime.Variable left = evaluateExpression(leftValue);
+        AntikytheraRunTime.Variable right = evaluateExpression(leftValue);
 
-    private boolean evaluateBinaryExpression(BinaryExpr.Operator operator, Comparable leftValue, Comparable rightValue) throws EvaluatorException {
         switch (operator) {
-            case EQUALS:
-                if(leftValue == null && rightValue == null) return true;
-                return leftValue.equals(rightValue);
-            case NOT_EQUALS:
-                if(leftValue == null) {
-                    if (rightValue != null) {
-                        return false;
-                    }
-                    return false;
+            case EQUALS: {
+                if (leftValue == null && rightValue == null) {
+                    return new AntikytheraRunTime.Variable(Boolean.TRUE);
+                }
+                if (leftValue == null || rightValue == null) {
+                    return new AntikytheraRunTime.Variable(Boolean.FALSE);
                 }
 
-                return !leftValue.equals(rightValue);
-            case LESS:
-                return (int) leftValue < (int) rightValue;
-            case GREATER:
-                return (int) leftValue > (int) rightValue;
-            case LESS_EQUALS:
-                if(leftValue == null) {
-                    throw new EvaluatorException("Left value is null - probably because evaluator is not completed yet");
+                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
+                    return new AntikytheraRunTime.Variable( ((Comparable) leftValue).equals(rightValue));
                 }
-                return (int) leftValue <= (int) rightValue;
+                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+            }
+
+            case GREATER:
+                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
+                    return new AntikytheraRunTime.Variable( ((Comparable) leftValue).compareTo(rightValue) > 0);
+                }
+                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
             case GREATER_EQUALS:
-                return (int) leftValue >= (int) rightValue;
+                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
+                    return new AntikytheraRunTime.Variable( ((Comparable) leftValue).compareTo(rightValue) >= 0);
+                }
+                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+
+            case LESS:
+                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
+                    return new AntikytheraRunTime.Variable( ((Comparable) leftValue).compareTo(rightValue) < 0);
+                }
+                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+
+            case LESS_EQUALS:
+                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
+                    return new AntikytheraRunTime.Variable( ((Comparable) leftValue).compareTo(rightValue) <= 0);
+                }
+                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+
+            case NOT_EQUALS: {
+                AntikytheraRunTime.Variable v = evaluateBinaryExpression(BinaryExpr.Operator.EQUALS, leftValue, rightValue);
+                if ( (Boolean)v.getValue()) {
+                    v.setValue(Boolean.FALSE);
+                }
+                else {
+                    v.setValue(Boolean.TRUE);
+                }
+                return v;
+            }
+
+            case PLUS:
+                if (left.getValue() instanceof String || right.getValue() instanceof String) {
+                    return new AntikytheraRunTime.Variable(left.getValue().toString() + right.getValue().toString());
+                }
+                return null;
 
             default:
-                return false;
+                return null;
         }
     }
 
@@ -338,18 +379,6 @@ public class Evaluator {
         return locals.get(s);
     }
 
-    public void setArgument(Type type, Object o) {
-        AntikytheraRunTime.Variable old = arguments.get(type);
-        if(old != null) {
-            old.setValue(o);
-        }
-        else {
-            AntikytheraRunTime.Variable v = new AntikytheraRunTime.Variable(type);
-            v.setValue(o);
-            arguments.put(type, v);
-        }
-    }
-
     public void setField(String nameAsString, Type t) {
         AntikytheraRunTime.Variable f = new AntikytheraRunTime.Variable(t);
         fields.put(nameAsString, f);
@@ -373,6 +402,13 @@ public class Evaluator {
 
     public void executeMethod(MethodDeclaration md) throws EvaluatorException {
         List<Statement> statements = md.getBody().orElseThrow().getStatements();
+        NodeList<Parameter> parameters = md.getParameters();
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            Parameter p = parameters.get(i);
+
+            locals.put(p.getNameAsString(), AntikytheraRunTime.pop());
+        }
+
         for (Statement stmt : statements) {
             evaluateExpression(stmt.asExpressionStmt().getExpression());
         }

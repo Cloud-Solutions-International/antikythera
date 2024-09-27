@@ -415,9 +415,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void buildContext(MethodDeclaration md) {
-
             for(var param : md.getParameters()) {
-                evaluator.setArgument(param.getType(), null);
                 solveTypeDependencies(param.getType(), cu);
             }
         }
@@ -438,17 +436,18 @@ public class RestControllerParser extends ClassProcessor {
             public void visit(ReturnStmt statement, MethodDeclaration md) {
                 ReturnStmt stmt = statement.asReturnStmt();
                 Optional<Node> parent = stmt.getParentNode();
-                try {
+//                try {
                     if (parent.isPresent() && !evaluatorUnsupported) {
                         // the return statement will have a parent no matter what but the optionals approach
                         // requires the use of isPresent.
                         if (parent.get() instanceof IfStmt) {
                             IfStmt ifStmt = (IfStmt) parent.get();
                             Expression condition = ifStmt.getCondition();
-                            if (evaluator.evaluateCondition(condition)) {
-                                identifyReturnType(stmt, md);
-                                buildPreconditions(md, condition);
-                            }
+                            // todo resurrce this
+//                            if (evaluator.evaluateCondition(condition)) {
+//                                identifyReturnType(stmt, md);
+//                                buildPreconditions(md, condition);
+//                            }
                         } else {
                             BlockStmt blockStmt = (BlockStmt) parent.get();
                             Optional<Node> gramps = blockStmt.getParentNode();
@@ -457,21 +456,22 @@ public class RestControllerParser extends ClassProcessor {
                                     // we have found ourselves a conditional return statement.
                                     IfStmt ifStmt = (IfStmt) gramps.get();
                                     Expression condition = ifStmt.getCondition();
-                                    if (evaluator.evaluateCondition(condition)) {
-                                        identifyReturnType(stmt, md);
-                                        buildPreconditions(md, condition);
-                                    }
+                                    // todo resurrce this
+//                                    if (evaluator.evaluateCondition(condition)) {
+//                                        identifyReturnType(stmt, md);
+//                                        buildPreconditions(md, condition);
+//                                    }
                                 } else if (gramps.get() instanceof MethodDeclaration) {
                                     identifyReturnType(stmt, md);
                                 }
                             }
                         }
                     }
-                } catch (EvaluatorException e) {
-                    logger.error("Evaluator exception");
-                    logger.error("\t{}", e.getMessage());
-                    evaluatorUnsupported = true;
-                }
+//                } catch (EvaluatorException e) {
+//                    logger.error("Evaluator exception");
+//                    logger.error("\t{}", e.getMessage());
+//                    evaluatorUnsupported = true;
+//                }
             }
         }
 
