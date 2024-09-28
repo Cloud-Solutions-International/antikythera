@@ -1,11 +1,8 @@
 package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
-import com.cloud.api.evaluator.AntikytheraRunTime;
-import com.github.javaparser.StaticJavaParser;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import com.github.javaparser.ast.*;
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.type.Type;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
