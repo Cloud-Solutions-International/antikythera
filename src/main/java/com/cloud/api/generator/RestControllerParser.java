@@ -55,6 +55,7 @@ import java.util.regex.Pattern;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
@@ -71,7 +72,7 @@ public class RestControllerParser extends ClassProcessor {
 
     private boolean evaluatorUnsupported = false;
     File current;
-    private Evaluator evaluator;
+    private SpringEvaluator evaluator;
 
     /**
      * Store the conditions that a controller may expect the input to meet.
@@ -168,7 +169,7 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.enums.TestType");
 
 
-        evaluator = new Evaluator();
+        evaluator = new SpringEvaluator();
         /*
          * There is a very valid reason for doing this in two steps.
          * We want to make sure that all the repositories are identified before we start processing the methods.
@@ -291,33 +292,23 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
             evaluatorUnsupported = false;
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                return;
+            }
+
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
+                resolveMethodParameterTypes(md);
 
-                buildContext(md);
-
-                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
-                    return;
-                }
-                Optional<BlockStmt> body = md.getBody();
-                if(body.isPresent()) {
-                    logger.info("Method: {}", md.getName());
-                    last = null;
-
-                    for(Statement st : body.get().getStatements()) {
-
-                        if (st.isExpressionStmt()) {
-
-                        }
-                        else {
-                            st.accept(new ReturnStatmentVisitor(), md);
-                        }
-                    }
+                try {
+                    evaluator.executeMethod(md);
+                } catch (EvaluatorException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
 
-        private void buildContext(MethodDeclaration md) {
+        private void resolveMethodParameterTypes(MethodDeclaration md) {
             for(var param : md.getParameters()) {
                 solveTypeDependencies(param.getType(), cu);
             }
@@ -800,26 +791,6 @@ public class RestControllerParser extends ClassProcessor {
                 request.setPath(path);
             }
         }
-    }
-
-    private static String getParamName(Parameter param) {
-        String paramString = String.valueOf(param);
-        if(paramString.startsWith("@PathVariable")) {
-            Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
-            if(ann.isPresent()) {
-                if(ann.get().isSingleMemberAnnotationExpr()) {
-                    return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
-                }
-                if(ann.get().isNormalAnnotationExpr()) {
-                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                        if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
-                            return pair.getValue().toString().replace("\"", "");
-                        }
-                    }
-                }
-            }
-        }
-        return param.getNameAsString();
     }
 
     /**
