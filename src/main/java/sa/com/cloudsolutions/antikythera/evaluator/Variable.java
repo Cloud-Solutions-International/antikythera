@@ -5,6 +5,7 @@ import com.github.javaparser.ast.type.Type;
 public class Variable {
     private Type type;
     private Object value;
+    private boolean primitive;
 
     public Variable(Type type) {
         this.type = type;
@@ -28,5 +29,13 @@ public class Variable {
 
     public void setType(Type type) {
         this.type = type;
+    }
+
+    public boolean isPrimitive() {
+        return primitive;
+    }
+
+    public void setPrimitive(boolean primitive) {
+        this.primitive = primitive;
     }
 }

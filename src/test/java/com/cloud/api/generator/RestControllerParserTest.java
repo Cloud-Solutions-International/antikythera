@@ -40,7 +40,7 @@ class RestControllerParserTest {
 
 
     @Test
-    void start_processesRestControllerSuccessfully() throws IOException {
+    void start_processesRestControllerSuccessfully() throws IOException, EvaluatorException {
         parser.start();
 
         File srcDirectory = new File(outputPath + "/src/main/java/");
