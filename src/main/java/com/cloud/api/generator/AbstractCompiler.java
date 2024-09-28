@@ -6,6 +6,8 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
@@ -172,5 +175,25 @@ public class AbstractCompiler {
             }
         }
         return fields;
+    }
+
+    public static String getParamName(Parameter param) {
+        String paramString = String.valueOf(param);
+        if(paramString.startsWith("@PathVariable")) {
+            Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
+            if(ann.isPresent()) {
+                if(ann.get().isSingleMemberAnnotationExpr()) {
+                    return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+                }
+                if(ann.get().isNormalAnnotationExpr()) {
+                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                        if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
+                            return pair.getValue().toString().replace("\"", "");
+                        }
+                    }
+                }
+            }
+        }
+        return param.getNameAsString();
     }
 }
