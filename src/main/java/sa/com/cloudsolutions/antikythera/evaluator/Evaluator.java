@@ -81,8 +81,7 @@ public class Evaluator {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            logger.warn("Finches could not be loaded");
+            logger.warn("Finches could not be loaded {}", e.getMessage());
         }
     }
 
@@ -203,7 +202,7 @@ public class Evaluator {
                         // Set the new instance as the value of v
                         v.setValue(instance);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        logger.error("An error occurred", e);
                     }
 
                     setLocal(expr, decl.getNameAsString(), v);
@@ -230,15 +229,16 @@ public class Evaluator {
             BlockStmt block = findBlockStatement(n);
             int hash = (block != null) ? block.hashCode() : 0;
 
-            Map<String, Variable> locals = this.locals.get(hash);
-            if (locals != null) {
-                v = locals.get(name);
+            Map<String, Variable> localsVars = this.locals.get(hash);
+
+            if (localsVars != null) {
+                v = localsVars.get(name);
                 return v;
             }
             if(n instanceof MethodDeclaration) {
-                locals = this.locals.get(hash);
-                if (locals != null) {
-                    v = locals.get(name);
+                localsVars = this.locals.get(hash);
+                if (localsVars != null) {
+                    v = localsVars.get(name);
                     return v;
                 }
                 break;
@@ -265,12 +265,12 @@ public class Evaluator {
         BlockStmt block = findBlockStatement(node);
         int hash = (block != null) ? block.hashCode() : 0;
 
-        Map<String, Variable> locals = this.locals.get(hash);
-        if(locals == null) {
-            locals = new HashMap<>();
-            this.locals.put(hash, locals);
+        Map<String, Variable> localVars = this.locals.get(hash);
+        if(localVars == null) {
+            localVars = new HashMap<>();
+            this.locals.put(hash, localVars);
         }
-        locals.put(nameAsString, v);
+        localVars.put(nameAsString, v);
     }
 
     /**
@@ -299,15 +299,12 @@ public class Evaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-    Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
+    public Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
         Optional<Expression> scope = methodCall.getScope();
 
         if (scope.isPresent()) {
             Expression scopeExpr = scope.get();
             if (scopeExpr.isMethodCallExpr()) {
-                /*
-                 * Chained method calls
-                 */
                 returnValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
                 MethodCallExpr chained = methodCall.clone();
                 chained.setScope(new NameExpr(returnValue.getValue().toString()));
@@ -329,74 +326,80 @@ public class Evaluator {
 
             try {
                 if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
-                    /*
-                     * System. stuff need special treatment
-                     */
-                    Class<?> systemClass = Class.forName("java.lang.System");
-                    Field outField = systemClass.getField("out");
-                    Class<?> printStreamClass = outField.getType();
-                    for(int i = 0; i < args.length; i++) {
-                        paramTypes[i] = Object.class;
-                    }
-                    Method printlnMethod = printStreamClass.getMethod("println", paramTypes);
-                    printlnMethod.invoke(outField.get(null), args);
+                    handleSystemOutMethodCall(paramTypes, args);
                 } else {
-                    ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
-                    ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
-
-                    if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
-                        Class<?> clazz = Class.forName(declaringType.getQualifiedName());
-                        Method method = clazz.getMethod(methodName, paramTypes);
-                        if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                            Variable v = new Variable(method.invoke(null, args));
-                            AntikytheraRunTime.push(v);
-                            return v;
-                        } else {
-                            Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
-                            AntikytheraRunTime.push(v);
-                            return v;
-                        }
-                    } else {
-                        if (scopeExpr.toString().equals(this.scope)) {
-                            Optional<Node> method = resolvedMethod.toAst();
-                            if (method.isPresent()) {
-                                executeMethod((MethodDeclaration) method.get());
-                                return returnValue;
-                            }
-                        } else {
-                            Variable v = evaluateExpression(scopeExpr);
-                            if(declaringType.getQualifiedName().equals("java.util.List") || declaringType.getQualifiedName().equals("java.util.Map")) {
-                                for(int i = 0; i < args.length; i++) {
-                                    paramTypes[i] = Object.class;
-                                }
-                            }
-                            Method method = v.getValue().getClass().getMethod(methodName, paramTypes);
-                            return new Variable(method.invoke(v.getValue(), args));
-                        }
-                    }
+                    return handleRegularMethodCall(methodCall, scopeExpr, methodName, paramTypes, args);
                 }
             } catch (IllegalStateException e) {
-                /*
-                 * I am a python program so this logic here is perfectly ok :)
-                 */
-                Class<?> clazz = returnValue.getValue().getClass();
-                try {
-                    Method method = clazz.getMethod(methodName, paramTypes);
-                    Variable v = new Variable(method.invoke(returnValue.getValue(), args));
-                    AntikytheraRunTime.push(v);
-                    return v;
-                } catch (Exception ex) {
-                    throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
-                }
+                return handleIllegalStateException(methodName, paramTypes, args, e);
             } catch (Exception e) {
                 throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
             }
-        }
-        else {
+        } else {
             Optional<Node> n = methodCall.resolve().toAst();
             if (n.isPresent() && n.get() instanceof MethodDeclaration) {
                 executeMethod((MethodDeclaration) n.get());
                 return returnValue;
+            }
+        }
+        return null;
+    }
+
+    private Variable handleIllegalStateException(String methodName, Class<?>[] paramTypes, Object[] args, IllegalStateException e) throws EvaluatorException {
+        Class<?> clazz = returnValue.getValue().getClass();
+        try {
+            Method method = clazz.getMethod(methodName, paramTypes);
+            Variable v = new Variable(method.invoke(returnValue.getValue(), args));
+            AntikytheraRunTime.push(v);
+            return v;
+        } catch (Exception ex) {
+            throw new EvaluatorException("Error evaluating method call: " + methodName, e);
+        }
+    }
+
+    private void handleSystemOutMethodCall(Class<?>[] paramTypes, Object[] args) throws Exception {
+        Class<?> systemClass = Class.forName("java.lang.System");
+        Field outField = systemClass.getField("out");
+        Class<?> printStreamClass = outField.getType();
+        for (int i = 0; i < args.length; i++) {
+            paramTypes[i] = Object.class;
+        }
+        Method printlnMethod = printStreamClass.getMethod("println", paramTypes);
+        printlnMethod.invoke(outField.get(null), args);
+    }
+
+    private Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, String methodName, Class<?>[] paramTypes, Object[] args) throws Exception {
+        ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
+        ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
+
+        if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
+            Class<?> clazz = Class.forName(declaringType.getQualifiedName());
+            Method method = clazz.getMethod(methodName, paramTypes);
+            if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                Variable v = new Variable(method.invoke(null, args));
+                AntikytheraRunTime.push(v);
+                return v;
+            } else {
+                Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
+                AntikytheraRunTime.push(v);
+                return v;
+            }
+        } else {
+            if (scopeExpr.toString().equals(this.scope)) {
+                Optional<Node> method = resolvedMethod.toAst();
+                if (method.isPresent()) {
+                    executeMethod((MethodDeclaration) method.get());
+                    return returnValue;
+                }
+            } else {
+                Variable v = evaluateExpression(scopeExpr);
+                if (declaringType.getQualifiedName().equals("java.util.List") || declaringType.getQualifiedName().equals("java.util.Map")) {
+                    for (int i = 0; i < args.length; i++) {
+                        paramTypes[i] = Object.class;
+                    }
+                }
+                Method method = v.getValue().getClass().getMethod(methodName, paramTypes);
+                return new Variable(method.invoke(v.getValue(), args));
             }
         }
         return null;
