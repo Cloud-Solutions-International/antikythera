@@ -6,6 +6,7 @@ import com.cloud.api.generator.EvaluatorException;
 import com.cloud.api.generator.RepositoryParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.Type;
 
@@ -26,6 +27,29 @@ public class SpringEvaluator extends Evaluator {
 
     public static Map<String, RepositoryParser> getRepositories() {
         return respositories;
+    }
+
+    public void executeMethod(MethodDeclaration md) throws EvaluatorException {
+        mockURIVariables(md);
+        super.executeMethod(md);
+    }
+
+    private void mockURIVariables(MethodDeclaration md) {
+        for(var param : md.getParameters()) {
+            String paramString = String.valueOf(param);
+
+            if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
+                Variable v = new Variable(switch (param.getTypeAsString()) {
+                    case "Boolean" -> true;
+                    case "float", "Float", "double", "Double" -> 1.0;
+                    case "Integer", "int" -> 1;
+                    case "Long", "long" -> 1L;
+                    case "String" -> "Ibuprofen";
+                    default -> "0";
+                });
+                AntikytheraRunTime.push(v);
+            }
+        }
     }
 
     public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
