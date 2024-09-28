@@ -22,7 +22,7 @@ public class RepositoryQuery {
      *     An argument is the value that is passed to a function when it is called.
      *     A parameter refers to the variable that is used in the function declaration
      */
-    static class QueryMethodParameter {
+    public static class QueryMethodParameter {
         /**
          * The name of the argument as defined in the respository function
          */
@@ -85,7 +85,7 @@ public class RepositoryQuery {
     /**
      * Represents a argument in a call to a query method
      */
-    static class QueryMethodArgument {
+    public static class QueryMethodArgument {
         /**
          * The name of the argument as defined in the respository function
          */

@@ -141,18 +141,7 @@ public class Evaluator {
                 return new Variable(expr.asStringLiteralExpr().getValue());
             }
         } else if (expr.isVariableDeclarationExpr()) {
-            VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-            for (var decl : varDeclExpr.getVariables()) {
-                if (decl.getInitializer().isPresent() && decl.getInitializer().get().isMethodCallExpr()) {
-                    MethodCallExpr methodCall = decl.getInitializer().get().asMethodCallExpr();
-                    Variable v = evaluateMethodCall(methodCall);
-                    if (v != null) {
-                        v.setType(decl.getType());
-                        setLocal(methodCall, decl.getNameAsString(), v);
-                    }
-                    return v;
-                }
-            }
+            return evaluateVariableDeclaration(expr);
         } else if (expr.isBinaryExpr()) {
             BinaryExpr binaryExpr = expr.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
@@ -163,6 +152,32 @@ public class Evaluator {
         } else if (expr.isMethodCallExpr()) {
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
+        }
+        return null;
+    }
+
+    /**
+     * Evaluates a variable declaration expression.
+     * @param expr the expression
+     * @return a Variable or null if the expression could not be evaluated or results in null
+     * @throws EvaluatorException if there is an error evaluating the expression
+     */
+    Variable evaluateVariableDeclaration(Expression expr) throws EvaluatorException {
+        VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
+        for (var decl : varDeclExpr.getVariables()) {
+            Optional<Expression> init = decl.getInitializer();
+            if (init.isPresent()) {
+                Expression expression = init.get();
+                if (expression.isMethodCallExpr()) {
+                    MethodCallExpr methodCall = expression.asMethodCallExpr();
+                    Variable v = evaluateMethodCall(methodCall);
+                    if (v != null) {
+                        v.setType(decl.getType());
+                        setLocal(methodCall, decl.getNameAsString(), v);
+                    }
+                    return v;
+                }
+            }
         }
         return null;
     }
@@ -213,7 +228,7 @@ public class Evaluator {
      * @param nameAsString the variable name
      * @param v The value to be set for the variable.
      */
-    private void setLocal(Node node, String nameAsString, Variable v) {
+    void setLocal(Node node, String nameAsString, Variable v) {
         BlockStmt block = findBlockStatement(node);
         int hash = (block != null) ? block.hashCode() : 0;
 
@@ -251,7 +266,7 @@ public class Evaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-    private Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
+    Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
         Optional<Expression> scope = methodCall.getScope();
 
         if (scope.isPresent()) {
