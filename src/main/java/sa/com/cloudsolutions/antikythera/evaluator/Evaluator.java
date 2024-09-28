@@ -56,6 +56,17 @@ public class Evaluator {
 
     private Variable returnValue;
 
+    static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
+    static {
+        wrapperToPrimitive.put(Integer.class, int.class);
+        wrapperToPrimitive.put(Double.class, double.class);
+        wrapperToPrimitive.put(Boolean.class, boolean.class);
+        wrapperToPrimitive.put(Long.class, long.class);
+        wrapperToPrimitive.put(Float.class, float.class);
+        wrapperToPrimitive.put(Short.class, short.class);
+        wrapperToPrimitive.put(Byte.class, byte.class);
+        wrapperToPrimitive.put(Character.class, char.class);
+    }
 
     private String scope;
 
@@ -177,6 +188,28 @@ public class Evaluator {
                     }
                     return v;
                 }
+                else if(expression.isObjectCreationExpr()) {
+                    ObjectCreationExpr oce = expression.asObjectCreationExpr();
+                    ClassOrInterfaceType type = oce.getType();
+                    Variable v = new Variable(type);
+                    try {
+                        // Get the class name from the type
+                        String className = type.resolve().describe();
+
+                        // Use reflection to create a new instance of the class
+                        Class<?> clazz = Class.forName(className);
+                        Object instance = clazz.getDeclaredConstructor().newInstance();
+
+                        // Set the new instance as the value of v
+                        v.setValue(instance);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                    setLocal(expr, decl.getNameAsString(), v);
+                    return v;
+                }
+
             }
         }
         return null;
@@ -273,7 +306,7 @@ public class Evaluator {
             Expression scopeExpr = scope.get();
             if (scopeExpr.isMethodCallExpr()) {
                 /*
-                 * Chanined method calls
+                 * Chained method calls
                  */
                 returnValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
                 MethodCallExpr chained = methodCall.clone();
@@ -284,35 +317,13 @@ public class Evaluator {
             String methodName = methodCall.getNameAsString();
             List<Expression> arguments = methodCall.getArguments();
             Variable[] argValues = new Variable[arguments.size()];
+            Class<?>[] paramTypes = new Class<?>[arguments.size()];
+            Object[] args = new Object[arguments.size()];
 
             for (int i = 0; i < arguments.size(); i++) {
                 argValues[i] = evaluateExpression(arguments.get(i));
-            }
-
-
-            Class<?>[] paramTypes = new Class<?>[argValues.length];
-            Object[] args = new Object[argValues.length];
-            for (int i = 0; i < argValues.length; i++) {
                 Class<?> wrapperClass = argValues[i].getValue().getClass();
-                if (wrapperClass == Integer.class) {
-                    paramTypes[i] = int.class;
-                } else if (wrapperClass == Double.class) {
-                    paramTypes[i] = double.class;
-                } else if (wrapperClass == Boolean.class) {
-                    paramTypes[i] = boolean.class;
-                } else if (wrapperClass == Long.class) {
-                    paramTypes[i] = long.class;
-                } else if (wrapperClass == Float.class) {
-                    paramTypes[i] = float.class;
-                } else if (wrapperClass == Short.class) {
-                    paramTypes[i] = short.class;
-                } else if (wrapperClass == Byte.class) {
-                    paramTypes[i] = byte.class;
-                } else if (wrapperClass == Character.class) {
-                    paramTypes[i] = char.class;
-                } else {
-                    paramTypes[i] = wrapperClass;
-                }
+                paramTypes[i] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
                 args[i] = argValues[i].getValue();
             }
 
@@ -324,6 +335,9 @@ public class Evaluator {
                     Class<?> systemClass = Class.forName("java.lang.System");
                     Field outField = systemClass.getField("out");
                     Class<?> printStreamClass = outField.getType();
+                    for(int i = 0; i < args.length; i++) {
+                        paramTypes[i] = Object.class;
+                    }
                     Method printlnMethod = printStreamClass.getMethod("println", paramTypes);
                     printlnMethod.invoke(outField.get(null), args);
                 } else {
@@ -351,6 +365,11 @@ public class Evaluator {
                             }
                         } else {
                             Variable v = evaluateExpression(scopeExpr);
+                            if(declaringType.getQualifiedName().equals("java.util.List") || declaringType.getQualifiedName().equals("java.util.Map")) {
+                                for(int i = 0; i < args.length; i++) {
+                                    paramTypes[i] = Object.class;
+                                }
+                            }
                             Method method = v.getValue().getClass().getMethod(methodName, paramTypes);
                             return new Variable(method.invoke(v.getValue(), args));
                         }
