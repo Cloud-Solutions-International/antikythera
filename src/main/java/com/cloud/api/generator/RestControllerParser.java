@@ -2,12 +2,10 @@ package com.cloud.api.generator;
 
 import com.cloud.api.configurations.Settings;
 import com.cloud.api.constants.Constants;
-import com.cloud.api.evaluator.Evaluator;
-import com.cloud.api.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -21,7 +19,6 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -31,7 +28,6 @@ import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
-import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 
 import com.github.javaparser.ast.stmt.Statement;
@@ -302,35 +298,8 @@ public class RestControllerParser extends ClassProcessor {
                 MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
                 Optional<Expression> scope = mce.getScope();
                 if(scope.isPresent()) {
-                    var x = fields.get(scope.get().toString());
-                    if (x != null) {
-                        RepositoryParser repository = respositories.get(x.toString());
-                        if (repository != null) {
-                            /*
-                             * This method call expression is associated with a repository query.
-                             */
-                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
-                            try {
-                                /*
-                                 * We have one more challenge; to find the parameters that are being used in the repository
-                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
-                                 * to the arguments that are passed in when the method is actually being called.
-                                 */
-                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
-                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
-                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
-                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
-                                }
 
-                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
-                                q.setResultSet(rs);
-                            } catch (Exception e) {
-                                logger.warn(e.getMessage());
-                                logger.warn("Could not execute query {}", mce);
-                            }
-                            return q;
-                        }
-                    }
+
                 }
             }
             else {
@@ -456,80 +425,7 @@ public class RestControllerParser extends ClassProcessor {
         }
         private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null) {
-                ControllerResponse response = new ControllerResponse();
-                response.setStatusCode(200);
-                if (expression.isObjectCreationExpr()) {
-                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for (Expression typeArg : objectCreationExpr.getArguments()) {
-                            if (typeArg.isFieldAccessExpr()) {
-                                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                                    response.setStatusCode(fae.getNameAsString());
-                                }
-                            }
-                            if (typeArg.isNameExpr()) {
-                                String nameAsString = typeArg.asNameExpr().getNameAsString();
-                                if (nameAsString != null && evaluator.getLocal(nameAsString) != null) {
-                                    response.setType(evaluator.getLocal(nameAsString).getType());
-                                } else {
-                                    logger.warn("NameExpr is null in identify return type");
-                                }
-                            } else if (typeArg.isStringLiteralExpr()) {
-                                response.setType(StaticJavaParser.parseType("java.lang.String"));
-                                response.setResponse(typeArg.asStringLiteralExpr().asString());
-                            } else if (typeArg.isMethodCallExpr()) {
-                                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                                try {
-                                    Optional<Expression> scope = methodCallExpr.getScope();
-                                    if (scope.isPresent()) {
-                                        Type type = (scope.get().isFieldAccessExpr())
-                                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                                : fields.get(scope.get().asNameExpr().getNameAsString());
-                                        if (type != null) {
-                                            extractTypeFromCall(type, methodCallExpr);
-                                            logger.debug(type.toString());
-                                        } else {
-                                            logger.debug("Type not found {}", scope.get());
-                                        }
-                                    }
-                                } catch (IOException e) {
-                                    throw new GeneratorException("Exception while identifying dependencies", e);
-                                }
-                            }
-                        }
-                    }
-                } else if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-                    try {
-                        Optional<Expression> scope = methodCallExpr.getScope();
-                        if (scope.isPresent()) {
-                            Type type = (scope.get().isFieldAccessExpr())
-                                    ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                    : fields.get(md.getType().asString());
-                            if(type != null) {
-                                extractTypeFromCall(type, methodCallExpr);
-                                logger.debug(type.toString());
-                            }
-                            else {
-                                logger.debug("Type not found {}", scope.get());
-                            }
-                        }
-                    } catch (IOException e) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
-                    }
-                } else if (expression.isNameExpr()) {
-                    String nameAsString = expression.asNameExpr().getNameAsString();
-                    if (nameAsString != null && evaluator.getLocal(nameAsString) != null) {
-                        response.setType(evaluator.getLocal(nameAsString).getType());
-                    } else {
-                        logger.warn("NameExpr is null in identify return type");
-                    }
-                }
-                createTests(md, response);
-                return response;
-            }
+
             return null;
         }
 
