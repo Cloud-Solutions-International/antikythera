@@ -296,77 +296,6 @@ public class RestControllerParser extends ClassProcessor {
             return null;
         }
 
-        public Object processMethodCallExpression(Statement st) {
-
-            if (st.isExpressionStmt()) {
-                return processMethodCallExpression(st.getChildNodes());
-//                MethodCallExpr mce = ((MethodCallExpr) expressionStmt).asMethodCallExpr();
-//                Optional<Expression> scope = mce.getScope();
-//                if(scope.isPresent()) {
-//                    Map<String, Evaluator.Variable> fields = evaluator.getFields();
-//                    var obj = fields.get(scope.get().toString());
-//                    if (obj != null) {
-//                        RepositoryParser repository = Evaluator.getRespositories().get(obj.toString());
-//                        if (repository != null) {
-//                            /*
-//                             * This method call expression is associated with a repository query.
-//                             */
-//                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
-//                            try {
-//                                /*
-//                                 * We have one more challenge; to find the parameters that are being used in the repository
-//                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
-//                                 * to the arguments that are passed in when the method is actually being called.
-//                                 */
-//                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
-//                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
-//                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
-//                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
-//                                }
-//
-//                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
-//                                q.setResultSet(rs);
-//                            } catch (Exception e) {
-//                                logger.warn(e.getMessage());
-//                                logger.warn("Could not execute query {}", mce);
-//                            }
-//                            return q;
-//                        }
-//                        else {
-//                            try {
-//                                if(obj.getValue() != null) {
-//                                    Class<?> clazz = obj.getValue().getClass();
-//                                    Method method = clazz.getMethod(mce.getNameAsString());
-//                                    Object result = method.invoke(obj);
-//                                    return result;
-//                                }
-//                            } catch (Exception e) {
-//                                e.printStackTrace();
-//                            }
-//                            return evaluator.getValue(scope.get().toString());
-//                        }
-//                    }
-//                    else {
-//                        if(scope.get().isMethodCallExpr()) {
-//                            return processMethodCallExpression(scope.get(), arg);
-//                        }
-//                        Object val = evaluator.getValue(scope.get().toString());
-//                        if(val != null) {
-//                            System.out.println("bada");
-//                        }
-//                    }
-//                }
-            }
-            else {
-//                for(Node n : node.getChildNodes()) {
-//                    Object q = processMethodCallExpression(n, arg);
-//                    if(q != null) {
-//                        return q;
-//                    }
-//                }
-            }
-            return null;
-        }
 
         /**
          * Prepares the ground for the MethodBLockVisitor to do it's work.
@@ -395,17 +324,7 @@ public class RestControllerParser extends ClassProcessor {
                     for(Statement st : body.get().getStatements()) {
 
                         if (st.isExpressionStmt()) {
-                            /*
-                             * we have just encountered a variable assignment.
-                             *
-                             * If the variable assignment is associated with a repository query, the visitor
-                             * will return a non-null value.
-                             */
-                            Object query = processMethodCallExpression(st);
-                            if (query != null && query instanceof RepositoryQuery &&
-                                    ((RepositoryQuery)query).getResultSet() != null) {
-                                last = (RepositoryQuery)query;
-                            }
+
                         }
                         else {
                             st.accept(new ReturnStatmentVisitor(), md);
@@ -437,42 +356,7 @@ public class RestControllerParser extends ClassProcessor {
             public void visit(ReturnStmt statement, MethodDeclaration md) {
                 ReturnStmt stmt = statement.asReturnStmt();
                 Optional<Node> parent = stmt.getParentNode();
-//                try {
-                    if (parent.isPresent() && !evaluatorUnsupported) {
-                        // the return statement will have a parent no matter what but the optionals approach
-                        // requires the use of isPresent.
-                        if (parent.get() instanceof IfStmt) {
-                            IfStmt ifStmt = (IfStmt) parent.get();
-                            Expression condition = ifStmt.getCondition();
-                            // todo resurrce this
-//                            if (evaluator.evaluateCondition(condition)) {
-//                                identifyReturnType(stmt, md);
-//                                buildPreconditions(md, condition);
-//                            }
-                        } else {
-                            BlockStmt blockStmt = (BlockStmt) parent.get();
-                            Optional<Node> gramps = blockStmt.getParentNode();
-                            if (gramps.isPresent()) {
-                                if (gramps.get() instanceof IfStmt) {
-                                    // we have found ourselves a conditional return statement.
-                                    IfStmt ifStmt = (IfStmt) gramps.get();
-                                    Expression condition = ifStmt.getCondition();
-                                    // todo resurrce this
-//                                    if (evaluator.evaluateCondition(condition)) {
-//                                        identifyReturnType(stmt, md);
-//                                        buildPreconditions(md, condition);
-//                                    }
-                                } else if (gramps.get() instanceof MethodDeclaration) {
-                                    identifyReturnType(stmt, md);
-                                }
-                            }
-                        }
-                    }
-//                } catch (EvaluatorException e) {
-//                    logger.error("Evaluator exception");
-//                    logger.error("\t{}", e.getMessage());
-//                    evaluatorUnsupported = true;
-//                }
+
             }
         }
 

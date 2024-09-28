@@ -42,11 +42,6 @@ import java.util.Optional;
 public class Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     /**
-     * Some complexity needs to be mocked.
-     * A json file called mocks.json should be maintained that contains the mock data.
-     */
-    private static JsonNode mocks;
-    /**
      * Local variables.
      *
      * These are specific to a block statement. A block statement may also be an
@@ -68,21 +63,6 @@ public class Evaluator {
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
 
     private String scope;
-
-    static {
-        try {
-            Evaluator.finches = new HashMap<>();
-            List<String> scouts = (List<String>) Settings.getProperty("finch");
-            if(scouts != null) {
-                for(String scout : scouts) {
-                    Map<String, Object> finches = Finch.loadClasses(new File(scout));
-                    Evaluator.finches.putAll(finches);
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("mocks could not be loaded");
-        }
-    }
 
     public Evaluator (){
         locals = new HashMap<>();
@@ -431,34 +411,38 @@ public class Evaluator {
             }
 
             case PLUS:
-                if (left.getValue() instanceof String || right.getValue() instanceof String) {
-                    return new Variable(left.getValue().toString() + right.getValue().toString());
-                }
-                if (left.getValue() instanceof  Number && right.getValue() instanceof Number) {
-                    if (left.getValue() instanceof Double || right.getValue() instanceof Double) {
-                        return new Variable((Double)left.getValue() + (Double)right.getValue());
-                    }
-                    if (left.getValue() instanceof Float || right.getValue() instanceof Float) {
-                        return new Variable((Float)left.getValue() + (Float)right.getValue());
-                    }
-                    if (left.getValue() instanceof Long || right.getValue() instanceof Long) {
-                        return new Variable((Long)left.getValue() + (Long)right.getValue());
-                    }
-                    if (left.getValue() instanceof Integer || right.getValue() instanceof Integer) {
-                        return new Variable((Integer)left.getValue() + (Integer)right.getValue());
-                    }
-                    if (left.getValue() instanceof Short || right.getValue() instanceof Short) {
-                        return new Variable((Short)left.getValue() + (Short)right.getValue());
-                    }
-                    if (left.getValue() instanceof Byte || right.getValue() instanceof Byte) {
-                        return new Variable((Byte)left.getValue() + (Byte)right.getValue());
-                    }
-                }
-                return null;
+                return addOperation(left, right);
 
             default:
                 return null;
         }
+    }
+
+    private static Variable addOperation(Variable left, Variable right) {
+        if (left.getValue() instanceof String || right.getValue() instanceof String) {
+            return new Variable(left.getValue().toString() + right.getValue().toString());
+        }
+        if (left.getValue() instanceof  Number && right.getValue() instanceof Number) {
+            if (left.getValue() instanceof Double || right.getValue() instanceof Double) {
+                return new Variable((Double) left.getValue() + (Double) right.getValue());
+            }
+            if (left.getValue() instanceof Float || right.getValue() instanceof Float) {
+                return new Variable((Float) left.getValue() + (Float) right.getValue());
+            }
+            if (left.getValue() instanceof Long || right.getValue() instanceof Long) {
+                return new Variable((Long) left.getValue() + (Long) right.getValue());
+            }
+            if (left.getValue() instanceof Integer || right.getValue() instanceof Integer) {
+                return new Variable((Integer) left.getValue() + (Integer) right.getValue());
+            }
+            if (left.getValue() instanceof Short || right.getValue() instanceof Short) {
+                return new Variable((Short) left.getValue() + (Short) right.getValue());
+            }
+            if (left.getValue() instanceof Byte || right.getValue() instanceof Byte) {
+                return new Variable((Byte) left.getValue() + (Byte) right.getValue());
+            }
+        }
+        return null;
     }
 
     public void clearLocalVariables() {
