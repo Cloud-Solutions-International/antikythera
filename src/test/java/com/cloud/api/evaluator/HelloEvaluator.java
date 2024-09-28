@@ -27,28 +27,7 @@ public class HelloEvaluator extends AbstractCompiler {
     protected HelloEvaluator() throws IOException {
     }
 
-    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
-        @Override
-        public void visit(FieldDeclaration field, Void arg) {
-            super.visit(field, arg);
-            for (var variable : field.getVariables()) {
-                try {
-                    evaluator.identifyFieldVariables(variable);
-                } catch (UnsolvedSymbolException e) {
-                    logger.debug("ignore {}", variable);
-                } catch (IOException e) {
-                    String action = Settings.getProperty("dependencies.on_error").toString();
-                    if (action == null || action.equals("exit")) {
-                        throw new GeneratorException("Exception while processing fields", e);
-                    }
-                    logger.error("Exception while processing fields");
-                    logger.error("\t{}", e.getMessage());
-                } catch (EvaluatorException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-    }
+
 
     public static void main(String[] args) throws Exception {
         Settings.loadConfigMap();
@@ -56,9 +35,9 @@ public class HelloEvaluator extends AbstractCompiler {
         helloEvaluator.doStuff();
     }
 
-    private void doStuff() throws FileNotFoundException, EvaluatorException {
+    private void doStuff() throws IOException, EvaluatorException {
         CompilationUnit cu = javaParser.parse(new File("src/test/java/com/cloud/api/evaluator/Hello.java")).getResult().get();
-        cu.accept(new ControllerFieldVisitor(), null);
+        evaluator.setupFields(cu);
 
         Variable u = new Variable("upper cased");
         AntikytheraRunTime.push(u);
