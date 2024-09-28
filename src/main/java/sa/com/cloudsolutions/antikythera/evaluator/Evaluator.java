@@ -4,9 +4,12 @@ import com.cloud.api.configurations.Settings;
 import com.cloud.api.finch.Finch;
 import com.cloud.api.generator.EvaluatorException;
 
+import com.cloud.api.generator.GeneratorException;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -16,6 +19,8 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import org.slf4j.Logger;
@@ -491,7 +496,7 @@ public class Evaluator {
         return null;
     }
 
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
+    void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
         if (variable.getType().isClassOrInterfaceType()) {
 
             Type t = variable.getType().asClassOrInterfaceType();
@@ -512,6 +517,19 @@ public class Evaluator {
                 }
                 fields.put(variable.getNameAsString(), v);
             }
+        }
+        else {
+            Variable v = null;
+            Optional<Expression> init = variable.getInitializer();
+            if(init.isPresent()) {
+                v = evaluateExpression(init.get());
+                v.setType(variable.getType());
+            }
+            else {
+                v = new Variable(variable.getType());
+            }
+            v.setPrimitive(true);
+            fields.put(variable.getNameAsString(), v);
         }
     }
 
@@ -575,6 +593,42 @@ public class Evaluator {
         if (!AntikytheraRunTime.isEmptyStack()) {
             AntikytheraRunTime.pop();
 
+        }
+    }
+
+    public void setupFields(CompilationUnit cu) throws IOException, EvaluatorException {
+        cu.accept(new ControllerFieldVisitor(), null);
+    }
+
+    /**
+     * Java parser visitor used to setup the fields in the class.
+     */
+    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
+        /**
+         * The field visitor will be used to identify the fields that are being used in the class
+         *
+         * @param field the field to inspect
+         * @param arg not used
+         */
+        @Override
+        public void visit(FieldDeclaration field, Void arg) {
+            super.visit(field, arg);
+            for (var variable : field.getVariables()) {
+                try {
+                    identifyFieldVariables(variable);
+                } catch (UnsolvedSymbolException e) {
+                    logger.debug("ignore {}", variable);
+                } catch (IOException e) {
+                    String action = Settings.getProperty("dependencies.on_error").toString();
+                    if(action == null || action.equals("exit")) {
+                        throw new GeneratorException("Exception while processing fields", e);
+                    }
+                    logger.error("Exception while processing fields");
+                    logger.error("\t{}",e.getMessage());
+                } catch (EvaluatorException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
     }
 }

@@ -192,7 +192,7 @@ public class ProjectGenerator {
 
     }
 
-    public void generate() throws IOException, XmlPullParserException {
+    public void generate() throws IOException, XmlPullParserException, EvaluatorException {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
         if (controllers.endsWith(SUFFIX)) {
@@ -228,7 +228,7 @@ public class ProjectGenerator {
         }
     }
 
-    public static void main(String[] args) throws IOException, XmlPullParserException {
+    public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
         ProjectGenerator.getInstance().generate();
     }
 }
