@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
@@ -81,7 +80,6 @@ public class Evaluator {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
             logger.warn("mocks could not be loaded");
         }
     }
@@ -342,8 +340,8 @@ public class Evaluator {
                         if (scopeExpr.toString().equals(this.scope)) {
                             Optional<Node> method = resolvedMethod.toAst();
                             if (method.isPresent()) {
-                                System.out.println(method);
                                 executeMethod((MethodDeclaration) method.get());
+                                return returnValue;
                             }
                         } else {
                             Object obj = evaluateExpression(scopeExpr);
@@ -353,8 +351,6 @@ public class Evaluator {
                     }
                 }
             } catch (IllegalStateException e) {
-                e.printStackTrace();
-
                 /*
                  * I am a python program so this logic here is perfectly ok :)
                  */
@@ -365,11 +361,17 @@ public class Evaluator {
                     AntikytheraRunTime.push(v);
                     return v;
                 } catch (Exception ex) {
-                    ex.printStackTrace();
                     throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
                 }
             } catch (Exception e) {
                 throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
+            }
+        }
+        else {
+            Optional<Node> n = methodCall.resolve().toAst();
+            if (n.isPresent() && n.get() instanceof MethodDeclaration) {
+                executeMethod((MethodDeclaration) n.get());
+                return returnValue;
             }
         }
         return null;
@@ -432,6 +434,26 @@ public class Evaluator {
                 if (left.getValue() instanceof String || right.getValue() instanceof String) {
                     return new Variable(left.getValue().toString() + right.getValue().toString());
                 }
+                if (left.getValue() instanceof  Number && right.getValue() instanceof Number) {
+                    if (left.getValue() instanceof Double || right.getValue() instanceof Double) {
+                        return new Variable((Double)left.getValue() + (Double)right.getValue());
+                    }
+                    if (left.getValue() instanceof Float || right.getValue() instanceof Float) {
+                        return new Variable((Float)left.getValue() + (Float)right.getValue());
+                    }
+                    if (left.getValue() instanceof Long || right.getValue() instanceof Long) {
+                        return new Variable((Long)left.getValue() + (Long)right.getValue());
+                    }
+                    if (left.getValue() instanceof Integer || right.getValue() instanceof Integer) {
+                        return new Variable((Integer)left.getValue() + (Integer)right.getValue());
+                    }
+                    if (left.getValue() instanceof Short || right.getValue() instanceof Short) {
+                        return new Variable((Short)left.getValue() + (Short)right.getValue());
+                    }
+                    if (left.getValue() instanceof Byte || right.getValue() instanceof Byte) {
+                        return new Variable((Byte)left.getValue() + (Byte)right.getValue());
+                    }
+                }
                 return null;
 
             default:
@@ -473,7 +495,7 @@ public class Evaluator {
                 }
                 return null;
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.error(e.getMessage());
             }
         }
         return null;
@@ -578,7 +600,23 @@ public class Evaluator {
         }
 
         for (Statement stmt : statements) {
-            evaluateExpression(stmt.asExpressionStmt().getExpression());
+            if (stmt.isExpressionStmt()) {
+                evaluateExpression(stmt.asExpressionStmt().getExpression());
+            }
+            else {
+                if(stmt.isReturnStmt()) {
+                    Optional<Expression> expr = stmt.asReturnStmt().getExpression();
+                    if(expr.isPresent()) {
+                        returnValue = evaluateExpression(expr.get());
+                    }
+                    else {
+                        returnValue = null;
+                    }
+                }
+                else {
+                    logger.info("Unhandled");
+                }
+            }
         }
 
         if (!AntikytheraRunTime.isEmptyStack()) {
