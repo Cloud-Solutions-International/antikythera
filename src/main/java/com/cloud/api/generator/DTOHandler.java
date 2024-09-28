@@ -14,11 +14,13 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -60,6 +62,9 @@ public class DTOHandler extends  ClassProcessor {
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
+        if (relativePath.contains("SearchParams")){
+            return;
+        }
         parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
@@ -76,7 +81,15 @@ public class DTOHandler extends  ClassProcessor {
         solveTypes();
         createFactory();
 
-        cu.accept(new TypeCollector(), null);
+        for( var  t : cu.getTypes()) {
+            if(t.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                if(!cdecl.isInnerClass()) {
+                    cdecl.accept(new TypeCollector(), null);
+                    cu.accept(new TypeCollector(), null);
+                }
+            }
+        }
 
         handleStaticImports(cu.getImports());
         removeUnusedImports(cu.getImports());
@@ -96,7 +109,7 @@ public class DTOHandler extends  ClassProcessor {
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
         String className = cdecl.getNameAsString();
 
-        if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
+        if (cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
                 && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
                 && className.toLowerCase().endsWith("to")) {
             String variable = classToInstanceName(cdecl);
@@ -114,12 +127,11 @@ public class DTOHandler extends  ClassProcessor {
 
             method.setBody(body);
 
-        }
+                    }
         else {
             method = null;
         }
     }
-
     void handleStaticImports(NodeList<ImportDeclaration> imports) {
         imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
         {
@@ -186,16 +198,27 @@ public class DTOHandler extends  ClassProcessor {
      * @param classDecl the class to which we are going to add lombok annotations
      * @param annotations the existing annotations (which will probably be empty)
      */
-    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
+
+    private void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
         String[] annotationsToAdd;
-        if (classDecl.getFields().size()<=255) {
+        if (classDecl.getFields().size() <= 255) {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
         } else {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
+        // Check existing annotations
+        boolean hasNoArgsConstructor = annotations.stream()
+                .anyMatch(annotation -> annotation.getNameAsString().equals("NoArgsConstructor"));
+        boolean hasAllArgsConstructor = annotations.stream()
+                .anyMatch(annotation -> annotation.getNameAsString().equals("AllArgsConstructor"));
+
+        if (classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
+                if ((annotation.equals("NoArgsConstructor") && hasNoArgsConstructor) ||
+                        (annotation.equals("AllArgsConstructor") && hasAllArgsConstructor)) {
+                    continue;
+                }
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
                 cu.addImport(importDeclaration);
                 NormalAnnotationExpr annotationExpr = new NormalAnnotationExpr();
@@ -214,15 +237,12 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-
-
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
                     || fieldAsString.equals("Logger")
                     || fieldAsString.equals("Sort.Direction")) {
                 return null;
             }
-
 
             // Filter annotations to retain only @JsonFormat and @JsonIgnore
             NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
@@ -316,16 +336,13 @@ public class DTOHandler extends  ClassProcessor {
                     if (nameExpr.isPresent() && nameExpr.get().isFieldAccessExpr()) {
                         findImport(cu, nameExpr.get().asFieldAccessExpr().getScope().toString());
                     }
-                }
-                else if(initializer.isFieldAccessExpr()) {
+                } else if (initializer.isFieldAccessExpr()) {
                     findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
-                }
-                else if (initializer.isNameExpr()) {
+                } else if (initializer.isNameExpr()) {
                     findImport(cu, initializer.asNameExpr().toString());
                 }
-            }
-            else {
-                if(method != null) {
+            } else {
+                if (method != null) {
                     MethodCallExpr setter = generateRandomValue(field, cu);
                     if (setter != null) {
                         method.getBody().get().addStatement(setter);
@@ -336,13 +353,13 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(MethodDeclaration method, Void args) {
+
             super.visit(method, args);
             method.getAnnotations().clear();
             solveTypeDependencies(method.getType(), cu);
             return method;
         }
     }
-
     static String capitalize(String s) {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
