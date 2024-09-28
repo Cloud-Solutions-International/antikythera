@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
@@ -54,6 +55,9 @@ public class Evaluator {
      */
     private final Map<Integer, Map<String, Variable>> locals ;
 
+    /**
+     * The fields that were encountered in the current class.
+     */
     private final Map<String, Variable> fields;
     static Map<String, Object> finches;
 
@@ -88,6 +92,16 @@ public class Evaluator {
 
     }
 
+    /**
+     * Get the value for the given variable in the current scope.
+     *
+     * The variable may have been defined as a local (which could be a variable defined in the current block
+     * or an argument to the function) or a field.
+     *
+     * @param n a node depicting the current statement. It will be used to identify the current block
+     * @param name the name of the variable.
+     * @return
+     */
     public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
         if (value == null) {
@@ -164,6 +178,13 @@ public class Evaluator {
         return null;
     }
 
+    /**
+     * Find local variable
+     * @param node the node representing the current expresion.
+     *             It's primary purpose is to help identify the current block
+     * @param name the name of the variable to look up
+     * @return the Variable if it's found or null.
+     */
     public Variable getLocal(Node node, String name) {
         Variable v = null;
         Node n = node;
@@ -185,6 +206,9 @@ public class Evaluator {
                 }
                 break;
             }
+            if(block == null) {
+                break;
+            }
             n = block.getParentNode().orElse(null);
             if(n == null) {
                 break;
@@ -193,6 +217,13 @@ public class Evaluator {
         return null;
     }
 
+    /**
+     * Sets a local variable
+     * @param node An expression representing the code being currently executed. It will be used to identify the
+     *             encapsulating block.
+     * @param nameAsString the variable name
+     * @param v The value to be set for the variable.
+     */
     private void setLocal(Node node, String nameAsString, Variable v) {
         BlockStmt block = findBlockStatement(node);
         int hash = (block != null) ? block.hashCode() : 0;
@@ -205,6 +236,11 @@ public class Evaluator {
         locals.put(nameAsString, v);
     }
 
+    /**
+     * Recursively traverse parents to find a block statement.
+     * @param expr
+     * @return
+     */
     private static BlockStmt findBlockStatement(Node expr) {
         Node currentNode = expr;
         while (currentNode != null) {
@@ -216,9 +252,18 @@ public class Evaluator {
         return null; // No block statement found
     }
 
+    /**
+     * Evaluate a method call.
+     *
+     * Does so by executing all the code contained in that method where possible.
+     *
+     * @param methodCall the method call expression
+     * @return the result of executing that code.
+     * @throws EvaluatorException if there is an error evaluating the method call or if the
+     *          feature is not yet implemented.
+     */
     private Variable evaluateMethodCall(MethodCallExpr methodCall) throws EvaluatorException {
         Optional<Expression> scope = methodCall.getScope();
-        Object scopeValue = null;
 
         if (scope.isPresent()) {
             Expression scopeExpr = scope.get();
@@ -226,28 +271,48 @@ public class Evaluator {
                 /*
                  * Chanined method calls
                  */
-                scopeValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
+                returnValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
+                MethodCallExpr chained = methodCall.clone();
+                chained.setScope(new NameExpr(returnValue.getValue().toString()));
+                returnValue = evaluateMethodCall(chained);
+            }
+
+            String methodName = methodCall.getNameAsString();
+            List<Expression> arguments = methodCall.getArguments();
+            Variable[] argValues = new Variable[arguments.size()];
+
+            for (int i = 0; i < arguments.size(); i++) {
+                argValues[i] = evaluateExpression(arguments.get(i));
+            }
 
 
-                new MethodCallExpr();
+            Class<?>[] paramTypes = new Class<?>[argValues.length];
+            Object[] args = new Object[argValues.length];
+            for (int i = 0; i < argValues.length; i++) {
+                Class<?> wrapperClass = argValues[i].getValue().getClass();
+                if (wrapperClass == Integer.class) {
+                    paramTypes[i] = int.class;
+                } else if (wrapperClass == Double.class) {
+                    paramTypes[i] = double.class;
+                } else if (wrapperClass == Boolean.class) {
+                    paramTypes[i] = boolean.class;
+                } else if (wrapperClass == Long.class) {
+                    paramTypes[i] = long.class;
+                } else if (wrapperClass == Float.class) {
+                    paramTypes[i] = float.class;
+                } else if (wrapperClass == Short.class) {
+                    paramTypes[i] = short.class;
+                } else if (wrapperClass == Byte.class) {
+                    paramTypes[i] = byte.class;
+                } else if (wrapperClass == Character.class) {
+                    paramTypes[i] = char.class;
+                } else {
+                    paramTypes[i] = wrapperClass;
+                }
+                args[i] = argValues[i].getValue();
             }
 
             try {
-                String methodName = methodCall.getNameAsString();
-                List<Expression> arguments = methodCall.getArguments();
-                Variable[] argValues = new Variable[arguments.size()];
-
-                for (int i = 0; i < arguments.size(); i++) {
-                    argValues[i] = evaluateExpression(arguments.get(i));
-                }
-
-
-                Class<?>[] paramTypes = new Class<?>[argValues.length];
-                Object[] args = new Object[argValues.length];
-                for (int i = 0; i < argValues.length; i++) {
-                    paramTypes[i] = argValues[i].getValue().getClass();
-                    args[i] = argValues[i].getValue();
-                }
 
                 if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
                     /*
@@ -283,6 +348,19 @@ public class Evaluator {
                     }
                 }
 
+            } catch (IllegalStateException e) {
+                /*
+                 * I am a python program so this logic here is perfectly ok :)
+                 */
+                Class<?> clazz = returnValue.getValue().getClass();
+                try {
+                    Method method = clazz.getMethod(methodName, paramTypes);
+                    Variable v = new Variable(method.invoke(returnValue.getValue(), args));
+                    AntikytheraRunTime.push(v);
+                    return v;
+                } catch (Exception ex) {
+                    throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
+                }
             } catch (Exception e) {
                 throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
             }
