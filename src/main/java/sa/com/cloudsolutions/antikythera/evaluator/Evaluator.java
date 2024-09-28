@@ -335,9 +335,9 @@ public class Evaluator {
                                 return returnValue;
                             }
                         } else {
-                            Object obj = evaluateExpression(scopeExpr);
-                            Method method = obj.getClass().getMethod(methodName, paramTypes);
-                            return new Variable(method.invoke(obj, args));
+                            Variable v = evaluateExpression(scopeExpr);
+                            Method method = v.getValue().getClass().getMethod(methodName, paramTypes);
+                            return new Variable(method.invoke(v.getValue(), args));
                         }
                     }
                 }
@@ -571,6 +571,7 @@ public class Evaluator {
         }
 
         for (Statement stmt : statements) {
+            System.out.println(stmt);
             if (stmt.isExpressionStmt()) {
                 evaluateExpression(stmt.asExpressionStmt().getExpression());
             }
