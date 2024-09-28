@@ -1,19 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.cloud.api.configurations.Settings;
-import com.cloud.api.evaluator.AntikytheraRunTime;
-import com.cloud.api.evaluator.Variable;
 import com.cloud.api.finch.Finch;
-import com.cloud.api.generator.AbstractCompiler;
-import com.cloud.api.generator.ClassProcessor;
 import com.cloud.api.generator.EvaluatorException;
 
-import com.cloud.api.generator.RepositoryParser;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -58,10 +51,6 @@ public class Evaluator {
 
     private Variable returnValue;
 
-    /**
-     * Maintains a list of repositories that we have already encountered.
-     */
-    private static Map<String, RepositoryParser> respositories = new HashMap<>();
 
     private String scope;
 
@@ -504,10 +493,7 @@ public class Evaluator {
 
     public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
         if (variable.getType().isClassOrInterfaceType()) {
-            String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
-            if (Evaluator.getRespositories().containsKey(shortName)) {
-                return;
-            }
+
             Type t = variable.getType().asClassOrInterfaceType();
             String className = t.resolve().describe();
 
@@ -526,39 +512,9 @@ public class Evaluator {
                 }
                 fields.put(variable.getNameAsString(), v);
             }
-            else {
-                ClassProcessor proc = new ClassProcessor();
-                proc.compile(AbstractCompiler.classToPath(className));
-                CompilationUnit cu = proc.getCompilationUnit();
-                for (var typeDecl : cu.getTypes()) {
-                    if (typeDecl.isClassOrInterfaceDeclaration()) {
-                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                        if (cdecl.getNameAsString().equals(shortName)) {
-                            for (var ext : cdecl.getExtendedTypes()) {
-                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                    /*
-                                     * We have found a repository. Now we need to process it. Afterwards
-                                     * it will be added to the repositories map, to be identified by the
-                                     * field name.
-                                     */
-                                    RepositoryParser parser = new RepositoryParser();
-                                    parser.compile(AbstractCompiler.classToPath(className));
-                                    parser.process();
-                                    respositories.put(variable.getNameAsString(), parser);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
-    public void setField(String nameAsString, Type t) {
-        Variable f = new Variable(t);
-        fields.put(nameAsString, f);
-    }
 
     public Map<String, Variable> getFields() {
         return fields;
@@ -566,10 +522,6 @@ public class Evaluator {
 
     public Map<String, Object> getFinches() {
         return finches;
-    }
-
-    public static Map<String, RepositoryParser> getRespositories() {
-        return respositories;
     }
 
     public void setScope(String scope) {
