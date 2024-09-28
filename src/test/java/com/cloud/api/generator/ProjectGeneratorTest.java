@@ -70,7 +70,7 @@ class ProjectGeneratorTest {
     }
 
     @Test
-    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException {
+    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException, EvaluatorException {
         generator.generate();
 
         String outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();

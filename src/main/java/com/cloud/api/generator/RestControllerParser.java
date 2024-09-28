@@ -97,11 +97,11 @@ public class RestControllerParser extends ClassProcessor {
 
     }
 
-    public void start() throws IOException {
+    public void start() throws IOException, EvaluatorException {
         processRestController(controllers);
     }
 
-    private void processRestController(File path) throws IOException {
+    private void processRestController(File path) throws IOException, EvaluatorException {
         current = path;
         testMethodNames = new HashSet<>();
         logger.info(path.toString());
@@ -142,7 +142,7 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private void processRestController(PackageDeclaration pd) throws IOException {
+    private void processRestController(PackageDeclaration pd) throws IOException, EvaluatorException {
         StringBuilder fileContent = new StringBuilder();
         gen = new CompilationUnit();
 
@@ -172,8 +172,10 @@ public class RestControllerParser extends ClassProcessor {
         /*
          * There is a very valid reason for doing this in two steps.
          * We want to make sure that all the repositories are identified before we start processing the methods.
+         *
          */
-        cu.accept(new ControllerFieldVisitor(), null);
+        evaluator.setupFields(cu);
+
         cu.accept(new ControllerMethodVisitor(), null);
 
         for (String s : dependencies) {
@@ -235,41 +237,6 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    /**
-     * Will be called for each field of the controller.
-     * Primary purpose is to identify services and repositories that are being used in the controller.
-     *
-     */
-    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
-
-        /**
-         * The field visitor will be used to identify the repositories that are being used in the controller.
-         *
-         * @param field the field to inspect
-         * @param arg not used
-         */
-        @Override
-        public void visit(FieldDeclaration field, Void arg) {
-            super.visit(field, arg);
-            for (var variable : field.getVariables()) {
-                try {
-                    evaluator.identifyFieldVariables(variable);
-                } catch (UnsolvedSymbolException e) {
-                    logger.debug("ignore {}", variable);
-                } catch (IOException e) {
-                    Object action = Settings.getProperty("dependencies.on_error");
-                    if(action == null || action.toString().equals("exit")) {
-                        throw new GeneratorException("Exception while processing fields", e);
-                    }
-                    logger.error("Exception while processing fields");
-                    logger.error("\t{}",e.getMessage());
-
-                } catch (EvaluatorException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-    }
 
     /**
      * Visitor that will detect methods in the controller.

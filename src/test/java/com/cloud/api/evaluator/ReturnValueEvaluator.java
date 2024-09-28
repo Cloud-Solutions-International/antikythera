@@ -27,11 +27,16 @@ public class ReturnValueEvaluator  extends AbstractCompiler  {
         returnValueEvaluator.doStuff();
     }
 
-    private void doStuff() throws FileNotFoundException, EvaluatorException {
+    private void doStuff() throws IOException, EvaluatorException {
         CompilationUnit cu = javaParser.parse(new File("src/test/java/com/cloud/api/evaluator/ReturnValue.java")).getResult().get();
+        evaluator.setupFields(cu);
         evaluator.setScope("returnValue");
+
         MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printName")).orElseThrow();
         evaluator.executeMethod(printName);
+
+        MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
+        evaluator.executeMethod(printNumber);
     }
 
 }
