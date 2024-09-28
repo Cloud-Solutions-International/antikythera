@@ -5,7 +5,6 @@ import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
@@ -141,35 +140,13 @@ public class AbstractCompiler {
         logger.debug("\t{}", relativePath);
         Path sourcePath = Paths.get(basePath, relativePath);
 
-        // Check if the file exists
         File file = sourcePath.toFile();
-        if (!file.exists()) {
-            // The file may not exist if the DTO is an inner class in a controller
-            logger.warn("File not found: {}. Checking if it's an inner class DTO.", sourcePath);
-            // Extract the controller's name from the path and assume the DTO is an inner class in the controller
-            String controllerPath = relativePath.replaceAll("/[^/]+\\.java$", ".java");  // Replaces DTO file with controller file
-            sourcePath = Paths.get(basePath, controllerPath);
-        }
-
-        // Check again for the controller file
-        file = sourcePath.toFile();
-        if (!file.exists()) {
-            logger.error("Controller file not found: {}", sourcePath);
-            throw new FileNotFoundException(sourcePath.toString());
-        }
 
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         AntikytheraRunTime.addClass(className, cu);
 
-        // Search for any inner class that ends with "Dto"
-        boolean hasInnerDTO = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .anyMatch(cls -> cls.getNameAsString().endsWith("Dto"));
-
-        if (hasInnerDTO) {
-            logger.info("Found inner DTO class in controller: {}", relativePath);
-        }
     }
 
     /**
