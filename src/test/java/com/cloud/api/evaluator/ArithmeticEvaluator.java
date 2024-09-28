@@ -48,6 +48,8 @@ public class ArithmeticEvaluator extends AbstractCompiler {
                     }
                     logger.error("Exception while processing fields");
                     logger.error("\t{}",e.getMessage());
+                } catch (EvaluatorException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
