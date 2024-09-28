@@ -79,7 +79,6 @@ public class DTOHandler extends  ClassProcessor {
         compile(relativePath);
         expandWildCards(cu);
         solveTypes();
-        createFactory();
 
         for( var  t : cu.getTypes()) {
             if(t.isClassOrInterfaceDeclaration()) {
@@ -97,39 +96,6 @@ public class DTOHandler extends  ClassProcessor {
         if (method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
-        }
-    }
-
-    /**
-     * Create a factory method for the DTO being processed.
-     * Does not return anything but the 'method' field will have a non null value.
-     * the visitor can add a setter for each field that it encounters.
-     */
-    private void createFactory() {
-        TypeDeclaration<?> cdecl = cu.getTypes().get(0);
-        String className = cdecl.getNameAsString();
-
-        if (cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
-                && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
-                && className.toLowerCase().endsWith("to")) {
-            String variable = classToInstanceName(cdecl);
-
-            method = new MethodDeclaration();
-            method.setName("create" + className);
-            method.setType(className);
-            method.setModifiers(Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC);
-            cdecl.asClassOrInterfaceDeclaration().addMember(method);
-
-            BlockStmt body = new BlockStmt();
-            VariableDeclarationExpr varDecl = new VariableDeclarationExpr(new ClassOrInterfaceType(null, className), variable);
-            ObjectCreationExpr newExpr = new ObjectCreationExpr(null, new ClassOrInterfaceType(null, className), new NodeList<>());
-            body.addStatement(new AssignExpr(varDecl, newExpr, AssignExpr.Operator.ASSIGN));
-
-            method.setBody(body);
-
-                    }
-        else {
-            method = null;
         }
     }
     void handleStaticImports(NodeList<ImportDeclaration> imports) {
