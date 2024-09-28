@@ -1,13 +1,14 @@
-package com.cloud.api.evaluator;
+package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.cloud.api.configurations.Settings;
+import com.cloud.api.evaluator.AntikytheraRunTime;
+import com.cloud.api.evaluator.Variable;
 import com.cloud.api.finch.Finch;
 import com.cloud.api.generator.AbstractCompiler;
 import com.cloud.api.generator.ClassProcessor;
 import com.cloud.api.generator.EvaluatorException;
 
 import com.cloud.api.generator.RepositoryParser;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 
@@ -63,6 +64,22 @@ public class Evaluator {
     private static Map<String, RepositoryParser> respositories = new HashMap<>();
 
     private String scope;
+
+    static {
+        try {
+            Evaluator.finches = new HashMap<>();
+            List<String> scouts = (List<String>) Settings.getProperty("finch");
+            if(scouts != null) {
+                for(String scout : scouts) {
+                    Map<String, Object> finches = Finch.loadClasses(new File(scout));
+                    Evaluator.finches.putAll(finches);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            logger.warn("Finches could not be loaded");
+        }
+    }
 
     public Evaluator (){
         locals = new HashMap<>();
