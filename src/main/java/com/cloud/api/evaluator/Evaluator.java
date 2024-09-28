@@ -313,7 +313,6 @@ public class Evaluator {
             }
 
             try {
-
                 if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
                     /*
                      * System. stuff need special treatment
@@ -330,9 +329,15 @@ public class Evaluator {
                     if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
                         Class<?> clazz = Class.forName(declaringType.getQualifiedName());
                         Method method = clazz.getMethod(methodName, paramTypes);
-                        Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
-                        AntikytheraRunTime.push(v);
-                        return v;
+                        if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                            Variable v = new Variable(method.invoke(null, args));
+                            AntikytheraRunTime.push(v);
+                            return v;
+                        } else {
+                            Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
+                            AntikytheraRunTime.push(v);
+                            return v;
+                        }
                     } else {
                         if (scopeExpr.toString().equals(this.scope)) {
                             Optional<Node> method = resolvedMethod.toAst();
@@ -347,8 +352,9 @@ public class Evaluator {
                         }
                     }
                 }
-
             } catch (IllegalStateException e) {
+                e.printStackTrace();
+
                 /*
                  * I am a python program so this logic here is perfectly ok :)
                  */
@@ -359,6 +365,7 @@ public class Evaluator {
                     AntikytheraRunTime.push(v);
                     return v;
                 } catch (Exception ex) {
+                    ex.printStackTrace();
                     throw new EvaluatorException("Error evaluating method call: " + methodCall, e);
                 }
             } catch (Exception e) {
@@ -472,7 +479,7 @@ public class Evaluator {
         return null;
     }
 
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException {
+    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
         if (variable.getType().isClassOrInterfaceType()) {
             String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
             if (Evaluator.getRespositories().containsKey(shortName)) {
@@ -488,10 +495,11 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else if (className.startsWith("java")) {
-                Variable v = new Variable(t);
+                Variable v = null;
                 Optional<Expression> init = variable.getInitializer();
                 if(init.isPresent()) {
-                    v.setValue(init.get());
+                    v = evaluateExpression(init.get());
+                    v.setType(t);
                 }
                 fields.put(variable.getNameAsString(), v);
             }
@@ -548,7 +556,7 @@ public class Evaluator {
     public void executeMethod(MethodDeclaration md) throws EvaluatorException {
         List<Statement> statements = md.getBody().orElseThrow().getStatements();
         NodeList<Parameter> parameters = md.getParameters();
-        locals.clear();
+
         returnValue = null;
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
