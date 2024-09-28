@@ -164,8 +164,7 @@ public class DTOHandler extends  ClassProcessor {
      * @param classDecl the class to which we are going to add lombok annotations
      * @param annotations the existing annotations (which will probably be empty)
      */
-
-    private void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
+    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
         String[] annotationsToAdd;
         if (classDecl.getFields().size() <= 255) {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
@@ -173,18 +172,8 @@ public class DTOHandler extends  ClassProcessor {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        // Check existing annotations
-        boolean hasNoArgsConstructor = annotations.stream()
-                .anyMatch(annotation -> annotation.getNameAsString().equals("NoArgsConstructor"));
-        boolean hasAllArgsConstructor = annotations.stream()
-                .anyMatch(annotation -> annotation.getNameAsString().equals("AllArgsConstructor"));
-
         if (classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
-                if ((annotation.equals("NoArgsConstructor") && hasNoArgsConstructor) ||
-                        (annotation.equals("AllArgsConstructor") && hasAllArgsConstructor)) {
-                    continue;
-                }
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
                 cu.addImport(importDeclaration);
                 NormalAnnotationExpr annotationExpr = new NormalAnnotationExpr();
@@ -203,12 +192,15 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
+
+
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
                     || fieldAsString.equals("Logger")
                     || fieldAsString.equals("Sort.Direction")) {
                 return null;
             }
+
 
             // Filter annotations to retain only @JsonFormat and @JsonIgnore
             NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
@@ -302,12 +294,15 @@ public class DTOHandler extends  ClassProcessor {
                     if (nameExpr.isPresent() && nameExpr.get().isFieldAccessExpr()) {
                         findImport(cu, nameExpr.get().asFieldAccessExpr().getScope().toString());
                     }
-                } else if (initializer.isFieldAccessExpr()) {
+                }
+                else if(initializer.isFieldAccessExpr()) {
                     findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
-                } else if (initializer.isNameExpr()) {
+                }
+                else if (initializer.isNameExpr()) {
                     findImport(cu, initializer.asNameExpr().toString());
                 }
-            } else {
+            }
+            else {
                 if (method != null) {
                     MethodCallExpr setter = generateRandomValue(field, cu);
                     if (setter != null) {
@@ -319,13 +314,13 @@ public class DTOHandler extends  ClassProcessor {
 
         @Override
         public Visitable visit(MethodDeclaration method, Void args) {
-
             super.visit(method, args);
             method.getAnnotations().clear();
             solveTypeDependencies(method.getType(), cu);
             return method;
         }
     }
+
     static String capitalize(String s) {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
