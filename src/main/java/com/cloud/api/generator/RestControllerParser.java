@@ -257,6 +257,8 @@ public class RestControllerParser extends ClassProcessor {
                     }
                     logger.error("Exception while processing fields");
                     logger.error("\t{}",e.getMessage());
+                } catch (EvaluatorException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
