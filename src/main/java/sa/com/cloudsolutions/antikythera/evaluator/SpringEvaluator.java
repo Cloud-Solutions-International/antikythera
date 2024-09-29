@@ -49,8 +49,9 @@ public class SpringEvaluator extends Evaluator {
         super.executeMethod(md);
     }
 
-    private void mockURIVariables(MethodDeclaration md) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        for(var param : md.getParameters()) {
+    private void mockURIVariables(MethodDeclaration md) throws Exception {
+        for (int i = md.getParameters().size() - 1; i >= 0; i--) {
+            var param = md.getParameter(i);
             String paramString = String.valueOf(param);
 
             if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
@@ -63,12 +64,16 @@ public class SpringEvaluator extends Evaluator {
                     default -> "0";
                 });
                 AntikytheraRunTime.push(v);
-            }
-            else if(paramString.startsWith("@RequestBody")) {
+            } else if (paramString.startsWith("@RequestBody")) {
                 Type t = param.getType();
-                Class<?> clz = Class.forName(t.resolve().describe());
-                Object instance = clz.getDeclaredConstructor().newInstance();
-                AntikytheraRunTime.push(new Variable(instance));
+                if (t.isClassOrInterfaceType()) {
+                    Class<?> clazz = DynamicDTOCreator.createDynamicDTO(t.asClassOrInterfaceType());
+                    Object o = clazz.getDeclaredConstructor().newInstance();
+                    Variable v = new Variable(o);
+                    AntikytheraRunTime.push(v);
+                } else {
+                    logger.warn("Unhandled {}", t);
+                }
             }
         }
     }
