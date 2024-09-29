@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.stmt.IfStmt;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
 import com.cloud.api.generator.EvaluatorException;
@@ -679,9 +680,14 @@ public class Evaluator {
         }
 
         for (Statement stmt : statements) {
-            logger.debug(stmt.toString());
+            logger.info(stmt.toString());
             if (stmt.isExpressionStmt()) {
                 evaluateExpression(stmt.asExpressionStmt().getExpression());
+            }
+            else if(stmt.isIfStmt()) {
+                IfStmt ifst = stmt.asIfStmt();
+                Variable v = evaluateExpression(ifst.getCondition());
+                System.out.println(v);
             }
             else {
                 if(stmt.isReturnStmt()) {
