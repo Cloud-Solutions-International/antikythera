@@ -66,6 +66,15 @@ public class TestBunches  {
     }
 
 
+    @Test
+    void testDTOConstructor() throws EvaluatorException {
+        CompilationUnit cu = eval.getCompilationUnit();
+        MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTOConstructor")).orElseThrow();
+        evaluator.executeMethod(withDTO);
+        assertTrue(outContent.toString().contains("[Biggles 10"));
+    }
+
+
     class CollectionEvaluator extends AbstractCompiler {
         protected CollectionEvaluator() throws IOException, EvaluatorException {
             evaluator = new Evaluator();
