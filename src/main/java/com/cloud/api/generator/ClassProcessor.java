@@ -148,7 +148,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param cdecl type declaration
      * @return a variable name as a string
      */
-    protected static String classToInstanceName(TypeDeclaration<?> cdecl) {
+    public static String classToInstanceName(TypeDeclaration<?> cdecl) {
         return classToInstanceName(cdecl.getNameAsString());
     }
 
@@ -157,7 +157,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param className as a string
      * @return a variable name as a string
      */
-    protected static String classToInstanceName(String className) {
+    public static String classToInstanceName(String className) {
         String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
         if(name.equals("long") || name.equals("int")) {
             return "_" + name;
