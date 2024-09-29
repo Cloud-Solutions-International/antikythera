@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -167,33 +168,39 @@ public class Evaluator {
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
         } else if (expr.isAssignExpr()) {
-            AssignExpr assignExpr = expr.asAssignExpr();
-            Expression target = assignExpr.getTarget();
-            Expression value = assignExpr.getValue();
-            Variable v = evaluateExpression(value);
-
-            if(target.isFieldAccessExpr()) {
-                FieldAccessExpr fae = target.asFieldAccessExpr();
-                String fieldName = fae.getNameAsString();
-                Variable field = fields.get(fieldName);
-                if(field != null) {
-                    field.setValue(v.getValue());
-                }
-                else {
-                    logger.warn("Field {} not found", fieldName);
-                }
-                setLocal(expr, fieldName, v);
-            }
-            else if(target.isNameExpr()) {
-                String name = target.asNameExpr().getNameAsString();
-                setLocal(expr, name, v);
-            }
-
-            return v;
+            return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
             return createObject(expr, null, expr);
         }
         return null;
+    }
+
+    private Variable evaluateAssignment(Expression expr) throws EvaluatorException {
+        AssignExpr assignExpr = expr.asAssignExpr();
+        Expression target = assignExpr.getTarget();
+        Expression value = assignExpr.getValue();
+        Variable v = evaluateExpression(value);
+
+        if(target.isFieldAccessExpr()) {
+            FieldAccessExpr fae = target.asFieldAccessExpr();
+            String fieldName = fae.getNameAsString();
+            Variable variable = getValue(expr, fae.getScope().toString());
+            Object obj = variable.getValue();
+            try {
+                Field field = obj.getClass().getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.set(obj, v.getValue());
+            } catch (Exception e) {
+                logger.error("An error occurred", e);
+            }
+
+        }
+        else if(target.isNameExpr()) {
+            String name = target.asNameExpr().getNameAsString();
+            setLocal(expr, name, v);
+        }
+
+        return v;
     }
 
     /**
@@ -226,7 +233,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable createObject(Expression expr, VariableDeclarator decl, Expression expression) {
+    private Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) {
         ObjectCreationExpr oce = expression.asObjectCreationExpr();
         ClassOrInterfaceType type = oce.getType();
         Variable v = new Variable(type);
@@ -247,6 +254,8 @@ public class Evaluator {
             if(outer != null) {
                 for(Class<?> c : outer.getDeclaredClasses()) {
                     if(c.getName().equals(className)) {
+                        // args values here
+                        Constructor<?> cons = c.getDeclaredConstructor(outer, null);
                         Object instance = c.getDeclaredConstructor(outer).newInstance(outer.getDeclaredConstructors()[0].newInstance());
                         v.setValue(instance);
                     }
@@ -254,15 +263,13 @@ public class Evaluator {
             }
             else {
                 Object instance = clazz.getDeclaredConstructor().newInstance();
-
-                // Set the new instance as the value of v
                 v.setValue(instance);
             }
         } catch (Exception e) {
             logger.error("An error occurred", e);
         }
 
-        setLocal(expr, decl.getNameAsString(), v);
+        setLocal(instructionPointer, decl.getNameAsString(), v);
         return v;
     }
 
