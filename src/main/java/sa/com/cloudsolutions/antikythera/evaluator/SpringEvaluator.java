@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,11 +41,15 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     public void executeMethod(MethodDeclaration md) throws EvaluatorException {
-        mockURIVariables(md);
+        try {
+            mockURIVariables(md);
+        } catch (Exception e) {
+            throw new EvaluatorException("Error while mocking controller arguments", e);
+        }
         super.executeMethod(md);
     }
 
-    private void mockURIVariables(MethodDeclaration md) {
+    private void mockURIVariables(MethodDeclaration md) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
 
@@ -58,6 +63,12 @@ public class SpringEvaluator extends Evaluator {
                     default -> "0";
                 });
                 AntikytheraRunTime.push(v);
+            }
+            else if(paramString.startsWith("@RequestBody")) {
+                Type t = param.getType();
+                Class<?> clz = Class.forName(t.resolve().describe());
+                Object instance = clz.getDeclaredConstructor().newInstance();
+                AntikytheraRunTime.push(new Variable(instance));
             }
         }
     }
