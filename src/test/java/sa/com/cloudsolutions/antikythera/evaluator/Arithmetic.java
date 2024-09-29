@@ -4,7 +4,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 public class Arithmetic {
     private final String a = "number10";
 
-    private int calculate(int b) {
+    public int calculate(int b) {
         String c = a.toLowerCase().substring(6);
         return Integer.parseInt(c) + b;
     }
