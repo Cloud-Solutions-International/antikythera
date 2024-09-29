@@ -38,4 +38,8 @@ public class Variable {
     public void setPrimitive(boolean primitive) {
         this.primitive = primitive;
     }
+
+    public String toString() {
+        return value == null ? "null" : value.toString();
+    }
 }

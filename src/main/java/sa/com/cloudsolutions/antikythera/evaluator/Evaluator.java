@@ -608,7 +608,7 @@ public class Evaluator {
         }
 
         for (Statement stmt : statements) {
-            System.out.println(stmt);
+            logger.debug(stmt.toString());
             if (stmt.isExpressionStmt()) {
                 evaluateExpression(stmt.asExpressionStmt().getExpression());
             }
