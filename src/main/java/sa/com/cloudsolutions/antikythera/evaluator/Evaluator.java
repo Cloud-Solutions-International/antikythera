@@ -379,6 +379,10 @@ public class Evaluator {
 
         if (scope.isPresent()) {
             Expression scopeExpr = scope.get();
+            // todo fix this hack
+            if (scopeExpr.toString().equals("logger")) {
+                return null;
+            }
             if (scopeExpr.isMethodCallExpr()) {
                 returnValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
                 MethodCallExpr chained = methodCall.clone();
@@ -486,13 +490,15 @@ public class Evaluator {
 
         switch (operator) {
             case EQUALS: {
-                if (leftValue == null && rightValue == null) {
+                if (left == null && right == null) {
                     return new Variable(Boolean.TRUE);
                 }
-                if (leftValue == null || rightValue == null) {
-                    return new Variable(Boolean.FALSE);
+                if (left == null && right.getValue() == null) {
+                    return new Variable(Boolean.TRUE);
                 }
-
+                if (right == null && left.getValue() == null) {
+                    return new Variable(Boolean.TRUE);
+                }
                 return new Variable( ((Comparable) leftValue).equals(rightValue));
             }
 
@@ -679,6 +685,15 @@ public class Evaluator {
             }
         }
 
+        executeBlock(statements);
+
+        if (!AntikytheraRunTime.isEmptyStack()) {
+            AntikytheraRunTime.pop();
+
+        }
+    }
+
+    protected void executeBlock(List<Statement> statements) throws EvaluatorException {
         for (Statement stmt : statements) {
             logger.info(stmt.toString());
             if (stmt.isExpressionStmt()) {
@@ -687,6 +702,11 @@ public class Evaluator {
             else if(stmt.isIfStmt()) {
                 IfStmt ifst = stmt.asIfStmt();
                 Variable v = evaluateExpression(ifst.getCondition());
+                if ( (boolean) v.getValue() ) {
+                    Statement then = ifst.getThenStmt();
+                    executeBlock(then.asBlockStmt().getStatements());
+                    System.out.println("Matched");
+                }
                 System.out.println(v);
             }
             else {
@@ -703,11 +723,6 @@ public class Evaluator {
                     logger.info("Unhandled");
                 }
             }
-        }
-
-        if (!AntikytheraRunTime.isEmptyStack()) {
-            AntikytheraRunTime.pop();
-
         }
     }
 
