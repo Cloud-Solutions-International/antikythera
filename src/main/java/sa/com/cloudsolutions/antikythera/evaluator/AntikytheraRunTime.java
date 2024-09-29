@@ -34,7 +34,7 @@ public class AntikytheraRunTime {
     }
 
     public static void reset() {
-        resolved.clear();
+        stack.clear();
     }
 
     public static void push(Variable variable) {
