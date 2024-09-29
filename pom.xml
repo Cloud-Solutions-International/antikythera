@@ -15,13 +15,18 @@
             <artifactId>javaparser-core</artifactId>
             <version>3.26.2</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.github.javaparser/javaparser-symbol-solver-core -->
+
         <dependency>
             <groupId>com.github.javaparser</groupId>
             <artifactId>javaparser-symbol-solver-core</artifactId>
             <version>3.26.2</version>
         </dependency>
 
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <version>LATEST</version>
+        </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -55,12 +60,14 @@
             <artifactId>maven-model</artifactId>
             <version>3.8.6</version>
         </dependency>
+
+        <!--  remove ??
         <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
             <version>3.4.1</version>
         </dependency>
-
+        -->
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
