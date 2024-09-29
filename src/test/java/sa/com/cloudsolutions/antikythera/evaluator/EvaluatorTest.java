@@ -7,7 +7,6 @@ import java.util.Map;
 
 class EvaluatorTest {
 
-    private Map<String, Comparable> context;
     CompilationUnit dto = StaticJavaParser.parse(
             getClass().getClassLoader().getResourceAsStream("sources/com/csi/expressions/SimpleDTO.java"));
     CompilationUnit exp = StaticJavaParser.parse(
