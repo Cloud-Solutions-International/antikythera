@@ -40,6 +40,13 @@ public class Bunches {
         System.out.println(ints);
     }
 
+    public void withDTOConstructor() {
+        List<Person> dtos = new ArrayList<>();
+        Person dto = new Person("Bertie", 10);
+        dtos.add(dto);
+        System.out.println(dtos);
+    }
+
     public void withDTO() {
         List<DTO> dtos = new ArrayList<>();
         DTO dto = new DTO();
@@ -53,6 +60,20 @@ public class Bunches {
     class DTO {
         private String name;
         private int age;
+
+        public String toString() {
+            return name + " " + age;
+        }
+    }
+
+    class Person {
+        private String name;
+        private int age;
+
+        public Person(String name, int age) {
+            this.name = name;
+            this.age = age;
+        }
 
         public String toString() {
             return name + " " + age;
