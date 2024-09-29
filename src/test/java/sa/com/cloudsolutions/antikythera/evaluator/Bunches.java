@@ -11,6 +11,8 @@ public class Bunches {
         Bunches bunches = new Bunches();
         bunches.printList();
         bunches.printMap();
+        bunches.methodCall();
+        bunches.withDTO();
     }
 
 
@@ -26,5 +28,34 @@ public class Bunches {
         list.put("one", 1);
         list.put("two", 2);
         System.out.println(list);
+    }
+
+    public void methodCall() {
+        List<Integer> ints = new ArrayList<>();
+        ints.add(15);
+
+        Arithmetic arithmetic = new Arithmetic();
+        int result = arithmetic.calculate(20);
+        ints.add(result);
+        System.out.println(ints);
+    }
+
+    public void withDTO() {
+        List<DTO> dtos = new ArrayList<>();
+        DTO dto = new DTO();
+        dto.age = 10;
+        dto.name = "Biggles";
+
+        dtos.add(dto);
+        System.out.println(dtos);
+    }
+
+    class DTO {
+        private String name;
+        private int age;
+
+        public String toString() {
+            return name + " " + age;
+        }
     }
 }

@@ -23,6 +23,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,8 +144,11 @@ public class Evaluator {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(expr, name);
         } else if (expr.isLiteralExpr()) {
+
             if (expr.isBooleanLiteralExpr()) {
                 return new Variable(expr.asBooleanLiteralExpr().getValue());
+            } else if (expr.isDoubleLiteralExpr()) {
+                return new Variable(Double.parseDouble(expr.asDoubleLiteralExpr().getValue()));
             } else if (expr.isIntegerLiteralExpr()) {
                 return new Variable(Integer.parseInt(expr.asIntegerLiteralExpr().getValue()));
             } else if (expr.isStringLiteralExpr()) {
@@ -162,6 +166,32 @@ public class Evaluator {
         } else if (expr.isMethodCallExpr()) {
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
+        } else if (expr.isAssignExpr()) {
+            AssignExpr assignExpr = expr.asAssignExpr();
+            Expression target = assignExpr.getTarget();
+            Expression value = assignExpr.getValue();
+            Variable v = evaluateExpression(value);
+
+            if(target.isFieldAccessExpr()) {
+                FieldAccessExpr fae = target.asFieldAccessExpr();
+                String fieldName = fae.getNameAsString();
+                Variable field = fields.get(fieldName);
+                if(field != null) {
+                    field.setValue(v.getValue());
+                }
+                else {
+                    logger.warn("Field {} not found", fieldName);
+                }
+                setLocal(expr, fieldName, v);
+            }
+            else if(target.isNameExpr()) {
+                String name = target.asNameExpr().getNameAsString();
+                setLocal(expr, name, v);
+            }
+
+            return v;
+        } else if (expr.isObjectCreationExpr()) {
+            return createObject(expr, null, expr);
         }
         return null;
     }
@@ -188,30 +218,52 @@ public class Evaluator {
                     return v;
                 }
                 else if(expression.isObjectCreationExpr()) {
-                    ObjectCreationExpr oce = expression.asObjectCreationExpr();
-                    ClassOrInterfaceType type = oce.getType();
-                    Variable v = new Variable(type);
-                    try {
-                        // Get the class name from the type
-                        String className = type.resolve().describe();
-
-                        // Use reflection to create a new instance of the class
-                        Class<?> clazz = Class.forName(className);
-                        Object instance = clazz.getDeclaredConstructor().newInstance();
-
-                        // Set the new instance as the value of v
-                        v.setValue(instance);
-                    } catch (Exception e) {
-                        logger.error("An error occurred", e);
-                    }
-
-                    setLocal(expr, decl.getNameAsString(), v);
-                    return v;
+                    return createObject(expr, decl, expression);
                 }
 
             }
         }
         return null;
+    }
+
+    private Variable createObject(Expression expr, VariableDeclarator decl, Expression expression) {
+        ObjectCreationExpr oce = expression.asObjectCreationExpr();
+        ClassOrInterfaceType type = oce.getType();
+        Variable v = new Variable(type);
+        try {
+            ResolvedType resolved = type.resolve();
+            String className = resolved.describe();
+
+            if(resolved.isReferenceType()) {
+                var typeDecl = resolved.asReferenceType().getTypeDeclaration();
+                if(typeDecl.isPresent() && typeDecl.get().getClassName().contains(".")) {
+                    className = className.replaceFirst("\\.([^\\.]+)$", "\\$$1");
+                }
+            }
+
+            Class<?> clazz = Class.forName(className);
+
+            Class<?> outer = clazz.getEnclosingClass();
+            if(outer != null) {
+                for(Class<?> c : outer.getDeclaredClasses()) {
+                    if(c.getName().equals(className)) {
+                        Object instance = c.getDeclaredConstructor(outer).newInstance(outer.getDeclaredConstructors()[0].newInstance());
+                        v.setValue(instance);
+                    }
+                }
+            }
+            else {
+                Object instance = clazz.getDeclaredConstructor().newInstance();
+
+                // Set the new instance as the value of v
+                v.setValue(instance);
+            }
+        } catch (Exception e) {
+            logger.error("An error occurred", e);
+        }
+
+        setLocal(expr, decl.getNameAsString(), v);
+        return v;
     }
 
     /**
@@ -405,7 +457,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateBinaryExpression(BinaryExpr.Operator operator, Expression leftValue, Expression rightValue) throws EvaluatorException {
+    Variable evaluateBinaryExpression(BinaryExpr.Operator operator, Expression leftValue, Expression rightValue) throws EvaluatorException {
         Variable left = evaluateExpression(leftValue);
         Variable right = evaluateExpression(rightValue);
 
@@ -418,10 +470,7 @@ public class Evaluator {
                     return new Variable(Boolean.FALSE);
                 }
 
-                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
-                    return new Variable( ((Comparable) leftValue).equals(rightValue));
-                }
-                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+                return new Variable( ((Comparable) leftValue).equals(rightValue));
             }
 
             case GREATER:
@@ -466,7 +515,7 @@ public class Evaluator {
         }
     }
 
-    private static Variable addOperation(Variable left, Variable right) {
+    static Variable addOperation(Variable left, Variable right) {
         if (left.getValue() instanceof String || right.getValue() instanceof String) {
             return new Variable(left.getValue().toString() + right.getValue().toString());
         }
