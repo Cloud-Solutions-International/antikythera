@@ -1,6 +1,6 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import com.github.javaparser.ast.*;
 import org.junit.jupiter.api.BeforeEach;
