@@ -1,8 +1,7 @@
-package com.cloud.api.configurations;
+package sa.com.cloudsolutions.antikythera.configuration;
 
 import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,7 +10,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

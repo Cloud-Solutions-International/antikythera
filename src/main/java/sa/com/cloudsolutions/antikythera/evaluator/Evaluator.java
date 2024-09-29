@@ -1,7 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.cloud.api.configurations.Settings;
-import com.cloud.api.finch.Finch;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.finch.Finch;
 import com.cloud.api.generator.EvaluatorException;
 
 import com.cloud.api.generator.GeneratorException;
@@ -24,7 +24,6 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
-import javassist.expr.Expr;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
