@@ -54,10 +54,10 @@ public class Evaluator {
     /**
      * The fields that were encountered in the current class.
      */
-    private final Map<String, Variable> fields;
+    protected final Map<String, Variable> fields;
     static Map<String, Object> finches;
 
-    private Variable returnValue;
+    protected Variable returnValue;
 
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
     static {
@@ -141,12 +141,25 @@ public class Evaluator {
         return null;
     }
 
+    /**
+     * Evaluate an expression.
+     *
+     * This is a recursive process, evaluating a particular expression might result in this method being called
+     * again and again either directly or indirectly.
+     *
+     * @param expr the expression to evaluat
+     * @return the result as a Variable instance which can be null if the expression is supposed to return null
+     *      todo: At the moment the expression can be null due to implementation shortcomings as well
+     * @throws EvaluatorException
+     */
     public Variable evaluateExpression(Expression expr) throws EvaluatorException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(expr, name);
         } else if (expr.isLiteralExpr()) {
-
+            /*
+             * Literal expressions are the easiest.
+             */
             if (expr.isBooleanLiteralExpr()) {
                 return new Variable(expr.asBooleanLiteralExpr().getValue());
             } else if (expr.isDoubleLiteralExpr()) {
@@ -157,8 +170,14 @@ public class Evaluator {
                 return new Variable(expr.asStringLiteralExpr().getValue());
             }
         } else if (expr.isVariableDeclarationExpr()) {
+            /*
+             * Variable declarations are hard and deserve their own method.
+             */
             return evaluateVariableDeclaration(expr);
         } else if (expr.isBinaryExpr()) {
+            /*
+             * Binary expressions can also be difficul
+             */
             BinaryExpr binaryExpr = expr.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
@@ -166,6 +185,10 @@ public class Evaluator {
             return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
 
         } else if (expr.isMethodCallExpr()) {
+            /*
+             * Method calls are the toughest nuts to crack. Some method calls will be from the Java api
+             * or from other libraries. Or from classes that have not been compiled.
+             */
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
         } else if (expr.isAssignExpr()) {
@@ -234,6 +257,16 @@ public class Evaluator {
         return null;
     }
 
+    /**
+     * Create an object using reflection
+     *
+     * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
+     *                           We recursively fetch it's parent until we reach the start of the block. This is
+     *                           needed because local variables are local to a block rather than a method.
+     * @param decl  The variable declaration
+     * @param expression The expression to be evaluated and assigned as the initial value
+     * @return The object that's created will be in the value field of the Variable
+     */
     private Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) {
         ObjectCreationExpr oce = expression.asObjectCreationExpr();
         ClassOrInterfaceType type = oce.getType();
@@ -499,7 +532,7 @@ public class Evaluator {
                 if (right == null && left.getValue() == null) {
                     return new Variable(Boolean.TRUE);
                 }
-                return new Variable( ((Comparable) leftValue).equals(rightValue));
+                return new Variable( ((Comparable<?>) leftValue).equals(rightValue));
             }
 
             case GREATER:
@@ -544,6 +577,13 @@ public class Evaluator {
         }
     }
 
+    /**
+     * Simple addition.
+     * String can be added to anything but numbers are tricker.
+     * @param left the left operand
+     * @param right the right operand
+     * @return the result of the add operation which may be arithmatic or string concatenation
+     */
     static Variable addOperation(Variable left, Variable right) {
         if (left.getValue() instanceof String || right.getValue() instanceof String) {
             return new Variable(left.getValue().toString() + right.getValue().toString());
@@ -711,18 +751,22 @@ public class Evaluator {
             }
             else {
                 if(stmt.isReturnStmt()) {
-                    Optional<Expression> expr = stmt.asReturnStmt().getExpression();
-                    if(expr.isPresent()) {
-                        returnValue = evaluateExpression(expr.get());
-                    }
-                    else {
-                        returnValue = null;
-                    }
+                    evaluateReturnStatement(stmt);
                 }
                 else {
                     logger.info("Unhandled");
                 }
             }
+        }
+    }
+
+    void evaluateReturnStatement(Statement stmt) throws EvaluatorException {
+        Optional<Expression> expr = stmt.asReturnStmt().getExpression();
+        if(expr.isPresent()) {
+            returnValue = evaluateExpression(expr.get());
+        }
+        else {
+            returnValue = null;
         }
     }
 

@@ -160,7 +160,7 @@ public class AbstractCompiler {
      * @String className
      * @return
      */
-    protected Map<String, FieldDeclaration> getFields(CompilationUnit cu, String className) {
+    public static Map<String, FieldDeclaration> getFields(CompilationUnit cu, String className) {
         Map<String, FieldDeclaration> fields = new HashMap<>();
         for (var type : cu.getTypes()) {
             if(type.getNameAsString().equals(className)) {
