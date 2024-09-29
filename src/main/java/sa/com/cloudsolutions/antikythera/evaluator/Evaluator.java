@@ -24,6 +24,7 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
+import javassist.expr.Expr;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -254,9 +255,24 @@ public class Evaluator {
             if(outer != null) {
                 for(Class<?> c : outer.getDeclaredClasses()) {
                     if(c.getName().equals(className)) {
-                        // args values here
-                        Constructor<?> cons = c.getDeclaredConstructor(outer, null);
-                        Object instance = c.getDeclaredConstructor(outer).newInstance(outer.getDeclaredConstructors()[0].newInstance());
+                        List<Expression> arguments = oce.getArguments();
+                        Class<?>[] paramTypes = new Class<?>[arguments.size()+1];
+                        Object[] args = new Object[arguments.size() + 1];
+
+                        // todo this is wrong, this should first check for an existing instance in the current scope
+                        // and then if an instance is not found build using the most suitable arguments.
+                        args[0] = outer.getDeclaredConstructors()[0].newInstance();
+                        paramTypes[0] = outer;
+
+                        for (int i = 0; i < arguments.size(); i++) {
+                            Variable vv = evaluateExpression(arguments.get(i));
+                            Class<?> wrapperClass = vv.getValue().getClass();
+                            paramTypes[i + 1] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
+                            args[i + 1] = vv.getValue();
+                        }
+
+                        Constructor<?> cons = c.getDeclaredConstructor(paramTypes);
+                        Object instance = cons.newInstance(args);
                         v.setValue(instance);
                     }
                 }
