@@ -14,17 +14,12 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.ThisExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
@@ -33,8 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-
-
 import java.util.Map;
 import java.util.Optional;
 
@@ -118,7 +111,7 @@ public class DTOHandler extends  ClassProcessor {
      * If we are inheriting from a class that's part of our AUT, we need to copy it.
      *
      */
-    private void solveTypes() {
+    void solveTypes() {
         cu.getTypes().forEach(typeDeclaration -> {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
@@ -235,7 +228,7 @@ public class DTOHandler extends  ClassProcessor {
             return super.visit(field, args);
         }
 
-        private void generateGetter(FieldDeclaration field, String getterName) {
+        void generateGetter(FieldDeclaration field, String getterName) {
             // Create a new MethodDeclaration for the getter
             MethodDeclaration getter = new MethodDeclaration();
             getter.setName(getterName);
@@ -255,7 +248,7 @@ public class DTOHandler extends  ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(getter);
         }
 
-        private void generateSetter(FieldDeclaration field, String setterName) {
+        void generateSetter(FieldDeclaration field, String setterName) {
             // Create a new MethodDeclaration for the setter
             MethodDeclaration setter = new MethodDeclaration();
             setter.setName(setterName);
@@ -283,7 +276,7 @@ public class DTOHandler extends  ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
         }
 
-        private void extractEnums(FieldDeclaration field) {
+        void extractEnums(FieldDeclaration field) {
             Optional<Expression> expr = field.getVariables().get(0).getInitializer();
             if (expr.isPresent()) {
                 var initializer = expr.get();
