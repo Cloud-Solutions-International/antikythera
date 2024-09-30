@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
 import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserClassDeclaration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
@@ -82,6 +83,14 @@ public class DTOHandler extends  ClassProcessor {
                     cdecl.accept(new TypeCollector(), null);
                     cu.accept(new TypeCollector(), null);
                 }
+            }
+            if(t.getFullyQualifiedName().isPresent()) {
+                JavaParserClassDeclaration classDeclaration = new JavaParserClassDeclaration(
+                        t.asClassOrInterfaceDeclaration(), combinedTypeSolver.getMemoryTypeSolver()
+                );
+
+                combinedTypeSolver.getMemoryTypeSolver()
+                        .addDeclaration(t.getFullyQualifiedName().get().toString(), classDeclaration);
             }
         }
 
@@ -189,7 +198,6 @@ public class DTOHandler extends  ClassProcessor {
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
 
-
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
                     || fieldAsString.equals("Logger")
@@ -205,10 +213,11 @@ public class DTOHandler extends  ClassProcessor {
                     filteredAnnotations.add(annotation);
                 }
                 else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
-                    switch(field.getElementType().asString()) {
-                        case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
-                        break;
-                    }
+//                    switch(field.getElementType().asString()) {
+//                        case "Long":
+//                            field.getVariables().get(0).setInitializer("0L");
+//                        break;
+//                    }
                 }
             }
             field.getAnnotations().clear();
@@ -231,7 +240,6 @@ public class DTOHandler extends  ClassProcessor {
                 generateSetter(field, setterName);
 
             }
-
 
             return super.visit(field, args);
         }

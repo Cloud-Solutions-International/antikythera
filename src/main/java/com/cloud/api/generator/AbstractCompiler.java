@@ -1,8 +1,8 @@
 package com.cloud.api.generator;
 
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.resolution.types.ResolvedType;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.MemoryTypeSolver;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
@@ -12,7 +12,6 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
@@ -32,7 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-
+import sa.com.cloudsolutions.antikythera.parser.UpdatableTypeSolver;
 
 
 /**
@@ -72,7 +71,7 @@ public class AbstractCompiler {
 
     protected JavaParser javaParser;
     protected JavaSymbolSolver symbolResolver;
-    protected CombinedTypeSolver combinedTypeSolver;
+    protected UpdatableTypeSolver combinedTypeSolver;
     protected ArrayList<JarTypeSolver> jarSolvers;
 
     protected CompilationUnit cu;
@@ -82,9 +81,10 @@ public class AbstractCompiler {
             basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
             basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         }
-        combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver = UpdatableTypeSolver.createTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+        combinedTypeSolver.setMemoryTypeSolver(new MemoryTypeSolver());
 
         jarSolvers = new ArrayList<>();
         for(String jarFile : Settings.getJarFiles()) {
@@ -103,8 +103,6 @@ public class AbstractCompiler {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
-
-
     }
 
     public static String classToPath(String className) {
