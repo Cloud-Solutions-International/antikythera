@@ -10,57 +10,36 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
+import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
     public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
     private final File controllers;
-
 
     private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
@@ -144,14 +123,17 @@ public class RestControllerParser extends ClassProcessor {
 
     private void processRestController(PackageDeclaration pd) throws IOException, EvaluatorException {
         StringBuilder fileContent = new StringBuilder();
-        gen = new CompilationUnit();
+        expandWildCards(cu);
 
+        evaluator = new SpringEvaluator();
+        SpringTestGenerator generator = new SpringTestGenerator();
+        evaluator.addGenerator(generator);
+        generator.setCommonPath(getCommonPath());
+
+        CompilationUnit gen = generator.getCompilationUnit();
         ClassOrInterfaceDeclaration cdecl = gen.addClass(cu.getTypes().get(0).getName() + "Test");
         cdecl.addExtendedType("TestHelper");
-
         gen.setPackageDeclaration(pd);
-
-        expandWildCards(cu);
 
         gen.addImport("com.cloud.api.base.TestHelper");
         gen.addImport("org.testng.annotations.Test");
@@ -167,8 +149,6 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.annotations.TestCaseType");
         gen.addImport("com.cloud.core.enums.TestType");
 
-
-        evaluator = new SpringEvaluator();
         /*
          * There is a very valid reason for doing this in two steps.
          * We want to make sure that all the repositories are identified before we start processing the methods.
