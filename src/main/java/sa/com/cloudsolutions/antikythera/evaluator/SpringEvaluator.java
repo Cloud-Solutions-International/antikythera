@@ -106,8 +106,7 @@ public class SpringEvaluator extends Evaluator {
             } else if (paramString.startsWith("@RequestBody")) {
                 Type t = param.getType();
                 if (t.isClassOrInterfaceType()) {
-                    Class<?> clazz = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
-                    Object o = clazz.getDeclaredConstructor().newInstance();
+                    Object o = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
                     Variable v = new Variable(o);
                     AntikytheraRunTime.push(v);
                 } else {

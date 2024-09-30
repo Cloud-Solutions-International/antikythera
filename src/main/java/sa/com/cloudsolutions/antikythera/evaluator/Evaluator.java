@@ -303,8 +303,7 @@ public class Evaluator {
                 }
             }
             else {
-                Class<?> clazz = DTOBuddy.createDynamicDTO(type);
-                Object instance = clazz.getDeclaredConstructor().newInstance();
+                Object instance  = DTOBuddy.createDynamicDTO(type);
                 v.setValue(instance);
             }
         } catch (Exception e) {
@@ -426,7 +425,7 @@ public class Evaluator {
 
             for (int i = 0; i < arguments.size(); i++) {
                 argValues[i] = evaluateExpression(arguments.get(i));
-                Class<?> wrapperClass = argValues[i].getValue().getClass();
+                Class<?> wrapperClass = argValues[i].getValue() == null ? argValues[i].getClazz() : argValues[i].getValue().getClass();
                 paramTypes[i] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
                 args[i] = argValues[i].getValue();
             }
@@ -506,20 +505,23 @@ public class Evaluator {
                     }
                 }
                 Method method = v.getValue().getClass().getMethod(methodName, paramTypes);
-                return new Variable(method.invoke(v.getValue(), args));
+                Variable response = new Variable(method.invoke(v.getValue(), args));
+                response.setClazz(method.getReturnType());
+                return response;
             }
         }
         return null;
     }
 
-    Variable evaluateBinaryExpression(BinaryExpr.Operator operator, Expression leftValue, Expression rightValue) throws EvaluatorException {
-        Variable left = evaluateExpression(leftValue);
+    Variable evaluateBinaryExpression(BinaryExpr.Operator operator,
+                                      Expression leftExpression, Expression rightExpression) throws EvaluatorException {
+        Variable left = evaluateExpression(leftExpression);
 
         if(operator.equals(BinaryExpr.Operator.OR) && (boolean)left.getValue()) {
              return new Variable(Boolean.TRUE);
         }
 
-        Variable right = evaluateExpression(rightValue);
+        Variable right = evaluateExpression(rightExpression);
 
         switch (operator) {
             case EQUALS: {
@@ -535,42 +537,35 @@ public class Evaluator {
                 if (left.getValue() == null && right.getValue() == null) {
                     return new Variable(Boolean.TRUE);
                 }
-                return new Variable( ((Comparable<?>) leftValue).equals(rightValue));
+                return new Variable( ((Comparable<?>) leftExpression).equals(rightExpression));
             }
 
             case GREATER:
-                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
-                    return new Variable( ((Comparable) leftValue).compareTo(rightValue) > 0);
+                if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
+                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) > 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
+
             case GREATER_EQUALS:
-                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
-                    return new Variable( ((Comparable) leftValue).compareTo(rightValue) >= 0);
+                if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
+                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) >= 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 
             case LESS:
-                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
-                    return new Variable( ((Comparable) leftValue).compareTo(rightValue) < 0);
+                if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
+                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) < 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 
             case LESS_EQUALS:
-                if (left.getValue() instanceof Comparable && right.getValue() instanceof Comparable) {
-                    return new Variable( ((Comparable) leftValue).compareTo(rightValue) <= 0);
+                if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
+                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) <= 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftValue + " and " + rightValue);
+                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 
-            case NOT_EQUALS: {
-                Variable v = evaluateBinaryExpression(BinaryExpr.Operator.EQUALS, leftValue, rightValue);
-                if ( (Boolean)v.getValue()) {
-                    v.setValue(Boolean.FALSE);
-                }
-                else {
-                    v.setValue(Boolean.TRUE);
-                }
-                return v;
-            }
+            case NOT_EQUALS:
+                return new Variable(!left.getValue().equals(right.getValue()));
 
             case PLUS:
                 return addOperation(left, right);
@@ -807,6 +802,29 @@ public class Evaluator {
                     throw new RuntimeException(e);
                 }
             }
+        }
+    }
+}
+
+class NumericComparator {
+
+    public static int compare(Object left, Object right) {
+        if (left instanceof Number && right instanceof Number) {
+            if (left instanceof Double || right instanceof Double) {
+                return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue());
+            } else if (left instanceof Float || right instanceof Float) {
+                return Float.compare(((Number) left).floatValue(), ((Number) right).floatValue());
+            } else if (left instanceof Long || right instanceof Long) {
+                return Long.compare(((Number) left).longValue(), ((Number) right).longValue());
+            } else {
+                return Integer.compare(((Number) left).intValue(), ((Number) right).intValue());
+            }
+        } else if (left instanceof String && right instanceof String) {
+            return ((String) left).compareTo((String) right);
+        } else if (left instanceof Comparable && right instanceof Comparable) {
+            return ((Comparable<Object>) left).compareTo(right);
+        } else {
+            throw new IllegalArgumentException("Cannot compare " + left + " and " + right);
         }
     }
 }
