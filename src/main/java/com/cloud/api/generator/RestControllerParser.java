@@ -6,15 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -26,7 +22,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -156,7 +151,10 @@ public class RestControllerParser extends ClassProcessor {
          */
         evaluator.setupFields(cu);
 
-        cu.accept(new ControllerMethodVisitor(), null);
+        /*
+         * Pass 1 : identify dependencies
+         */
+        cu.accept(new DepSolvingVisitor(), null);
 
         for (String s : dependencies) {
             gen.addImport(s);
@@ -172,6 +170,10 @@ public class RestControllerParser extends ClassProcessor {
             copyDependencies(dependency);
         }
 
+        /*
+         * Pass 2 : Generate the tests
+         */
+        cu.accept(new ControllerMethodVisitor(), null);
         dependencies.clear();
         externalDependencies.clear();
     }
@@ -223,43 +225,6 @@ public class RestControllerParser extends ClassProcessor {
      *
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
-        /*
-         * Every public method in the source code will result in a call to the visit(MethodDeclaration...)
-         * method of this class. In there will try to identify locals and whether any repository queries
-         * are being executed. Armed with that information we will then use the return statement visitor
-         * to identify the return type of the method and thereafter to generate the tests.
-         */
-        RepositoryQuery last = null;
-
-        /**
-         * This method will be called for each method call expression associated with a variable assignment.
-         * @param node a node from an expression statement, which may have a method call expression.
-         *             The result of which will be used in the variable assignment by the caller
-         * @param arg The list of variables that are being assigned.
-         *            Most likely to contain a single node
-         * @return A repository query, if the variable assignment is the result of a query execution or null.
-         */
-        public RepositoryQuery processMCE(Node node, NodeList<VariableDeclarator> arg) {
-
-            if (node instanceof MethodCallExpr) {
-                MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
-                Optional<Expression> scope = mce.getScope();
-                if(scope.isPresent()) {
-
-
-                }
-            }
-            else {
-                for(Node n : node.getChildNodes()) {
-                    RepositoryQuery q = processMCE(n, arg);
-                    if(q != null) {
-                        return q;
-                    }
-                }
-            }
-            return null;
-        }
-
         /**
          * Prepares the ground for the MethodBLockVisitor to do it's work.
          *
@@ -277,13 +242,39 @@ public class RestControllerParser extends ClassProcessor {
 
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
-                resolveMethodParameterTypes(md);
-
                 try {
                     evaluator.executeMethod(md);
                 } catch (EvaluatorException e) {
                     throw new RuntimeException(e);
                 }
+            }
+        }
+    }
+
+    /**
+     * Class to resolve dependencies of the controller.
+     *
+     * Generating tests is a two step process, in the first step we will identify all the dependencies
+     * and compile them with java parser. This is a requirement for efficient type resolution when
+     * building the tests
+     */
+    class DepSolvingVisitor extends VoidVisitorAdapter<Void> {
+        /**
+         * Prepares the ground for the MethodBLockVisitor to do it's work.
+         *
+         * reset the preConditions list
+         * identify the locals
+         * reset the context
+         */
+        @Override
+        public void visit(MethodDeclaration md, Void arg) {
+            super.visit(md, arg);
+            evaluatorUnsupported = false;
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                return;
+            }
+            if (md.isPublic()) {
+                resolveMethodParameterTypes(md);
             }
         }
 
@@ -292,27 +283,6 @@ public class RestControllerParser extends ClassProcessor {
                 solveTypeDependencies(param.getType(), cu);
             }
         }
-
-
-        /**
-         * Nested inner class to handle return statements.
-         *
-         */
-        class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
-            /**
-             * This method will be called once for each return statment inside the method block.
-             *
-             * @param statement A statement that maybe a return statement.
-             * @param md        the method declaration that contains the return statement.
-             */
-            @Override
-            public void visit(ReturnStmt statement, MethodDeclaration md) {
-                ReturnStmt stmt = statement.asReturnStmt();
-                Optional<Node> parent = stmt.getParentNode();
-
-            }
-        }
-
     }
 
     /**
@@ -337,7 +307,6 @@ public class RestControllerParser extends ClassProcessor {
         }
         return "";
     }
-
 }
 
 
