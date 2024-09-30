@@ -8,12 +8,11 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
-import net.bytebuddy.implementation.FixedValue;
-import net.bytebuddy.implementation.StubMethod;
+import net.bytebuddy.implementation.FieldAccessor;
+
 
 import java.util.Collection;
-import java.util.List;
-import java.util.Set;
+
 
 public class DTOBuddy {
 
@@ -41,14 +40,17 @@ public class DTOBuddy {
             // Get the field type
             TypeDescription.Generic fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(field.getType().describe()));
 
+            // Define field
+            builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
+
             // Define getter
             builder = builder.defineMethod(getterName, fieldType, net.bytebuddy.description.modifier.Visibility.PUBLIC)
-                    .intercept(FixedValue.nullValue());
+                    .intercept(FieldAccessor.ofField(fieldName));
 
             // Define setter
             builder = builder.defineMethod(setterName, void.class, net.bytebuddy.description.modifier.Visibility.PUBLIC)
                     .withParameter(fieldType)
-                    .intercept(StubMethod.INSTANCE);
+                    .intercept(FieldAccessor.ofField(fieldName));
         }
 
         return builder.make()

@@ -271,7 +271,7 @@ public class SpringEvaluator extends Evaluator {
             if (parent instanceof IfStmt) {
                 IfStmt ifStmt = (IfStmt) parent;
                 Expression condition = ifStmt.getCondition();
-                if (evaluateCondition(condition)) {
+                if (evaluateValidatorCondition(condition)) {
                     identifyReturnType(stmt, currentMethod);
                     if (!flunk) {
                         buildPreconditions(currentMethod, condition);
@@ -285,7 +285,7 @@ public class SpringEvaluator extends Evaluator {
                         // we have found ourselves a conditional return statement.
                         IfStmt ifStmt = (IfStmt) gramps.get();
                         Expression condition = ifStmt.getCondition();
-                        if (evaluateCondition(condition)) {
+                        if (evaluateValidatorCondition(condition)) {
                             identifyReturnType(stmt, currentMethod);
                             if (!flunk) {
                                 buildPreconditions(currentMethod, condition);
@@ -415,16 +415,16 @@ public class SpringEvaluator extends Evaluator {
     }
 
 
-    public boolean evaluateCondition(Expression condition) throws EvaluatorException {
+    public boolean evaluateValidatorCondition(Expression condition) throws EvaluatorException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
             Expression right = binaryExpr.getRight();
 
             if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
-                return evaluateCondition(left) && evaluateCondition(right);
+                return evaluateValidatorCondition(left) && evaluateValidatorCondition(right);
             } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                return evaluateCondition(left) || evaluateCondition(right);
+                return evaluateValidatorCondition(left) || evaluateValidatorCondition(right);
             }
             else {
                 return (boolean) evaluateBinaryExpression(binaryExpr.getOperator(), left, right).getValue();
@@ -449,6 +449,14 @@ public class SpringEvaluator extends Evaluator {
     }
 
 
+    /**
+     * Identifies the preconditions to be fullfilled by a check point in the controller.
+     *
+     * A controller may have multiple validations represented by various if conditions, we need to setup
+     * parameters so that these conditions will pass and move forward to the next state.
+     * @param md
+     * @param expr
+     */
     private void buildPreconditions(MethodDeclaration md, Expression expr) {
         if(expr instanceof BinaryExpr) {
             BinaryExpr binaryExpr = expr.asBinaryExpr();
@@ -482,6 +490,8 @@ public class SpringEvaluator extends Evaluator {
                                 gen.addPrecondition(methodCall);
                             }
                         }
+
+
                     }
                 } catch (UnsolvedSymbolException e) {
                     logger.warn("Unsolved symbol exception");
