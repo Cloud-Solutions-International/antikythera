@@ -163,9 +163,6 @@ public class RestControllerParser extends ClassProcessor {
             gen.addImport(s);
         }
 
-        fileContent.append(gen.toString()).append("\n");
-        ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
-
         for(String dependency : dependencies) {
             copyDependencies(dependency);
         }
@@ -176,6 +173,10 @@ public class RestControllerParser extends ClassProcessor {
         cu.accept(new ControllerMethodVisitor(), null);
         dependencies.clear();
         externalDependencies.clear();
+
+        fileContent.append(gen.toString()).append("\n");
+        ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
+
     }
 
 
