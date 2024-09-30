@@ -8,7 +8,6 @@ import com.cloud.api.generator.ControllerResponse;
 import com.cloud.api.generator.DTOHandler;
 import com.cloud.api.generator.GeneratorException;
 import com.cloud.api.generator.RepositoryQuery;
-import com.cloud.api.generator.RestControllerParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -32,6 +31,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -40,6 +40,8 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,15 +51,15 @@ public class SpringTestGenerator implements  TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
     // TODO this needs to be set properly
     private String commonPath;
-    Set<String> testMethodNames;
+    Set<String> testMethodNames = new HashSet<>();
     RepositoryQuery last;
-    CompilationUnit gen;
+    CompilationUnit gen = new CompilationUnit();
     File current;
 
     /**
      * Store the conditions that a controller may expect the input to meet.
      */
-    List<Expression> preConditions;
+    List<Expression> preConditions = new ArrayList<>();
 
     /**
      * Create tests based on the method declarion and return type
@@ -562,5 +564,13 @@ public class SpringTestGenerator implements  TestGenerator {
         }
     }
 
+    public void setCommonPath(String commonPath) {
+        this.commonPath = commonPath;
+    }
+
+    @Override
+    public CompilationUnit getCompilationUnit() {
+        return gen;
+    }
 }
 
