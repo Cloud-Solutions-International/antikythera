@@ -274,7 +274,7 @@ public class DTOHandler extends  ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(getter);
         }
 
-        private void generateSetter(FieldDeclaration field, String setterName) {
+        void generateSetter(FieldDeclaration field, String setterName) {
             // Create a new MethodDeclaration for the setter
             MethodDeclaration setter = new MethodDeclaration();
             setter.setName(setterName);

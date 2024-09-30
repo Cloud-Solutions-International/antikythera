@@ -886,4 +886,56 @@ public class DTOHandlerTest {
         handler.method = new MethodDeclaration();
         assertThrows(AssertionError.class, () -> typeCollector.generateGetter(field, null));
     }
+
+    // -------------------- generateSetter -------------------- //
+    @Test
+    void generateSetterCreatesPublicMethod() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        field.setParentNode(classDeclaration);
+        classDeclaration.addMember(field);
+
+        typeCollector.generateSetter(field, "setValue");
+
+        MethodDeclaration setter = classDeclaration.getMethodsByName("setValue").get(0);
+        assertNotNull(setter, "Setter method should be created.");
+        assertTrue(setter.isPublic(), "Setter should be public.");
+    }
+
+    @Test
+    void generateSetterAssignsFieldValue() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        field.setParentNode(classDeclaration);
+        classDeclaration.addMember(field);
+
+        typeCollector.generateSetter(field, "setValue");
+
+        MethodDeclaration setter = classDeclaration.getMethodsByName("setValue").get(0);
+        BlockStmt body = setter.getBody().orElseThrow(() -> new AssertionError("Setter body should not be empty"));
+        AssignExpr assignExpr = (AssignExpr) body.getStatement(0).asExpressionStmt().getExpression();
+
+        assertEquals("this.value", assignExpr.getTarget().toString(), "Setter should assign to 'this.value'.");
+        assertEquals("value", assignExpr.getValue().toString(), "Setter should assign the parameter 'value'.");
+    }
+
+    @Test
+    void generateSetterHandlesNullField() {
+        assertThrows(NullPointerException.class, () -> typeCollector.generateSetter(null, "setValue"));
+    }
+
+    @Test
+    void generateSetterHandlesNullSetterName() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        assertThrows(AssertionError.class, () -> typeCollector.generateSetter(field, null));
+    }
+
+    @Test
+    void generateSetterHandlesEmptySetterName() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        assertThrows(AssertionError.class, () -> typeCollector.generateSetter(field, ""));
+    }
+
 }
