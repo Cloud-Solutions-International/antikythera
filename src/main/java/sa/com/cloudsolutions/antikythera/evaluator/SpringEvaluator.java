@@ -490,8 +490,6 @@ public class SpringEvaluator extends Evaluator {
                                 gen.addPrecondition(methodCall);
                             }
                         }
-
-
                     }
                 } catch (UnsolvedSymbolException e) {
                     logger.warn("Unsolved symbol exception");
