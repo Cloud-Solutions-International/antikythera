@@ -126,6 +126,16 @@ public class RestControllerParser extends ClassProcessor {
             }
             logger.info("Processed {} controllers", i);
         } else {
+            String p = path.toString().replace("/",".");
+            List<String> skip = (List<String>) Settings.getProperty("skip");
+            if(skip != null) {
+                for(String s : skip) {
+                    if (p.endsWith(s)) {
+                        return;
+                    }
+                }
+            }
+
             Matcher matcher = controllerPattern.matcher(path.toString());
 
             String controllerName = null;
@@ -177,11 +187,22 @@ public class RestControllerParser extends ClassProcessor {
         cu.accept(new ControllerFieldVisitor(), null);
         cu.accept(new ControllerMethodVisitor(), null);
 
-        for (String s : dependencies) {
-            gen.addImport(s);
+        Set<String> originalImports = new HashSet<>();
+
+        for(var imp : cu.getImports()) {
+            originalImports.add(imp.getNameAsString());
         }
+
+        for (String s : dependencies) {
+            if(originalImports.contains(s)) {
+                gen.addImport(s);
+            }
+        }
+
         for(String s: externalDependencies) {
-            gen.addImport(s);
+            if(originalImports.contains(s)) {
+                gen.addImport(s);
+            }
         }
 
         fileContent.append(gen.toString()).append("\n");
@@ -295,8 +316,9 @@ public class RestControllerParser extends ClassProcessor {
                     } catch (UnsolvedSymbolException e) {
                         logger.debug("ignore {}", t);
                     } catch (IOException e) {
-                        String action = Settings.getProperty("dependencies.on_error").toString();
-                        if(action == null || action.equals("exit")) {
+
+                        Object action = Settings.getProperty("dependencies.on_error");
+                        if(action == null || action.toString().equals("exit")) {
                             throw new GeneratorException("Exception while processing fields", e);
                         }
                         logger.error("Exception while processing fields");
@@ -534,48 +556,75 @@ public class RestControllerParser extends ClassProcessor {
         }
         private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null && expression.isObjectCreationExpr()) {
+            if (expression != null) {
                 ControllerResponse response = new ControllerResponse();
-                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                    for(Expression typeArg : objectCreationExpr.getArguments()) {
-                        if (typeArg.isFieldAccessExpr()) {
-                            FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                            if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                                response.setStatusCode(fae.getNameAsString());
+                response.setStatusCode(200);
+                if (expression.isObjectCreationExpr()) {
+                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                        for (Expression typeArg : objectCreationExpr.getArguments()) {
+                            if (typeArg.isFieldAccessExpr()) {
+                                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
+                                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
+                                    response.setStatusCode(fae.getNameAsString());
+                                }
+                            }
+                            if (typeArg.isNameExpr()) {
+                                String nameAsString = typeArg.asNameExpr().getNameAsString();
+                                if (nameAsString != null && evaluator.getLocal(nameAsString) != null) {
+                                    response.setType(evaluator.getLocal(nameAsString).getType());
+                                } else {
+                                    logger.warn("NameExpr is null in identify return type");
+                                }
+                            } else if (typeArg.isStringLiteralExpr()) {
+                                response.setType(StaticJavaParser.parseType("java.lang.String"));
+                                response.setResponse(typeArg.asStringLiteralExpr().asString());
+                            } else if (typeArg.isMethodCallExpr()) {
+                                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
+                                try {
+                                    Optional<Expression> scope = methodCallExpr.getScope();
+                                    if (scope.isPresent()) {
+                                        Type type = (scope.get().isFieldAccessExpr())
+                                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                                : fields.get(scope.get().asNameExpr().getNameAsString());
+                                        if (type != null) {
+                                            extractTypeFromCall(type, methodCallExpr);
+                                            logger.debug(type.toString());
+                                        } else {
+                                            logger.debug("Type not found {}", scope.get());
+                                        }
+                                    }
+                                } catch (IOException e) {
+                                    throw new GeneratorException("Exception while identifying dependencies", e);
+                                }
                             }
                         }
-                        if (typeArg.isNameExpr()) {
-                            String nameAsString = typeArg.asNameExpr().getNameAsString();
-                            if(nameAsString != null && evaluator.getLocal(nameAsString) != null) {
-                                response.setType(evaluator.getLocal(nameAsString).getType());
+                    }
+                } else if (expression.isMethodCallExpr()) {
+                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
+                    try {
+                        Optional<Expression> scope = methodCallExpr.getScope();
+                        if (scope.isPresent()) {
+                            Type type = (scope.get().isFieldAccessExpr())
+                                    ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                                    : fields.get(md.getType().asString());
+                            if(type != null) {
+                                extractTypeFromCall(type, methodCallExpr);
+                                logger.debug(type.toString());
                             }
                             else {
-                                logger.warn("NameExpr is null in identify return type");
-                            }
-                        } else if (typeArg.isStringLiteralExpr()) {
-                            response.setType(StaticJavaParser.parseType("java.lang.String"));
-                            response.setResponse(typeArg.asStringLiteralExpr().asString());
-                        } else if (typeArg.isMethodCallExpr()) {
-                            MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                            try {
-                                Optional<Expression> scope = methodCallExpr.getScope();
-                                if (scope.isPresent()) {
-                                    Type type = (scope.get().isFieldAccessExpr())
-                                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                            : fields.get(scope.get().asNameExpr().getNameAsString());
-                                    if(type != null) {
-                                        extractTypeFromCall(type, methodCallExpr);
-                                        logger.debug(type.toString());
-                                    }
-                                    else {
-                                        logger.debug("Type not found {}", scope.get());
-                                    }
-                                }
-                            } catch (IOException e) {
-                                throw new GeneratorException("Exception while identifying dependencies", e);
+                                logger.debug("Type not found {}", scope.get());
                             }
                         }
+                    } catch (IOException e) {
+                        throw new GeneratorException("Exception while identifying dependencies", e);
+                    }
+                } else if (expression.isNameExpr()) {
+                    String nameAsString = expression.asNameExpr().getNameAsString();
+                    if (nameAsString != null && evaluator.getLocal(nameAsString) != null) {
+                        response.setType(evaluator.getLocal(nameAsString).getType());
+                    } else {
+                        logger.warn("NameExpr is null in identify return type");
                     }
                 }
                 createTests(md, response);
@@ -895,28 +944,32 @@ public class RestControllerParser extends ClassProcessor {
                 // return type will be null
                 if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                     System.out.println("bada 2");
-                } else if (!
-                        (returnType.toString().equals("void") || returnType.toString().equals("CompletableFuture"))) {
-                    Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                    if (respType.toString().equals("String")) {
-                        body.addStatement("String resp = response.getBody().asString();");
-                        if(resp.getResponse() != null) {
-                            body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                } else
+                {
+                    List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
+                    if (! IncompatibleReturnTypes.contains(returnType.toString()))
+                    {
+                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                        if (respType.toString().equals("String")) {
+                            body.addStatement("String resp = response.getBody().asString();");
+                            if(resp.getResponse() != null) {
+                                body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
+                            }
+                            else {
+                                body.addStatement("Assert.assertNotNull(resp);");
+                                logger.warn("Reponse body is empty for {}", md.getName());
+                            }
+                        } else {
+                            System.out.println("bada 1");
+                            // todo get thsi back on line
+                            //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                            //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                            //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                            //                                variableDeclarator.setInitializer(methodCallExpr);
+                            //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                            //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                            //                                body.addStatement(expressionStmt);
                         }
-                        else {
-                            body.addStatement("Assert.assertNotNull(resp);");
-                            logger.warn("Reponse body is empty for {}", md.getName());
-                        }
-                    } else {
-                        System.out.println("bada 1");
-                        // todo get thsi back on line
-//                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-//                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-//                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-//                                variableDeclarator.setInitializer(methodCallExpr);
-//                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-//                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-//                                body.addStatement(expressionStmt);
                     }
                 }
             }
@@ -950,8 +1003,8 @@ public class RestControllerParser extends ClassProcessor {
         MethodCallExpr getStatusCodeCall = new MethodCallExpr(new NameExpr("response"), "getStatusCode");
 
         MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
-        assertTrueCall.addArgument(new IntegerLiteralExpr(statusCode));
         assertTrueCall.addArgument(getStatusCodeCall);
+        assertTrueCall.addArgument(new IntegerLiteralExpr(statusCode));
 
         blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
     }
@@ -1032,6 +1085,11 @@ public class RestControllerParser extends ClassProcessor {
             NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
             for (var pair : normalAnnotation.getPairs()) {
                 if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
+                    String pairValue = pair.getValue().toString();
+                    String[] parts = pairValue.split(",");
+                    if(parts.length == 2) {
+                        return parts[0].substring(1).replace("\"","").strip();
+                    }
                     return getCommonPath() + pair.getValue().toString();
                 }
             }
