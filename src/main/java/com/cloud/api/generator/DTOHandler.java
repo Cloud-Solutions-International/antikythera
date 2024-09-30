@@ -137,7 +137,7 @@ public class DTOHandler extends  ClassProcessor {
      * If we are inheriting from a class that's part of our AUT, we need to copy it.
      *
      */
-    private void solveTypes() {
+    void solveTypes() {
         cu.getTypes().forEach(typeDeclaration -> {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
@@ -254,7 +254,7 @@ public class DTOHandler extends  ClassProcessor {
             return super.visit(field, args);
         }
 
-        private void generateGetter(FieldDeclaration field, String getterName) {
+        void generateGetter(FieldDeclaration field, String getterName) {
             // Create a new MethodDeclaration for the getter
             MethodDeclaration getter = new MethodDeclaration();
             getter.setName(getterName);
