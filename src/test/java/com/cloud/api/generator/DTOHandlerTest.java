@@ -988,4 +988,79 @@ public class DTOHandlerTest {
         assertEquals("TestDTO testDTO", assignExpr.getTarget().toString(), "Factory method should declare and assign 'TestDTO testDTO'.");
         assertEquals("new TestDTO()", assignExpr.getValue().toString(), "Factory method should instantiate 'new TestDTO()'.");
     }
+
+    // -------------------- extractEnums -------------------- //
+    @Test
+    void extractEnumsHandlesNameExpr() {
+        handler.method = StaticJavaParser.parseBodyDeclaration("public static TestTO createTestTO() {\n" +
+                "    TestTO testTO = new TestTO();\n" +
+                "}").asMethodDeclaration();
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private Boolean isDeleted = Boolean.FALSE;").asFieldDeclaration();
+        typeCollector.extractEnums(field);
+
+        assertFalse(handler.method.getBody().get().getStatements().stream()
+                .anyMatch(stmt -> stmt.toString().contains("setIsDeleted")));
+    }
+
+    @Test
+    void extractEnumsGeneratesRandomValueForFieldWithoutInitializer() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestTO");
+
+        handler.method = StaticJavaParser.parseBodyDeclaration("public static TestTO createTestTO() {\n" +
+                "    TestTO testTO = new TestTO();\n" +
+                "}").asMethodDeclaration();
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private Integer value;").asFieldDeclaration();
+        classDeclaration.addMember(field);
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.method.getBody().get().getStatements().stream()
+                .anyMatch(stmt -> stmt.toString().contains("setValue")));
+    }
+
+    @Test
+    void extractEnumsDoesNotAddSetterForFieldWithInitializer() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value = 10;").asFieldDeclaration();
+        handler.method = new MethodDeclaration();
+        handler.method.setBody(new BlockStmt());
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.method.getBody().get().getStatements().isEmpty(), "No setter method should be added for field with initializer.");
+    }
+
+    @Test
+    void extractEnumsHandlesNullMethod() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        handler.method = null;
+
+        typeCollector.extractEnums(field);
+
+        assertNull(handler.method, "Method should remain null when handler.method is null.");
+    }
+
+    @Test
+    void extractEnumsDoesNothingForFieldWithInitializer() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value = 10;").asFieldDeclaration();
+        handler.method = new MethodDeclaration();
+        handler.method.setBody(new BlockStmt());
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.method.getBody().get().getStatements().isEmpty());
+    }
+
+    @Test
+    void extractEnumsDoesNotAddImportForNonFieldAccessExpr() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private String value = someMethod();").asFieldDeclaration();
+        handler.setCompilationUnit(new CompilationUnit());
+        handler.method = new MethodDeclaration();
+        handler.method.setBody(new BlockStmt());
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.cu.getImports().isEmpty(), "No import should be added for non-field access expression.");
+    }
 }
