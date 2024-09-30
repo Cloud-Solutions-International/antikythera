@@ -89,7 +89,7 @@ public class DTOHandler extends  ClassProcessor {
      * Does not return anything but the 'method' field will have a non null value.
      * the visitor can add a setter for each field that it encounters.
      */
-    private void createFactory() {
+    void createFactory() {
         TypeDeclaration<?> cdecl = cu.getTypes().get(0);
         String className = cdecl.getNameAsString();
 
