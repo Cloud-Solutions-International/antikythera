@@ -1063,4 +1063,18 @@ public class DTOHandlerTest {
 
         assertTrue(handler.cu.getImports().isEmpty(), "No import should be added for non-field access expression.");
     }
+
+    // -------------------- parseDTO -------------------- //
+    @Test
+    void parseDTOHandlesInvalidPath() {
+        assertThrows(FileNotFoundException.class, () -> handler.parseDTO("invalid/path/NonExistentDTO.java"));
+    }
+
+    // -------------------- copyDTO -------------------- //
+    @Test
+    void copyDTOHandlesInvalidPath() {
+        String relativePath = "invalid/path/NonExistentDTO.java";
+
+        assertThrows(FileNotFoundException.class, () -> handler.copyDTO(relativePath));
+    }
 }
