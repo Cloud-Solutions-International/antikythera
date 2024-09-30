@@ -18,11 +18,8 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
@@ -32,8 +29,6 @@ import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-
-
 import java.util.Map;
 import java.util.Optional;
 
@@ -61,6 +56,9 @@ public class DTOHandler extends  ClassProcessor {
      * @throws IOException when the source code cannot be read
      */
     public void copyDTO(String relativePath) throws IOException{
+        if (relativePath.contains("SearchParams")){
+            return;
+        }
         parseDTO(relativePath);
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
@@ -75,9 +73,16 @@ public class DTOHandler extends  ClassProcessor {
         compile(relativePath);
         expandWildCards(cu);
         solveTypes();
-        createFactory();
 
-        cu.accept(new TypeCollector(), null);
+        for( var  t : cu.getTypes()) {
+            if(t.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                if(!cdecl.isInnerClass()) {
+                    cdecl.accept(new TypeCollector(), null);
+                    cu.accept(new TypeCollector(), null);
+                }
+            }
+        }
 
         handleStaticImports(cu.getImports());
         removeUnusedImports(cu.getImports());
@@ -87,40 +92,6 @@ public class DTOHandler extends  ClassProcessor {
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
     }
-
-    /**
-     * Create a factory method for the DTO being processed.
-     * Does not return anything but the 'method' field will have a non null value.
-     * the visitor can add a setter for each field that it encounters.
-     */
-    private void createFactory() {
-        TypeDeclaration<?> cdecl = cu.getTypes().get(0);
-        String className = cdecl.getNameAsString();
-
-        if(cdecl.isClassOrInterfaceDeclaration() && !cdecl.asClassOrInterfaceDeclaration().isInterface()
-                && !cdecl.asClassOrInterfaceDeclaration().isAbstract()
-                && className.toLowerCase().endsWith("to")) {
-            String variable = classToInstanceName(cdecl);
-
-            method = new MethodDeclaration();
-            method.setName("create" + className);
-            method.setType(className);
-            method.setModifiers(Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC);
-            cdecl.asClassOrInterfaceDeclaration().addMember(method);
-
-            BlockStmt body = new BlockStmt();
-            VariableDeclarationExpr varDecl = new VariableDeclarationExpr(new ClassOrInterfaceType(null, className), variable);
-            ObjectCreationExpr newExpr = new ObjectCreationExpr(null, new ClassOrInterfaceType(null, className), new NodeList<>());
-            body.addStatement(new AssignExpr(varDecl, newExpr, AssignExpr.Operator.ASSIGN));
-
-            method.setBody(body);
-
-        }
-        else {
-            method = null;
-        }
-    }
-
     void handleStaticImports(NodeList<ImportDeclaration> imports) {
         imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
         {
@@ -141,7 +112,7 @@ public class DTOHandler extends  ClassProcessor {
      * If we are inheriting from a class that's part of our AUT, we need to copy it.
      *
      */
-    private void solveTypes() {
+    void solveTypes() {
         cu.getTypes().forEach(typeDeclaration -> {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
@@ -189,13 +160,13 @@ public class DTOHandler extends  ClassProcessor {
      */
     void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
         String[] annotationsToAdd;
-        if (classDecl.getFields().size()<=255) {
+        if (classDecl.getFields().size() <= 255) {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
         } else {
             annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
         }
 
-        if(classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
+        if (classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
             for (String annotation : annotationsToAdd) {
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
                 cu.addImport(importDeclaration);
@@ -258,7 +229,7 @@ public class DTOHandler extends  ClassProcessor {
             return super.visit(field, args);
         }
 
-        private void generateGetter(FieldDeclaration field, String getterName) {
+        void generateGetter(FieldDeclaration field, String getterName) {
             // Create a new MethodDeclaration for the getter
             MethodDeclaration getter = new MethodDeclaration();
             getter.setName(getterName);
@@ -278,7 +249,7 @@ public class DTOHandler extends  ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(getter);
         }
 
-        private void generateSetter(FieldDeclaration field, String setterName) {
+        void generateSetter(FieldDeclaration field, String setterName) {
             // Create a new MethodDeclaration for the setter
             MethodDeclaration setter = new MethodDeclaration();
             setter.setName(setterName);
@@ -306,7 +277,7 @@ public class DTOHandler extends  ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
         }
 
-        private void extractEnums(FieldDeclaration field) {
+        void extractEnums(FieldDeclaration field) {
             Optional<Expression> expr = field.getVariables().get(0).getInitializer();
             if (expr.isPresent()) {
                 var initializer = expr.get();
@@ -326,7 +297,7 @@ public class DTOHandler extends  ClassProcessor {
                 }
             }
             else {
-                if(method != null) {
+                if (method != null) {
                     MethodCallExpr setter = generateRandomValue(field, cu);
                     if (setter != null) {
                         method.getBody().get().addStatement(setter);
