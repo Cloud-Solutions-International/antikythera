@@ -938,4 +938,54 @@ public class DTOHandlerTest {
         assertThrows(AssertionError.class, () -> typeCollector.generateSetter(field, ""));
     }
 
+    // -------------------- createFactory -------------------- //
+    @Test
+    void createFactoryCreatesMethodForValidDTOClass() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TestDTO {}"));
+        handler.createFactory();
+
+        MethodDeclaration method = handler.method;
+        assertNotNull(method, "Factory method should be created.");
+        assertEquals("createTestDTO", method.getNameAsString(), "Factory method name should be 'createTestDTO'.");
+        assertEquals("TestDTO", method.getTypeAsString(), "Factory method return type should be 'TestDTO'.");
+        assertTrue(method.isPublic(), "Factory method should be public.");
+        assertTrue(method.isStatic(), "Factory method should be static.");
+    }
+
+    @Test
+    void createFactoryDoesNotCreateMethodForNonDTOClass() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TestClass {}"));
+        handler.createFactory();
+
+        assertNull(handler.method, "Factory method should not be created for non-DTO class.");
+    }
+
+    @Test
+    void createFactoryDoesNotCreateMethodForInterface() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public interface TestDTO {}"));
+        handler.createFactory();
+
+        assertNull(handler.method, "Factory method should not be created for interface.");
+    }
+
+    @Test
+    void createFactoryDoesNotCreateMethodForAbstractClass() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public abstract class TestDTO {}"));
+        handler.createFactory();
+
+        assertNull(handler.method, "Factory method should not be created for abstract class.");
+    }
+
+    @Test
+    void createFactoryCreatesMethodWithCorrectBody() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TestDTO {}"));
+        handler.createFactory();
+
+        MethodDeclaration method = handler.method;
+        BlockStmt body = method.getBody().orElseThrow(() -> new AssertionError("Factory method body should not be empty"));
+        assertEquals(1, body.getStatements().size(), "Factory method body should have one statement.");
+        AssignExpr assignExpr = (AssignExpr) body.getStatement(0).asExpressionStmt().getExpression();
+        assertEquals("TestDTO testDTO", assignExpr.getTarget().toString(), "Factory method should declare and assign 'TestDTO testDTO'.");
+        assertEquals("new TestDTO()", assignExpr.getValue().toString(), "Factory method should instantiate 'new TestDTO()'.");
+    }
 }
