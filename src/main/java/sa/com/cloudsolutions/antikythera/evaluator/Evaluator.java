@@ -141,6 +141,12 @@ public class Evaluator {
                 return new Variable(Integer.parseInt(expr.asIntegerLiteralExpr().getValue()));
             } else if (expr.isStringLiteralExpr()) {
                 return new Variable(expr.asStringLiteralExpr().getValue());
+            } else if (expr.isCharLiteralExpr()) {
+                return new Variable(expr.asCharLiteralExpr().getValue());
+            } else if (expr.isLongLiteralExpr()) {
+                return new Variable(Long.parseLong(expr.asLongLiteralExpr().getValue()));
+            } else if (expr.isNullLiteralExpr()) {
+                return new Variable(null);
             }
         } else if (expr.isVariableDeclarationExpr()) {
             /*
@@ -524,6 +530,9 @@ public class Evaluator {
                     return new Variable(Boolean.TRUE);
                 }
                 if (right == null && left.getValue() == null) {
+                    return new Variable(Boolean.TRUE);
+                }
+                if (left.getValue() == null && right.getValue() == null) {
                     return new Variable(Boolean.TRUE);
                 }
                 return new Variable( ((Comparable<?>) leftValue).equals(rightValue));
