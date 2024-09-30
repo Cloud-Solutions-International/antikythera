@@ -49,14 +49,11 @@ public class AbstractCompiler {
      *
      * A relative path is a path that's relative to the base path of the project.
      *
-     * Many of the fields are static naturally indicating that they should be shared
+     * Many of the fields are static, naturally indicating that they should be shared
      * amongst all instances of the class. Others like the ComppilationUnit property
-     * a specific to each instance.
+     * are specific to each instance.
      */
-    /*
-     * this is made static because multiple classes may have the same dependency
-     * and we don't want to spend time copying them multiple times.
-     */
+
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
 
     /**
