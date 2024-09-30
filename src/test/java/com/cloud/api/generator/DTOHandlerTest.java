@@ -817,4 +817,73 @@ public class DTOHandlerTest {
 
         assertFalse(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
     }
+
+    // -------------------- generateGetter -------------------- //
+    @Test
+    void generateGetterCreatesPublicMethod() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
+        field.setParentNode(classDeclaration);
+
+        classDeclaration.addMember(field);
+
+        typeCollector.generateGetter(field, "getName");
+
+        MethodDeclaration getter = (MethodDeclaration) handler.cu.getType(0).getMembers().stream()
+                .filter(member -> member instanceof MethodDeclaration)
+                .filter(member -> ((MethodDeclaration) member).getNameAsString().equals("getName"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Getter method not found"));
+
+        assertTrue(getter.isPublic(), "Generated getter should be public.");
+    }
+
+    @Test
+    void generateGetterReturnsFieldValue() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
+        field.setParentNode(classDeclaration);
+
+        classDeclaration.addMember(field);
+
+        typeCollector.generateGetter(field, "getName");
+
+        MethodDeclaration getter = (MethodDeclaration) handler.cu.getType(0).getMembers().stream()
+                .filter(member -> member instanceof MethodDeclaration)
+                .filter(member -> ((MethodDeclaration) member).getNameAsString().equals("getName"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Getter method not found"));
+
+        assertTrue(getter.getBody().isPresent(), "Getter should have a method body.");
+        assertTrue(getter.getBody().get().getStatements().stream()
+                        .anyMatch(stmt -> stmt.toString().contains("return name")),
+                "Getter should return the field 'name'.");
+    }
+
+    @Test
+    void generateGetterHandlesEmptyFieldName() {
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "testString"));
+
+        handler.method = new MethodDeclaration();
+        assertThrows(NoSuchElementException.class, () -> typeCollector.generateGetter(field, "get"));
+    }
+
+    @Test
+    void generateGetterHandlesNullField() {
+        assertThrows(NullPointerException.class, () -> typeCollector.generateGetter(null, "getName"));
+    }
+
+    @Test
+    void generateGetterHandlesNullGetterName() {
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
+
+        handler.method = new MethodDeclaration();
+        assertThrows(AssertionError.class, () -> typeCollector.generateGetter(field, null));
+    }
 }
