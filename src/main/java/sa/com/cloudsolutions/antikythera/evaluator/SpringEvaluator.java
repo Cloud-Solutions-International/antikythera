@@ -3,25 +3,36 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.cloud.api.generator.AbstractCompiler;
 import com.cloud.api.generator.ClassProcessor;
 import com.cloud.api.generator.ControllerResponse;
+import com.cloud.api.generator.DTOHandler;
 import com.cloud.api.generator.EvaluatorException;
 import com.cloud.api.generator.GeneratorException;
 import com.cloud.api.generator.RepositoryParser;
 import com.cloud.api.generator.RepositoryQuery;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
 import java.io.IOException;
@@ -226,8 +237,47 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    void evaluateReturnStatement(Statement stmt) throws EvaluatorException {
+    void evaluateReturnStatement(Statement statement) throws EvaluatorException {
+
+        ReturnStmt stmt = statement.asReturnStmt();
+        Optional<Node> parent = stmt.getParentNode();
+        try {
+            if (parent.isPresent() ) {
+                // the return statement will have a parent no matter what but the optionals approach
+                // requires the use of isPresent.
+                if (parent.get() instanceof IfStmt) {
+                    IfStmt ifStmt = (IfStmt) parent.get();
+                    Expression condition = ifStmt.getCondition();
+                    if (evaluateCondition(condition)) {
+                        identifyReturnType(stmt, currentMethod);
+                        buildPreconditions(currentMethod, condition);
+                    }
+                } else {
+                    BlockStmt blockStmt = (BlockStmt) parent.get();
+                    Optional<Node> gramps = blockStmt.getParentNode();
+                    if (gramps.isPresent()) {
+                        if (gramps.get() instanceof IfStmt) {
+                            // we have found ourselves a conditional return statement.
+                            IfStmt ifStmt = (IfStmt) gramps.get();
+                            Expression condition = ifStmt.getCondition();
+                            if (evaluateCondition(condition)) {
+                                identifyReturnType(stmt, currentMethod);
+                                buildPreconditions(currentMethod, condition);
+                            }
+                        } else if (gramps.get() instanceof MethodDeclaration) {
+                            identifyReturnType(stmt, currentMethod);
+                        }
+                    }
+                }
+            }
+        } catch (EvaluatorException e) {
+            logger.error("Evaluator exception");
+            logger.error("\t{}", e.getMessage());
+        }
+
+
         ControllerResponse response = identifyReturnType(stmt.asReturnStmt(), currentMethod);
+
         if(response != null) {
             for(TestGenerator generator : generators) {
                 generator.createTests(currentMethod, response);
@@ -334,7 +384,6 @@ public class SpringEvaluator extends Evaluator {
                     logger.warn("NameExpr is null in identify return type");
                 }
             }
-           // createTests(md, response);
             return response;
         }
         return null;
@@ -348,6 +397,91 @@ public class SpringEvaluator extends Evaluator {
         }
         else{
             return super.handleRegularMethodCall(methodCall, scopeExpr, methodName, paramTypes, args);
+        }
+    }
+
+
+    public boolean evaluateCondition(Expression condition) throws EvaluatorException {
+        if (condition.isBinaryExpr()) {
+            BinaryExpr binaryExpr = condition.asBinaryExpr();
+            Expression left = binaryExpr.getLeft();
+            Expression right = binaryExpr.getRight();
+
+            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
+                return evaluateCondition(left) && evaluateCondition(right);
+            } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
+                return evaluateCondition(left) || evaluateCondition(right);
+            }
+            else {
+                return (boolean) evaluateBinaryExpression(binaryExpr.getOperator(), left, right).getValue();
+            }
+        } else if (condition.isBooleanLiteralExpr()) {
+            return condition.asBooleanLiteralExpr().getValue();
+        } else if (condition.isNameExpr()) {
+            String name = condition.asNameExpr().getNameAsString();
+            Boolean value = (Boolean) evaluateExpression(condition.asNameExpr()).getValue();
+            return value != null ? value : false;
+        }
+        else if(condition.isUnaryExpr()) {
+            UnaryExpr unaryExpr = condition.asUnaryExpr();
+            Expression expr = unaryExpr.getExpression();
+            if(expr.isNameExpr() && getValue(expr, expr.asNameExpr().getNameAsString()) != null) {
+                return false;
+            }
+            logger.warn("Unary expression not supported yet");
+        }
+
+        return false;
+    }
+
+
+    private void buildPreconditions(MethodDeclaration md, Expression expr) {
+        if(expr instanceof BinaryExpr) {
+            BinaryExpr binaryExpr = expr.asBinaryExpr();
+            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND) || binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
+                buildPreconditions(md, binaryExpr.getLeft());
+                buildPreconditions(md, binaryExpr.getRight());
+            }
+            else {
+                buildPreconditions(md, binaryExpr.getLeft());
+                buildPreconditions(md, binaryExpr.getRight());
+            }
+        }
+        if(expr instanceof MethodCallExpr) {
+            MethodCallExpr mce = expr.asMethodCallExpr();
+            Parameter reqBody = SpringTestGenerator.findRequestBody(md);
+            if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
+                try {
+                    if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
+
+                        String fullClassName = reqBody.resolve().describeType();
+                        String fieldName = ClassProcessor.classToInstanceName(mce.getName().asString().replace("get", ""));
+
+                        DTOHandler handler = new DTOHandler();
+                        handler.compile(AbstractCompiler.classToPath(fullClassName));
+                        Map<String, FieldDeclaration> fields = AbstractCompiler.getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
+
+                        FieldDeclaration fieldDeclaration = fields.get(fieldName);
+                        if (fieldDeclaration != null) {
+                            MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
+                            for(var gen : generators) {
+                                gen.addPrecondition(methodCall);
+                            }
+                        }
+                    }
+                } catch (UnsolvedSymbolException e) {
+                    logger.warn("Unsolved symbol exception");
+                } catch (IOException e) {
+                    logger.error("Current controller: {}", md.getParentNode());
+                    if(Settings.getProperty("dependencies.on_error").toString().equals("exit")) {
+                        throw new GeneratorException("Exception while identifying dependencies", e);
+                    }
+                    logger.error(e.getMessage());
+                }
+            }
+        }
+        else {
+            System.out.println(expr);
         }
     }
 }
