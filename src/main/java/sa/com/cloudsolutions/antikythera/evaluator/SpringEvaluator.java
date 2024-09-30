@@ -62,6 +62,8 @@ public class SpringEvaluator extends Evaluator {
         return respositories;
     }
 
+    private boolean flunk = true;
+
     @Override
     public void executeMethod(MethodDeclaration md) throws EvaluatorException {
         md.getParentNode().ifPresent(p -> {
@@ -93,10 +95,10 @@ public class SpringEvaluator extends Evaluator {
 
             if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
                 Variable v = new Variable(switch (param.getTypeAsString()) {
-                    case "Boolean" -> true;
-                    case "float", "Float", "double", "Double" -> 1.0;
-                    case "Integer", "int" -> 1;
-                    case "Long", "long" -> 1L;
+                    case "Boolean" -> false;
+                    case "float", "Float", "double", "Double" -> 0.0;
+                    case "Integer", "int" -> 0;
+                    case "Long", "long" -> 0L;
                     case "String" -> "Ibuprofen";
                     default -> "0";
                 });
@@ -241,50 +243,62 @@ public class SpringEvaluator extends Evaluator {
 
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
+        if (parent.isPresent() ) {
+            // the return statement will have a parent no matter what but the optionals approach
+            // requires the use of isPresent.
+            evaluateReturnStatement(parent.get(), stmt);
+        }
+        ControllerResponse response = identifyReturnType(stmt.asReturnStmt(), currentMethod);
+
+        if(response != null) {
+            if(flunk) {
+                for (TestGenerator generator : generators) {
+                    generator.createTests(currentMethod, response);
+                }
+                flunk = false;
+            }
+            for (TestGenerator generator : generators) {
+                generator.createTests(currentMethod, response);
+            }
+        }
+        else {
+            super.evaluateReturnStatement(stmt);
+        }
+    }
+
+    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws EvaluatorException {
         try {
-            if (parent.isPresent() ) {
-                // the return statement will have a parent no matter what but the optionals approach
-                // requires the use of isPresent.
-                if (parent.get() instanceof IfStmt) {
-                    IfStmt ifStmt = (IfStmt) parent.get();
-                    Expression condition = ifStmt.getCondition();
-                    if (evaluateCondition(condition)) {
-                        identifyReturnType(stmt, currentMethod);
+            if (parent instanceof IfStmt) {
+                IfStmt ifStmt = (IfStmt) parent;
+                Expression condition = ifStmt.getCondition();
+                if (evaluateCondition(condition)) {
+                    identifyReturnType(stmt, currentMethod);
+                    if (!flunk) {
                         buildPreconditions(currentMethod, condition);
                     }
-                } else {
-                    BlockStmt blockStmt = (BlockStmt) parent.get();
-                    Optional<Node> gramps = blockStmt.getParentNode();
-                    if (gramps.isPresent()) {
-                        if (gramps.get() instanceof IfStmt) {
-                            // we have found ourselves a conditional return statement.
-                            IfStmt ifStmt = (IfStmt) gramps.get();
-                            Expression condition = ifStmt.getCondition();
-                            if (evaluateCondition(condition)) {
-                                identifyReturnType(stmt, currentMethod);
+                }
+            } else {
+                BlockStmt blockStmt = (BlockStmt) parent;
+                Optional<Node> gramps = blockStmt.getParentNode();
+                if (gramps.isPresent()) {
+                    if (gramps.get() instanceof IfStmt) {
+                        // we have found ourselves a conditional return statement.
+                        IfStmt ifStmt = (IfStmt) gramps.get();
+                        Expression condition = ifStmt.getCondition();
+                        if (evaluateCondition(condition)) {
+                            identifyReturnType(stmt, currentMethod);
+                            if (!flunk) {
                                 buildPreconditions(currentMethod, condition);
                             }
-                        } else if (gramps.get() instanceof MethodDeclaration) {
-                            identifyReturnType(stmt, currentMethod);
                         }
+                    } else if (gramps.get() instanceof MethodDeclaration) {
+                        identifyReturnType(stmt, currentMethod);
                     }
                 }
             }
         } catch (EvaluatorException e) {
             logger.error("Evaluator exception");
             logger.error("\t{}", e.getMessage());
-        }
-
-
-        ControllerResponse response = identifyReturnType(stmt.asReturnStmt(), currentMethod);
-
-        if(response != null) {
-            for(TestGenerator generator : generators) {
-                generator.createTests(currentMethod, response);
-            }
-        }
-        else {
-            super.evaluateReturnStatement(stmt);
         }
     }
 
