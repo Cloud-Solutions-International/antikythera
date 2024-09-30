@@ -302,7 +302,7 @@ public class DTOHandler extends  ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
         }
 
-        private void extractEnums(FieldDeclaration field) {
+        void extractEnums(FieldDeclaration field) {
             Optional<Expression> expr = field.getVariables().get(0).getInitializer();
             if (expr.isPresent()) {
                 var initializer = expr.get();
