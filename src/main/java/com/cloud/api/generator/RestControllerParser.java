@@ -306,7 +306,7 @@ public class RestControllerParser extends ClassProcessor {
             for (var variable : field.getVariables()) {
                 if (variable.getType().isClassOrInterfaceType()) {
                     String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
-                    if (SpringEvaluator.getRepositories().containsKey(shortName)) {
+                    if (SpringEvaluator.getRepositories().containsKey(classToInstanceName(shortName))) {
                         return;
                     }
                     solveTypeDependencies(variable.getType(), cu);
@@ -354,24 +354,11 @@ public class RestControllerParser extends ClassProcessor {
                                     }
                                 }
                             } catch (UnsolvedSymbolException e) {
+                                logger.warn("Unresolvable {}", e);
                                 //findImport(dependencyCu, mainType);
                             }
                         }
                     }
-                } else if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-                    try {
-                        Optional<Expression> scope = methodCallExpr.getScope();
-                        if (scope.isPresent()) {
-                             Type type = null;
-                             extractTypeFromCall(type, methodCallExpr);
-                        }
-                    } catch (IOException e) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
-                    }
-                } else if (expression.isNameExpr()) {
-                    String nameAsString = expression.asNameExpr().getNameAsString();
-                    System.out.println("bada again");
                 }
             }
         }
