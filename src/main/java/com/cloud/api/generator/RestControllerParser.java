@@ -1,5 +1,14 @@
 package com.cloud.api.generator;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,12 +31,14 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
@@ -222,16 +233,15 @@ public class RestControllerParser extends ClassProcessor {
 
 
     /**
-     * Visitor that will detect methods in the controller.
+     * Visitor that will cause the tests to be generated for each method.
+     *
+     * Test generation is carried out by the SpringTestGenerator which will be invoked by the
+     * evaluator each time a return statement is encountered.
      *
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
         /**
-         * Prepares the ground for the MethodBLockVisitor to do it's work.
-         *
-         * reset the preConditions list
-         * identify the locals
-         * reset the context
+         * Will trigger an evaluation which is like a fake execution of the code inside the method
          */
         @Override
         public void visit(MethodDeclaration md, Void arg) {
@@ -261,11 +271,9 @@ public class RestControllerParser extends ClassProcessor {
      */
     class DepSolvingVisitor extends VoidVisitorAdapter<Void> {
         /**
-         * Prepares the ground for the MethodBLockVisitor to do it's work.
+         * Prepares the ground for the ControllerMethodVisitor to do it's work.
          *
-         * reset the preConditions list
-         * identify the locals
-         * reset the context
+         * This visitor will identify the dependencies of each method in the controller.
          */
         @Override
         public void visit(MethodDeclaration md, Void arg) {
@@ -276,12 +284,95 @@ public class RestControllerParser extends ClassProcessor {
             }
             if (md.isPublic()) {
                 resolveMethodParameterTypes(md);
+                md.accept(new ReturnStatmentVisitor(), null);
             }
         }
 
         private void resolveMethodParameterTypes(MethodDeclaration md) {
             for(var param : md.getParameters()) {
                 solveTypeDependencies(param.getType(), cu);
+            }
+        }
+
+        /**
+         * The field visitor will be used to identify the types used by the controllers.
+         *
+         * @param field the field to inspect
+         * @param arg not used
+         */
+        @Override
+        public void visit(FieldDeclaration field, Void arg) {
+            super.visit(field, arg);
+            for (var variable : field.getVariables()) {
+                if (variable.getType().isClassOrInterfaceType()) {
+                    String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
+                    if (SpringEvaluator.getRepositories().containsKey(shortName)) {
+                        return;
+                    }
+                    solveTypeDependencies(variable.getType(), cu);
+                }
+            }
+        }
+
+
+        /**
+         * Nested inner class to handle return statements.
+         *
+         */
+        class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            /**
+             * This method will be called once for each return statment inside the method block.
+             *
+             * @param statement A statement that maybe a return statement.
+             * @param md        the method declaration that contains the return statement.
+             */
+            @Override
+            public void visit(ReturnStmt statement, MethodDeclaration md) {
+                ReturnStmt stmt = statement.asReturnStmt();
+                identifyReturnType(stmt, md);
+            }
+        }
+
+        private void identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
+            Expression expression = returnStmt.getExpression().orElse(null);
+            if (expression != null) {
+                if (expression.isObjectCreationExpr()) {
+                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                        for (Expression typeArg : objectCreationExpr.getArguments()) {
+                            try {
+                                if(typeArg.isNameExpr()) {
+                                    String description = ((NameExpr) typeArg).resolve().getType().describe();
+                                    if (!description.startsWith("java.")) {
+                                        for (var jarSolver : jarSolvers) {
+                                            if (jarSolver.getKnownClasses().contains(description)) {
+                                                externalDependencies.add(description);
+                                                return;
+                                            }
+                                        }
+                                        dependencies.add(description);
+                                    }
+                                }
+                            } catch (UnsolvedSymbolException e) {
+                                //findImport(dependencyCu, mainType);
+                            }
+                        }
+                    }
+                } else if (expression.isMethodCallExpr()) {
+                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
+                    try {
+                        Optional<Expression> scope = methodCallExpr.getScope();
+                        if (scope.isPresent()) {
+                             Type type = null;
+                             extractTypeFromCall(type, methodCallExpr);
+                        }
+                    } catch (IOException e) {
+                        throw new GeneratorException("Exception while identifying dependencies", e);
+                    }
+                } else if (expression.isNameExpr()) {
+                    String nameAsString = expression.asNameExpr().getNameAsString();
+                    System.out.println("bada again");
+                }
             }
         }
     }
