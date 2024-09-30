@@ -167,22 +167,11 @@ public class RestControllerParser extends ClassProcessor {
          */
         cu.accept(new DepSolvingVisitor(), null);
 
-        Set<String> originalImports = new HashSet<>();
-
-        for(var imp : cu.getImports()) {
-            originalImports.add(imp.getNameAsString());
-        }
-
         for (String s : dependencies) {
-            if(originalImports.contains(s)) {
-                gen.addImport(s);
-            }
+            gen.addImport(s);
         }
-
         for(String s: externalDependencies) {
-            if(originalImports.contains(s)) {
-                gen.addImport(s);
-            }
+            gen.addImport(s);
         }
 
         for(String dependency : dependencies) {
@@ -398,5 +387,3 @@ public class RestControllerParser extends ClassProcessor {
         return "";
     }
 }
-
-
