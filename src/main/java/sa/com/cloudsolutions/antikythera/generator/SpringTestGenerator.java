@@ -2,21 +2,19 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 
 import com.cloud.api.generator.AbstractCompiler;
-import com.cloud.api.generator.ClassProcessor;
 import com.cloud.api.generator.ControllerRequest;
 import com.cloud.api.generator.ControllerResponse;
-import com.cloud.api.generator.DTOHandler;
-import com.cloud.api.generator.GeneratorException;
+
 import com.cloud.api.generator.RepositoryQuery;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.FieldDeclaration;
+
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.BinaryExpr;
+
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -30,14 +28,11 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
-import org.checkerframework.checker.units.qual.A;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
 
 import java.io.File;
-import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -66,6 +61,7 @@ public class SpringTestGenerator implements  TestGenerator {
      * @param md
      * @param returnType
      */
+    @Override
     public void createTests(MethodDeclaration md, ControllerResponse returnType) {
         for (AnnotationExpr annotation : md.getAnnotations()) {
             if (annotation.getNameAsString().equals("GetMapping") ) {
@@ -505,7 +501,7 @@ public class SpringTestGenerator implements  TestGenerator {
      * @param md a method argument
      * @return the parameter identified as the RequestBody
      */
-    private Parameter findRequestBody(MethodDeclaration md) {
+    public static Parameter findRequestBody(MethodDeclaration md) {
 
         for(var param : md.getParameters()) {
             if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
@@ -515,55 +511,6 @@ public class SpringTestGenerator implements  TestGenerator {
         return null;
     }
 
-
-    private void buildPreconditions(MethodDeclaration md, Expression expr) {
-        if(expr instanceof BinaryExpr) {
-            BinaryExpr binaryExpr = expr.asBinaryExpr();
-            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND) || binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                buildPreconditions(md, binaryExpr.getLeft());
-                buildPreconditions(md, binaryExpr.getRight());
-            }
-            else {
-                buildPreconditions(md, binaryExpr.getLeft());
-                buildPreconditions(md, binaryExpr.getRight());
-            }
-        }
-        if(expr instanceof MethodCallExpr) {
-            MethodCallExpr mce = expr.asMethodCallExpr();
-            Parameter reqBody = findRequestBody(md);
-            if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
-                try {
-                    if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
-
-                        String fullClassName = reqBody.resolve().describeType();
-                        String fieldName = ClassProcessor.classToInstanceName(mce.getName().asString().replace("get", ""));
-
-                        DTOHandler handler = new DTOHandler();
-                        handler.compile(AbstractCompiler.classToPath(fullClassName));
-                        Map<String, FieldDeclaration> fields = AbstractCompiler.getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
-
-                        FieldDeclaration fieldDeclaration = fields.get(fieldName);
-                        if (fieldDeclaration != null) {
-                            MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
-                            preConditions.add(methodCall);
-                        }
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    logger.warn("Unsolved symbol exception");
-                } catch (IOException e) {
-                    logger.error("Current controller: {}", current);
-                    if(Settings.getProperty("dependencies.on_error").toString().equals("exit")) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
-                    }
-                    logger.error(e.getMessage());
-                }
-            }
-        }
-        else {
-            System.out.println(expr);
-        }
-    }
-
     public void setCommonPath(String commonPath) {
         this.commonPath = commonPath;
     }
@@ -571,6 +518,11 @@ public class SpringTestGenerator implements  TestGenerator {
     @Override
     public CompilationUnit getCompilationUnit() {
         return gen;
+    }
+
+    @Override
+    public void addPrecondition(Expression expr) {
+        preConditions.add(expr);
     }
 }
 
