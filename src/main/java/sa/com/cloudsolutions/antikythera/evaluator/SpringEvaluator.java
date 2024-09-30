@@ -121,22 +121,26 @@ public class SpringEvaluator extends Evaluator {
                     MethodCallExpr methodCall = expression.asMethodCallExpr();
                     Optional<Expression> scope = methodCall.getScope();
                     if(scope.isPresent() && scope.get().isNameExpr()) {
-                        executeQuery(scope.get().asNameExpr().getNameAsString(), methodCall);
+                        RepositoryQuery q = executeQuery(scope.get().asNameExpr().getNameAsString(), methodCall);
+                        ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr();
+                        objectCreationExpr.setType(decl.getType().asString());
+                        Variable v = createObject(expr, decl, objectCreationExpr);
                     }
-
-                    Variable v = evaluateMethodCall(methodCall);
-                    if (v != null) {
-                        v.setType(decl.getType());
-                        setLocal(methodCall, decl.getNameAsString(), v);
+                    else {
+                        Variable v = evaluateMethodCall(methodCall);
+                        if (v != null) {
+                            v.setType(decl.getType());
+                            setLocal(methodCall, decl.getNameAsString(), v);
+                        }
+                        return v;
                     }
-                    return v;
                 }
             }
         }
         return null;
     }
 
-    private static void executeQuery(String name, MethodCallExpr methodCall) {
+    private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = respositories.get(name);
         if(repository != null) {
             RepositoryQuery q = repository.getQueries().get(methodCall.getNameAsString());
@@ -147,19 +151,25 @@ public class SpringEvaluator extends Evaluator {
                  * to the arguments that are passed in when the method is actually being called.
                  */
                 MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(methodCall.getNameAsString()).get(0);
-                for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(methodCall.getArgument(i), i));
-                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
-                }
+                if (!repoMethod.getNameAsString().equals("save")) {
+                    for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
+                        q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(methodCall.getArgument(i), i));
+                        q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
+                    }
 
-                ResultSet rs = repository.executeQuery(methodCall.getNameAsString(), q);
-                q.setResultSet(rs);
+                    ResultSet rs = repository.executeQuery(methodCall.getNameAsString(), q);
+                    q.setResultSet(rs);
+                }
+                else {
+                    // todo do some fake work here
+                }
             } catch (Exception e) {
                 logger.warn(e.getMessage());
                 logger.warn("Could not execute query {}", methodCall);
             }
-           // return q;
+            return q;
         }
+        return null;
     }
 
     @Override
@@ -204,12 +214,13 @@ public class SpringEvaluator extends Evaluator {
     @Override
     void evaluateReturnStatement(Statement stmt) throws EvaluatorException {
         ControllerResponse response = identifyReturnType(stmt.asReturnStmt(), currentMethod);
-        Optional<Expression> expr = stmt.asReturnStmt().getExpression();
-        if(expr.isPresent()) {
-            returnValue = evaluateExpression(expr.get());
+        if(response != null) {
+            for(TestGenerator generator : generators) {
+                generator.createTests(currentMethod, response);
+            }
         }
         else {
-            returnValue = null;
+            super.evaluateReturnStatement(stmt);
         }
     }
 
@@ -313,5 +324,16 @@ public class SpringEvaluator extends Evaluator {
             return response;
         }
         return null;
+    }
+
+    @Override
+    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, String methodName, Class<?>[] paramTypes, Object[] args) throws Exception {
+        if(methodName.equals("save") && scopeExpr.isNameExpr()
+                && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
+            return null;
+        }
+        else{
+            return super.handleRegularMethodCall(methodCall, scopeExpr, methodName, paramTypes, args);
+        }
     }
 }

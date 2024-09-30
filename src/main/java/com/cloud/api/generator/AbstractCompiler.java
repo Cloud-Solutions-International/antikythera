@@ -1,5 +1,8 @@
 package com.cloud.api.generator;
 
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
@@ -195,5 +198,18 @@ public class AbstractCompiler {
             }
         }
         return param.getNameAsString();
+    }
+
+    public static Optional<ResolvedType> resolveTypeSafely(ClassOrInterfaceType node) {
+        Optional<CompilationUnit> compilationUnit = node.findCompilationUnit();
+        if (compilationUnit.isPresent()) {
+            try {
+                return Optional.of(node.resolve());
+            } catch (Exception e) {
+                // Handle the exception or log it
+                logger.info("Error resolving type: {}", node.toString());
+            }
+        }
+        return Optional.empty();
     }
 }

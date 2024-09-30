@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.cloud.api.generator.AbstractCompiler;
 import com.github.javaparser.ast.stmt.IfStmt;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
@@ -112,34 +113,6 @@ public class Evaluator {
         return value;
     }
 
-    public Variable evaluateCondition(Expression condition) throws EvaluatorException {
-        if (condition.isBinaryExpr()) {
-            BinaryExpr binaryExpr = condition.asBinaryExpr();
-            Expression left = binaryExpr.getLeft();
-            Expression right = binaryExpr.getRight();
-
-            return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
-
-        } else if (condition.isBooleanLiteralExpr()) {
-
-            return new Variable(condition.asBooleanLiteralExpr().getValue());
-
-        } else if (condition.isNameExpr()) {
-            String name = condition.asNameExpr().getNameAsString();
-            return getValue(condition, name);
-
-        } else if (condition.isUnaryExpr()) {
-            UnaryExpr unaryExpr = condition.asUnaryExpr();
-            Expression expr = unaryExpr.getExpression();
-            if (unaryExpr.getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
-                Variable v = evaluateCondition(expr);
-                v.setValue(!(Boolean)v.getValue());
-                return v;
-            }
-            logger.warn("Unary expression not supported yet");
-        }
-        return null;
-    }
 
     /**
      * Evaluate an expression.
@@ -183,7 +156,14 @@ public class Evaluator {
             Expression right = binaryExpr.getRight();
 
             return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
-
+        } else if (expr.isUnaryExpr()) {
+            Expression unaryExpr = expr.asUnaryExpr().getExpression();
+            if (expr.asUnaryExpr().getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
+                Variable v = evaluateExpression(unaryExpr);
+                v.setValue(!(Boolean)v.getValue());
+                return v;
+            }
+            logger.warn("Negation is the only unary operation supported at the moment");
         } else if (expr.isMethodCallExpr()) {
             /*
              * Method calls are the toughest nuts to crack. Some method calls will be from the Java api
@@ -267,58 +247,67 @@ public class Evaluator {
      * @param expression The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
-    private Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) {
+    Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) {
         ObjectCreationExpr oce = expression.asObjectCreationExpr();
         ClassOrInterfaceType type = oce.getType();
         Variable v = new Variable(type);
         try {
-            ResolvedType resolved = type.resolve();
-            String className = resolved.describe();
+            Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
+            if (res.isPresent()) {
+                ResolvedType resolved = type.resolve();
+                String className = resolved.describe();
 
-            if(resolved.isReferenceType()) {
-                var typeDecl = resolved.asReferenceType().getTypeDeclaration();
-                if(typeDecl.isPresent() && typeDecl.get().getClassName().contains(".")) {
-                    className = className.replaceFirst("\\.([^\\.]+)$", "\\$$1");
-                }
-            }
-
-            Class<?> clazz = Class.forName(className);
-
-            Class<?> outer = clazz.getEnclosingClass();
-            if(outer != null) {
-                for(Class<?> c : outer.getDeclaredClasses()) {
-                    if(c.getName().equals(className)) {
-                        List<Expression> arguments = oce.getArguments();
-                        Class<?>[] paramTypes = new Class<?>[arguments.size()+1];
-                        Object[] args = new Object[arguments.size() + 1];
-
-                        // todo this is wrong, this should first check for an existing instance in the current scope
-                        // and then if an instance is not found build using the most suitable arguments.
-                        args[0] = outer.getDeclaredConstructors()[0].newInstance();
-                        paramTypes[0] = outer;
-
-                        for (int i = 0; i < arguments.size(); i++) {
-                            Variable vv = evaluateExpression(arguments.get(i));
-                            Class<?> wrapperClass = vv.getValue().getClass();
-                            paramTypes[i + 1] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
-                            args[i + 1] = vv.getValue();
-                        }
-
-                        Constructor<?> cons = c.getDeclaredConstructor(paramTypes);
-                        Object instance = cons.newInstance(args);
-                        v.setValue(instance);
+                if (resolved.isReferenceType()) {
+                    var typeDecl = resolved.asReferenceType().getTypeDeclaration();
+                    if (typeDecl.isPresent() && typeDecl.get().getClassName().contains(".")) {
+                        className = className.replaceFirst("\\.([^\\.]+)$", "\\$$1");
                     }
+                }
+
+                Class<?> clazz = Class.forName(className);
+
+                Class<?> outer = clazz.getEnclosingClass();
+                if (outer != null) {
+                    for (Class<?> c : outer.getDeclaredClasses()) {
+                        if (c.getName().equals(className)) {
+                            List<Expression> arguments = oce.getArguments();
+                            Class<?>[] paramTypes = new Class<?>[arguments.size() + 1];
+                            Object[] args = new Object[arguments.size() + 1];
+
+                            // todo this is wrong, this should first check for an existing instance in the current scope
+                            // and then if an instance is not found build using the most suitable arguments.
+                            args[0] = outer.getDeclaredConstructors()[0].newInstance();
+                            paramTypes[0] = outer;
+
+                            for (int i = 0; i < arguments.size(); i++) {
+                                Variable vv = evaluateExpression(arguments.get(i));
+                                Class<?> wrapperClass = vv.getValue().getClass();
+                                paramTypes[i + 1] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
+                                args[i + 1] = vv.getValue();
+                            }
+
+                            Constructor<?> cons = c.getDeclaredConstructor(paramTypes);
+                            Object instance = cons.newInstance(args);
+                            v.setValue(instance);
+                        }
+                    }
+                } else {
+                    Object instance = clazz.getDeclaredConstructor().newInstance();
+                    v.setValue(instance);
                 }
             }
             else {
+                Class<?> clazz = DTOBuddy.createDynamicDTO(type);
                 Object instance = clazz.getDeclaredConstructor().newInstance();
                 v.setValue(instance);
             }
         } catch (Exception e) {
             logger.error("An error occurred", e);
         }
+        if (decl != null) {
+            setLocal(instructionPointer, decl.getNameAsString(), v);
+        }
 
-        setLocal(instructionPointer, decl.getNameAsString(), v);
         return v;
     }
 
@@ -480,7 +469,7 @@ public class Evaluator {
         printlnMethod.invoke(outField.get(null), args);
     }
 
-    private Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, String methodName, Class<?>[] paramTypes, Object[] args) throws Exception {
+    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, String methodName, Class<?>[] paramTypes, Object[] args) throws Exception {
         ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
         ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
 
@@ -519,6 +508,11 @@ public class Evaluator {
 
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator, Expression leftValue, Expression rightValue) throws EvaluatorException {
         Variable left = evaluateExpression(leftValue);
+
+        if(operator.equals(BinaryExpr.Operator.OR) && (boolean)left.getValue()) {
+             return new Variable(Boolean.TRUE);
+        }
+
         Variable right = evaluateExpression(rightValue);
 
         switch (operator) {
@@ -745,9 +739,10 @@ public class Evaluator {
                 if ( (boolean) v.getValue() ) {
                     Statement then = ifst.getThenStmt();
                     executeBlock(then.asBlockStmt().getStatements());
-                    System.out.println("Matched");
                 }
-                System.out.println(v);
+                else {
+                    System.out.println("Else condition");
+                }
             }
             else {
                 if(stmt.isReturnStmt()) {
