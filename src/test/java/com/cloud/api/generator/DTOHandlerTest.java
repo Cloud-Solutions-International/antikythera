@@ -284,6 +284,7 @@ public class DTOHandlerTest {
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
     }
 
+    // -------------------- capitalize -------------------- //
     @Test
     void capitalizeConvertsFirstCharacterToUpperCase() {
         assertEquals("Hello", DTOHandler.capitalize("hello"));
@@ -661,5 +662,159 @@ public class DTOHandlerTest {
             classProcessor.solveTypeDependencies(field.getElementType(), cu);
             assertEquals(classProcessor.dependencies.size(), 1);
         }
+    }
+
+    // -------------------- solveTypes -------------------- //
+    @Test
+    void solveTypesAddsLombokAnnotationsToClass() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addField("String", "field");
+
+        handler.cu.addType(classDecl);
+        handler.solveTypes();
+
+        assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
+        assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
+    }
+
+    @Test
+    void solveTypesRemovesConstructorsAndMethods() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addConstructor();
+        classDecl.addMethod("someMethod");
+
+        handler.cu.addType(classDecl);
+        handler.solveTypes();
+
+        assertTrue(classDecl.getConstructors().isEmpty());
+        assertTrue(classDecl.getMethods().isEmpty());
+    }
+
+    @Test
+    void solveTypesAddsParentClassToDependencies() throws IOException {
+        CombinedTypeSolver typeSolver = new CombinedTypeSolver();
+        typeSolver.add(new ReflectionTypeSolver());
+        typeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
+
+        ParserConfiguration parserConfiguration = new ParserConfiguration()
+                .setSymbolResolver(new JavaSymbolSolver(typeSolver));
+        StaticJavaParser.setConfiguration(parserConfiguration);
+
+        CompilationUnit cu = StaticJavaParser.parse("package com.cloud.api.generator;\n" +
+                "public class ParentClass {}\n" +
+                "public class TempClass extends ParentClass {}");
+
+        handler.setCompilationUnit(cu);
+        handler.solveTypes();
+
+        assertTrue(handler.dependencies.contains("com.cloud.api.generator.ParentClass"));
+    }
+
+    @Test
+    void solveTypesIgnoresJavaLangParentClass() throws IOException {
+        CombinedTypeSolver typeSolver = new CombinedTypeSolver();
+        typeSolver.add(new ReflectionTypeSolver());
+        typeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
+
+        ParserConfiguration parserConfiguration = new ParserConfiguration()
+                .setSymbolResolver(new JavaSymbolSolver(typeSolver));
+        StaticJavaParser.setConfiguration(parserConfiguration);
+
+        CompilationUnit cu = StaticJavaParser.parse("package com.cloud.api.generator;\n" +
+                "public class TempClass extends java.lang.Object {}");
+
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addExtendedType("java.lang.Object");
+
+        handler.setCompilationUnit(cu);
+        handler.solveTypes();
+
+        assertFalse(handler.dependencies.contains("java.lang.Object"));
+    }
+
+    @Test
+    void solveTypesClearsImplementedInterfaces() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass implements SomeInterface {}"));
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addImplementedType("SomeInterface");
+
+        handler.cu.addType(classDecl);
+        handler.solveTypes();
+
+        assertTrue(classDecl.getImplementedTypes().isEmpty());
+    }
+
+    @Test
+    void solveTypesHandlesUnresolvedParentClass() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("public class TempClass extends UnresolvedClass {}");
+        handler.setCompilationUnit(cu);
+
+        ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow(() -> new IllegalStateException("Class not found"));
+        classDecl.addExtendedType("UnresolvedClass");
+
+        assertThrows(RuntimeException.class, () -> handler.solveTypes());
+    }
+
+    @Test
+    void solveTypesAddsLombokAnnotationsToEnum() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }"));
+
+        EnumDeclaration enumDecl = new EnumDeclaration();
+        enumDecl.setName("TempEnum");
+        enumDecl.addEnumConstant("VALUE1");
+        enumDecl.addEnumConstant("VALUE2");
+        enumDecl.addAnnotation("AllArgsConstructor");
+
+        handler.cu.addType(enumDecl);
+        handler.solveTypes();
+
+        assertTrue(handler.cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("lombok.AllArgsConstructor")));
+    }
+
+    @Test
+    void solveTypesAddsGetterAnnotationToEnum() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
+        handler.setCompilationUnit(cu);
+
+        EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
+        enumDecl.addAnnotation("Getter");
+
+        handler.solveTypes();
+
+        assertTrue(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
+    }
+
+    @Test
+    void solveTypesDoesNotAddGetterAnnotationIfAlreadyPresent() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("import lombok.Getter; public enum TempEnum { VALUE1, VALUE2 }");
+        handler.setCompilationUnit(cu);
+
+        EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
+        enumDecl.addAnnotation("Getter");
+
+        handler.solveTypes();
+
+        long getterImports = cu.getImports().stream().filter(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")).count();
+        assertEquals(1, getterImports);
+    }
+
+    @Test
+    void solveTypesHandlesEnumWithoutAnnotations() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
+        handler.setCompilationUnit(cu);
+
+        handler.solveTypes();
+
+        assertFalse(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
     }
 }
