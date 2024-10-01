@@ -1,6 +1,6 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -33,7 +33,6 @@ import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
 
-import net.sf.jsqlparser.util.deparser.StatementDeParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -684,9 +683,6 @@ public class RepositoryParser extends ClassProcessor{
                             if (pair.getNameAsString().equals("nativeQuery")) {
                                 if (pair.getValue().toString().equals("true")) {
                                     nt = true;
-                                    System.out.println("\tNative Query");
-                                } else {
-                                    System.out.println("\tJPQL Query");
                                 }
                             }
                         }
