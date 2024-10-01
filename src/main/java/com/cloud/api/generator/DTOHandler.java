@@ -1,6 +1,7 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
+import com.github.javaparser.ast.type.PrimitiveType;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -25,6 +26,7 @@ import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -91,6 +93,7 @@ public class DTOHandler extends  ClassProcessor {
             method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
         }
     }
+
     void handleStaticImports(NodeList<ImportDeclaration> imports) {
         imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
         {
@@ -194,13 +197,18 @@ public class DTOHandler extends  ClassProcessor {
                 return null;
             }
 
-
             // Filter annotations to retain only @JsonFormat and @JsonIgnore
             NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
             for (AnnotationExpr annotation : field.getAnnotations()) {
                 String annotationName = annotation.getNameAsString();
                 if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
                     filteredAnnotations.add(annotation);
+                }
+                else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
+                    switch(field.getElementType().asString()) {
+                        case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
+                        break;
+                    }
                 }
             }
             field.getAnnotations().clear();
