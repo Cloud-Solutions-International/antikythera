@@ -144,8 +144,7 @@ public class SpringEvaluator extends Evaluator {
                             }
                             else {
                                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(qualifiedName);
-                                Variable v = new Variable(DTOBuddy.createDynamicDTO(cu.getTypes().get(0).asClassOrInterfaceDeclaration()));
-                                return v;
+                                return new Variable(DTOBuddy.createDynamicDTO(cu.getTypes().get(0).asClassOrInterfaceDeclaration()));
                             }
                         } catch (Exception e) {
                             logger.error(decl.getType().resolve().asReferenceType().getQualifiedName());
@@ -160,6 +159,9 @@ public class SpringEvaluator extends Evaluator {
                         }
                         return v;
                     }
+                }
+                else if(expression.isObjectCreationExpr()) {
+                    return createObject(varDeclExpr, decl, expression.asObjectCreationExpr());
                 }
             }
         }
@@ -500,9 +502,6 @@ public class SpringEvaluator extends Evaluator {
                     logger.error(e.getMessage());
                 }
             }
-        }
-        else {
-            System.out.println(expr);
         }
     }
 }
