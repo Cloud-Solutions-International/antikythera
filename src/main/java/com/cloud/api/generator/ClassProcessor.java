@@ -1,5 +1,9 @@
 package com.cloud.api.generator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
@@ -10,6 +14,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -18,6 +23,8 @@ import java.util.Set;
 
 
 public class ClassProcessor extends AbstractCompiler {
+    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
+
     /*
      * The strategy followed is that we iterate through all the fields in the
      * class and add them to a queue. Then we iterate through the items in
@@ -29,7 +36,7 @@ public class ClassProcessor extends AbstractCompiler {
     final Set<String> externalDependencies = new HashSet<>();
     static final Set<String> copied = new HashSet<>();
 
-    protected ClassProcessor() throws IOException {
+    public ClassProcessor() throws IOException {
         super();
     }
 
@@ -43,13 +50,19 @@ public class ClassProcessor extends AbstractCompiler {
             return;
         }
         if (!copied.contains(nameAsString) && nameAsString.startsWith(AbstractCompiler.basePackage)) {
-            copied.add(nameAsString);
-
-            DTOHandler handler = new DTOHandler();
-            handler.copyDTO(classToPath(nameAsString));
-
-            AbstractCompiler.resolved.put(nameAsString, handler.getCompilationUnit());
-
+            try {
+                copied.add(nameAsString);
+                DTOHandler handler = new DTOHandler();
+                handler.copyDTO(classToPath(nameAsString));
+                AntikytheraRunTime.addClass(nameAsString, handler.getCompilationUnit());
+            } catch (FileNotFoundException fe) {
+                if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                    logger.warn("Could not find " + nameAsString);
+                }
+                else {
+                    throw fe;
+                }
+            }
         }
     }
 
@@ -148,7 +161,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param cdecl type declaration
      * @return a variable name as a string
      */
-    protected static String classToInstanceName(TypeDeclaration<?> cdecl) {
+    public static String classToInstanceName(TypeDeclaration<?> cdecl) {
         return classToInstanceName(cdecl.getNameAsString());
     }
 
@@ -157,7 +170,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param className as a string
      * @return a variable name as a string
      */
-    protected static String classToInstanceName(String className) {
+    public static String classToInstanceName(String className) {
         String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
         if(name.equals("long") || name.equals("int")) {
             return "_" + name;
@@ -225,7 +238,8 @@ public class ClassProcessor extends AbstractCompiler {
                  nameAsString.contains("lombok") ||
                  nameAsString.startsWith("java.") ||
                  nameAsString.startsWith("com.fasterxml.jackson") ||
-                nameAsString.startsWith("org.springframework.util") ||
+                 nameAsString.startsWith("org.springframework.util") ||
+                 nameAsString.equals("jakarta.validation.constraints.NotNull") ||
                  (importDeclaration.isStatic() && nameAsString.contains("constants.")));
         });
     }

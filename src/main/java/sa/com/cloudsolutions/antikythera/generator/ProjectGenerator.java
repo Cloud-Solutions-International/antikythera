@@ -1,8 +1,9 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.generator;
 
-import com.cloud.api.configurations.Settings;
+import com.cloud.api.generator.EvaluatorException;
+import com.cloud.api.generator.RestControllerParser;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
-import com.github.javaparser.ast.CompilationUnit;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -192,7 +193,7 @@ public class ProjectGenerator {
 
     }
 
-    public void generate() throws IOException, XmlPullParserException {
+    public void generate() throws IOException, XmlPullParserException, EvaluatorException {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
         if (controllers.endsWith(SUFFIX)) {
@@ -228,7 +229,7 @@ public class ProjectGenerator {
         }
     }
 
-    public static void main(String[] args) throws IOException, XmlPullParserException {
+    public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
         ProjectGenerator.getInstance().generate();
     }
 }

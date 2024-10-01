@@ -1,93 +1,67 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
-import com.cloud.api.evaluator.Evaluator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
-import com.github.javaparser.ast.stmt.IfStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 
-import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.type.VoidType;
-import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.github.javaparser.resolution.UnsolvedSymbolException;
-import net.sf.jsqlparser.statement.select.ExceptOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
+import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
     public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
     private final File controllers;
 
-    Set<String> testMethodNames;
     private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
 
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
-    Map<String, Comparable> context;
+
     private boolean evaluatorUnsupported = false;
     File current;
+    private SpringEvaluator evaluator;
 
     /**
      * Store the conditions that a controller may expect the input to meet.
      */
     List<Expression> preConditions;
-
-    /**
-     * Maintains a list of repositories that we have already encountered.
-     */
-    private static Map<String, RepositoryParser> respositories = new HashMap<>();
-    private Map<String, Type> fields;
-
 
     /**
      * Creates a new RestControllerParser
@@ -108,13 +82,13 @@ public class RestControllerParser extends ClassProcessor {
 
     }
 
-    public void start() throws IOException {
+    public void start() throws IOException, EvaluatorException {
         processRestController(controllers);
     }
 
-    private void processRestController(File path) throws IOException {
+    private void processRestController(File path) throws IOException, EvaluatorException {
         current = path;
-        testMethodNames = new HashSet<>();
+
         logger.info(path.toString());
         if (path.isDirectory()) {
             int i = 0;
@@ -153,16 +127,19 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private void processRestController(PackageDeclaration pd) throws IOException {
+    private void processRestController(PackageDeclaration pd) throws IOException, EvaluatorException {
         StringBuilder fileContent = new StringBuilder();
-        gen = new CompilationUnit();
+        expandWildCards(cu);
 
+        evaluator = new SpringEvaluator();
+        SpringTestGenerator generator = new SpringTestGenerator();
+        evaluator.addGenerator(generator);
+        generator.setCommonPath(getCommonPath());
+
+        CompilationUnit gen = generator.getCompilationUnit();
         ClassOrInterfaceDeclaration cdecl = gen.addClass(cu.getTypes().get(0).getName() + "Test");
         cdecl.addExtendedType("TestHelper");
-
         gen.setPackageDeclaration(pd);
-
-        expandWildCards(cu);
 
         gen.addImport("com.cloud.api.base.TestHelper");
         gen.addImport("org.testng.annotations.Test");
@@ -178,42 +155,39 @@ public class RestControllerParser extends ClassProcessor {
         gen.addImport("com.cloud.core.annotations.TestCaseType");
         gen.addImport("com.cloud.core.enums.TestType");
 
-        fields = new HashMap<>();
-
         /*
          * There is a very valid reason for doing this in two steps.
          * We want to make sure that all the repositories are identified before we start processing the methods.
+         *
          */
-        cu.accept(new ControllerFieldVisitor(), null);
-        cu.accept(new ControllerMethodVisitor(), null);
+        evaluator.setupFields(cu);
 
-        Set<String> originalImports = new HashSet<>();
-
-        for(var imp : cu.getImports()) {
-            originalImports.add(imp.getNameAsString());
-        }
+        /*
+         * Pass 1 : identify dependencies
+         */
+        cu.accept(new DepSolvingVisitor(), null);
 
         for (String s : dependencies) {
-            if(originalImports.contains(s)) {
-                gen.addImport(s);
-            }
+            gen.addImport(s);
         }
-
         for(String s: externalDependencies) {
-            if(originalImports.contains(s)) {
-                gen.addImport(s);
-            }
+            gen.addImport(s);
         }
-
-        fileContent.append(gen.toString()).append("\n");
-        ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
 
         for(String dependency : dependencies) {
             copyDependencies(dependency);
         }
 
+        /*
+         * Pass 2 : Generate the tests
+         */
+        cu.accept(new ControllerMethodVisitor(), null);
         dependencies.clear();
         externalDependencies.clear();
+
+        fileContent.append(gen.toString()).append("\n");
+        ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
+
     }
 
 
@@ -257,15 +231,71 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
+
     /**
-     * Will be called for each field of the controller.
-     * Primary purpose is to identify services and repositories that are being used in the controller.
+     * Visitor that will cause the tests to be generated for each method.
+     *
+     * Test generation is carried out by the SpringTestGenerator which will be invoked by the
+     * evaluator each time a return statement is encountered.
      *
      */
-    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
+    private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        /**
+         * Will trigger an evaluation which is like a fake execution of the code inside the method
+         */
+        @Override
+        public void visit(MethodDeclaration md, Void arg) {
+            super.visit(md, arg);
+            evaluatorUnsupported = false;
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                return;
+            }
+
+            if (md.isPublic()) {
+                preConditions = new ArrayList<>();
+                try {
+                    evaluator.executeMethod(md);
+                } catch (EvaluatorException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Class to resolve dependencies of the controller.
+     *
+     * Generating tests is a two step process, in the first step we will identify all the dependencies
+     * and compile them with java parser. This is a requirement for efficient type resolution when
+     * building the tests
+     */
+    class DepSolvingVisitor extends VoidVisitorAdapter<Void> {
+        /**
+         * Prepares the ground for the ControllerMethodVisitor to do it's work.
+         *
+         * This visitor will identify the dependencies of each method in the controller.
+         */
+        @Override
+        public void visit(MethodDeclaration md, Void arg) {
+            super.visit(md, arg);
+            evaluatorUnsupported = false;
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                return;
+            }
+            if (md.isPublic()) {
+                resolveMethodParameterTypes(md);
+                md.accept(new ReturnStatmentVisitor(), null);
+            }
+        }
+
+        private void resolveMethodParameterTypes(MethodDeclaration md) {
+            for(var param : md.getParameters()) {
+                solveTypeDependencies(param.getType(), cu);
+            }
+        }
 
         /**
-         * The field visitor will be used to identify the repositories that are being used in the controller.
+         * The field visitor will be used to identify the types used by the controllers.
          *
          * @param field the field to inspect
          * @param arg not used
@@ -276,181 +306,11 @@ public class RestControllerParser extends ClassProcessor {
             for (var variable : field.getVariables()) {
                 if (variable.getType().isClassOrInterfaceType()) {
                     String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
-                    if (respositories.containsKey(shortName)) {
+                    if (SpringEvaluator.getRepositories().containsKey(classToInstanceName(shortName))) {
                         return;
                     }
-
-                    Type t = variable.getType().asClassOrInterfaceType();
-                    try {
-                        String className = t.resolve().describe();
-                        if (className.startsWith(basePackage)) {
-                            /*
-                             * At the moment only compatible with repositories that are direct part of the
-                             * application under test. Repositories from external jar files are not supported.
-                             */
-                            ClassProcessor proc = new ClassProcessor();
-                            proc.compile(AbstractCompiler.classToPath(className));
-                            CompilationUnit cu = proc.getCompilationUnit();
-                            for (var typeDecl : cu.getTypes()) {
-                                if (typeDecl.isClassOrInterfaceDeclaration()) {
-                                    ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                                    if (cdecl.getNameAsString().equals(shortName)) {
-                                        for (var ext : cdecl.getExtendedTypes()) {
-                                            if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                                /*
-                                                 * We have found a repository. Now we need to process it. Afterwards
-                                                 * it will be added to the repositories map, to be identified by the
-                                                 * field name.
-                                                 */
-                                                RepositoryParser parser = new RepositoryParser();
-                                                parser.compile(AbstractCompiler.classToPath(className));
-                                                parser.process();
-                                                respositories.put(shortName, parser);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (UnsolvedSymbolException e) {
-                        logger.debug("ignore {}", t);
-                    } catch (IOException e) {
-
-                        Object action = Settings.getProperty("dependencies.on_error");
-                        if(action == null || action.toString().equals("exit")) {
-                            throw new GeneratorException("Exception while processing fields", e);
-                        }
-                        logger.error("Exception while processing fields");
-                        logger.error("\t{}",e.getMessage());
-                    }
+                    solveTypeDependencies(variable.getType(), cu);
                 }
-                fields.put(variable.getNameAsString(), field.getElementType());
-            }
-        }
-    }
-
-    /**
-     * Visitor that will detect methods in the controller.
-     *
-     */
-    private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
-        /*
-         * Every public method in the source code will result in a call to the visit(MethodDeclaration...)
-         * method of this class. In there will try to identify locals and whether any repository queries
-         * are being executed. Armed with that information we will then use the return statement visitor
-         * to identify the return type of the method and thereafter to generate the tests.
-         */
-        Evaluator evaluator = new Evaluator();
-        RepositoryQuery last = null;
-
-        /**
-         * This method will be called for each method call expression associated with a variable assignment.
-         * @param node a node from an expression statement, which may have a method call expression.
-         *             The result of which will be used in the variable assignment by the caller
-         * @param arg The list of variables that are being assigned.
-         *            Most likely to contain a single node
-         * @return A repository query, if the variable assignment is the result of a query execution or null.
-         */
-        public RepositoryQuery processMCE(Node node, NodeList<VariableDeclarator> arg) {
-
-            if (node instanceof MethodCallExpr) {
-                MethodCallExpr mce = ((MethodCallExpr) node).asMethodCallExpr();
-                Optional<Expression> scope = mce.getScope();
-                if(scope.isPresent()) {
-                    var x = fields.get(scope.get().toString());
-                    if (x != null) {
-                        RepositoryParser repository = respositories.get(x.toString());
-                        if (repository != null) {
-                            /*
-                             * This method call expression is associated with a repository query.
-                             */
-                            RepositoryQuery q = repository.getQueries().get(mce.getNameAsString());
-                            try {
-                                /*
-                                 * We have one more challenge; to find the parameters that are being used in the repository
-                                 * method. These will then have to be mapped to the jdbc place holders and reverse mapped
-                                 * to the arguments that are passed in when the method is actually being called.
-                                 */
-                                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(mce.getNameAsString()).get(0);
-                                for (int i = 0, j = mce.getArguments().size(); i < j; i++) {
-                                    q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(mce.getArgument(i), i));
-                                    q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
-                                }
-
-                                ResultSet rs = repository.executeQuery(mce.getNameAsString(), q);
-                                q.setResultSet(rs);
-                            } catch (Exception e) {
-                                logger.warn(e.getMessage());
-                                logger.warn("Could not execute query {}", mce);
-                            }
-                            return q;
-                        }
-                    }
-                }
-            }
-            else {
-                for(Node n : node.getChildNodes()) {
-                    RepositoryQuery q = processMCE(n, arg);
-                    if(q != null) {
-                        return q;
-                    }
-                }
-            }
-            return null;
-        }
-
-        /**
-         * Prepares the ground for the MethodBLockVisitor to do it's work.
-         *
-         * reset the preConditions list
-         * identify the locals
-         * reset the context
-         */
-        @Override
-        public void visit(MethodDeclaration md, Void arg) {
-            super.visit(md, arg);
-            evaluatorUnsupported = false;
-            if (md.isPublic()) {
-                preConditions = new ArrayList<>();
-
-                buildContext(md);
-
-                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
-                    return;
-                }
-                Optional<BlockStmt> body = md.getBody();
-                if(body.isPresent()) {
-                    logger.info("Method: {}", md.getName());
-                    last = null;
-
-                    for(Statement st : body.get().getStatements()) {
-                        NodeList<VariableDeclarator> variables = evaluator.identifyLocals(st);
-                        if (variables != null && st.isExpressionStmt()) {
-                            /*
-                             * we have just encountered a variable assignment.
-                             *
-                             * If the variable assignment is associated with a repository query, the visitor
-                             * will return a non-null value.
-                             */
-                            RepositoryQuery query = processMCE(st, variables);
-                            if (query != null && query.getResultSet() != null) {
-                                last = query;
-                            }
-                        }
-                        else {
-                            st.accept(new ReturnStatmentVisitor(), md);
-                        }
-                    }
-                }
-            }
-        }
-
-        private void buildContext(MethodDeclaration md) {
-            context = new HashMap<>();
-            for(var param : md.getParameters()) {
-                context.put(param.getNameAsString(), null);
-                solveTypeDependencies(param.getType(), cu);
             }
         }
 
@@ -469,633 +329,41 @@ public class RestControllerParser extends ClassProcessor {
             @Override
             public void visit(ReturnStmt statement, MethodDeclaration md) {
                 ReturnStmt stmt = statement.asReturnStmt();
-                Optional<Node> parent = stmt.getParentNode();
-                try {
-                    if (parent.isPresent() && !evaluatorUnsupported) {
-                        // the return statement will have a parent no matter what but the optionals approach
-                        // requires the use of isPresent.
-                        if (parent.get() instanceof IfStmt) {
-                            IfStmt ifStmt = (IfStmt) parent.get();
-                            Expression condition = ifStmt.getCondition();
-                            if (context != null && evaluator.evaluateCondition(condition, context)) {
-                                identifyReturnType(stmt, md);
-                                buildPreconditions(md, condition);
-                            }
-                        } else {
-                            BlockStmt blockStmt = (BlockStmt) parent.get();
-                            Optional<Node> gramps = blockStmt.getParentNode();
-                            if (gramps.isPresent()) {
-                                if (gramps.get() instanceof IfStmt) {
-                                    // we have found ourselves a conditional return statement.
-                                    IfStmt ifStmt = (IfStmt) gramps.get();
-                                    Expression condition = ifStmt.getCondition();
-                                    if (context != null && evaluator.evaluateCondition(condition, context)) {
-                                        identifyReturnType(stmt, md);
-                                        buildPreconditions(md, condition);
-                                    }
-                                } else if (gramps.get() instanceof MethodDeclaration) {
-                                    identifyReturnType(stmt, md);
-                                }
-                            }
-                        }
-                    }
-                } catch (EvaluatorException e) {
-                    logger.error("Evaluator exception");
-                    logger.error("\t{}", e.getMessage());
-                    evaluatorUnsupported = true;
-                }
+                identifyReturnType(stmt, md);
             }
         }
 
-        private void buildPreconditions(MethodDeclaration md, Expression expr) {
-            if(expr instanceof BinaryExpr) {
-                BinaryExpr binaryExpr = expr.asBinaryExpr();
-                if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND) || binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                    buildPreconditions(md, binaryExpr.getLeft());
-                    buildPreconditions(md, binaryExpr.getRight());
-                }
-                else {
-                    buildPreconditions(md, binaryExpr.getLeft());
-                    buildPreconditions(md, binaryExpr.getRight());
-                }
-            }
-            if(expr instanceof MethodCallExpr) {
-                MethodCallExpr mce = expr.asMethodCallExpr();
-                Parameter reqBody = findRequestBody(md);
-                if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
-                    try {
-                        if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
-
-                            String fullClassName = reqBody.resolve().describeType();
-                            String fieldName = classToInstanceName(mce.getName().asString().replace("get", ""));
-
-                            DTOHandler handler = new DTOHandler();
-                            handler.compile(AbstractCompiler.classToPath(fullClassName));
-                            Map<String, FieldDeclaration> fields = getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
-
-                            FieldDeclaration fieldDeclaration = fields.get(fieldName);
-                            if (fieldDeclaration != null) {
-                                MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
-                                preConditions.add(methodCall);
-                            }
-                        }
-                    } catch (UnsolvedSymbolException e) {
-                        logger.warn("Unsolved symbol exception");
-                    } catch (IOException e) {
-                        logger.error("Current controller: {}", current);
-                        if(Settings.getProperty("dependencies.on_error").toString().equals("exit")) {
-                            throw new GeneratorException("Exception while identifying dependencies", e);
-                        }
-                        logger.error(e.getMessage());
-                    }
-                }
-            }
-            else {
-                System.out.println(expr);
-            }
-        }
-        private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
+        private void identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             Expression expression = returnStmt.getExpression().orElse(null);
             if (expression != null) {
-                ControllerResponse response = new ControllerResponse();
-                response.setStatusCode(200);
                 if (expression.isObjectCreationExpr()) {
                     ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
                     if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
                         for (Expression typeArg : objectCreationExpr.getArguments()) {
-                            if (typeArg.isFieldAccessExpr()) {
-                                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                                    response.setStatusCode(fae.getNameAsString());
-                                }
-                            }
-                            if (typeArg.isNameExpr()) {
-                                String nameAsString = typeArg.asNameExpr().getNameAsString();
-                                if (nameAsString != null && evaluator.getLocal(nameAsString) != null) {
-                                    response.setType(evaluator.getLocal(nameAsString).getType());
-                                } else {
-                                    logger.warn("NameExpr is null in identify return type");
-                                }
-                            } else if (typeArg.isStringLiteralExpr()) {
-                                response.setType(StaticJavaParser.parseType("java.lang.String"));
-                                response.setResponse(typeArg.asStringLiteralExpr().asString());
-                            } else if (typeArg.isMethodCallExpr()) {
-                                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                                try {
-                                    Optional<Expression> scope = methodCallExpr.getScope();
-                                    if (scope.isPresent()) {
-                                        Type type = (scope.get().isFieldAccessExpr())
-                                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                                : fields.get(scope.get().asNameExpr().getNameAsString());
-                                        if (type != null) {
-                                            extractTypeFromCall(type, methodCallExpr);
-                                            logger.debug(type.toString());
-                                        } else {
-                                            logger.debug("Type not found {}", scope.get());
+                            try {
+                                if(typeArg.isNameExpr()) {
+                                    String description = ((NameExpr) typeArg).resolve().getType().describe();
+                                    if (!description.startsWith("java.")) {
+                                        for (var jarSolver : jarSolvers) {
+                                            if (jarSolver.getKnownClasses().contains(description)) {
+                                                externalDependencies.add(description);
+                                                return;
+                                            }
                                         }
-                                    }
-                                } catch (IOException e) {
-                                    throw new GeneratorException("Exception while identifying dependencies", e);
-                                }
-                            }
-                        }
-                    }
-                } else if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-                    try {
-                        Optional<Expression> scope = methodCallExpr.getScope();
-                        if (scope.isPresent()) {
-                            Type type = (scope.get().isFieldAccessExpr())
-                                    ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                    : fields.get(md.getType().asString());
-                            if(type != null) {
-                                extractTypeFromCall(type, methodCallExpr);
-                                logger.debug(type.toString());
-                            }
-                            else {
-                                logger.debug("Type not found {}", scope.get());
-                            }
-                        }
-                    } catch (IOException e) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
-                    }
-                } else if (expression.isNameExpr()) {
-                    String nameAsString = expression.asNameExpr().getNameAsString();
-                    if (nameAsString != null && evaluator.getLocal(nameAsString) != null) {
-                        response.setType(evaluator.getLocal(nameAsString).getType());
-                    } else {
-                        logger.warn("NameExpr is null in identify return type");
-                    }
-                }
-                createTests(md, response);
-                return response;
-            }
-            return null;
-        }
-
-        /**
-         * Create tests based on the method declarion and return type
-         * @param md
-         * @param returnType
-         */
-        private void createTests(MethodDeclaration md, ControllerResponse returnType) {
-            for (AnnotationExpr annotation : md.getAnnotations()) {
-                if (annotation.getNameAsString().equals("GetMapping") ) {
-                    buildGetMethodTests(md, annotation, returnType);
-                }
-                else if(annotation.getNameAsString().equals("PostMapping")) {
-                    buildPostMethodTests(md, annotation, returnType);
-                }
-                else if(annotation.getNameAsString().equals("DeleteMapping")) {
-                    buildDeleteMethodTests(md, annotation, returnType);
-                }
-                else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
-                    NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
-                    for (var pair : normalAnnotation.getPairs()) {
-                        if (pair.getNameAsString().equals("method")) {
-                            if (pair.getValue().toString().equals("RequestMethod.GET")) {
-                                buildGetMethodTests(md, annotation, returnType);
-                            }
-                            if (pair.getValue().toString().equals("RequestMethod.POST")) {
-                                buildPostMethodTests(md, annotation, returnType);
-                            }
-                            if (pair.getValue().toString().equals("RequestMethod.PUT")) {
-                                buildPutMethodTests(md, annotation, returnType);
-                            }
-                            if (pair.getValue().toString().equals("RequestMethod.DELETE")) {
-                                buildDeleteMethodTests(md, annotation, returnType);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-            httpWithoutBody(md, annotation, "makeDelete");
-        }
-
-        private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-            httpWithBody(md, annotation, returnType, "makePut");
-        }
-
-        private MethodDeclaration buildTestMethod(MethodDeclaration md) {
-            MethodDeclaration testMethod = new MethodDeclaration();
-
-            NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
-            testCaseTypeAnnotation.setName("TestCaseType");
-            testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
-
-            testMethod.addAnnotation(testCaseTypeAnnotation);
-            testMethod.addAnnotation("Test");
-            StringBuilder paramNames = new StringBuilder();
-            for(var param : md.getParameters()) {
-                for(var ann : param.getAnnotations()) {
-                    if(ann.getNameAsString().equals("PathVariable")) {
-                        paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                                .append(param.getNameAsString().substring(1));
-                        break;
-                    }
-                }
-            }
-
-            String testName = String.valueOf(md.getName());
-            if (paramNames.isEmpty()) {
-                testName += "Test";
-            } else {
-                testName += "By" + paramNames + "Test";
-
-            }
-
-            if (testMethodNames.contains(testName)) {
-                testName += "_" + (char)('A' + testMethodNames.size()  % 26 -1);
-            }
-            testMethodNames.add(testName);
-            testMethod.setName(testName);
-
-            BlockStmt body = new BlockStmt();
-
-            testMethod.setType(new VoidType());
-
-            testMethod.setBody(body);
-            return testMethod;
-        }
-
-        private void addCheckStatus(MethodDeclaration md) {
-            MethodCallExpr check = new MethodCallExpr("checkStatusCode");
-            check.addArgument(new NameExpr("response"));
-            md.getBody().get().addStatement(new ExpressionStmt(check));
-        }
-
-        private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-            httpWithoutBody(md, annotation, "makeGet");
-        }
-
-        private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call)  {
-            MethodDeclaration testMethod = buildTestMethod(md);
-            MethodCallExpr makeGetCall = new MethodCallExpr(call);
-            makeGetCall.addArgument(new NameExpr("headers"));
-            BlockStmt body = testMethod.getBody().get();
-
-            if(md.getParameters().isEmpty()) {
-                /*
-                 * Empty parameters are very easy.
-                 */
-                makeGetCall.addArgument(new StringLiteralExpr(getCommonPath().replace("\"", "")));
-            }
-            else {
-                /*
-                 * Non empty parameters.
-                 */
-                ControllerRequest request = new ControllerRequest();
-                request.setPath(getPath(annotation).replace("\"", ""));
-
-                try {
-                    replaceURIVariablesFromDb(md, request);
-                } catch (SQLException e) {
-                    logger.warn(e.getMessage());
-                }
-                handleURIVariables(md, request);
-
-                makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
-                if(!request.getQueryParameters().isEmpty()) {
-                    body.addStatement("Map<String, String> queryParams = new HashMap<>();");
-                    for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
-                        body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
-                    }
-                    makeGetCall.addArgument(new NameExpr("queryParams"));
-                }
-            }
-            VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
-            AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
-
-            body.addStatement(new ExpressionStmt(assignExpr));
-
-            addCheckStatus(testMethod);
-            gen.getType(0).addMember(testMethod);
-
-        }
-
-        /*
-         * Replace PathVariable and RequestParam values with the values from the database.
-         *
-          We need to figure out if any of the path or request parameters are supposed to
-         * match the values from the database.
-         *
-         * If the last field is not null that means there is likely to be a query associated
-         * with those parameters.
-         *
-         * Mapping parameters works like this.
-         *    Request or path parameter becomes an argument to a method call.
-         *    The argument in the method call becomes a parameter for a placeholder
-         *    The placeholder may have been removed though!
-         */
-        private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
-            if (last != null && last.getResultSet() != null) {
-                ResultSet rs = last.getResultSet();
-                List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
-                List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
-
-                if(rs.next()) {
-                    for(int i = 0 ; i < paramMap.size() ; i++) {
-                        RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
-                        RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
-
-                        if(param.getColumnName() != null) {
-                            String[] parts = param.getColumnName().split("\\.");
-                            String col = parts.length > 1 ? parts[1] : parts[0];
-
-                            logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col));
-
-                            // finally try to match it against the path and request variables
-                            for (Parameter p : md.getParameters()) {
-                                Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
-                                Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
-                                if (requestParam.isPresent()) {
-                                    String name = getParamName(p);
-                                    if (name.equals(arg.getArgument().toString())) {
-                                        request.getQueryParameters().put(name, rs.getObject(col).toString());
-                                    }
-                                } else if (pathParam.isPresent()) {
-                                    String name = getParamName(p);
-                                    final String target = '{' + name + '}';
-                                    if (name.equals(arg.getArgument().toString())) {
-                                        request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
+                                        dependencies.add(description);
                                     }
                                 }
+                            } catch (UnsolvedSymbolException e) {
+                                logger.warn("Unresolvable {}", e);
+                                //findImport(dependencyCu, mainType);
                             }
                         }
                     }
                 }
             }
         }
-
-        private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-            httpWithBody(md, annotation, returnType, "makePost");
-        }
-
-        private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse resp, String call) {
-
-            MethodDeclaration testMethod = buildTestMethod(md);
-            MethodCallExpr makePost = new MethodCallExpr(call);
-            BlockStmt body = testMethod.getBody().get();
-
-            ControllerRequest request = new ControllerRequest();
-            request.setPath(getPath(annotation).replace("\"", ""));
-            handleURIVariables(md, request);
-
-            if(md.getParameters().isNonEmpty()) {
-                Parameter requestBody = findRequestBody(md);
-                if(requestBody != null) {
-                    String paramClassName = requestBody.getTypeAsString();
-
-                    if (requestBody.getType().isClassOrInterfaceType()) {
-                        var cdecl = requestBody.getType().asClassOrInterfaceType();
-                        switch (cdecl.getNameAsString()) {
-                            case "List": {
-                                prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
-                                break;
-                            }
-
-                            case "Set": {
-                                prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
-                                break;
-                            }
-
-                            case "Map": {
-                                prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
-                                break;
-                            }
-                            case "Integer":
-                            case "Long": {
-                                VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
-                                variableDeclarator.setInitializer("0");
-                                body.addStatement(new VariableDeclarationExpr(variableDeclarator));
-
-                                break;
-                            }
-
-                            case "MultipartFile": {
-                                dependencies.add("org.springframework.web.multipart.MultipartFile");
-                                ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
-                                VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
-                                MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
-                                methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
-                                variableDeclarator.setInitializer(methodCallExpr);
-                                testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
-                                break;
-                            }
-
-                            case "Object": {
-                                // SOme methods incorrectly have their DTO listed as of type Object. We will treat
-                                // as a String
-                                prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
-                                break;
-                            }
-
-                            default:
-                                ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
-                                VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
-                                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
-                                variableDeclarator.setInitializer(objectCreationExpr);
-                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                                body.addStatement(variableDeclarationExpr);
-                        }
-
-                        for (Expression expr : preConditions) {
-                            if (expr.isMethodCallExpr()) {
-                                String s = expr.toString();
-                                if (s.contains("set")) {
-                                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
-                                }
-                            }
-                        }
-
-                        if (cdecl.getNameAsString().equals("MultipartFile")) {
-                            makePost.addArgument(new NameExpr("req"));
-                            testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
-                        } else {
-                            MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                            writeValueAsStringCall.addArgument(new NameExpr("req"));
-                            makePost.addArgument(writeValueAsStringCall);
-                            testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
-                        }
-                    }
-                }
-                else {
-                    makePost.addArgument(new StringLiteralExpr(""));
-                    logger.warn("No RequestBody found for {}", md.getName());
-                }
-            }
-
-            prepareRequest(makePost, request, body);
-
-            gen.getType(0).addMember(testMethod);
-
-            VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
-            AssignExpr assignExpr = new AssignExpr(responseVar, makePost, AssignExpr.Operator.ASSIGN);
-            body.addStatement(new ExpressionStmt(assignExpr));
-
-
-            addHttpStatusCheck(body, resp.getStatusCode());
-            Type returnType = resp.getType();
-            if (returnType != null) {
-                // There maybe controllers that do not return a body. In that case the
-                // return type will be null
-                if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                    System.out.println("bada 2");
-                } else
-                {
-                    List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
-                    if (! IncompatibleReturnTypes.contains(returnType.toString()))
-                    {
-                        Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                        if (respType.toString().equals("String")) {
-                            body.addStatement("String resp = response.getBody().asString();");
-                            if(resp.getResponse() != null) {
-                                body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
-                            }
-                            else {
-                                body.addStatement("Assert.assertNotNull(resp);");
-                                logger.warn("Reponse body is empty for {}", md.getName());
-                            }
-                        } else {
-                            System.out.println("bada 1");
-                            // todo get thsi back on line
-                            //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                            //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                            //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                            //                                variableDeclarator.setInitializer(methodCallExpr);
-                            //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                            //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                            //                                body.addStatement(expressionStmt);
-                        }
-                    }
-                }
-            }
-        }
-
-        private void prepareRequest(MethodCallExpr makePost, ControllerRequest request, BlockStmt body) {
-            makePost.addArgument(new NameExpr("headers"));
-            makePost.addArgument(new StringLiteralExpr(request.getPath()));
-            if(!request.getQueryParameters().isEmpty()) {
-                body.addStatement("Map<String, String> queryParams = new HashMap<>();");
-                for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
-                    body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
-                }
-                makePost.addArgument(new NameExpr("queryParams"));
-            }
-        }
-
-        private void prepareBody(String e, ClassOrInterfaceType paramClassName, String name, MethodDeclaration testMethod) {
-            dependencies.add(e);
-            VariableDeclarator variableDeclarator = new VariableDeclarator(paramClassName, "req");
-            MethodCallExpr methodCallExpr = new MethodCallExpr(name);
-            variableDeclarator.setInitializer(methodCallExpr);
-            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-
-            testMethod.getBody().get().addStatement(variableDeclarationExpr);
-        }
     }
 
-    private void addHttpStatusCheck(BlockStmt blockStmt, int statusCode)
-    {
-        MethodCallExpr getStatusCodeCall = new MethodCallExpr(new NameExpr("response"), "getStatusCode");
-
-        MethodCallExpr assertTrueCall = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
-        assertTrueCall.addArgument(getStatusCodeCall);
-        assertTrueCall.addArgument(new IntegerLiteralExpr(statusCode));
-
-        blockStmt.addStatement(new ExpressionStmt(assertTrueCall));
-    }
-
-    private void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
-        for(var param : md.getParameters()) {
-            String paramString = String.valueOf(param);
-
-            String paramName = getParamName(param);
-            if (paramString.startsWith("@RequestParam")) {
-                if (!request.getQueryParameters().containsKey(paramName)) {
-                    request.addQueryParameter(paramName, switch (param.getTypeAsString()) {
-                        case "Boolean" -> "1";
-                        case "float", "Float", "double", "Double" -> "1";
-                        case "Integer", "int", "Long" -> "1";
-                        case "String" -> "Ibuprofen";
-                        default -> "0";
-                    });
-                }
-            } else if (paramString.startsWith("@PathVariable")) {
-                final String target = '{' + paramName + '}';
-
-                String path = switch (param.getTypeAsString()) {
-                    case "Boolean" -> request.getPath().replace(target, "false");
-                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "1.0");
-                    case "Integer", "int", "Long" -> request.getPath().replace(target, "1");
-                    case "String" -> request.getPath().replace(target, "Ibuprofen");
-                    default -> request.getPath().replace(target, "0");
-                };
-                request.setPath(path);
-            }
-        }
-    }
-
-    private static String getParamName(Parameter param) {
-        String paramString = String.valueOf(param);
-        if(paramString.startsWith("@PathVariable")) {
-            Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
-            if(ann.isPresent()) {
-                if(ann.get().isSingleMemberAnnotationExpr()) {
-                    return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
-                }
-                if(ann.get().isNormalAnnotationExpr()) {
-                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                        if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
-                            return pair.getValue().toString().replace("\"", "");
-                        }
-                    }
-                }
-            }
-        }
-        return param.getNameAsString();
-    }
-
-    /**
-     * Of the various params in the method, which one is the RequestBody
-     * @param md a method argument
-     * @return the parameter identified as the RequestBody
-     */
-    private Parameter findRequestBody(MethodDeclaration md) {
-
-        for(var param : md.getParameters()) {
-            if(param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("RequestBody"))) {
-                return param;
-            }
-        }
-        return null;
-    }
-    /**
-     * Given an annotation for a method in a controller find the full path in the url
-     * @param annotation a GetMapping, PostMapping etc
-     * @return the path url component
-     */
-    private String getPath(AnnotationExpr annotation) {
-        if (annotation.isSingleMemberAnnotationExpr()) {
-            return getCommonPath() + annotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
-        } else if (annotation.isNormalAnnotationExpr()) {
-            NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
-            for (var pair : normalAnnotation.getPairs()) {
-                if (pair.getNameAsString().equals("path") || pair.getNameAsString().equals("value")) {
-                    String pairValue = pair.getValue().toString();
-                    String[] parts = pairValue.split(",");
-                    if(parts.length == 2) {
-                        return parts[0].substring(1).replace("\"","").strip();
-                    }
-                    return getCommonPath() + pair.getValue().toString();
-                }
-            }
-        }
-        return getCommonPath();
-    }
     /**
      * Each method in the controller will be a child of the main path for that controller
      * which is represented by the RequestMapping for that controller
@@ -1119,5 +387,3 @@ public class RestControllerParser extends ClassProcessor {
         return "";
     }
 }
-
-
