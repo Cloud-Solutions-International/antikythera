@@ -45,20 +45,20 @@ public class DTOBuddy {
 
         for (ResolvedFieldDeclaration field : fields) {
             Optional<Node> a = field.toAst();
-            Node node = a.get();
-            if (node instanceof FieldDeclaration) {
-                FieldDeclaration fieldDeclaration = (FieldDeclaration) node;
-                if (fieldDeclaration.getAnnotationByName("Id").isPresent()) {
-                    String fieldName = field.getName();
-                    Type t = fieldDeclaration.getElementType();
-                    String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            if (a.isPresent()) {
+                Node node = a.get();
+                if (node instanceof FieldDeclaration) {
+                    FieldDeclaration fieldDeclaration = (FieldDeclaration) node;
+                    if (fieldDeclaration.getAnnotationByName("Id").isPresent()) {
+                        String fieldName = field.getName();
+                        Type t = fieldDeclaration.getElementType();
+                        String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
 
-                    Method method = clazz.getMethod(setterName, Class.forName(field.getType().describe()));
-                    method.invoke(instance, Long.valueOf("10"));
-                    System.out.println(t);
+                        Method method = clazz.getMethod(setterName, Class.forName(field.getType().describe()));
+                        method.invoke(instance, Long.valueOf("10"));
+                    }
                 }
             }
-            System.out.println(node);
         }
     }
 
@@ -72,7 +72,13 @@ public class DTOBuddy {
             String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
 
             // Get the field type
-            TypeDescription.Generic fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(field.getType().describe()));
+            TypeDescription.Generic fieldType = null;
+            if (field.getType().isPrimitive()) {
+                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(resolvePrimitiveType(field.getType().describe()));
+            }
+            else {
+                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(field.getType().describe()));
+            }
 
             // Define field
             builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
@@ -90,5 +96,19 @@ public class DTOBuddy {
         return builder.make()
                 .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
                 .getLoaded();
+    }
+
+    private static Class<?> resolvePrimitiveType(String typeName) {
+        switch (typeName) {
+            case "boolean": return boolean.class;
+            case "byte": return byte.class;
+            case "char": return char.class;
+            case "short": return short.class;
+            case "int": return int.class;
+            case "long": return long.class;
+            case "float": return float.class;
+            case "double": return double.class;
+            default: throw new IllegalArgumentException("Unknown primitive type: " + typeName);
+        }
     }
 }

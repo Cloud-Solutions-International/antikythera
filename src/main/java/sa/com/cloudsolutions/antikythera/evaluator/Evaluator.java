@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
@@ -256,11 +257,13 @@ public class Evaluator {
     Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) {
         ObjectCreationExpr oce = expression.asObjectCreationExpr();
         ClassOrInterfaceType type = oce.getType();
-        Variable v = new Variable(type);
+        Variable vx = null;
+        Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
+        ResolvedType resolved = null;
         try {
-            Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
+
             if (res.isPresent()) {
-                ResolvedType resolved = type.resolve();
+                resolved = type.resolve();
                 String className = resolved.describe();
 
                 if (resolved.isReferenceType()) {
@@ -294,26 +297,34 @@ public class Evaluator {
 
                             Constructor<?> cons = c.getDeclaredConstructor(paramTypes);
                             Object instance = cons.newInstance(args);
-                            v.setValue(instance);
+                            vx = new Variable(type, instance);
                         }
                     }
                 } else {
                     Object instance = clazz.getDeclaredConstructor().newInstance();
-                    v.setValue(instance);
+                    vx = new Variable(type, instance);
                 }
             }
-            else {
-                Object instance  = DTOBuddy.createDynamicDTO(type);
-                v.setValue(instance);
-            }
         } catch (Exception e) {
-            logger.error("An error occurred", e);
-        }
-        if (decl != null) {
-            setLocal(instructionPointer, decl.getNameAsString(), v);
+            logger.error("Could not create an instance of type {} going to try again with bytebuddy", type);
+            logger.error("The error was {}", e.getMessage());
+
         }
 
-        return v;
+        if (vx == null) {
+            Object instance  = null;
+            try {
+                instance = DTOBuddy.createDynamicDTO(type);
+                vx = new Variable(type, instance);
+            } catch (Exception e) {
+                logger.error("An error occurred in creating a variable with bytebuddy", e);
+            }
+        }
+        if (decl != null) {
+            setLocal(instructionPointer, decl.getNameAsString(), vx);
+        }
+
+        return vx;
     }
 
     /**
@@ -425,8 +436,8 @@ public class Evaluator {
 
             for (int i = 0; i < arguments.size(); i++) {
                 argValues[i] = evaluateExpression(arguments.get(i));
-                Class<?> wrapperClass = argValues[i].getValue() == null ? argValues[i].getClazz() : argValues[i].getValue().getClass();
-                paramTypes[i] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
+                Class<?> wrapperClass = argValues[i].getClazz() == null ? argValues[i].getValue().getClass() : argValues[i].getClazz();
+                paramTypes[i] = wrapperClass; //wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
                 args[i] = argValues[i].getValue();
             }
 
@@ -611,42 +622,6 @@ public class Evaluator {
 
     public void clearLocalVariables() {
         locals.clear();
-    }
-
-    public Object createVariable(List<Node> nodes) {
-        if(nodes.get(0) instanceof ClassOrInterfaceType) {
-
-            String varName = ((SimpleName) nodes.get(1)).toString();
-
-            Variable v = getLocal(nodes.get(0), varName);
-            if(v == null) {
-                v = new Variable( (ClassOrInterfaceType) nodes.get(0));
-                setLocal(nodes.get(0), varName, v);
-            }
-            try {
-                MethodCallExpr mce = (MethodCallExpr) nodes.get(2);
-                List<Node> children = mce.getChildNodes();
-                Object result = null;
-
-                for(Node child : children) {
-                    if (child instanceof MethodCallExpr) {
-                        MethodCallExpr nexpr = (MethodCallExpr) child;
-                        Expression expression = nexpr.getScope().get();
-                        Object value = getValue(expression, expression.toString());
-                        System.out.println(nexpr);
-
-                        Class<?> clazz = value.getClass();
-                        Method method = clazz.getMethod(nexpr.getNameAsString());
-                        result = method.invoke(value);
-                        System.out.println(result);
-                    }
-                }
-                return null;
-            } catch (Exception e) {
-                logger.error(e.getMessage());
-            }
-        }
-        return null;
     }
 
     void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
