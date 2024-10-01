@@ -22,12 +22,20 @@ public class Variable {
     private Object value;
     private boolean primitive;
 
+    public Variable (Type type, Object value) {
+        setValue(value);
+        setType(type);
+    }
+
     public Variable(Type type) {
         this.type = type;
     }
 
     public Variable(Object value) {
         this.value = value;
+        if (value != null) {
+            clazz = value.getClass();
+        }
     }
 
     public Type getType() {
@@ -40,6 +48,9 @@ public class Variable {
 
     public void setValue(Object value) {
         this.value = value;
+        if (value != null) {
+            clazz = value.getClass();
+        }
     }
 
     public void setType(Type type) {
