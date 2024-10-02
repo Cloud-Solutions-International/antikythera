@@ -1,11 +1,12 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -70,7 +71,7 @@ class ProjectGeneratorTest {
     }
 
     @Test
-    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException {
+    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException, EvaluatorException {
         generator.generate();
 
         String outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
