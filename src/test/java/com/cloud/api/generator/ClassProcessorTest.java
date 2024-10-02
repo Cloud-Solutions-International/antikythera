@@ -1,5 +1,7 @@
 package com.cloud.api.generator;
 
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import com.github.javaparser.ast.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,40 +21,47 @@ class ClassProcessorTest {
 
     @BeforeEach
     void setUp() throws IOException {
+        Settings.loadConfigMap();
         imports = new NodeList<>();
         imports.add(new ImportDeclaration("com.example.SomeClass", false, false));
         imports.add(new ImportDeclaration("java.util.List", false, false));
         imports.add(new ImportDeclaration("org.springframework.data.domain.Page", false, false));
         imports.add(new ImportDeclaration("com.otherpackage.OtherClass", false, false));
-//        ClassProcessor.loadConfigMap(); // Ensure properties are loaded
         classProcessor = new ClassProcessor();
         handler = mock(DTOHandler.class);
+        AntikytheraRunTime.reset();
     }
 
 
     @Test
     void copyDependencies_doesNotCopySpringDataDomain() throws IOException {
-        ClassProcessor.resolved.clear();
         classProcessor.copyDependencies("org.springframework.data.domain.Page");
-        assertFalse(ClassProcessor.resolved.contains("org.springframework.data.domain.Page"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("org.springframework.data.domain.Page"));
         verify(handler, never()).copyDTO(anyString());
     }
 
     @Test
     void copyDependencies_doesNotCopyAlreadyResolvedDependency() throws IOException {
-        ClassProcessor.resolved.clear();
         ClassProcessor.basePackage = "com.example";
-        ClassProcessor.resolved.add("com.example.NewClass");
+        ClassProcessor.copied.add("com.example.NewClass");
+
+        classProcessor.copyDependencies("com.example.NewClass");
+        verify(handler, never()).copyDTO(anyString());
+    }
+
+    @Test
+    void copyDependencies_doesNotCopyExternals() throws IOException {
+        ClassProcessor.basePackage = "com.example";
+        classProcessor.externalDependencies.add("com.example.NewClass");
         classProcessor.copyDependencies("com.example.NewClass");
         verify(handler, never()).copyDTO(anyString());
     }
 
     @Test
     void copyDependencies_doesNotCopyNonBasePackageDependency() throws IOException {
-        ClassProcessor.resolved.clear();
         ClassProcessor.basePackage = "com.example";
         classProcessor.copyDependencies("com.otherpackage.OtherClass");
-        assertFalse(ClassProcessor.resolved.contains("com.otherpackage.OtherClass"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("com.otherpackage.OtherClass"));
         verify(handler, never()).copyDTO(anyString());
     }
 
@@ -100,4 +109,5 @@ class ClassProcessorTest {
 
         assertFalse(result);
     }
+
 }
