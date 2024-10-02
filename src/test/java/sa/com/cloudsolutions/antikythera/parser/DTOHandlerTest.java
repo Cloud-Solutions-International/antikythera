@@ -1,7 +1,7 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.parser;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import com.cloud.api.constants.Constants;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
@@ -35,7 +35,7 @@ import java.nio.file.Paths;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import static com.cloud.api.generator.ClassProcessor.basePackage;
+import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.basePackage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

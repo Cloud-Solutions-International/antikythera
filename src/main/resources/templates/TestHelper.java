@@ -1,7 +1,7 @@
 package com.cloud.api.base;
 
 import com.cloud.api.configurations.Configurations;
-import com.cloud.api.constants.StaticHeaders;
+import sa.com.cloudsolutions.antikythera.constants.StaticHeaders;
 import com.cloud.api.rest.APIRequester;
 import com.cloud.core.config.enums.ConfigKeys;
 import com.cloud.core.reporting.ExtentLogger;

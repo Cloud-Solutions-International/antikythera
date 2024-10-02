@@ -1,13 +1,12 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
+import net.sf.jsqlparser.schema.Table;
 
 import java.sql.ResultSet;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Represents a query from a JPARepository
@@ -28,17 +27,7 @@ public class RepositoryQuery {
          */
         Parameter parameter;
 
-        /**
-         * The name of the jdbc named parameter.
-         * These can typicall be identified in the JPARepository function by the @Param annotation.
-         * If they are used along side custom queries, the query will have a place holder that starts
-         * with the : character and matches the name of the parameter.
-         * example:
-         *     select u from User u where u.firstname = :firstname or u.lastname = :lastname
-         *     User findByLastnameOrFirstname(@Param("lastname") String lastname,
-         *                                  @Param("firstname") String firstname);
-         */
-        String placeHolderName;
+        private String placeHolderName;
 
         /**
          * Typically column names in SQL are camel_cased.
@@ -51,13 +40,7 @@ public class RepositoryQuery {
          */
         boolean removed;
 
-        /**
-         * Tracks usage of this column with numeric jdbc query parameters
-         * Unlike named parameters, numeric parameters can appear in multiple places. THough the same
-         * number can be used in two different places it's common to see programmers use two different ids.
-         * These numbers will start counting from 1, in keeping with the usual jdbc convention.
-         */
-        List<Integer> placeHolderId;
+        private List<Integer> placeHolderId;
 
         /**
          * The position at which this parameter appears in the function parameters list.
@@ -67,9 +50,9 @@ public class RepositoryQuery {
         public QueryMethodParameter(Parameter parameter, int index) {
             this.parameter = parameter;
             parameter.getAnnotationByName("Param").ifPresent(a ->
-                placeHolderName = a.asStringLiteralExpr().asString()
+                    setPlaceHolderName(a.asStringLiteralExpr().asString())
             );
-            placeHolderId = new ArrayList<>();
+            setPlaceHolderId(new ArrayList<>());
             this.paramIndex = index;
         }
 
@@ -79,6 +62,42 @@ public class RepositoryQuery {
 
         public void setColumnName(String columnName) {
             this.columnName = columnName;
+        }
+
+        /**
+         * The name of the jdbc named parameter.
+         * These can typicall be identified in the JPARepository function by the @Param annotation.
+         * If they are used along side custom queries, the query will have a place holder that starts
+         * with the : character and matches the name of the parameter.
+         * example:
+         *     select u from User u where u.firstname = :firstname or u.lastname = :lastname
+         *     User findByLastnameOrFirstname(@Param("lastname") String lastname,
+         *                                  @Param("firstname") String firstname);
+         */
+        public String getPlaceHolderName() {
+            return placeHolderName;
+        }
+
+        public void setPlaceHolderName(String placeHolderName) {
+            this.placeHolderName = placeHolderName;
+        }
+
+        /**
+         * Tracks usage of this column with numeric jdbc query parameters
+         * Unlike named parameters, numeric parameters can appear in multiple places. THough the same
+         * number can be used in two different places it's common to see programmers use two different ids.
+         * These numbers will start counting from 1, in keeping with the usual jdbc convention.
+         */
+        public List<Integer> getPlaceHolderId() {
+            return placeHolderId;
+        }
+
+        public void setPlaceHolderId(List<Integer> placeHolderId) {
+            this.placeHolderId = placeHolderId;
+        }
+
+        public Parameter getParameter() {
+            return parameter;
         }
     }
 

@@ -1,12 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.cloud.api.generator.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import com.github.javaparser.ast.stmt.IfStmt;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
-import com.cloud.api.generator.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
-import com.cloud.api.generator.GeneratorException;
+import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 
@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
@@ -553,25 +552,25 @@ public class Evaluator {
 
             case GREATER:
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) > 0);
+                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
                 }
                 throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 
             case GREATER_EQUALS:
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) >= 0);
+                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) >= 0);
                 }
                 throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 
             case LESS:
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) < 0);
+                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) < 0);
                 }
                 throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 
             case LESS_EQUALS:
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare((Number) left.getValue(), (Number) right.getValue()) <= 0);
+                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) <= 0);
                 }
                 throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
 

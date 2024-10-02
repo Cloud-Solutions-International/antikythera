@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.cloud.api.generator.ControllerResponse;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;

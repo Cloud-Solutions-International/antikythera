@@ -1,4 +1,4 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -37,7 +37,7 @@ import java.util.Optional;
  * Recursively copy DTOs from the Application Under Test (AUT).
  *
  */
-public class DTOHandler extends  ClassProcessor {
+public class DTOHandler extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
 

@@ -1,4 +1,4 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.body.Parameter;
 import org.junit.jupiter.api.BeforeEach;

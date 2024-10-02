@@ -1,4 +1,4 @@
-package com.cloud.api.constants;
+package sa.com.cloudsolutions.antikythera.constants;
 
 public interface Constants {
 

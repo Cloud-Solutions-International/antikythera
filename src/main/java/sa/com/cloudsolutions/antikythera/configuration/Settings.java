@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.configuration;
 
-import com.cloud.api.constants.Constants;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -124,8 +124,7 @@ public class Settings {
                     }
                     target.put(key, result);
                 }
-                else if (value instanceof String) {
-                    String v = (String) value;
+                else if (value instanceof String v) {
                     v = v.replace("${USERDIR}", userDir);
                     v = replaceYamlVariables(v);
                     target.put(key, replaceEnvVariables(v));

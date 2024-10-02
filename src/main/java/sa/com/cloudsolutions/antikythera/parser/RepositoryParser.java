@@ -1,5 +1,6 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.parser;
 
+import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
@@ -59,7 +60,7 @@ import java.util.regex.Pattern;
  * These queries can then be used to determine what kind of data need to be sent
  * to the controller for a valid response.
  */
-public class RepositoryParser extends ClassProcessor{
+public class RepositoryParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     public static final String JPA_REPOSITORY = "JpaRepository";
 
@@ -633,17 +634,17 @@ public class RepositoryParser extends ClassProcessor{
         if(right instanceof  JdbcParameter) {
             int pos = ((JdbcParameter) right).getIndex();
             RepositoryQuery.QueryMethodParameter params = current.getMethodParameters().get(pos - 1);
-            params.placeHolderId.add(pos);
+            params.getPlaceHolderId().add(pos);
             params.setColumnName(name);
 
-            System.out.println("Mapping " + name + " to " + params.parameter.getName());
+            System.out.println("Mapping " + name + " to " + params.getParameter().getName());
         }
         else {
             String placeHolder = ((JdbcNamedParameter) right).getName();
             for(RepositoryQuery.QueryMethodParameter p : current.getMethodParameters()) {
-                if(p.placeHolderName.equals(placeHolder)) {
+                if(p.getPlaceHolderName().equals(placeHolder)) {
                     p.setColumnName(name);
-                    System.out.println("Mapping " + name + " to " + p.parameter.getName());
+                    System.out.println("Mapping " + name + " to " + p.getParameter().getName());
                     break;
                 }
             }

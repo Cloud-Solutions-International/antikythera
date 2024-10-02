@@ -1,8 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import com.cloud.api.generator.AbstractCompiler;
-import com.cloud.api.generator.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;

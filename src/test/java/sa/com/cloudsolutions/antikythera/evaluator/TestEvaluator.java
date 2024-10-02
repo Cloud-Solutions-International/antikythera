@@ -1,11 +1,10 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.cloud.api.generator.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.BinaryExpr;
-import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
