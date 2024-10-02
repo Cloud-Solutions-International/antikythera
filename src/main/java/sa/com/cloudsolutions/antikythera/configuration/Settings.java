@@ -1,4 +1,4 @@
-package com.cloud.api.configurations;
+package sa.com.cloudsolutions.antikythera.configuration;
 
 import com.cloud.api.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
@@ -10,6 +10,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,6 +35,10 @@ public class Settings {
      */
     private Settings() {}
 
+    /**
+     * Load the configuration from a file.
+     * @throws IOException
+     */
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
@@ -106,12 +111,7 @@ public class Settings {
             String key = entry.getKey();
             Object value = entry.getValue();
             if (value != null && !key.equals("variables")) {
-                if (value instanceof String) {
-                    String v = (String) value;
-                    v = v.replace("${USERDIR}", userDir);
-                    v = replaceYamlVariables(v);
-                    target.put(key, replaceEnvVariables(v));
-                } else if (value instanceof Map) {
+                if (value instanceof Map) {
                     Map<String, Object> nestedMap = new HashMap<>();
                     replaceVariables((Map<String, Object>) value, nestedMap);
                     target.put(key, nestedMap);
@@ -123,6 +123,15 @@ public class Settings {
                         result.add(s);
                     }
                     target.put(key, result);
+                }
+                else if (value instanceof String) {
+                    String v = (String) value;
+                    v = v.replace("${USERDIR}", userDir);
+                    v = replaceYamlVariables(v);
+                    target.put(key, replaceEnvVariables(v));
+                }
+                else {
+                    target.put(key, value);
                 }
             }
         }
@@ -141,6 +150,22 @@ public class Settings {
             value = value.replace(key, varValue);
         }
         return value;
+    }
+
+    public static Map<String, String> loadCustomMethodNames(String className, String fieldName) {
+        Map<String, String> methodNames = new HashMap<>();
+        Map<String, Object> dtoConfig = (Map<String, Object>) Settings.getProperty("DTO");
+        if (dtoConfig != null) {
+            Map<String, Object> classConfig = (Map<String, Object>) dtoConfig.get(className);
+            if (classConfig != null) {
+                Map<String, String> fieldConfig = (Map<String, String>) classConfig.get(fieldName);
+                if (fieldConfig != null) {
+                    methodNames.put("getter", fieldConfig.get("getter"));
+                    methodNames.put("setter", fieldConfig.get("setter"));
+                }
+            }
+        }
+        return methodNames;
     }
 
     /**
@@ -169,7 +194,19 @@ public class Settings {
     }
 
     public static Object getProperty(String key) {
-        return props.get(key);
+
+        Object property = props.get(key);
+        if(property != null) {
+            return property;
+        }
+        String[] parts = key.split("\\.");
+        if(parts.length > 1) {
+            Map<String, Object> map = (Map<String, Object>) props.get(parts[0]);
+            if(map != null) {
+                return map.get(parts[1]);
+            }
+        }
+        return null;
     }
 
     public static String[] getArtifacts() {
