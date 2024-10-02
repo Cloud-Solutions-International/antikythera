@@ -1,0 +1,66 @@
+# This file contains the configurations for Antikythera. You can use environment variables
+# anywhere in this file. For example ${HOME} will be replaced with the value of the HOME
+# environment variable.
+
+variables:
+  projects_folder: /home/balara/csi
+  m2_folder: /home/balara/.m2/repository
+
+# Points to top level folder of the application under test. This is a file system path.
+base_path: ${projects_folder}/PMS/csi-pms-adt-request-java-sev/src/main/java
+
+# Add the base path to the src/main/java folder of csi-project
+# The top level package for your project. As an example for the pharmacy project it is
+# com.csi.phr
+base_package: com.csi
+#.vidaplus.ehr
+
+# The controllers settings determines where the controllers can be found. If you
+# specify a package name it will iterate through all the controllers in that
+# package. If you specify an individual controller it will only generate tests
+# for that single controller
+controllers: com.csi.pms.adt.request.controller
+#.externaltransfer.ExternalTransferController.java
+
+# Path to output the generated test project
+output_path: /tmp/csi-pms-adt
+
+# Dependencies configuration
+dependencies:
+  artifact_ids:
+    - csi-pms-adt-request-java-sev
+    - csi-microservices-base
+    - csi-error-handler
+    - csi-common
+    - csi-rms-reservation-api
+  jar_files:
+    - ${m2_folder}/com/csi/pms/csi-pms-adt-request-java-sev/1.0.0/csi-pms-adt-request-java-sev-1.0.0.jar
+    - ${m2_folder}/com/csi/csi-microservices-base/1.1.2/csi-microservices-base-1.1.2.jar
+    - ${m2_folder}/com/csi/csi-error-handler/1.1.2/csi-error-handler-1.1.2.jar
+    - ${m2_folder}/com/csi/common/csi-common/4.2.1.18-17/csi-common-4.2.1.18-17.jar
+    - ${m2_folder}/com/csi/rms/csi-rms-reservation-api/4.2.1.18-17/csi-rms-reservation-api-4.2.1.18-17.jar
+  on_error: log
+#
+# the url at which the application can be reached. This value will be copied into the
+# Url.properties file in the resources folder, and that file in turn will be copied to the
+# generated tests project.
+#
+application.host: https://vidaqa.cloudsolutions.com.sa/csi-api/csi-pms-adt-request
+#
+# the veresion of the application if any. ~ means no versioning
+# This setting will also be copied to the Url.properties file
+#
+application.version: ~
+
+#
+# use the database settings to connect and try out the queries extracted from JPARepository
+#
+database:
+  url: jdbc:oracle:thin:@//10.201.215.50:1521/VQPDB.hmg.local
+  user: C##xstrm
+  password: p08642xs
+  schema: EH_IP
+  run_queries: true
+
+skip :
+  - com.csi.pms.adt.request.controller.TempController.java

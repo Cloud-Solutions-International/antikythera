@@ -1,18 +1,23 @@
 package com.cloud.api.generator;
 
-import com.cloud.api.configurations.Settings;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.cloud.api.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
@@ -22,12 +27,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 import static com.cloud.api.generator.ClassProcessor.basePackage;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DTOHandlerTest {
     private ClassProcessor classProcessor;
@@ -48,9 +62,10 @@ public class DTOHandlerTest {
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();
         typeCollector = handler.new TypeCollector();
+        handler.cu = new CompilationUnit();
     }
 
-    // -------- handleStaticImports -------- //
+    // -------------------- handleStaticImports -------------------- //
     @Test
     void handleStaticImportsAddsStaticImportsToDependencies() {
         NodeList<ImportDeclaration> imports = new NodeList<>();
@@ -132,7 +147,7 @@ public class DTOHandlerTest {
         }
     }
 
-    // -------- addLombok -------- //
+    // -------------------- addLombok -------------------- //
 
     @Test
     void addLombokAddsAllAnnotationsForSmallClass() throws IOException {
@@ -269,297 +284,338 @@ public class DTOHandlerTest {
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
     }
 
-    // ======== TypeCollector ======== //
-
-    // -------- capitalize -------- //
+    // -------------------- capitalize -------------------- //
     @Test
     void capitalizeConvertsFirstCharacterToUpperCase() {
-        assertEquals("Hello", typeCollector.capitalize("hello"));
+        assertEquals("Hello", DTOHandler.capitalize("hello"));
     }
 
     @Test
     void capitalizeDoesNotChangeAlreadyCapitalizedString() {
-        assertEquals("Hello", typeCollector.capitalize("Hello"));
+        assertEquals("Hello", DTOHandler.capitalize("Hello"));
     }
 
     @Test
     void capitalizeHandlesEmptyString() {
-        assertThrows(StringIndexOutOfBoundsException.class, () -> typeCollector.capitalize(""));
+        assertThrows(StringIndexOutOfBoundsException.class, () -> DTOHandler.capitalize(""));
     }
 
-
-    // -------- generateRandomValue -------- //
+    // -------------------- generateRandomValue -------------------- //
     @Test
-    void generateRandomValueAddSetterForBooleanField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
+    void generateRandomValueAddSetterForBooleanFieldWithIsPrefix() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "boolean"), "isActive"));
 
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
+        handler.method = new MethodDeclaration();
 
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setActive(true)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForBooleanField()  {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Boolean"), "isActive"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setIsActive(true)")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setIsActive(true)"));
     }
 
     @Test
-    void generateRandomValueAddSetterForCharacterField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+    void generateRandomValueAddSetterForCharacterField()  {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Character"), "initial"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setInitial('A')")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setInitial('A')"));
     }
 
     @Test
     void generateRandomValueAddSetterForDateField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Date"), "createdDate"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setCreatedDate(new Date())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setCreatedDate(new Date())"));
     }
 
     @Test
     void generateRandomValueAddSetterForIntegerField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Integer"), "count"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setCount(0)"));
+    }
 
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setCount(0)")));
+    @Test
+    void generateRandomValueAddSetterForDoubleField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Double"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue(0.0)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForPrimitiveDoubleField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "double"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue(0.0)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForFloatField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Float"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue(0.0f)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForPrimitiveFloatField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "float"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue(0.0f)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForByteField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Byte"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue((byte) 0)"));
     }
 
     @Test
     void generateRandomValueAddSetterForStringField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "message"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setMessage(\"Hello world\")"));
+    }
 
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setMessage(\"Hello world\")")));
+    @Test
+    void generateRandomValueAddSetterForListField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "List"), "items"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setItems(List.of())"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForPrimitiveLongField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue(0L)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForLongField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Long"), "value"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setValue(0L)"));
     }
 
     @Test
     void generateRandomValueAddSetterForMapField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Map"), "testMap"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setTestMap(Map.of())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setTestMap(Map.of())"));
     }
 
     @Test
     void generateRandomValueAddSetterForSetField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Set"), "testSet"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setTestSet(Set.of())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setTestSet(Set.of())"));
     }
 
     @Test
-    void generateRandomValueAddSetterForUUIDField() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
+    void generateRandomValueAddSetterForUUIDField(){
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "UUID"), "testUUID"));
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-        typeCollector.generateRandomValue(field);
-
-        assertTrue(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setTestUUID(UUID.randomUUID())")));
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setTestUUID(UUID.randomUUID())"));
     }
 
     @Test
-    void generateRandomValueAddSetterForEnumType() throws IOException {
+    void generateRandomValueAddSetterForLocalDateField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "LocalDate"), "date"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setDate(LocalDate.now())"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForLocalDateTimeField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "LocalDateTime"), "dateTime"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setDateTime(LocalDateTime.now())"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForShortField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "Short"), "shortValue"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setShortValue((short) 0)"));
+    }
+
+    @Test
+    void generateRandomValueReturnsNullForGenericTypeField() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "T"), "genericField"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setGenericField(null)"));
+    }
+
+    @Test
+    void generateRandomValueAddSetterForBigDecimalField() {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "BigDecimal"), "amount"));
+
+        handler.method = new MethodDeclaration();
+
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, handler.getCompilationUnit());
+        assertNotNull(setter);
+        assertTrue(setter.toString().contains("setAmount(BigDecimal.ZERO)"));
+    }
+
+    @Test
+    void generateRandomValueReturnsNullForEnumTypeField() throws IOException {
         Path tempFilePath = Files.createTempFile("TempClass", ".java");
         Files.write(tempFilePath, """
-        public class TempClass {
-            private enum MyEnum { VALUE1, VALUE2 }
-        }
+    public class TempClass {
+        enum MyEnum { VALUE1, VALUE2 }
+    }
     """.getBytes());
 
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
@@ -579,12 +635,395 @@ public class DTOHandlerTest {
         ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow();
         classDecl.addMember(field);
 
-        MethodDeclaration method = new MethodDeclaration();
-        handler.method = method;
+        handler.method = new MethodDeclaration();
 
-         typeCollector.generateRandomValue(field);
+        MethodCallExpr setter = DTOHandler.generateRandomValue(field, cu);
+        assertNull(setter);
+    }
 
-        assertFalse(method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setEnumField")));
+    @Test
+    void extractCompleTypes() {
+
+        assertTrue(classProcessor.dependencies.isEmpty());
+        Optional<CompilationUnit> result = handler.javaParser.parse("class Test{}").getResult();
+        if (result.isPresent()) {
+            CompilationUnit cu = result.get();
+            FieldDeclaration field = StaticJavaParser
+                    .parseBodyDeclaration("Map<String, SimpleDTO> someList;")
+                    .asFieldDeclaration();
+            cu.getTypes().get(0).addMember(field);
+            cu.addImport("com.csi.dto.SimpleDTO");
+            handler.setCompilationUnit(cu);
+
+            classProcessor.solveTypeDependencies(field.getElementType(), cu);
+            assertEquals(classProcessor.dependencies.size(), 1);
+
+            // calling the same thing again should not change anything.
+            classProcessor.solveTypeDependencies(field.getElementType(), cu);
+            assertEquals(classProcessor.dependencies.size(), 1);
+        }
+    }
+
+    // -------------------- solveTypes -------------------- //
+    @Test
+    void solveTypesAddsLombokAnnotationsToClass() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addField("String", "field");
+
+        handler.cu.addType(classDecl);
+        handler.solveTypes();
+
+        assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
+        assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
+    }
+
+    @Test
+    void solveTypesRemovesConstructorsAndMethods() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addConstructor();
+        classDecl.addMethod("someMethod");
+
+        handler.cu.addType(classDecl);
+        handler.solveTypes();
+
+        assertTrue(classDecl.getConstructors().isEmpty());
+        assertTrue(classDecl.getMethods().isEmpty());
+    }
+
+    @Test
+    void solveTypesAddsParentClassToDependencies() throws IOException {
+        CombinedTypeSolver typeSolver = new CombinedTypeSolver();
+        typeSolver.add(new ReflectionTypeSolver());
+        typeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
+
+        ParserConfiguration parserConfiguration = new ParserConfiguration()
+                .setSymbolResolver(new JavaSymbolSolver(typeSolver));
+        StaticJavaParser.setConfiguration(parserConfiguration);
+
+        CompilationUnit cu = StaticJavaParser.parse("package com.cloud.api.generator;\n" +
+                "public class ParentClass {}\n" +
+                "public class TempClass extends ParentClass {}");
+
+        handler.setCompilationUnit(cu);
+        handler.solveTypes();
+
+        assertTrue(handler.dependencies.contains("com.cloud.api.generator.ParentClass"));
+    }
+
+    @Test
+    void solveTypesIgnoresJavaLangParentClass() throws IOException {
+        CombinedTypeSolver typeSolver = new CombinedTypeSolver();
+        typeSolver.add(new ReflectionTypeSolver());
+        typeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
+
+        ParserConfiguration parserConfiguration = new ParserConfiguration()
+                .setSymbolResolver(new JavaSymbolSolver(typeSolver));
+        StaticJavaParser.setConfiguration(parserConfiguration);
+
+        CompilationUnit cu = StaticJavaParser.parse("package com.cloud.api.generator;\n" +
+                "public class TempClass extends java.lang.Object {}");
+
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addExtendedType("java.lang.Object");
+
+        handler.setCompilationUnit(cu);
+        handler.solveTypes();
+
+        assertFalse(handler.dependencies.contains("java.lang.Object"));
+    }
+
+    @Test
+    void solveTypesClearsImplementedInterfaces() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass implements SomeInterface {}"));
+
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
+        classDecl.setName("TempClass");
+        classDecl.addImplementedType("SomeInterface");
+
+        handler.cu.addType(classDecl);
+        handler.solveTypes();
+
+        assertTrue(classDecl.getImplementedTypes().isEmpty());
+    }
+
+    @Test
+    void solveTypesHandlesUnresolvedParentClass() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("public class TempClass extends UnresolvedClass {}");
+        handler.setCompilationUnit(cu);
+
+        ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow(() -> new IllegalStateException("Class not found"));
+        classDecl.addExtendedType("UnresolvedClass");
+
+        assertThrows(RuntimeException.class, () -> handler.solveTypes());
+    }
+
+    @Test
+    void solveTypesAddsLombokAnnotationsToEnum() throws IOException {
+        handler.setCompilationUnit(StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }"));
+
+        EnumDeclaration enumDecl = new EnumDeclaration();
+        enumDecl.setName("TempEnum");
+        enumDecl.addEnumConstant("VALUE1");
+        enumDecl.addEnumConstant("VALUE2");
+        enumDecl.addAnnotation("AllArgsConstructor");
+
+        handler.cu.addType(enumDecl);
+        handler.solveTypes();
+
+        assertTrue(handler.cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("lombok.AllArgsConstructor")));
+    }
+
+    @Test
+    void solveTypesAddsGetterAnnotationToEnum() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
+        handler.setCompilationUnit(cu);
+
+        EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
+        enumDecl.addAnnotation("Getter");
+
+        handler.solveTypes();
+
+        assertTrue(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
+    }
+
+    @Test
+    void solveTypesDoesNotAddGetterAnnotationIfAlreadyPresent() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("import lombok.Getter; public enum TempEnum { VALUE1, VALUE2 }");
+        handler.setCompilationUnit(cu);
+
+        EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
+        enumDecl.addAnnotation("Getter");
+
+        handler.solveTypes();
+
+        long getterImports = cu.getImports().stream().filter(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")).count();
+        assertEquals(1, getterImports);
+    }
+
+    @Test
+    void solveTypesHandlesEnumWithoutAnnotations() throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
+        handler.setCompilationUnit(cu);
+
+        handler.solveTypes();
+
+        assertFalse(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
+    }
+
+    // -------------------- generateGetter -------------------- //
+    @Test
+    void generateGetterCreatesPublicMethod() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
+        field.setParentNode(classDeclaration);
+
+        classDeclaration.addMember(field);
+
+        typeCollector.generateGetter(field, "getName");
+
+        MethodDeclaration getter = (MethodDeclaration) handler.cu.getType(0).getMembers().stream()
+                .filter(member -> member instanceof MethodDeclaration)
+                .filter(member -> ((MethodDeclaration) member).getNameAsString().equals("getName"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Getter method not found"));
+
+        assertTrue(getter.isPublic(), "Generated getter should be public.");
+    }
+
+    @Test
+    void generateGetterReturnsFieldValue() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
+        field.setParentNode(classDeclaration);
+
+        classDeclaration.addMember(field);
+
+        typeCollector.generateGetter(field, "getName");
+
+        MethodDeclaration getter = (MethodDeclaration) handler.cu.getType(0).getMembers().stream()
+                .filter(member -> member instanceof MethodDeclaration)
+                .filter(member -> ((MethodDeclaration) member).getNameAsString().equals("getName"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Getter method not found"));
+
+        assertTrue(getter.getBody().isPresent(), "Getter should have a method body.");
+        assertTrue(getter.getBody().get().getStatements().stream()
+                        .anyMatch(stmt -> stmt.toString().contains("return name")),
+                "Getter should return the field 'name'.");
+    }
+
+    @Test
+    void generateGetterHandlesEmptyFieldName() {
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "testString"));
+
+        handler.method = new MethodDeclaration();
+        assertThrows(NoSuchElementException.class, () -> typeCollector.generateGetter(field, "get"));
+    }
+
+    @Test
+    void generateGetterHandlesNullField() {
+        assertThrows(NullPointerException.class, () -> typeCollector.generateGetter(null, "getName"));
+    }
+
+    @Test
+    void generateGetterHandlesNullGetterName() {
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
+
+        handler.method = new MethodDeclaration();
+        assertThrows(AssertionError.class, () -> typeCollector.generateGetter(field, null));
+    }
+
+    // -------------------- generateSetter -------------------- //
+    @Test
+    void generateSetterCreatesPublicMethod() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        field.setParentNode(classDeclaration);
+        classDeclaration.addMember(field);
+
+        typeCollector.generateSetter(field, "setValue");
+
+        MethodDeclaration setter = classDeclaration.getMethodsByName("setValue").get(0);
+        assertNotNull(setter, "Setter method should be created.");
+        assertTrue(setter.isPublic(), "Setter should be public.");
+    }
+
+    @Test
+    void generateSetterAssignsFieldValue() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        field.setParentNode(classDeclaration);
+        classDeclaration.addMember(field);
+
+        typeCollector.generateSetter(field, "setValue");
+
+        MethodDeclaration setter = classDeclaration.getMethodsByName("setValue").get(0);
+        BlockStmt body = setter.getBody().orElseThrow(() -> new AssertionError("Setter body should not be empty"));
+        AssignExpr assignExpr = (AssignExpr) body.getStatement(0).asExpressionStmt().getExpression();
+
+        assertEquals("this.value", assignExpr.getTarget().toString(), "Setter should assign to 'this.value'.");
+        assertEquals("value", assignExpr.getValue().toString(), "Setter should assign the parameter 'value'.");
+    }
+
+    @Test
+    void generateSetterHandlesNullField() {
+        assertThrows(NullPointerException.class, () -> typeCollector.generateSetter(null, "setValue"));
+    }
+
+    @Test
+    void generateSetterHandlesNullSetterName() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        assertThrows(AssertionError.class, () -> typeCollector.generateSetter(field, null));
+    }
+
+    @Test
+    void generateSetterHandlesEmptySetterName() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        assertThrows(AssertionError.class, () -> typeCollector.generateSetter(field, ""));
+    }
+
+    // -------------------- extractEnums -------------------- //
+    @Test
+    void extractEnumsHandlesNameExpr() {
+        handler.method = StaticJavaParser.parseBodyDeclaration("public static TestTO createTestTO() {\n" +
+                "    TestTO testTO = new TestTO();\n" +
+                "}").asMethodDeclaration();
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private Boolean isDeleted = Boolean.FALSE;").asFieldDeclaration();
+        typeCollector.extractEnums(field);
+
+        assertFalse(handler.method.getBody().get().getStatements().stream()
+                .anyMatch(stmt -> stmt.toString().contains("setIsDeleted")));
+    }
+
+    @Test
+    void extractEnumsGeneratesRandomValueForFieldWithoutInitializer() {
+        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestTO");
+
+        handler.method = StaticJavaParser.parseBodyDeclaration("public static TestTO createTestTO() {\n" +
+                "    TestTO testTO = new TestTO();\n" +
+                "}").asMethodDeclaration();
+
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private Integer value;").asFieldDeclaration();
+        classDeclaration.addMember(field);
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.method.getBody().get().getStatements().stream()
+                .anyMatch(stmt -> stmt.toString().contains("setValue")));
+    }
+
+    @Test
+    void extractEnumsDoesNotAddSetterForFieldWithInitializer() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value = 10;").asFieldDeclaration();
+        handler.method = new MethodDeclaration();
+        handler.method.setBody(new BlockStmt());
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.method.getBody().get().getStatements().isEmpty(), "No setter method should be added for field with initializer.");
+    }
+
+    @Test
+    void extractEnumsHandlesNullMethod() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
+        handler.method = null;
+
+        typeCollector.extractEnums(field);
+
+        assertNull(handler.method, "Method should remain null when handler.method is null.");
+    }
+
+    @Test
+    void extractEnumsDoesNothingForFieldWithInitializer() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value = 10;").asFieldDeclaration();
+        handler.method = new MethodDeclaration();
+        handler.method.setBody(new BlockStmt());
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.method.getBody().get().getStatements().isEmpty());
+    }
+
+    @Test
+    void extractEnumsDoesNotAddImportForNonFieldAccessExpr() {
+        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private String value = someMethod();").asFieldDeclaration();
+        handler.setCompilationUnit(new CompilationUnit());
+        handler.method = new MethodDeclaration();
+        handler.method.setBody(new BlockStmt());
+
+        typeCollector.extractEnums(field);
+
+        assertTrue(handler.cu.getImports().isEmpty(), "No import should be added for non-field access expression.");
+    }
+
+    // -------------------- parseDTO -------------------- //
+    @Test
+    void parseDTOHandlesInvalidPath() {
+        assertThrows(FileNotFoundException.class, () -> handler.parseDTO("invalid/path/NonExistentDTO.java"));
+    }
+
+    // -------------------- copyDTO -------------------- //
+    @Test
+    void copyDTOHandlesInvalidPath() {
+        String relativePath = "invalid/path/NonExistentDTO.java";
+
+        assertThrows(FileNotFoundException.class, () -> handler.copyDTO(relativePath));
     }
 }

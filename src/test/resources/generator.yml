@@ -3,11 +3,11 @@
 # environment variable.
 
 variables:
-  projects_folder: /home/raditha/workspace/python/CSI/selenium/repos
+  projects_folder: /home/raditha/csi/antikythera/src/test/resources/
   m2_folder: /home/raditha/.m2/repository
 
 # Points to top level folder of the application under test. This is a file system path.
-base_path: ${projects_folder}/EHR-IP/csi-ehr-ip-java-sev/src/main/java
+base_path: ${projects_folder}/sources
 
 # Add the base path to the src/main/java folder of csi-project
 # The top level package for your project. As an example for the pharmacy project it is
@@ -19,12 +19,9 @@ base_package: com.csi
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests
 # for that single controller
-controllers: com.csi.vidaplus.ehr.ip.admissionwithcareplane.controller.socialservices.SocialServicesController.java
-  #.referral.ReferralService.java
-#.checklist.CheckListController.java
-#  .apgarscore.ApgaScoreServiceRead.java
-#.dischargediettype.DischargeDietTypeController.java
-#.admission.AdmissionServiceRead.java
+controllers: com.csi.controller
+
+  #.admission.AdmissionServiceRead.java
 #.externaltransfer.ExternalTransferController.java
 
 # Path to output the generated test project
@@ -67,6 +64,3 @@ database:
   run_queries: true
 
 log_level: DEBUG
-
-finch:
-  - ${projects_folder}/AUT/finch/src/main/java/
