@@ -64,8 +64,8 @@ public class DTOHandler extends ClassProcessor {
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
 
-        for(String dependency : dependencies) {
-            copyDependencies(dependency);
+        for(Map.Entry<String,Dependency> dependency : dependencies.entrySet()) {
+            copyDependencies(dependency.getKey(), dependency.getValue());
         }
         dependencies.clear();
     }
@@ -95,24 +95,24 @@ public class DTOHandler extends ClassProcessor {
     }
 
     void handleStaticImports(NodeList<ImportDeclaration> imports) {
-        imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
-        {
-            if(importDeclaration.isStatic()) {
-                String importName = importDeclaration.getNameAsString();
-                if(importDeclaration.isAsterisk()) {
-                    dependencies.add(importName);
-                }
-                else {
-                    dependencies.add(importName.substring(0, importName.lastIndexOf(".")));
-                }
-            }
-        });
+// todo get this back
+//        imports.stream().filter(importDeclaration -> importDeclaration.isStatic()).forEach(importDeclaration ->
+//        {
+//            String importName = importDeclaration.getNameAsString();
+//            if(importName.startsWith(basePackage)) {
+//
+//                if(importDeclaration.isAsterisk()) {
+//                    dependencies.add(importName);
+//                }
+//                else {
+//                    dependencies.add(importName.substring(0, importName.lastIndexOf(".")));
+//                }
+//            }
+//        });
     }
 
     /**
-     * Iterates through all the classes in the file and processes them.
-     * If we are inheriting from a class that's part of our AUT, we need to copy it.
-     *
+     * Iterates through all the classes in the compilation unit and processes them.
      */
     void solveTypes() {
         cu.getTypes().forEach(typeDeclaration -> {
@@ -123,18 +123,24 @@ public class DTOHandler extends ClassProcessor {
                 NodeList<AnnotationExpr> annotations = classDecl.getAnnotations();
                 annotations.clear();
                 addLombok(classDecl, annotations);
+
                 // remove constructos and all methods. We are adding the @Getter and @Setter
-                // annotations so no getters and setters are needed. Any other methods can
-                // goto hell because they just shouldn't be here in the first place.
+                // annotations so no getters and setters are needed. All other annotations we will
+                // discard. They maybe required in the application under test but the tests don't
+                // need it themselves.
+
                 classDecl.getConstructors().forEach(Node::remove);
                 classDecl.getMethods().forEach(Node::remove);
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
-                    if(findImport(cu, parent.getName().asString()) || parent.resolve().describe().startsWith("java.lang")) {
-                        return;
-                    }
+
                     String className = cu.getPackageDeclaration().get().getNameAsString() + "." + parent.getNameAsString();
-                    dependencies.add(className);
+                    if (className.startsWith("java")) {
+                        continue;
+                    }
+                    Dependency dependency = new Dependency(typeDeclaration, parent);
+                    dependency.setExtension(true);
+                    dependencies.put(className, dependency);
                 }
                 // we don't want interfaces
                 classDecl.getImplementedTypes().clear();

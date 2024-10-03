@@ -18,22 +18,38 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
-
+/**
+ * Class processor will parse a class and track it's dependencies.
+ *
+ */
 public class ClassProcessor extends AbstractCompiler {
+    /*
+     * The overall strategy:
+     *   it is described here even though several different classes are involved.
+     *
+     *   We are only interested in copying the DTOs from the application under test. Broadly a DTO is a
+     *   class is either a return type of a controller or an input to a controller.
+     *
+     *   A controller has a lot of other dependencies, most notably services and even though respositories
+     *   are only supposed to be accessed through services sometimes you find them referred directly in
+     *   the controller. These will not be copied across to the test folder.
+     */
+
+    /**
+     * The logger
+     */
     private static final Logger logger = LoggerFactory.getLogger(ClassProcessor.class);
 
-    /*
-     * The strategy followed is that we iterate through all the fields in the
-     * class and add them to a queue. Then we iterate through the items in
-     * the queue and call the copy method on each one. If an item has already
-     * been copied, it will be in the resolved set that is defined in the
-     * parent, so we will skip it.
+    /**
+     * Essentially dependencies are a graph and the Dependency class represents an edge.
      */
-    protected final Set<String> dependencies = new HashSet<>();
-    final Set<String> externalDependencies = new HashSet<>();
+    protected final Map<String, Dependency> dependencies = new HashMap<>();
+
     static final Set<String> copied = new HashSet<>();
 
     public ClassProcessor() throws IOException {
@@ -45,8 +61,9 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param nameAsString a fully qualified class name
      */
-    protected void copyDependencies(String nameAsString) throws IOException {
-        if (nameAsString.endsWith("SUCCESS") || nameAsString.startsWith("org.springframework") || externalDependencies.contains(nameAsString)) {
+    protected void copyDependencies(String nameAsString, Dependency dependency) throws IOException {
+        if (dependency.isExternal() || nameAsString.endsWith("SUCCESS")
+                || nameAsString.startsWith("org.springframework")) {
             return;
         }
         if (!copied.contains(nameAsString) && nameAsString.startsWith(AbstractCompiler.basePackage)) {
@@ -107,20 +124,17 @@ public class ClassProcessor extends AbstractCompiler {
                 }
             }
             else {
-                try {
-                    String description = classType.resolve().describe();
-                    if (!description.startsWith("java.")) {
-                        for (var jarSolver : jarSolvers) {
-                            if(jarSolver.getKnownClasses().contains(description)) {
-                                externalDependencies.add(description);
-                                return;
-                            }
-                        }
-                        dependencies.add(description);
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    findImport(dependencyCu, mainType);
-                }
+                String description = classType.resolve().describe();
+                // todo
+//                if (!description.startsWith("java.")) {
+//                    for (var jarSolver : jarSolvers) {
+//                        if(jarSolver.getKnownClasses().contains(description)) {
+//                            externalDependencies.add(description);
+//                            return;
+//                        }
+//                    }
+//                    dependencies.add(description);
+//                }
             }
         }
     }
@@ -140,24 +154,24 @@ public class ClassProcessor extends AbstractCompiler {
          * copy the DTO across with the generated tests
          */
         for (var ref2 : dependencyCu.getImports()) {
-
-            String[] parts = ref2.getNameAsString().split("\\.");
-            if (parts[parts.length - 1].equals(mainType)) {
-                dependencies.add(ref2.getNameAsString());
-                for (var jarSolver : jarSolvers) {
-                    if(jarSolver.getKnownClasses().contains(ref2.getNameAsString())) {
-                        externalDependencies.add(ref2.getNameAsString());
-                    }
-                }
-                return true;
-            }
+// @todo
+//            String[] parts = ref2.getNameAsString().split("\\.");
+//            if (parts[parts.length - 1].equals(mainType)) {
+//                dependencies.add(ref2.getNameAsString());
+//                for (var jarSolver : jarSolvers) {
+//                    if(jarSolver.getKnownClasses().contains(ref2.getNameAsString())) {
+//                        externalDependencies.add(ref2.getNameAsString());
+//                    }
+//                }
+//                return true;
+//            }
         }
         return false;
     }
 
     /**
      * Converts a class name to an instance name.
-     * The usually convention. If we want to create an instance of List that variable is usually
+     * The usual convention. If we want to create an instance of List that variable is usually
      * called 'list'
      * @param cdecl type declaration
      * @return a variable name as a string
@@ -234,8 +248,7 @@ public class ClassProcessor extends AbstractCompiler {
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
         imports.removeIf(importDeclaration -> {
         String nameAsString = importDeclaration.getNameAsString();
-        return !(dependencies.contains(nameAsString) ||
-                 externalDependencies.contains(nameAsString) ||
+        return !(dependencies.containsKey(nameAsString) ||
                  nameAsString.contains("lombok") ||
                  nameAsString.startsWith("java.") ||
                  nameAsString.startsWith("com.fasterxml.jackson") ||

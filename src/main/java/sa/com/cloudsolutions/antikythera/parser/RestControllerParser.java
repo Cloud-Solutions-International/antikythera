@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -27,6 +29,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -162,15 +165,9 @@ public class RestControllerParser extends ClassProcessor {
          */
         cu.accept(new DepSolvingVisitor(), null);
 
-        for (String s : dependencies) {
-            gen.addImport(s);
-        }
-        for(String s: externalDependencies) {
-            gen.addImport(s);
-        }
-
-        for(String dependency : dependencies) {
-            copyDependencies(dependency);
+        for (Map.Entry<String, Dependency> dep : dependencies.entrySet()) {
+            gen.addImport(dep.getKey());
+            copyDependencies(dep.getKey(), dep.getValue());
         }
 
         /*
@@ -178,8 +175,6 @@ public class RestControllerParser extends ClassProcessor {
          */
         evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
-        dependencies.clear();
-        externalDependencies.clear();
 
         fileContent.append(gen.toString()).append("\n");
         ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
@@ -330,28 +325,28 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         private void identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
+            TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null) {
+            if (expression != null && from != null) {
                 if (expression.isObjectCreationExpr()) {
                     ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
                     if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for (Expression typeArg : objectCreationExpr.getArguments()) {
+                        for (Type typeArg : objectCreationExpr.getTypeArguments().orElse(new NodeList<>())) {
                             try {
-                                if(typeArg.isNameExpr()) {
-                                    String description = ((NameExpr) typeArg).resolve().getType().describe();
-                                    if (!description.startsWith("java.")) {
-                                        for (var jarSolver : jarSolvers) {
-                                            if (jarSolver.getKnownClasses().contains(description)) {
-                                                externalDependencies.add(description);
-                                                return;
-                                            }
+                                String description = typeArg.resolve().describe();
+                                if (!description.startsWith("java.")) {
+                                    Dependency dependency = new Dependency(from, typeArg);
+                                    for (var jarSolver : jarSolvers) {
+                                        if (jarSolver.getKnownClasses().contains(description)) {
+                                            dependency.setExtension(true);
+                                            return;
                                         }
-                                        dependencies.add(description);
                                     }
+                                    dependencies.put(description, dependency);
                                 }
+
                             } catch (UnsolvedSymbolException e) {
                                 logger.warn("Unresolvable {}", e);
-                                //findImport(dependencyCu, mainType);
                             }
                         }
                     }
