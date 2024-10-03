@@ -1,10 +1,9 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import com.cloud.api.constants.Constants;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;

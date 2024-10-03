@@ -1,11 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 
-import com.cloud.api.generator.AbstractCompiler;
-import com.cloud.api.generator.ControllerRequest;
-import com.cloud.api.generator.ControllerResponse;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import com.cloud.api.generator.RepositoryQuery;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 

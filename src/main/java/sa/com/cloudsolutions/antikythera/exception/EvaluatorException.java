@@ -1,4 +1,4 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.exception;
 
 public class EvaluatorException extends Exception{
     public EvaluatorException(String message) {

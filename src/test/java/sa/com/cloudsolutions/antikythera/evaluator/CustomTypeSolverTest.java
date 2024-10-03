@@ -1,10 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.cloud.api.generator.AbstractCompiler;
-import com.cloud.api.generator.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserClassDeclaration;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.MemoryTypeSolver;
@@ -13,8 +11,8 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import java.io.File;
 import java.io.IOException;
 
-public class CustomTypeSolver extends AbstractCompiler {
-    protected CustomTypeSolver() throws IOException {
+public class CustomTypeSolverTest extends AbstractCompiler {
+    protected CustomTypeSolverTest() throws IOException {
     }
 
     void doStuff() throws IOException, EvaluatorException {
@@ -39,7 +37,7 @@ public class CustomTypeSolver extends AbstractCompiler {
 
     public static void main(String[] args) throws IOException {
         Settings.loadConfigMap();
-        CustomTypeSolver customTypeSolver = new CustomTypeSolver();
+        CustomTypeSolverTest customTypeSolver = new CustomTypeSolverTest();
         try {
             customTypeSolver.doStuff();
         } catch (IOException | EvaluatorException e) {

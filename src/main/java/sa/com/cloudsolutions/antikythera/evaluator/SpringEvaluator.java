@@ -1,13 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.cloud.api.generator.AbstractCompiler;
-import com.cloud.api.generator.ClassProcessor;
-import com.cloud.api.generator.ControllerResponse;
-import com.cloud.api.generator.DTOHandler;
-import com.cloud.api.generator.EvaluatorException;
-import com.cloud.api.generator.GeneratorException;
-import com.cloud.api.generator.RepositoryParser;
-import com.cloud.api.generator.RepositoryQuery;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
+import sa.com.cloudsolutions.antikythera.parser.DTOHandler;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
+import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
+import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
@@ -52,9 +52,9 @@ public class SpringEvaluator extends Evaluator {
     /**
      * Maintains a list of repositories that we have already encountered.
      */
-    private static Map<String, RepositoryParser> respositories = new HashMap<>();
+    private static final Map<String, RepositoryParser> respositories = new HashMap<>();
 
-    private List<TestGenerator> generators  = new ArrayList<>();
+    private final List<TestGenerator> generators  = new ArrayList<>();
 
     private MethodDeclaration currentMethod;
 
@@ -67,8 +67,7 @@ public class SpringEvaluator extends Evaluator {
     @Override
     public void executeMethod(MethodDeclaration md) throws EvaluatorException {
         md.getParentNode().ifPresent(p -> {
-            if (p instanceof ClassOrInterfaceDeclaration) {
-                ClassOrInterfaceDeclaration cdecl = (ClassOrInterfaceDeclaration) p;
+            if (p instanceof ClassOrInterfaceDeclaration cdecl) {
                 if (cdecl.isAnnotationPresent("RestController")) {
                     currentMethod = md;
                 }
@@ -147,8 +146,8 @@ public class SpringEvaluator extends Evaluator {
                                 return new Variable(DTOBuddy.createDynamicDTO(cu.getTypes().get(0).asClassOrInterfaceDeclaration()));
                             }
                         } catch (Exception e) {
-                            logger.error(decl.getType().resolve().asReferenceType().getQualifiedName());
-                            throw  new EvaluatorException("Error while creating dynamic DTO", e);
+                            logger.error("Error while creating dynamic DTO {}", decl.getType().resolve().asReferenceType().getQualifiedName());
+                            throw  new EvaluatorException("in evaluateVariableDeclaration", e);
                         }
                     }
                     else {
@@ -269,8 +268,7 @@ public class SpringEvaluator extends Evaluator {
 
     private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws EvaluatorException {
         try {
-            if (parent instanceof IfStmt) {
-                IfStmt ifStmt = (IfStmt) parent;
+            if (parent instanceof IfStmt ifStmt) {
                 Expression condition = ifStmt.getCondition();
                 if (evaluateValidatorCondition(condition)) {
                     identifyReturnType(stmt, currentMethod);
@@ -282,9 +280,8 @@ public class SpringEvaluator extends Evaluator {
                 BlockStmt blockStmt = (BlockStmt) parent;
                 Optional<Node> gramps = blockStmt.getParentNode();
                 if (gramps.isPresent()) {
-                    if (gramps.get() instanceof IfStmt) {
+                    if (gramps.get() instanceof IfStmt ifStmt) {
                         // we have found ourselves a conditional return statement.
-                        IfStmt ifStmt = (IfStmt) gramps.get();
                         Expression condition = ifStmt.getCondition();
                         if (evaluateValidatorCondition(condition)) {
                             identifyReturnType(stmt, currentMethod);

@@ -1,12 +1,13 @@
-package com.cloud.api.generator;
+package sa.com.cloudsolutions.antikythera.parser;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import com.cloud.api.constants.Constants;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,7 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
-import static com.cloud.api.generator.ClassProcessor.*;
+import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RestControllerParserTest {

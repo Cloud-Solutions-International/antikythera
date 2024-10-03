@@ -47,8 +47,7 @@ public class DTOBuddy {
             Optional<Node> a = field.toAst();
             if (a.isPresent()) {
                 Node node = a.get();
-                if (node instanceof FieldDeclaration) {
-                    FieldDeclaration fieldDeclaration = (FieldDeclaration) node;
+                if (node instanceof FieldDeclaration fieldDeclaration) {
                     if (fieldDeclaration.getAnnotationByName("Id").isPresent()) {
                         String fieldName = field.getName();
                         Type t = fieldDeclaration.getElementType();

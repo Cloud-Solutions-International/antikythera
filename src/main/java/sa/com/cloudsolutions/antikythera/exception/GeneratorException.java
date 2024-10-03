@@ -1,6 +1,4 @@
-package com.cloud.api.generator;
-
-import java.io.IOException;
+package sa.com.cloudsolutions.antikythera.exception;
 
 public class GeneratorException extends RuntimeException {
 

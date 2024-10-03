@@ -1,9 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.cloud.api.generator.EvaluatorException;
-import com.cloud.api.generator.RestControllerParser;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import com.cloud.api.constants.Constants;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
