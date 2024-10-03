@@ -146,8 +146,8 @@ public class SpringEvaluator extends Evaluator {
                                 return new Variable(DTOBuddy.createDynamicDTO(cu.getTypes().get(0).asClassOrInterfaceDeclaration()));
                             }
                         } catch (Exception e) {
-                            logger.error(decl.getType().resolve().asReferenceType().getQualifiedName());
-                            throw  new EvaluatorException("Error while creating dynamic DTO", e);
+                            logger.error("Error while creating dynamic DTO {}", decl.getType().resolve().asReferenceType().getQualifiedName());
+                            throw  new EvaluatorException("in evaluateVariableDeclaration", e);
                         }
                     }
                     else {

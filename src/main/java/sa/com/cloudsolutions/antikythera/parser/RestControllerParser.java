@@ -155,7 +155,7 @@ public class RestControllerParser extends ClassProcessor {
          * We want to make sure that all the repositories are identified before we start processing the methods.
          *
          */
-        evaluator.setupFields(cu);
+
 
         /*
          * Pass 1 : identify dependencies
@@ -176,6 +176,7 @@ public class RestControllerParser extends ClassProcessor {
         /*
          * Pass 2 : Generate the tests
          */
+        evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
         dependencies.clear();
         externalDependencies.clear();

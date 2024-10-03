@@ -23,7 +23,7 @@ import java.util.Set;
 
 
 public class ClassProcessor extends AbstractCompiler {
-    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
+    private static final Logger logger = LoggerFactory.getLogger(ClassProcessor.class);
 
     /*
      * The strategy followed is that we iterate through all the fields in the
@@ -83,6 +83,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param dependencyCu the compilation unit inside which the type was encountered.
      */
     void solveTypeDependencies(Type type, CompilationUnit dependencyCu)  {
+
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
