@@ -74,23 +74,20 @@ public class ClassProcessor extends AbstractCompiler {
         }
 
         ClassOrInterfaceDeclaration cdecl = dependency.to.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-        if (cdecl != null) {
-            if (cdecl.getAnnotations().isEmpty() || cdecl.getAnnotationByName("Entity").isPresent()) {
-
-                System.out.println(dependency.to);
-                String targetName = dependency.to.resolve().describe();
-                if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
-                    try {
-                        copied.add(targetName);
-                        DTOHandler handler = new DTOHandler();
-                        handler.copyDTO(classToPath(targetName));
-                        AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
-                    } catch (FileNotFoundException fe) {
-                        if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                            logger.warn("Could not find " + targetName + " for copying");
-                        } else {
-                            throw fe;
-                        }
+        if (cdecl != null &&
+                 (cdecl.getAnnotations().isEmpty() || cdecl.getAnnotationByName("Entity").isPresent())) {
+            String targetName = dependency.to.resolve().describe();
+            if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
+                try {
+                    copied.add(targetName);
+                    DTOHandler handler = new DTOHandler();
+                    handler.copyDTO(classToPath(targetName));
+                    AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                } catch (FileNotFoundException fe) {
+                    if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                        logger.warn("Could not find {} for copying", targetName);
+                    } else {
+                        throw fe;
                     }
                 }
             }
@@ -113,7 +110,6 @@ public class ClassProcessor extends AbstractCompiler {
      * @param type the type to resolve
      */
     void solveTypeDependencies(TypeDeclaration<?> from, Type type)  {
-
 
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
@@ -278,7 +274,7 @@ public class ClassProcessor extends AbstractCompiler {
                 addEdge(from.getFullyQualifiedName().orElse(null), dependency);
             }
         } catch (UnsolvedSymbolException e) {
-            logger.debug("Unresolvable {}", e);
+            logger.debug("Unresolvable {}", typeArg.toString());
         }
         return false;
     }

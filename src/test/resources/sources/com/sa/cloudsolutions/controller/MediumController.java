@@ -1,4 +1,4 @@
-package com.csi.controller;
+package com.sa.cloudsolutions.controller;
 
 import com.csi.dto.SimpleDTO;
 import com.csi.dto.ComplexDTO;
@@ -6,9 +6,9 @@ import com.csi.dto.ComplexDTO;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/simple/entities"})
+@RequestMapping({"/medium/entities"})
 @Service
-public class SimpleController {
+public class MediumController {
 
     private static Logger logger = LogManager.getLogger(AssessmentChartServiceWrite.class);
     @CrossOrigin

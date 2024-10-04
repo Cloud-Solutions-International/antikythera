@@ -30,7 +30,6 @@ public class DTOBuddy {
             throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         String className = dtoType.resolve().asReferenceType().getQualifiedName();
 
-        //dtoType.getNameAsString();
         Class<?> clazz = createDynamicDTO(dtoType.resolve().asReferenceType().getDeclaredFields(), className);
         Object instance = clazz.getDeclaredConstructor().newInstance();
         setDefaults(dtoType.resolve().asReferenceType().getDeclaredFields(), instance);
