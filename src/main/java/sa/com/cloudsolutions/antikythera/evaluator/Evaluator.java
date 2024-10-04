@@ -534,12 +534,16 @@ public class Evaluator {
 
     /**
      * Find a constructor matching the given parameters.
+     *
+     * This method has side effects. The paramTypes may end up being converted from a boxed to primitive
+     * or vice verce
+     *
      * @param clazz the Class for which we need to find a constructor
      * @param paramTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
-    private Constructor findConstructor(Class<?> clazz, Class<?>[] paramTypes) {
-        for (Constructor<?> c : clazz.getConstructors()) {
+    private Constructor<?> findConstructor(Class<?> clazz, Class<?>[] paramTypes) {
+        for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             Class<?>[] types = c.getParameterTypes();
             if (types.length != paramTypes.length) {
                 continue;
@@ -880,6 +884,8 @@ public class Evaluator {
 }
 
 class NumericComparator {
+    private NumericComparator() {
+    }
 
     public static int compare(Object left, Object right) {
         if (left instanceof Number && right instanceof Number) {

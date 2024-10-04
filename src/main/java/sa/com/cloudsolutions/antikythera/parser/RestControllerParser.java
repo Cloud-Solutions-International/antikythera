@@ -5,7 +5,9 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -52,6 +54,11 @@ public class RestControllerParser extends ClassProcessor {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
 
+    /**
+     * Maintain stats of the controllers and methods parsed
+     */
+    private Stats stats = new Stats();
+
     private boolean evaluatorUnsupported = false;
     File current;
     private SpringEvaluator evaluator;
@@ -82,6 +89,8 @@ public class RestControllerParser extends ClassProcessor {
 
     public void start() throws IOException, EvaluatorException {
         processRestController(controllers);
+        logger.info("Processed {} controllers", stats.controllers);
+        logger.info("Processed {} methods", stats.methods);
     }
 
     private void processRestController(File path) throws IOException, EvaluatorException {
@@ -89,14 +98,13 @@ public class RestControllerParser extends ClassProcessor {
 
         logger.info(path.toString());
         if (path.isDirectory()) {
-            int i = 0;
             for (File f : path.listFiles()) {
                 if(f.toString().contains(controllers.toString())) {
                     new RestControllerParser(f).start();
-                    i++;
+                    stats.controllers++;
                 }
             }
-            logger.info("Processed {} controllers", i);
+
         } else {
             String p = path.toString().replace("/",".");
             List<String> skip = (List<String>) Settings.getProperty("skip");
@@ -115,6 +123,19 @@ public class RestControllerParser extends ClassProcessor {
                 controllerName = matcher.group(1);
             }
             parameterSet = new HashMap<>();
+            if (!path.exists()) {
+                // if the file ends with /java then we need to replace it with .java but only the
+                // last occurance
+                String absolutePath = path.getAbsolutePath();
+                if(absolutePath.endsWith("java")) {
+                    int idx = absolutePath.lastIndexOf("/");
+                    if (idx != -1) {
+                        char[] letters = absolutePath.toCharArray();
+                        letters[idx] = '.';
+                        path = new File(new String(letters));
+                    }
+                }
+            }
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
@@ -275,7 +296,8 @@ public class RestControllerParser extends ClassProcessor {
             }
             if (md.isPublic()) {
                 resolveMethodParameterTypes(md);
-                md.accept(new ReturnStatmentVisitor(), null);
+                md.accept(new ReturnStatmentVisitor(), md);
+                md.accept(new StatementVisitor(), md);
             }
         }
 
@@ -321,6 +343,19 @@ public class RestControllerParser extends ClassProcessor {
             public void visit(ReturnStmt statement, MethodDeclaration md) {
                 ReturnStmt stmt = statement.asReturnStmt();
                 identifyReturnType(stmt, md);
+            }
+        }
+
+        class StatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            @Override
+            public void visit(ExpressionStmt n, MethodDeclaration arg) {
+                super.visit(n, arg);
+                Expression expr = n.getExpression();
+                if(expr.isVariableDeclarationExpr()) {
+                    Type t = expr.asVariableDeclarationExpr().getElementType();
+
+                }
+                System.out.println(n);
             }
         }
 
@@ -376,5 +411,10 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
         return "";
+    }
+
+    private class Stats {
+        int controllers;
+        int methods;
     }
 }

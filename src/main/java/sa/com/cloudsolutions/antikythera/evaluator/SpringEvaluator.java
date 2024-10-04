@@ -357,6 +357,7 @@ public class SpringEvaluator extends Evaluator {
                                             ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
                                             : fields.get(scope.get().asNameExpr().getNameAsString());
                                     if (f != null) {
+
                                         extractTypeFromCall(f.getType(), methodCallExpr);
                                         logger.debug(f.toString());
                                     } else {
