@@ -364,7 +364,6 @@ public class RestControllerParser extends ClassProcessor {
                         addEdge(from.getFullyQualifiedName().orElseThrow(null), dependency);
                     }
                 }
-                System.out.println(n);
             }
         }
 

@@ -1,4 +1,6 @@
-package com.csi.expressions;
+package com.sa.cloudsolutions.expressions;
+
+import com.sa.cloudsolutions.dto.SimpleDTO;
 
 class SimpleDTOExpressions {
     void eval() {
