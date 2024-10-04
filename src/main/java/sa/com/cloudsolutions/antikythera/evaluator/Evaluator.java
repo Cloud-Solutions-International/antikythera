@@ -61,6 +61,7 @@ public class Evaluator {
     protected Variable returnValue;
 
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
+    static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
     static {
         wrapperToPrimitive.put(Integer.class, int.class);
         wrapperToPrimitive.put(Double.class, double.class);
@@ -70,6 +71,10 @@ public class Evaluator {
         wrapperToPrimitive.put(Short.class, short.class);
         wrapperToPrimitive.put(Byte.class, byte.class);
         wrapperToPrimitive.put(Character.class, char.class);
+
+        for(Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
+            primitiveToWrapper.put(entry.getValue(), entry.getKey());
+        }
     }
 
     private String scope;
@@ -290,13 +295,18 @@ public class Evaluator {
                             for (int i = 0; i < arguments.size(); i++) {
                                 Variable vv = evaluateExpression(arguments.get(i));
                                 Class<?> wrapperClass = vv.getValue().getClass();
-                                paramTypes[i + 1] = wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
+                                paramTypes[i + 1] =wrapperClass;
                                 args[i + 1] = vv.getValue();
                             }
 
-                            Constructor<?> cons = c.getDeclaredConstructor(paramTypes);
-                            Object instance = cons.newInstance(args);
-                            vx = new Variable(type, instance);
+                            Constructor<?> cons = findConstructor(c, paramTypes);
+                            if(cons !=  null) {
+                                Object instance = cons.newInstance(args);
+                                vx = new Variable(type, instance);
+                            }
+                            else {
+                                throw new EvaluatorException("Could not find a constructor for class " + c.getName());
+                            }
                         }
                     }
                 } else {
@@ -436,7 +446,7 @@ public class Evaluator {
             for (int i = 0; i < arguments.size(); i++) {
                 argValues[i] = evaluateExpression(arguments.get(i));
                 Class<?> wrapperClass = argValues[i].getClazz() == null ? argValues[i].getValue().getClass() : argValues[i].getClazz();
-                paramTypes[i] = wrapperClass; //wrapperToPrimitive.getOrDefault(wrapperClass, wrapperClass);
+                paramTypes[i] = wrapperClass;
                 args[i] = argValues[i].getValue();
             }
 
@@ -464,13 +474,96 @@ public class Evaluator {
     private Variable handleIllegalStateException(String methodName, Class<?>[] paramTypes, Object[] args, IllegalStateException e) throws EvaluatorException {
         Class<?> clazz = returnValue.getValue().getClass();
         try {
-            Method method = clazz.getMethod(methodName, paramTypes);
-            Variable v = new Variable(method.invoke(returnValue.getValue(), args));
-            AntikytheraRunTime.push(v);
-            return v;
+
+            Method method = findMethod(clazz, methodName, paramTypes);
+            if (method != null) {
+                Variable v = new Variable(method.invoke(returnValue.getValue(), args));
+                AntikytheraRunTime.push(v);
+                return v;
+            }
+            throw new EvaluatorException("Error evaluating method call: " + methodName, e);
         } catch (Exception ex) {
             throw new EvaluatorException("Error evaluating method call: " + methodName, e);
         }
+    }
+
+    /**
+     * Finds a matching method using parameters.
+     *
+     * This function has side effects. The paramTypes may end up being converted from a boxed to
+     * primitive or wise versa. This is because the Variable class that we use has an Object
+     * representing the value. Where as some of the methods have parameters that require a primitive
+     * type. Hence the conversion needs to happen.
+     *
+     * @param clazz the class on which we need to match the method name
+     * @param methodName the name of the method to find
+     * @param paramTypes and array or parameter types.
+     * @return a Method instance or null.
+     */
+    private Method findMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+
+        Method[] methods = clazz.getMethods();
+        for (Method m : methods) {
+            if (m.getName().equals(methodName)) {
+                Class<?>[] types = m.getParameterTypes();
+                if (types.length != paramTypes.length) {
+                    continue;
+                }
+                boolean found = true;
+                for(int i = 0 ; i < paramTypes.length ; i++) {
+                    if (types[i].equals(paramTypes[i])) {
+                        continue;
+                    }
+                    if (wrapperToPrimitive.get(types[i]) != null && wrapperToPrimitive.get(types[i]).equals(paramTypes[i])) {
+                        paramTypes[i] = wrapperToPrimitive.get(types[i]);
+                        continue;
+                    }
+                    if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
+                        paramTypes[i] = primitiveToWrapper.get(types[i]);
+                        continue;
+                    }
+                    found = false;
+                }
+                if (found) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find a constructor matching the given parameters.
+     * @param clazz the Class for which we need to find a constructor
+     * @param paramTypes the types of the parameters we are looking for.
+     * @return a Constructor instance or null.
+     */
+    private Constructor findConstructor(Class<?> clazz, Class<?>[] paramTypes) {
+        for (Constructor<?> c : clazz.getConstructors()) {
+            Class<?>[] types = c.getParameterTypes();
+            if (types.length != paramTypes.length) {
+                continue;
+            }
+            boolean found = true;
+            for(int i = 0 ; i < paramTypes.length ; i++) {
+                if (types[i].equals(paramTypes[i])) {
+                    continue;
+                }
+                if (wrapperToPrimitive.get(types[i]) != null && wrapperToPrimitive.get(types[i]).equals(paramTypes[i])) {
+                    paramTypes[i] = wrapperToPrimitive.get(types[i]);
+                    continue;
+                }
+                if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
+                    paramTypes[i] = primitiveToWrapper.get(types[i]);
+                    continue;
+                }
+                found = false;
+            }
+            if (found) {
+                return c;
+            }
+        }
+        return null;
     }
 
     private void handleSystemOutMethodCall(Class<?>[] paramTypes, Object[] args) throws Exception {
@@ -490,16 +583,19 @@ public class Evaluator {
 
         if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
             Class<?> clazz = Class.forName(declaringType.getQualifiedName());
-            Method method = clazz.getMethod(methodName, paramTypes);
-            if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                Variable v = new Variable(method.invoke(null, args));
-                AntikytheraRunTime.push(v);
-                return v;
-            } else {
-                Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
-                AntikytheraRunTime.push(v);
-                return v;
+            Method method = findMethod(clazz, methodName, paramTypes);
+            if(method != null) {
+                if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                    Variable v = new Variable(method.invoke(null, args));
+                    AntikytheraRunTime.push(v);
+                    return v;
+                } else {
+                    Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), args));
+                    AntikytheraRunTime.push(v);
+                    return v;
+                }
             }
+            throw new EvaluatorException(String.format("Method %s not found ", methodName));
         } else {
             if (scopeExpr.toString().equals(this.scope)) {
                 Optional<Node> method = resolvedMethod.toAst();
@@ -514,10 +610,13 @@ public class Evaluator {
                         paramTypes[i] = Object.class;
                     }
                 }
-                Method method = v.getValue().getClass().getMethod(methodName, paramTypes);
-                Variable response = new Variable(method.invoke(v.getValue(), args));
-                response.setClazz(method.getReturnType());
-                return response;
+                Method method = findMethod(v.getValue().getClass(), methodName, paramTypes);
+                if(method != null) {
+                    Variable response = new Variable(method.invoke(v.getValue(), args));
+                    response.setClazz(method.getReturnType());
+                    return response;
+                }
+                throw new EvaluatorException(String.format("Method %s not found ", methodName));
             }
         }
         return null;
