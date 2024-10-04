@@ -30,17 +30,16 @@ import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
- *
  */
 public class DTOHandler extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
-
 
     MethodDeclaration method = null;
 
@@ -64,10 +63,11 @@ public class DTOHandler extends ClassProcessor {
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
 
-        for(Map.Entry<String,Dependency> dependency : dependencies.entrySet()) {
-            copyDependencies(dependency.getKey(), dependency.getValue());
+        for(Map.Entry<String, List<Dependency>> dependency : dependencies.entrySet()) {
+            for (Dependency dep : dependency.getValue()) {
+                copyDependencies(dependency.getKey(), dep);
+            }
         }
-        dependencies.clear();
     }
 
     public void parseDTO(String relativePath) throws FileNotFoundException {
@@ -140,7 +140,7 @@ public class DTOHandler extends ClassProcessor {
                     }
                     Dependency dependency = new Dependency(typeDeclaration, parent);
                     dependency.setExtension(true);
-                    dependencies.put(className, dependency);
+                    addEdge(className, dependency);
                 }
                 // we don't want interfaces
                 classDecl.getImplementedTypes().clear();
@@ -221,7 +221,8 @@ public class DTOHandler extends ClassProcessor {
             field.setAnnotations(filteredAnnotations);
 
             extractEnums(field);
-            solveTypeDependencies(field.getElementType(), cu);
+            solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
+                    field.getElementType());
 
             // handle custom getters and setters
             String fieldName = field.getVariables().get(0).getNameAsString();
@@ -323,7 +324,7 @@ public class DTOHandler extends ClassProcessor {
         public Visitable visit(MethodDeclaration method, Void args) {
             super.visit(method, args);
             method.getAnnotations().clear();
-            solveTypeDependencies(method.getType(), cu);
+            solveTypeDependencies(method.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null), method.getType());
             return method;
         }
     }

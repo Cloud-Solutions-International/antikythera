@@ -226,18 +226,18 @@ public class Evaluator {
      */
     Variable evaluateVariableDeclaration(Expression expr) throws EvaluatorException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
+        Variable v = null;
         for (var decl : varDeclExpr.getVariables()) {
             Optional<Expression> init = decl.getInitializer();
             if (init.isPresent()) {
                 Expression expression = init.get();
                 if (expression.isMethodCallExpr()) {
                     MethodCallExpr methodCall = expression.asMethodCallExpr();
-                    Variable v = evaluateMethodCall(methodCall);
+                    v = evaluateMethodCall(methodCall);
                     if (v != null) {
                         v.setType(decl.getType());
                         setLocal(methodCall, decl.getNameAsString(), v);
                     }
-                    return v;
                 }
                 else if(expression.isObjectCreationExpr()) {
                     return createObject(expr, decl, expression);
@@ -245,7 +245,7 @@ public class Evaluator {
 
             }
         }
-        return null;
+        return v;
     }
 
     /**
@@ -520,6 +520,9 @@ public class Evaluator {
                     }
                     if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
                         paramTypes[i] = primitiveToWrapper.get(types[i]);
+                        continue;
+                    }
+                    if(types[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
                     found = false;

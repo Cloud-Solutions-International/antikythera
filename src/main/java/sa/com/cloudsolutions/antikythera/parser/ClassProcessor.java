@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -11,15 +13,16 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,9 +49,12 @@ public class ClassProcessor extends AbstractCompiler {
     private static final Logger logger = LoggerFactory.getLogger(ClassProcessor.class);
 
     /**
-     * Essentially dependencies are a graph and the Dependency class represents an edge.
+     * Essentially dependencies are a graph.
+     *
+     * The key in this map is the fully qualified class. The values will be the other types it
+     * refers to.
      */
-    protected final Map<String, Dependency> dependencies = new HashMap<>();
+    protected final Map<String, List<Dependency>> dependencies = new HashMap<>();
 
     static final Set<String> copied = new HashSet<>();
 
@@ -66,18 +72,26 @@ public class ClassProcessor extends AbstractCompiler {
                 || nameAsString.startsWith("org.springframework")) {
             return;
         }
-        if (!copied.contains(nameAsString) && nameAsString.startsWith(AbstractCompiler.basePackage)) {
-            try {
-                copied.add(nameAsString);
-                DTOHandler handler = new DTOHandler();
-                handler.copyDTO(classToPath(nameAsString));
-                AntikytheraRunTime.addClass(nameAsString, handler.getCompilationUnit());
-            } catch (FileNotFoundException fe) {
-                if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                    logger.warn("Could not find " + nameAsString);
-                }
-                else {
-                    throw fe;
+
+        ClassOrInterfaceDeclaration cdecl = dependency.to.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
+        if (cdecl != null) {
+            if (cdecl.getAnnotations().isEmpty() || cdecl.getAnnotationByName("Entity").isPresent()) {
+
+                System.out.println(dependency.to);
+                String targetName = dependency.to.resolve().describe();
+                if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
+                    try {
+                        copied.add(targetName);
+                        DTOHandler handler = new DTOHandler();
+                        handler.copyDTO(classToPath(targetName));
+                        AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                    } catch (FileNotFoundException fe) {
+                        if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                            logger.warn("Could not find " + targetName + " for copying");
+                        } else {
+                            throw fe;
+                        }
+                    }
                 }
             }
         }
@@ -97,9 +111,8 @@ public class ClassProcessor extends AbstractCompiler {
      * These are not copied across with the generated tests.
      *
      * @param type the type to resolve
-     * @param dependencyCu the compilation unit inside which the type was encountered.
      */
-    void solveTypeDependencies(Type type, CompilationUnit dependencyCu)  {
+    void solveTypeDependencies(TypeDeclaration<?> from, Type type)  {
 
 
         if (type.isClassOrInterfaceType()) {
@@ -119,22 +132,12 @@ public class ClassProcessor extends AbstractCompiler {
                 for (Type t : secondaryType) {
                     // todo find out the proper way to indentify Type parameters like List<T>
                     if(t.asString().length() != 1 ) {
-                        solveTypeDependencies(t, dependencyCu);
+                        solveTypeDependencies(from, t);
                     }
                 }
             }
             else {
-                String description = classType.resolve().describe();
-                // todo
-//                if (!description.startsWith("java.")) {
-//                    for (var jarSolver : jarSolvers) {
-//                        if(jarSolver.getKnownClasses().contains(description)) {
-//                            externalDependencies.add(description);
-//                            return;
-//                        }
-//                    }
-//                    dependencies.add(description);
-//                }
+                createEdge(classType, from);
             }
         }
     }
@@ -263,7 +266,29 @@ public class ClassProcessor extends AbstractCompiler {
         return cu;
     }
 
-    public void setCompilationUnit(CompilationUnit cu) {
-        this.cu = cu;
+    protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {
+        try {
+            if(typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType()) {
+                return false;
+            }
+            String description = typeArg.resolve().describe();
+            if (!description.startsWith("java.")) {
+                Dependency dependency = new Dependency(from, typeArg);
+                for (var jarSolver : jarSolvers) {
+                    if (jarSolver.getKnownClasses().contains(description)) {
+                        dependency.setExtension(true);
+                        return true;
+                    }
+                }
+                addEdge(from.getFullyQualifiedName().orElse(null), dependency);
+            }
+        } catch (UnsolvedSymbolException e) {
+            logger.debug("Unresolvable {}", e);
+        }
+        return false;
+    }
+
+    protected void addEdge(String className, Dependency dependency) {
+        this.dependencies.computeIfAbsent(className, k -> new ArrayList<>()).add(dependency);
     }
 }

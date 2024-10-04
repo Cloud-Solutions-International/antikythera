@@ -102,8 +102,6 @@ public class AbstractCompiler {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
-
-
     }
 
     public static String classToPath(String className) {

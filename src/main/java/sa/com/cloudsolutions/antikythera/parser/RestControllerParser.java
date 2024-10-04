@@ -47,7 +47,6 @@ public class RestControllerParser extends ClassProcessor {
     public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
     private final File controllers;
 
-    private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
 
     private final Path dataPath;
@@ -95,8 +94,9 @@ public class RestControllerParser extends ClassProcessor {
 
     private void processRestController(File path) throws IOException, EvaluatorException {
         current = path;
+        String absolutePath = path.getAbsolutePath();
 
-        logger.info(path.toString());
+        logger.info(absolutePath);
         if (path.isDirectory()) {
             for (File f : path.listFiles()) {
                 if(f.toString().contains(controllers.toString())) {
@@ -125,8 +125,8 @@ public class RestControllerParser extends ClassProcessor {
             parameterSet = new HashMap<>();
             if (!path.exists()) {
                 // if the file ends with /java then we need to replace it with .java but only the
-                // last occurance
-                String absolutePath = path.getAbsolutePath();
+                // last occurrence
+
                 if(absolutePath.endsWith("java")) {
                     int idx = absolutePath.lastIndexOf("/");
                     if (idx != -1) {
@@ -136,6 +136,7 @@ public class RestControllerParser extends ClassProcessor {
                     }
                 }
             }
+
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
@@ -186,9 +187,11 @@ public class RestControllerParser extends ClassProcessor {
          */
         cu.accept(new DepSolvingVisitor(), null);
 
-        for (Map.Entry<String, Dependency> dep : dependencies.entrySet()) {
+        for (Map.Entry<String, List<Dependency>> dep : dependencies.entrySet()) {
             gen.addImport(dep.getKey());
-            copyDependencies(dep.getKey(), dep.getValue());
+            for(Dependency dependency : dep.getValue()) {
+                copyDependencies(dep.getKey(), dependency);
+            }
         }
 
         /*
@@ -233,7 +236,8 @@ public class RestControllerParser extends ClassProcessor {
                             MethodDeclaration method = member.asMethodDeclaration();
 
                             if (!method.isPrivate() && method.getName().asString().equals(methodCallExpr.getNameAsString())) {
-                                solveTypeDependencies(method.getType(), dependencyCu);
+                                solveTypeDependencies(method.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
+                                        method.getType());
                             }
                         }
                     }
@@ -303,7 +307,8 @@ public class RestControllerParser extends ClassProcessor {
 
         private void resolveMethodParameterTypes(MethodDeclaration md) {
             for(var param : md.getParameters()) {
-                solveTypeDependencies(param.getType(), cu);
+                solveTypeDependencies(md.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
+                        param.getType());
             }
         }
 
@@ -322,7 +327,7 @@ public class RestControllerParser extends ClassProcessor {
                     if (SpringEvaluator.getRepositories().containsKey(classToInstanceName(shortName))) {
                         return;
                     }
-                    solveTypeDependencies(variable.getType(), cu);
+                    solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null), variable.getType());
                 }
             }
         }
@@ -348,12 +353,16 @@ public class RestControllerParser extends ClassProcessor {
 
         class StatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
             @Override
-            public void visit(ExpressionStmt n, MethodDeclaration arg) {
-                super.visit(n, arg);
+            public void visit(ExpressionStmt n, MethodDeclaration md) {
+                super.visit(n, md);
                 Expression expr = n.getExpression();
                 if(expr.isVariableDeclarationExpr()) {
                     Type t = expr.asVariableDeclarationExpr().getElementType();
-
+                    TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
+                    if (from != null) {
+                        Dependency dependency = new Dependency(from, t);
+                        addEdge(from.getFullyQualifiedName().orElseThrow(null), dependency);
+                    }
                 }
                 System.out.println(n);
             }
@@ -367,22 +376,7 @@ public class RestControllerParser extends ClassProcessor {
                     ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
                     if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
                         for (Type typeArg : objectCreationExpr.getTypeArguments().orElse(new NodeList<>())) {
-                            try {
-                                String description = typeArg.resolve().describe();
-                                if (!description.startsWith("java.")) {
-                                    Dependency dependency = new Dependency(from, typeArg);
-                                    for (var jarSolver : jarSolvers) {
-                                        if (jarSolver.getKnownClasses().contains(description)) {
-                                            dependency.setExtension(true);
-                                            return;
-                                        }
-                                    }
-                                    dependencies.put(description, dependency);
-                                }
-
-                            } catch (UnsolvedSymbolException e) {
-                                logger.warn("Unresolvable {}", e);
-                            }
+                            if (createEdge(typeArg, from)) return;
                         }
                     }
                 }
