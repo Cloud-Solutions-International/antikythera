@@ -218,7 +218,15 @@ public class Settings {
             return ((String) deps).split(",");
         }
         Map<String, Object> dependencies = (Map<String, Object>) deps;
-        return ((List<String>) dependencies.get(artifactIds)).toArray(new String[0]);
+        if (dependencies == null) {
+            return new String[]{ };
+        }
+
+        Object artifacts = dependencies.get(artifactIds);
+        if(artifacts == null) {
+            return new String[] {};
+        }
+        return ((List<String>) artifacts).toArray(new String[0]);
     }
 
     public static String[] getJarFiles() {

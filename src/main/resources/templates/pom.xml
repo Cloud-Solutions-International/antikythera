@@ -61,6 +61,13 @@
             <version>5.3.20</version>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+            <version>5.3.20</version>
+        </dependency>
+
     </dependencies>
     <build>
         <plugins>

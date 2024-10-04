@@ -417,4 +417,7 @@ public class DTOHandler extends ClassProcessor {
         }
     }
 
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
+    }
 }

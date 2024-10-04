@@ -84,7 +84,7 @@ class ProjectGeneratorTest {
                 "test" + File.separator + "java" + File.separator + basePackage);
         File testResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "test" + File.separator + "resources");
         File pomFile = new File(outputPath + File.separator + "pom.xml");
-        File mainJavaConstantsDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "java" + File.separator + "com" + File.separator + "cloud" + File.separator + "api" + File.separator + "constants");
+        File mainJavaConstantsDir = new File(outputPath + "src/main/java/sa/com/cloudsolutions/antikythera/constants");
         File testBaseDir = new File(outputPath + File.separator + "src" + File.separator + "test" + File.separator + "java" + File.separator + "com" + File.separator + "cloud" + File.separator + "api");
 
         assertTrue(mainJavaDir.exists() && mainJavaDir.isDirectory());

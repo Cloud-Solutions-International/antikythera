@@ -219,5 +219,4 @@ public class AbstractCompiler {
     public CompilationUnit getCompilationUnit() {
         return cu;
     }
-
 }

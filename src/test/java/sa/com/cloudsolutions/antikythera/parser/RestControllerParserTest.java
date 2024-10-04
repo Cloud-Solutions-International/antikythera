@@ -55,12 +55,12 @@ class RestControllerParserTest {
 
     @Test
     void getFields_returnsMapWithFieldNamesAndTypes() throws IOException {
-        Path testFilePath = Paths.get("src/test/resources/sources/com/csi/dto/SimpleDTO.java");
+        Path testFilePath = Paths.get("src/test/resources/sources/src/main/java/sa/com/cloudsolutions/dto/SimpleDTO.java");
         CompilationUnit cu = StaticJavaParser.parse(testFilePath);
 
         Map<String, FieldDeclaration> fields = parser.getFields(cu, "SimpleDTO");
         assertFalse(fields.isEmpty());
-        assertEquals(fields.size(), 3);
+        assertEquals(fields.size(), 7);
         assertTrue(fields.containsKey("id"));
         assertEquals(fields.get("id").toString(), "private Long id;");
         assertTrue(fields.containsKey("name"));

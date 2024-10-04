@@ -1,4 +1,4 @@
-package com.cloud.api.base;
+package sa.com.cloudsolutions.antikythera.base;
 
 import com.cloud.api.configurations.Configurations;
 import sa.com.cloudsolutions.antikythera.constants.StaticHeaders;
@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public abstract class TestHelper extends APIBaseTest {
+public abstract class TestHelper {
 
     private String baseURI;
     public static HashMap<String, String> loginProperties = null;
