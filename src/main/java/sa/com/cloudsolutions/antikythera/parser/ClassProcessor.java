@@ -261,11 +261,6 @@ public class ClassProcessor extends AbstractCompiler {
         });
     }
 
-
-    public CompilationUnit getCompilationUnit() {
-        return cu;
-    }
-
     protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {
         try {
             if(typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType()) {

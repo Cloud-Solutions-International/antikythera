@@ -1,86 +1,86 @@
-//package sa.com.cloudsolutions.antikythera.parser;
-//
-//import sa.com.cloudsolutions.antikythera.configuration.Settings;
-//import sa.com.cloudsolutions.antikythera.constants.Constants;
-//import com.github.javaparser.JavaParser;
-//import com.github.javaparser.ParserConfiguration;
-//import com.github.javaparser.StaticJavaParser;
-//import com.github.javaparser.ast.CompilationUnit;
-//import com.github.javaparser.ast.ImportDeclaration;
-//import com.github.javaparser.ast.Modifier;
-//import com.github.javaparser.ast.NodeList;
-//import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-//import com.github.javaparser.ast.body.EnumDeclaration;
-//import com.github.javaparser.ast.body.FieldDeclaration;
-//import com.github.javaparser.ast.body.MethodDeclaration;
-//import com.github.javaparser.ast.body.VariableDeclarator;
-//import com.github.javaparser.ast.expr.AnnotationExpr;
-//import com.github.javaparser.ast.expr.AssignExpr;
-//import com.github.javaparser.ast.expr.MethodCallExpr;
-//import com.github.javaparser.ast.stmt.BlockStmt;
-//import com.github.javaparser.ast.type.ClassOrInterfaceType;
-//import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-//import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-//import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-//import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
-//import org.junit.jupiter.api.BeforeEach;
-//import org.junit.jupiter.api.Test;
-//
-//import java.io.FileInputStream;
-//import java.io.FileNotFoundException;
-//import java.io.IOException;
-//import java.nio.file.Files;
-//import java.nio.file.Path;
-//import java.nio.file.Paths;
-//import java.util.NoSuchElementException;
-//import java.util.Optional;
-//
-//import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.basePackage;
-//import static org.junit.jupiter.api.Assertions.assertEquals;
-//import static org.junit.jupiter.api.Assertions.assertFalse;
-//import static org.junit.jupiter.api.Assertions.assertNotNull;
-//import static org.junit.jupiter.api.Assertions.assertNull;
-//import static org.junit.jupiter.api.Assertions.assertThrows;
-//import static org.junit.jupiter.api.Assertions.assertTrue;
-//
-//public class DTOHandlerTest {
-//    private ClassProcessor classProcessor;
-//    private DTOHandler handler;
-//    private DTOHandler.TypeCollector typeCollector;
-//
-//    private static String basePath;
-//    private static String controllers;
-//    private static String outputPath;
-//
-//    @BeforeEach
-//    void loadConfigMapBeforeEach() throws IOException {
-//        Settings.loadConfigMap();
-//        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-//        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
-//        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
-//
-//        classProcessor = new ClassProcessor();
-//        handler = new DTOHandler();
-//        typeCollector = handler.new TypeCollector();
-//        handler.cu = new CompilationUnit();
-//    }
-//
-//    // -------------------- handleStaticImports -------------------- //
-//    @Test
-//    void handleStaticImportsAddsStaticImportsToDependencies() {
-//        NodeList<ImportDeclaration> imports = new NodeList<>();
-//        String util = String.format("%s.util", basePackage);
-//        String staticImport = String.format("%s.staticImport", util);
-//        imports.add(new ImportDeclaration(staticImport, true, false));
-//
-//        handler.handleStaticImports(imports);
-//
-//        assertEquals(1, handler.dependencies.size());
-//        for (String dependency : handler.dependencies) {
-//            assertTrue(dependency.startsWith(basePackage));
-//            assertEquals(util, dependency);
-//        }
-//    }
+package sa.com.cloudsolutions.antikythera.parser;
+
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+
+import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.basePackage;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public class DTOHandlerTest {
+    private ClassProcessor classProcessor;
+    private DTOHandler handler;
+    private DTOHandler.TypeCollector typeCollector;
+
+    private static String basePath;
+    private static String controllers;
+    private static String outputPath;
+
+    @BeforeEach
+    void loadConfigMapBeforeEach() throws IOException {
+        Settings.loadConfigMap();
+        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
+        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
+        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+
+        classProcessor = new ClassProcessor();
+        handler = new DTOHandler();
+        typeCollector = handler.new TypeCollector();
+        handler.cu = new CompilationUnit();
+    }
+
+    @Test
+    void handleStaticImportsAddsStaticImportsToDependencies() {
+        NodeList<ImportDeclaration> imports = new NodeList<>();
+        String util = String.format("%s.util", basePackage);
+        String staticImport = String.format("%s.staticImport", util);
+        imports.add(new ImportDeclaration(staticImport, true, false));
+
+        handler.handleStaticImports(imports);
+
+        assertEquals(1, handler.dependencies.size());
+        for (Dependency dependency : handler.dependencies.get(staticImport)) {
+            assertTrue(dependency.getTo().asString().startsWith(basePackage));
+            assertEquals(util, dependency);
+        }
+    }
+}
 //
 //    @Test
 //    void handleStaticImportsAddsWildcardStaticImportsToDependencies() {

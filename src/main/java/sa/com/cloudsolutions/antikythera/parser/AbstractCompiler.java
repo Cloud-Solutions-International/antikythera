@@ -206,4 +206,9 @@ public class AbstractCompiler {
         }
         return Optional.empty();
     }
+
+    public CompilationUnit getCompilationUnit() {
+        return cu;
+    }
+
 }
