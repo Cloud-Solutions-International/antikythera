@@ -9,6 +9,7 @@ import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
@@ -134,49 +135,82 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param type the type to resolve
      */
-    void solveTypeDependencies(TypeDeclaration<?> from, Type type)  {
+    void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
 
         if (type.isClassOrInterfaceType()) {
-            ClassOrInterfaceType classType = type.asClassOrInterfaceType();
-
-            String mainType = classType.getNameAsString();
-            NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
-
-            if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
-                /*
-                 * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
-                 */
-
-                return;
-            }
-            if (secondaryType != null) {
-                for (Type t : secondaryType) {
-                    // todo find out the proper way to indentify Type parameters like List<T>
-                    if(t.asString().length() != 1 ) {
-                        solveTypeDependencies(from, t);
-                    }
-                }
-            }
-
-            resolveImport(mainType);
-            createEdge(classType, from);
+            solveClassDependency(from, type);
         }
         else {
             /*
              * Primitive constants that are assigned a value based on a static import is the
              * hardest thing to solve.
              */
-            Optional<VariableDeclarator> vdecl = type.findAncestor(VariableDeclarator.class);
-            if (vdecl.isPresent()) {
-                Optional<Expression> expr = vdecl.get().getInitializer();
-                if(expr.isPresent()) {
-                    String name = expr.get().asNameExpr().getName().asString();
-                    ImportDeclaration imp = resolveImport(name);
+            solveConstant(from, type);
+        }
+    }
 
-                    System.out.println("Primitive");
+    private void solveConstant(TypeDeclaration<?> from, Type type) {
+        Optional<VariableDeclarator> vdecl = type.findAncestor(VariableDeclarator.class);
+        if (vdecl.isPresent()) {
+            Optional<Expression> optExpr = vdecl.get().getInitializer();
+            if(optExpr.isPresent()) {
+                Expression expr = optExpr.get();
+                if(expr.isNameExpr()) {
+                    String name = expr.asNameExpr().getName().asString();
+                    ImportDeclaration imp = resolveImport(name);
+                    String className = imp.getNameAsString();
+
+                    int index = className.lastIndexOf(".");
+                    if (index > 0) {
+                        String pkg = className.substring(0, index);
+                        CompilationUnit depCu = AntikytheraRunTime.getCompilationUnit(pkg);
+                        if (depCu == null) {
+                            try {
+                                DTOHandler handler = new DTOHandler();
+                                handler.parseDTO(AbstractCompiler.classToPath(pkg));
+                                depCu = handler.getCompilationUnit();
+                            } catch (IOException iex) {
+                                logger.error("Could not find {}", pkg);
+                            }
+                        }
+                        if (depCu != null) {
+                            for (TypeDeclaration typeArg : depCu.getTypes()) {
+                                typeArg.asClassOrInterfaceDeclaration().getFullyQualifiedName();
+//                                if (typeArg.getNameAsString().equals(name)) {
+//                                    createEdge(typeArg, from);
+//                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private void solveClassDependency(TypeDeclaration<?> from, Type type) {
+        ClassOrInterfaceType classType = type.asClassOrInterfaceType();
+
+        String mainType = classType.getNameAsString();
+        NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
+
+        if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
+            /*
+             * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
+             */
+
+            return;
+        }
+        if (secondaryType != null) {
+            for (Type t : secondaryType) {
+                // todo find out the proper way to indentify Type parameters like List<T>
+                if(t.asString().length() != 1 ) {
+                    solveTypeDependencies(from, t);
+                }
+            }
+        }
+
+        resolveImport(mainType);
+        createEdge(classType, from);
     }
 
 
@@ -306,6 +340,22 @@ public class ClassProcessor extends AbstractCompiler {
                     ImportDeclaration solvedImport = new ImportDeclaration(ref.getCorrespondingDeclaration().getQualifiedName(), false, false);
                     keepImports.add(solvedImport);
                     return solvedImport;
+                }
+                else {
+                    ref = combinedTypeSolver.tryToSolveType(packageName);
+                    if (ref.isSolved()) {
+                        Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
+                        if(resolved.isPresent()) {
+                            for(ResolvedFieldDeclaration field : ref.getDeclaration().get().getDeclaredFields()) {
+                                if (field.getName().equals(name)) {
+                                    ImportDeclaration solvedImport = new ImportDeclaration(
+                                            packageName + "." + name, false, false);
+                                    keepImports.add(solvedImport);
+                                    return solvedImport;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IntegrationTestDTOHandler {
     @BeforeAll
@@ -52,14 +53,17 @@ class IntegrationTestDTOHandler {
         DTOHandler handler = new DTOHandler();
         handler.copyDTO(AbstractCompiler.classToPath("sa.com.cloudsolutions.dto.ComplexDTO"));
 
-        File file = Paths.get( Settings.getProperty("output_path").toString() , "src/main/java/sa/com/cloudsolutions/dto/ComplexDTO.java").toFile();
+        File file = Paths.get( Settings.getProperty("output_path").toString() ,
+                "src/main/java/sa/com/cloudsolutions/dto/ComplexDTO.java").toFile();
 
         CompilationUnit cu = StaticJavaParser.parse(file);
 
         assertEquals(1, cu.getTypes().size());
-        assertEquals(6, cu.getImports().size());
+        assertEquals(8, cu.getImports().size());
         assertEquals(0, cu.getType(0).getConstructors().size());
+
+        File constants = Paths.get( Settings.getProperty("output_path").toString() ,
+                "src/main/java/sa/com/cloudsolutions/dto/Constants.java").toFile();
+        assertTrue(constants.exists());
     }
-
-
 }
