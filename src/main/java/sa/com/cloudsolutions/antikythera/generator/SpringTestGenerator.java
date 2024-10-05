@@ -383,7 +383,7 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
 
-    private MethodDeclaration buildTestMethod(MethodDeclaration md) {
+    MethodDeclaration buildTestMethod(MethodDeclaration md) {
         MethodDeclaration testMethod = new MethodDeclaration();
 
         NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
@@ -450,8 +450,7 @@ public class SpringTestGenerator implements  TestGenerator {
         return commonPath;
     }
 
-
-    private void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
+    void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
 
@@ -459,9 +458,9 @@ public class SpringTestGenerator implements  TestGenerator {
             if (paramString.startsWith("@RequestParam")) {
                 if (!request.getQueryParameters().containsKey(paramName)) {
                     request.addQueryParameter(paramName, switch (param.getTypeAsString()) {
-                        case "Boolean" -> "1";
-                        case "float", "Float", "double", "Double" -> "1";
-                        case "Integer", "int", "Long" -> "1";
+                        case "Boolean" -> "false";
+                        case "float", "Float", "double", "Double" -> "0.0";
+                        case "Integer", "int", "Long" -> "0";
                         case "String" -> "Ibuprofen";
                         default -> "0";
                     });
@@ -471,8 +470,8 @@ public class SpringTestGenerator implements  TestGenerator {
 
                 String path = switch (param.getTypeAsString()) {
                     case "Boolean" -> request.getPath().replace(target, "false");
-                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "1.0");
-                    case "Integer", "int", "Long" -> request.getPath().replace(target, "1");
+                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "0.0");
+                    case "Integer", "int", "Long" -> request.getPath().replace(target, "0");
                     case "String" -> request.getPath().replace(target, "Ibuprofen");
                     default -> request.getPath().replace(target, "0");
                 };
@@ -515,6 +514,10 @@ public class SpringTestGenerator implements  TestGenerator {
     @Override
     public CompilationUnit getCompilationUnit() {
         return gen;
+    }
+
+    public void setCompilationUnit(CompilationUnit gen) {
+        this.gen = gen;
     }
 
     @Override

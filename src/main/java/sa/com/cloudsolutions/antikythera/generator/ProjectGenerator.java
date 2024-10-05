@@ -26,7 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ProjectGenerator {
-    private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
+    private static final Logger logger = LoggerFactory.getLogger(ProjectGenerator.class);
 
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
