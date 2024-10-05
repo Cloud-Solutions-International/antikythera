@@ -186,7 +186,7 @@ public class RestControllerParser extends ClassProcessor {
         for (Map.Entry<String, Set<Dependency>> dep : dependencies.entrySet()) {
             gen.addImport(dep.getKey());
             for(Dependency dependency : dep.getValue()) {
-                copyDependencies(dep.getKey(), dependency);
+                copyDependency(dep.getKey(), dependency);
             }
         }
 

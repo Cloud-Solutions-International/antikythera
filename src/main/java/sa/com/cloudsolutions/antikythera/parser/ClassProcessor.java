@@ -1,12 +1,8 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
@@ -94,7 +90,7 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param nameAsString a fully qualified class name
      */
-    protected void copyDependencies(String nameAsString, Dependency dependency) throws IOException {
+    protected void copyDependency(String nameAsString, Dependency dependency) throws IOException {
         if (dependency.isExternal() || nameAsString.startsWith("org.springframework")) {
             return;
         }
