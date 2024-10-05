@@ -2,11 +2,16 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +33,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -151,9 +157,24 @@ public class ClassProcessor extends AbstractCompiler {
                     }
                 }
             }
-            else {
-                resolveImport(classType);
-                createEdge(classType, from);
+
+            resolveImport(mainType);
+            createEdge(classType, from);
+        }
+        else {
+            /*
+             * Primitive constants that are assigned a value based on a static import is the
+             * hardest thing to solve.
+             */
+            Optional<VariableDeclarator> vdecl = type.findAncestor(VariableDeclarator.class);
+            if (vdecl.isPresent()) {
+                Optional<Expression> expr = vdecl.get().getInitializer();
+                if(expr.isPresent()) {
+                    String name = expr.get().asNameExpr().getName().asString();
+                    ImportDeclaration imp = resolveImport(name);
+
+                    System.out.println("Primitive");
+                }
             }
         }
     }
@@ -265,13 +286,29 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
 
-    protected void resolveImport(Type type) {
+    protected ImportDeclaration resolveImport(String name) {
         for (ImportDeclaration importDeclaration : allImports) {
             Name importedName = importDeclaration.getName();
-            if (importedName.toString().equals(type.asString())) {
+            if (importedName.toString().equals(name)) {
                 keepImports.add(importDeclaration);
-                return;
+                return importDeclaration;
+            }
+            String[] parts = importedName.toString().split("\\.");
+            if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
+                keepImports.add(importDeclaration);
+                return importDeclaration;
+            }
+
+            if(importDeclaration.isAsterisk()) {
+                String packageName = importedName.toString();
+                SymbolReference<ResolvedReferenceTypeDeclaration> ref = combinedTypeSolver.tryToSolveType(packageName + "." + name);
+                if (ref.isSolved()) {
+                    ImportDeclaration solvedImport = new ImportDeclaration(ref.getCorrespondingDeclaration().getQualifiedName(), false, false);
+                    keepImports.add(solvedImport);
+                    return solvedImport;
+                }
             }
         }
+        return null;
     }
 }

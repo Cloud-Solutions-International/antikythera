@@ -12,12 +12,14 @@ import static sa.com.cloudsolutions.dto.Constants.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ComplexDTO {
+    private int first = FIRST_GROUP;
+    private int second = SECOND_GROUP;
+
     private Long id;
     private String name;
     private String description;
 
-    private int first = FIRST_GROUP;
-    private int second = SECOND_GROUP;
+
 
     private Map<String, SimpleDTO> simpleMap;
     private Map<String, List<SimpleDTO>> mediumMap;
