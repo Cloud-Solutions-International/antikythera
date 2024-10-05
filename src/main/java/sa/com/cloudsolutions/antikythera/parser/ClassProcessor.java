@@ -4,6 +4,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
@@ -26,7 +27,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -62,7 +62,21 @@ public class ClassProcessor extends AbstractCompiler {
 
     static final Set<String> copied = new HashSet<>();
 
-    private final Set<String> importsToKeep = new HashSet<>();
+    /**
+     * A collection of all imports encountered in a class.
+     * This maybe a huge list because sometimes we find wild card imports.
+     */
+    private final Set<ImportDeclaration> allImports = new HashSet<>();
+
+    /**
+     * This is a collection of imports that we want to preserve.
+     *
+     * Most classes contain a bunch of imports that are not used + there will be some that are
+     * obsolete after we strip out the unwanted dependencies. Lastly we are trying to avoid
+     * asterisk imports, so they are expanded and then the asterisk is removed.
+     *
+     */
+    private final Set<ImportDeclaration> keepImports = new HashSet<>();
 
     public ClassProcessor() throws IOException {
         super();
@@ -138,6 +152,7 @@ public class ClassProcessor extends AbstractCompiler {
                 }
             }
             else {
+                resolveImport(classType);
                 createEdge(classType, from);
             }
         }
@@ -173,10 +188,8 @@ public class ClassProcessor extends AbstractCompiler {
      * We do not search jars, external dependencies or the java standard library.
      *
      * @param packageName the package name
-     * @return a set of fully qualified class names
      */
-    protected Set<String> findMatchingClasses(String packageName) {
-        Set<String> matchingClasses = new HashSet<>();
+    protected void findMatchingClasses(String packageName) {
         Path p = Paths.get(basePath, packageName.replace(".", "/"));
         File directory = p.toFile();
 
@@ -187,12 +200,12 @@ public class ClassProcessor extends AbstractCompiler {
                     String fname = f.getName();
                     if (fname.endsWith(ClassProcessor.SUFFIX)) {
                         String imp = packageName + "." + fname.substring(0, fname.length() - 5);
-                        matchingClasses.add(imp);
+                        ImportDeclaration importDeclaration = new ImportDeclaration(imp, false, false);
+                        allImports.add(importDeclaration);
                     }
                 }
             }
         }
-        return matchingClasses;
     }
 
     /**
@@ -203,46 +216,30 @@ public class ClassProcessor extends AbstractCompiler {
      * @param cu the compilation unit
      */
     protected void expandWildCards(CompilationUnit cu) {
-        Set<String> wildCards = new HashSet<>();
+
         for(var imp : cu.getImports()) {
             if(imp.isAsterisk() && !imp.isStatic()) {
                 String packageName = imp.getNameAsString();
                 if (packageName.startsWith(basePackage)) {
-                    wildCards.addAll(findMatchingClasses(packageName));
+                    findMatchingClasses(packageName);
                 }
             }
-        }
-        for(String s : wildCards) {
-            // setting asterisk as true and then switching it off is to overcome a bug in javaparser
-            ImportDeclaration impl = new ImportDeclaration(s, false, true);
-            cu.addImport(impl);
-            impl.setAsterisk(false);
         }
     }
 
-    protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
-        Set<String> keepers = new HashSet<>();
+    /**
+     * Removes unused imports.
+     */
+    protected void removeUnusedImports() {
 
-        for(ClassOrInterfaceDeclaration cdecl : cu.findAll(ClassOrInterfaceDeclaration.class)) {
-            Set<Dependency> deps = dependencies.get(cdecl.getFullyQualifiedName().orElseGet(null));
-            if(deps != null) {
-                for(Dependency dep : deps) {
-                    try {
-                        keepers.add(dep.to.resolve().describe());
-                    } catch (IllegalStateException e) {
-                        keepers.add(dep.to.toString());
-                    }
-                }
-            }
-        }
-        imports.removeIf(importDeclaration -> {
+        allImports.removeIf(importDeclaration -> {
         String nameAsString = importDeclaration.getNameAsString();
         return !(dependencies.containsKey(nameAsString) ||
                  nameAsString.contains("lombok") ||
                  nameAsString.startsWith("java.") ||
                  nameAsString.startsWith("com.fasterxml.jackson") ||
                  nameAsString.startsWith("org.springframework.util") ||
-                 keepers.contains(nameAsString) ||
+                 keepImports.contains(importDeclaration) ||
                  (importDeclaration.isStatic() && nameAsString.contains("constants.")));
         });
 
@@ -284,5 +281,16 @@ public class ClassProcessor extends AbstractCompiler {
 
     protected void addEdge(String className, Dependency dependency) {
         dependencies.computeIfAbsent(className, k -> new HashSet<>()).add(dependency);
+    }
+
+
+    protected void resolveImport(Type type) {
+        for (ImportDeclaration importDeclaration : allImports) {
+            Name importedName = importDeclaration.getName();
+            if (importedName.toString().equals(type.asString())) {
+                keepImports.add(importDeclaration);
+                return;
+            }
+        }
     }
 }

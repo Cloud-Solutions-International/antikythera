@@ -86,7 +86,7 @@ public class DTOHandler extends ClassProcessor {
             }
         }
 
-        removeUnusedImports(cu.getImports());
+        removeUnusedImports();
 
         if (method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
