@@ -155,7 +155,12 @@ public class ClassProcessor extends AbstractCompiler {
     void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
 
         if (type.isClassOrInterfaceType()) {
-            solveClassDependency(from, type);
+            if (type.asClassOrInterfaceType().isBoxedType()) {
+                solveConstant(from, type);
+            }
+            else {
+                solveClassDependency(from, type);
+            }
         }
         else {
             /*
@@ -166,6 +171,14 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
+    /**
+     * Solve the dependency problem for a field declaration that has an assignment.
+     * This method does not return anything but has a side effect. It will result
+     * in the dependency graph being updated.
+     *
+     * @param from the node from which we are trying to solve the dependency
+     * @param type the type of the field being resolved.
+     */
     private void solveConstant(TypeDeclaration<?> from, Type type) {
         Optional<VariableDeclarator> vdecl = type.findAncestor(VariableDeclarator.class);
         if (vdecl.isPresent()) {

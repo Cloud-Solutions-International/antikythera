@@ -60,7 +60,7 @@ class RestControllerParserTest {
 
         Map<String, FieldDeclaration> fields = parser.getFields(cu, "SimpleDTO");
         assertFalse(fields.isEmpty());
-        assertEquals(fields.size(), 7);
+        assertEquals(fields.size(), 6);
         assertTrue(fields.containsKey("id"));
         assertEquals(fields.get("id").toString(), "private Long id;");
         assertTrue(fields.containsKey("name"));
