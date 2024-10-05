@@ -219,6 +219,10 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    /**
+     * Get the compilation unit for the current class
+     * @return a CompilationUnit instance.
+     */
     public CompilationUnit getCompilationUnit() {
         return cu;
     }

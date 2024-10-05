@@ -127,7 +127,7 @@ public class DTOHandler extends ClassProcessor {
                     if (className.startsWith("java")) {
                         continue;
                     }
-                    Dependency dependency = new Dependency(typeDeclaration, parent);
+                    Dependency dependency = new Dependency(typeDeclaration, className);
                     dependency.setExtension(true);
                     addEdge(className, dependency);
                 }

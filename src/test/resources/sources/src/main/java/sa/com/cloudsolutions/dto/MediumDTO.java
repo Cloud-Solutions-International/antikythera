@@ -14,11 +14,13 @@ import static sa.com.cloudsolutions.dto.Constants.FIRST_GROUP;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MediumDTO {
+    private Integer group = FIRST_GROUP;
+
     private Long id;
     private String name;
     private String description;
 
-    private Integer group = FIRST_GROUP;
+
 
     private Map<String, SimpleDTO> simpleMap;
     private Map<String, List<SimpleDTO>> mediumMap;

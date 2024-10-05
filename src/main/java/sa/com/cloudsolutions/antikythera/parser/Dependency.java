@@ -5,21 +5,21 @@ import com.github.javaparser.ast.type.Type;
 
 public class Dependency {
     TypeDeclaration<?> from;
-    Type to;
+    String to;
     boolean returnType;
     boolean parameter;
     boolean controller;
     boolean external;
     boolean extension;
 
-    public Dependency(TypeDeclaration<?> from, Type to, boolean returnType, boolean isParameter) {
+    public Dependency(TypeDeclaration<?> from, String to, boolean returnType, boolean isParameter) {
         this.from = from;
         this.to = to;
         this.returnType = returnType;
         this.parameter = isParameter;
     }
 
-    public Dependency(TypeDeclaration<?> from, Type to) {
+    public Dependency(TypeDeclaration<?> from, String to) {
         this(from, to, false, false);
     }
 
@@ -31,11 +31,11 @@ public class Dependency {
         this.from = from;
     }
 
-    public Type getTo() {
+    public String getTo() {
         return to;
     }
 
-    public void setTo(Type to) {
+    public void setTo(String to) {
         this.to = to;
     }
 
@@ -81,13 +81,13 @@ public class Dependency {
 
     @Override
     public int hashCode() {
-        return from.getFullyQualifiedName().hashCode() + to.asString().hashCode();
+        return from.getFullyQualifiedName().hashCode() + to.hashCode();
     }
 
     @Override
     public boolean equals(Object obj) {
         if(obj instanceof Dependency other) {
-            return from.getFullyQualifiedName().equals(other.from.getFullyQualifiedName()) && to.asString().equals(other.to.asString());
+            return from.getFullyQualifiedName().equals(other.from.getFullyQualifiedName()) && to.equals(other.to);
         }
 
         return false;

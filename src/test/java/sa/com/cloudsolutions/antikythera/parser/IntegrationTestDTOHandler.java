@@ -44,7 +44,7 @@ class IntegrationTestDTOHandler {
         CompilationUnit cu = StaticJavaParser.parse(file);
 
         assertEquals(1, cu.getTypes().size());
-        assertEquals(6, cu.getImports().size());
+        assertEquals(7, cu.getImports().size());
         assertEquals(0, cu.getType(0).getConstructors().size());
     }
 

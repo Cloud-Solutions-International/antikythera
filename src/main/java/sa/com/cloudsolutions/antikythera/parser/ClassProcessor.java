@@ -98,22 +98,39 @@ public class ClassProcessor extends AbstractCompiler {
         if (dependency.isExternal() || nameAsString.startsWith("org.springframework")) {
             return;
         }
+        /*
+         * First thing is to find the compilation unit. Obviously we can only copy the DTO
+         * if we have a compilation unit.
+         */
+        CompilationUnit depCu = getCompilationUnit(dependency.to);
+        if (depCu != null) {
+            for (var decl : depCu.getTypes()) {
+                String targetName = dependency.to;
+                if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
+                    /*
+                     * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
+                     * it's best to make sure that we haven't copied this file already and also to make
+                     * sure that the class is directly part of the application under test.
+                     */
+                    if (decl.getAnnotations().isEmpty() || decl.getAnnotationByName("Entity").isPresent()) {
+                        /*
+                         * There are lots of beans in a Spring Boot app. Typically these do not need to be
+                         * copied. Those beans can easily be identified by the fact that they have various
+                         * annotations. We skip anything that is not an Entity.
+                         */
 
-        ClassOrInterfaceDeclaration cdecl = dependency.to.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-        if (cdecl != null &&
-                 (!cdecl.getAnnotations().isEmpty() || cdecl.getAnnotationByName("Entity").isPresent())) {
-            String targetName = dependency.to.resolve().describe();
-            if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
-                try {
-                    copied.add(targetName);
-                    DTOHandler handler = new DTOHandler();
-                    handler.copyDTO(classToPath(targetName));
-                    AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
-                } catch (FileNotFoundException fe) {
-                    if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                        logger.warn("Could not find {} for copying", targetName);
-                    } else {
-                        throw fe;
+                        try {
+                            copied.add(targetName);
+                            DTOHandler handler = new DTOHandler();
+                            handler.copyDTO(classToPath(targetName));
+                            AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                        } catch (FileNotFoundException fe) {
+                            if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                                logger.warn("Could not find {} for copying", targetName);
+                            } else {
+                                throw fe;
+                            }
+                        }
                     }
                 }
             }
@@ -163,28 +180,34 @@ public class ClassProcessor extends AbstractCompiler {
                     int index = className.lastIndexOf(".");
                     if (index > 0) {
                         String pkg = className.substring(0, index);
-                        CompilationUnit depCu = AntikytheraRunTime.getCompilationUnit(pkg);
-                        if (depCu == null) {
-                            try {
-                                DTOHandler handler = new DTOHandler();
-                                handler.parseDTO(AbstractCompiler.classToPath(pkg));
-                                depCu = handler.getCompilationUnit();
-                            } catch (IOException iex) {
-                                logger.error("Could not find {}", pkg);
-                            }
-                        }
+                        CompilationUnit depCu = getCompilationUnit(pkg);
                         if (depCu != null) {
-                            for (TypeDeclaration typeArg : depCu.getTypes()) {
-                                typeArg.asClassOrInterfaceDeclaration().getFullyQualifiedName();
-//                                if (typeArg.getNameAsString().equals(name)) {
-//                                    createEdge(typeArg, from);
-//                                }
-                            }
+                            Dependency dep = new Dependency(from, pkg);
+                            addEdge(from.getFullyQualifiedName().orElse(null), dep);
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Find the compilation unit for the given class
+     * @param className the class name
+     * @return a CompilationUnit instance or null
+     */
+    private static CompilationUnit getCompilationUnit(String className) {
+        CompilationUnit depCu = AntikytheraRunTime.getCompilationUnit(className);
+        if (depCu == null) {
+            try {
+                DTOHandler handler = new DTOHandler();
+                handler.parseDTO(AbstractCompiler.classToPath(className));
+                depCu = handler.getCompilationUnit();
+            } catch (IOException iex) {
+                logger.error("Could not find {}", className);
+            }
+        }
+        return depCu;
     }
 
     private void solveClassDependency(TypeDeclaration<?> from, Type type) {
@@ -292,7 +315,7 @@ public class ClassProcessor extends AbstractCompiler {
                     if (init != null) {
                         JavaParserFieldDeclaration fieldDeclaration =  symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
                         ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
-                        addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, new ClassOrInterfaceType(declaringType.getQualifiedName() )));
+                        addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
                         return true;
                     }
                 }
@@ -300,7 +323,7 @@ public class ClassProcessor extends AbstractCompiler {
             }
             String description = typeArg.resolve().describe();
             if (!description.startsWith("java.")) {
-                Dependency dependency = new Dependency(from, typeArg);
+                Dependency dependency = new Dependency(from, description);
                 for (var jarSolver : jarSolvers) {
                     if (jarSolver.getKnownClasses().contains(description)) {
                         dependency.setExtension(true);
@@ -320,6 +343,11 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
 
+    /**
+     * Finds an import that matches the given type name
+     * @param name the name of an interface, a class or an enum. This maybe a fully qualified name or a simple name.
+     * @return an ImportDeclaration instance if one can be found or null
+     */
     protected ImportDeclaration resolveImport(String name) {
         for (ImportDeclaration importDeclaration : allImports) {
             Name importedName = importDeclaration.getName();
@@ -334,26 +362,43 @@ public class ClassProcessor extends AbstractCompiler {
             }
 
             if(importDeclaration.isAsterisk()) {
-                String packageName = importedName.toString();
-                SymbolReference<ResolvedReferenceTypeDeclaration> ref = combinedTypeSolver.tryToSolveType(packageName + "." + name);
-                if (ref.isSolved()) {
-                    ImportDeclaration solvedImport = new ImportDeclaration(ref.getCorrespondingDeclaration().getQualifiedName(), false, false);
-                    keepImports.add(solvedImport);
-                    return solvedImport;
-                }
-                else {
-                    ref = combinedTypeSolver.tryToSolveType(packageName);
-                    if (ref.isSolved()) {
-                        Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
-                        if(resolved.isPresent()) {
-                            for(ResolvedFieldDeclaration field : ref.getDeclaration().get().getDeclaredFields()) {
-                                if (field.getName().equals(name)) {
-                                    ImportDeclaration solvedImport = new ImportDeclaration(
-                                            packageName + "." + name, false, false);
-                                    keepImports.add(solvedImport);
-                                    return solvedImport;
-                                }
-                            }
+                ImportDeclaration solvedImport = matchWildCard(name, importedName);
+                if (solvedImport != null) return solvedImport;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Asterisk imports are tricky.
+     * We have so much code for resolving them. That's why you don't want to use them in your code.
+     * Checks all the classes under the package to find if there is a match. Sometimes what we
+     * think to be a package is not really a package but a class and the import happens to be a
+     * static import.
+     *
+     * @param name of the class to match
+     * @param importedName the name in the import
+     * @return an ImportDeclaration instance if one can be found or null.
+     */
+    private ImportDeclaration matchWildCard(String name, Name importedName) {
+        String packageName = importedName.toString();
+        SymbolReference<ResolvedReferenceTypeDeclaration> ref = combinedTypeSolver.tryToSolveType(packageName + "." + name);
+        if (ref.isSolved()) {
+            ImportDeclaration solvedImport = new ImportDeclaration(ref.getCorrespondingDeclaration().getQualifiedName(), false, false);
+            keepImports.add(solvedImport);
+            return solvedImport;
+        }
+        else {
+            ref = combinedTypeSolver.tryToSolveType(packageName);
+            if (ref.isSolved()) {
+                Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
+                if(resolved.isPresent()) {
+                    for(ResolvedFieldDeclaration field : ref.getDeclaration().get().getDeclaredFields()) {
+                        if (field.getName().equals(name)) {
+                            ImportDeclaration solvedImport = new ImportDeclaration(
+                                    packageName + "." + name, field.isStatic(), false);
+                            keepImports.add(solvedImport);
+                            return solvedImport;
                         }
                     }
                 }
