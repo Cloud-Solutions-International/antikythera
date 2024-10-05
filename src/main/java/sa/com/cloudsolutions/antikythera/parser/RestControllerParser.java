@@ -3,12 +3,9 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,7 +53,7 @@ public class RestControllerParser extends ClassProcessor {
     /**
      * Maintain stats of the controllers and methods parsed
      */
-    private Stats stats = new Stats();
+    private static Stats stats = new Stats();
 
     private boolean evaluatorUnsupported = false;
     File current;
@@ -88,8 +85,6 @@ public class RestControllerParser extends ClassProcessor {
 
     public void start() throws IOException, EvaluatorException {
         processRestController(controllers);
-        logger.info("Processed {} controllers", stats.controllers);
-        logger.info("Processed {} methods", stats.methods);
     }
 
     private void processRestController(File path) throws IOException, EvaluatorException {
@@ -161,7 +156,7 @@ public class RestControllerParser extends ClassProcessor {
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
-        gen.addImport("com.cloud.api.base.TestHelper");
+        gen.addImport("sa.com.cloudsolutions.antikythera.base.TestHelper");
         gen.addImport("org.testng.annotations.Test");
         gen.addImport("org.testng.Assert");
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
@@ -299,6 +294,7 @@ public class RestControllerParser extends ClassProcessor {
                 return;
             }
             if (md.isPublic()) {
+                stats.methods++;
                 resolveMethodParameterTypes(md);
                 md.accept(new ReturnStatmentVisitor(), md);
                 md.accept(new StatementVisitor(), md);
@@ -374,8 +370,8 @@ public class RestControllerParser extends ClassProcessor {
                 if (expression.isObjectCreationExpr()) {
                     ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
                     if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for (Type typeArg : objectCreationExpr.getTypeArguments().orElse(new NodeList<>())) {
-                            if (createEdge(typeArg, from)) return;
+                        for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+                            solveTypeDependencies(from, typeArg);
                         }
                     }
                 }
@@ -406,8 +402,20 @@ public class RestControllerParser extends ClassProcessor {
         return "";
     }
 
-    private class Stats {
+    public static Stats getStats() {
+        return stats;
+    }
+
+    public static class Stats {
         int controllers;
         int methods;
+
+        public int getControllers() {
+            return controllers;
+        }
+
+        public int getMethods() {
+            return methods;
+        }
     }
 }

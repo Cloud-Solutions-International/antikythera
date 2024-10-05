@@ -54,7 +54,7 @@ public class ClassProcessor extends AbstractCompiler {
      * The key in this map is the fully qualified class. The values will be the other types it
      * refers to.
      */
-    protected final Map<String, List<Dependency>> dependencies = new HashMap<>();
+    protected static final Map<String, List<Dependency>> dependencies = new HashMap<>();
 
     static final Set<String> copied = new HashSet<>();
 
@@ -68,14 +68,13 @@ public class ClassProcessor extends AbstractCompiler {
      * @param nameAsString a fully qualified class name
      */
     protected void copyDependencies(String nameAsString, Dependency dependency) throws IOException {
-        if (dependency.isExternal() || nameAsString.endsWith("SUCCESS")
-                || nameAsString.startsWith("org.springframework")) {
+        if (dependency.isExternal() || nameAsString.startsWith("org.springframework")) {
             return;
         }
 
         ClassOrInterfaceDeclaration cdecl = dependency.to.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
         if (cdecl != null &&
-                 (cdecl.getAnnotations().isEmpty() || cdecl.getAnnotationByName("Entity").isPresent())) {
+                 (!cdecl.getAnnotations().isEmpty() || cdecl.getAnnotationByName("Entity").isPresent())) {
             String targetName = dependency.to.resolve().describe();
             if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
                 try {
@@ -280,6 +279,6 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     protected void addEdge(String className, Dependency dependency) {
-        this.dependencies.computeIfAbsent(className, k -> new ArrayList<>()).add(dependency);
+        dependencies.computeIfAbsent(className, k -> new ArrayList<>()).add(dependency);
     }
 }

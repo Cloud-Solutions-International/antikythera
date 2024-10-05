@@ -1,4 +1,4 @@
-package com.sa.cloudsolutions.dto;
+package sa.com.cloudsolutions.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

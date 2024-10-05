@@ -1,4 +1,4 @@
-package com.sa.cloudsolutions.dto;
+package sa.com.cloudsolutions.dto;
 
 public class Constants {
     public static final int FIRST_GROUP = 1;

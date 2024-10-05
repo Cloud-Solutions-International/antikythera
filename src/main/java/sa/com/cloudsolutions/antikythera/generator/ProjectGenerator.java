@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -24,6 +26,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ProjectGenerator {
+    private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
+
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
@@ -232,5 +236,9 @@ public class ProjectGenerator {
 
     public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
         ProjectGenerator.getInstance().generate();
+        RestControllerParser.Stats stats = RestControllerParser.getStats();
+
+        logger.info("Processed {} controllers", stats.getControllers());
+        logger.info("Processed {} methods", stats.getMethods());
     }
 }

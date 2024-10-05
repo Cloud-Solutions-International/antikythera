@@ -1,11 +1,11 @@
-package com.sa.cloudsolutions.dto;
+package sa.com.cloudsolutions.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import static com.sa.cloudsolutions.dto.Constants.FIRST_GROUP;
+import static sa.com.cloudsolutions.dto.Constants.FIRST_GROUP;
 
 @Getter
 @Setter
