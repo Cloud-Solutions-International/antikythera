@@ -14,7 +14,6 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -30,9 +29,7 @@ import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -66,7 +63,7 @@ public class DTOHandler extends ClassProcessor {
 
         for(Map.Entry<String, Set<Dependency>> dependency : dependencies.entrySet()) {
             for (Dependency dep : dependency.getValue()) {
-                copyDependencies(dependency.getKey(), dep);
+                copyDependency(dependency.getKey(), dep);
             }
         }
     }
