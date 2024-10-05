@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBunches  {
     Evaluator evaluator;
-    TestBunches.CollectionEvaluator eval;
+    AbstractCompiler eval;
 
     private final PrintStream standardOut = System.out;
     private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
@@ -82,10 +82,6 @@ public class TestBunches  {
             cu = javaParser.parse(file).getResult().get();
             evaluator.setupFields(cu);
 
-        }
-
-        CompilationUnit getCompilationUnit() {
-            return cu;
         }
     }
 }

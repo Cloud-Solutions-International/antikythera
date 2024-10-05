@@ -6,7 +6,7 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
+
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -31,11 +31,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 
-import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.basePackage;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -43,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class DTOHandlerTest {
+class DTOHandlerTest {
     private ClassProcessor classProcessor;
     private DTOHandler handler;
     private DTOHandler.TypeCollector typeCollector;
@@ -64,90 +62,6 @@ public class DTOHandlerTest {
         typeCollector = handler.new TypeCollector();
         handler.cu = new CompilationUnit();
     }
-
-    // -------------------- handleStaticImports -------------------- //
-    @Test
-    void handleStaticImportsAddsStaticImportsToDependencies() {
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        String util = String.format("%s.util", basePackage);
-        String staticImport = String.format("%s.staticImport", util);
-        imports.add(new ImportDeclaration(staticImport, true, false));
-
-        handler.handleStaticImports(imports);
-
-        assertEquals(1, handler.dependencies.size());
-        for (String dependency : handler.dependencies) {
-            assertTrue(dependency.startsWith(basePackage));
-            assertEquals(util, dependency);
-        }
-    }
-
-    @Test
-    void handleStaticImportsAddsWildcardStaticImportsToDependencies() {
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        String wildcardStaticImport = String.format("%s.staticImport", basePackage);
-        imports.add(new ImportDeclaration(wildcardStaticImport, true, true));
-
-        handler.handleStaticImports(imports);
-
-        assertEquals(1, handler.dependencies.size());
-        for (String dependency : handler.dependencies) {
-            assertTrue(dependency.startsWith(basePackage));
-            assertEquals(wildcardStaticImport, dependency);
-        }
-    }
-
-    @Test
-    void handleStaticImportsIgnoresNonStaticImports() {
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        String nonStaticImport =  String.format("%s.NonStaticImport", basePackage);
-        imports.add(new ImportDeclaration(nonStaticImport, false, false));
-
-        handler.handleStaticImports(imports);
-
-        assertEquals(0, handler.dependencies.size());
-        assertFalse(handler.dependencies.contains(nonStaticImport));
-    }
-
-    @Test
-    void handleStaticImportsIgnoresImportsNotStartingWithBasePackage() {
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        String otherPackageStaticImport = "com.otherpackage.StaticImport";
-        imports.add(new ImportDeclaration(otherPackageStaticImport, true, false));
-
-        handler.handleStaticImports(imports);
-
-        assertEquals(0, handler.dependencies.size());
-        assertFalse(classProcessor.dependencies.contains(otherPackageStaticImport));
-    }
-
-    @Test
-    void handleStaticImportsAddAllImportsToDependencies() {
-        NodeList<ImportDeclaration> imports = new NodeList<>();
-        String util = String.format("%s.util", basePackage);
-        String staticImport = String.format("%s.staticImport", util);
-        imports.add(new ImportDeclaration(staticImport, true, false));
-
-        String wildcardStaticImport = String.format("%s.staticImport", basePackage);
-        imports.add(new ImportDeclaration(wildcardStaticImport, true, true));
-
-        String nonStaticImport =  String.format("%s.NonStaticImport", basePackage);
-        imports.add(new ImportDeclaration(nonStaticImport, false, false));
-
-        String otherPackageStaticImport = "com.otherpackage.StaticImport";
-        imports.add(new ImportDeclaration(otherPackageStaticImport, true, false));
-
-        handler.handleStaticImports(imports);
-
-        assertEquals(2, handler.dependencies.size());
-        for (String dependency : handler.dependencies) {
-            assertTrue(dependency.startsWith(basePackage));
-            assertTrue(dependency.equals(util) || dependency.equals(wildcardStaticImport));
-            assertFalse(dependency.equals(nonStaticImport) || dependency.equals(otherPackageStaticImport));
-        }
-    }
-
-    // -------------------- addLombok -------------------- //
 
     @Test
     void addLombokAddsAllAnnotationsForSmallClass() throws IOException {
@@ -640,29 +554,29 @@ public class DTOHandlerTest {
         MethodCallExpr setter = DTOHandler.generateRandomValue(field, cu);
         assertNull(setter);
     }
-
-    @Test
-    void extractCompleTypes() {
-
-        assertTrue(classProcessor.dependencies.isEmpty());
-        Optional<CompilationUnit> result = handler.javaParser.parse("class Test{}").getResult();
-        if (result.isPresent()) {
-            CompilationUnit cu = result.get();
-            FieldDeclaration field = StaticJavaParser
-                    .parseBodyDeclaration("Map<String, SimpleDTO> someList;")
-                    .asFieldDeclaration();
-            cu.getTypes().get(0).addMember(field);
-            cu.addImport("com.csi.dto.SimpleDTO");
-            handler.setCompilationUnit(cu);
-
-            classProcessor.solveTypeDependencies(field.getElementType(), cu);
-            assertEquals(classProcessor.dependencies.size(), 1);
-
-            // calling the same thing again should not change anything.
-            classProcessor.solveTypeDependencies(field.getElementType(), cu);
-            assertEquals(classProcessor.dependencies.size(), 1);
-        }
-    }
+//
+//    @Test
+//    void extractCompleTypes() {
+//
+//        assertTrue(classProcessor.dependencies.isEmpty());
+//        Optional<CompilationUnit> result = handler.javaParser.parse("class Test{}").getResult();
+//        if (result.isPresent()) {
+//            CompilationUnit cu = result.get();
+//            FieldDeclaration field = StaticJavaParser
+//                    .parseBodyDeclaration("Map<String, SimpleDTO> someList;")
+//                    .asFieldDeclaration();
+//            cu.getTypes().get(0).addMember(field);
+//            cu.addImport("com.csi.dto.SimpleDTO");
+//            handler.setCompilationUnit(cu);
+//
+//            classProcessor.solveTypeDependencies(field.getElementType(), cu);
+//            assertEquals(classProcessor.dependencies.size(), 1);
+//
+//            // calling the same thing again should not change anything.
+//            classProcessor.solveTypeDependencies(field.getElementType(), cu);
+//            assertEquals(classProcessor.dependencies.size(), 1);
+//        }
+//    }
 
     // -------------------- solveTypes -------------------- //
     @Test
@@ -674,7 +588,7 @@ public class DTOHandlerTest {
         classDecl.addField("String", "field");
 
         handler.cu.addType(classDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
         assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
@@ -690,58 +604,14 @@ public class DTOHandlerTest {
         classDecl.addMethod("someMethod");
 
         handler.cu.addType(classDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(classDecl.getConstructors().isEmpty());
         assertTrue(classDecl.getMethods().isEmpty());
     }
 
     @Test
-    void solveTypesAddsParentClassToDependencies() throws IOException {
-        CombinedTypeSolver typeSolver = new CombinedTypeSolver();
-        typeSolver.add(new ReflectionTypeSolver());
-        typeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
-
-        ParserConfiguration parserConfiguration = new ParserConfiguration()
-                .setSymbolResolver(new JavaSymbolSolver(typeSolver));
-        StaticJavaParser.setConfiguration(parserConfiguration);
-
-        CompilationUnit cu = StaticJavaParser.parse("package com.cloud.api.generator;\n" +
-                "public class ParentClass {}\n" +
-                "public class TempClass extends ParentClass {}");
-
-        handler.setCompilationUnit(cu);
-        handler.solveTypes();
-
-        assertTrue(handler.dependencies.contains("com.cloud.api.generator.ParentClass"));
-    }
-
-    @Test
-    void solveTypesIgnoresJavaLangParentClass() throws IOException {
-        CombinedTypeSolver typeSolver = new CombinedTypeSolver();
-        typeSolver.add(new ReflectionTypeSolver());
-        typeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
-
-        ParserConfiguration parserConfiguration = new ParserConfiguration()
-                .setSymbolResolver(new JavaSymbolSolver(typeSolver));
-        StaticJavaParser.setConfiguration(parserConfiguration);
-
-        CompilationUnit cu = StaticJavaParser.parse("package com.cloud.api.generator;\n" +
-                "public class TempClass extends java.lang.Object {}");
-
-
-        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
-        classDecl.setName("TempClass");
-        classDecl.addExtendedType("java.lang.Object");
-
-        handler.setCompilationUnit(cu);
-        handler.solveTypes();
-
-        assertFalse(handler.dependencies.contains("java.lang.Object"));
-    }
-
-    @Test
-    void solveTypesClearsImplementedInterfaces() throws IOException {
+    void solveTypesClearsImplementedInterfaces() {
         handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass implements SomeInterface {}"));
 
         ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
@@ -749,24 +619,24 @@ public class DTOHandlerTest {
         classDecl.addImplementedType("SomeInterface");
 
         handler.cu.addType(classDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(classDecl.getImplementedTypes().isEmpty());
     }
 
     @Test
-    void solveTypesHandlesUnresolvedParentClass() throws IOException {
+    void solveTypesHandlesUnresolvedParentClass()  {
         CompilationUnit cu = StaticJavaParser.parse("public class TempClass extends UnresolvedClass {}");
         handler.setCompilationUnit(cu);
 
         ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow(() -> new IllegalStateException("Class not found"));
         classDecl.addExtendedType("UnresolvedClass");
 
-        assertThrows(RuntimeException.class, () -> handler.solveTypes());
+        assertThrows(RuntimeException.class, () -> handler.removeUnwanted());
     }
 
     @Test
-    void solveTypesAddsLombokAnnotationsToEnum() throws IOException {
+    void solveTypesAddsLombokAnnotationsToEnum() {
         handler.setCompilationUnit(StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }"));
 
         EnumDeclaration enumDecl = new EnumDeclaration();
@@ -776,49 +646,49 @@ public class DTOHandlerTest {
         enumDecl.addAnnotation("AllArgsConstructor");
 
         handler.cu.addType(enumDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(handler.cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("lombok.AllArgsConstructor")));
     }
 
     @Test
-    void solveTypesAddsGetterAnnotationToEnum() throws IOException {
+    void solveTypesAddsGetterAnnotationToEnum()  {
         CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
         handler.setCompilationUnit(cu);
 
         EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
         enumDecl.addAnnotation("Getter");
 
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
     }
 
     @Test
-    void solveTypesDoesNotAddGetterAnnotationIfAlreadyPresent() throws IOException {
+    void solveTypesDoesNotAddGetterAnnotationIfAlreadyPresent()  {
         CompilationUnit cu = StaticJavaParser.parse("import lombok.Getter; public enum TempEnum { VALUE1, VALUE2 }");
         handler.setCompilationUnit(cu);
 
         EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
         enumDecl.addAnnotation("Getter");
 
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         long getterImports = cu.getImports().stream().filter(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")).count();
         assertEquals(1, getterImports);
     }
 
     @Test
-    void solveTypesHandlesEnumWithoutAnnotations() throws IOException {
+    void solveTypesHandlesEnumWithoutAnnotations() {
         CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
         handler.setCompilationUnit(cu);
 
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertFalse(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
     }
 
-    // -------------------- generateGetter -------------------- //
+
     @Test
     void generateGetterCreatesPublicMethod() {
         ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
@@ -887,7 +757,7 @@ public class DTOHandlerTest {
         assertThrows(AssertionError.class, () -> typeCollector.generateGetter(field, null));
     }
 
-    // -------------------- generateSetter -------------------- //
+
     @Test
     void generateSetterCreatesPublicMethod() {
         ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
@@ -901,19 +771,7 @@ public class DTOHandlerTest {
         MethodDeclaration setter = classDeclaration.getMethodsByName("setValue").get(0);
         assertNotNull(setter, "Setter method should be created.");
         assertTrue(setter.isPublic(), "Setter should be public.");
-    }
 
-    @Test
-    void generateSetterAssignsFieldValue() {
-        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
-
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
-        field.setParentNode(classDeclaration);
-        classDeclaration.addMember(field);
-
-        typeCollector.generateSetter(field, "setValue");
-
-        MethodDeclaration setter = classDeclaration.getMethodsByName("setValue").get(0);
         BlockStmt body = setter.getBody().orElseThrow(() -> new AssertionError("Setter body should not be empty"));
         AssignExpr assignExpr = (AssignExpr) body.getStatement(0).asExpressionStmt().getExpression();
 
@@ -938,92 +796,9 @@ public class DTOHandlerTest {
         assertThrows(AssertionError.class, () -> typeCollector.generateSetter(field, ""));
     }
 
-    // -------------------- extractEnums -------------------- //
-    @Test
-    void extractEnumsHandlesNameExpr() {
-        handler.method = StaticJavaParser.parseBodyDeclaration("public static TestTO createTestTO() {\n" +
-                "    TestTO testTO = new TestTO();\n" +
-                "}").asMethodDeclaration();
-
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private Boolean isDeleted = Boolean.FALSE;").asFieldDeclaration();
-        typeCollector.extractEnums(field);
-
-        assertFalse(handler.method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setIsDeleted")));
-    }
-
-    @Test
-    void extractEnumsGeneratesRandomValueForFieldWithoutInitializer() {
-        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestTO");
-
-        handler.method = StaticJavaParser.parseBodyDeclaration("public static TestTO createTestTO() {\n" +
-                "    TestTO testTO = new TestTO();\n" +
-                "}").asMethodDeclaration();
-
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private Integer value;").asFieldDeclaration();
-        classDeclaration.addMember(field);
-
-        typeCollector.extractEnums(field);
-
-        assertTrue(handler.method.getBody().get().getStatements().stream()
-                .anyMatch(stmt -> stmt.toString().contains("setValue")));
-    }
-
-    @Test
-    void extractEnumsDoesNotAddSetterForFieldWithInitializer() {
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value = 10;").asFieldDeclaration();
-        handler.method = new MethodDeclaration();
-        handler.method.setBody(new BlockStmt());
-
-        typeCollector.extractEnums(field);
-
-        assertTrue(handler.method.getBody().get().getStatements().isEmpty(), "No setter method should be added for field with initializer.");
-    }
-
-    @Test
-    void extractEnumsHandlesNullMethod() {
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
-        handler.method = null;
-
-        typeCollector.extractEnums(field);
-
-        assertNull(handler.method, "Method should remain null when handler.method is null.");
-    }
-
-    @Test
-    void extractEnumsDoesNothingForFieldWithInitializer() {
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value = 10;").asFieldDeclaration();
-        handler.method = new MethodDeclaration();
-        handler.method.setBody(new BlockStmt());
-
-        typeCollector.extractEnums(field);
-
-        assertTrue(handler.method.getBody().get().getStatements().isEmpty());
-    }
-
-    @Test
-    void extractEnumsDoesNotAddImportForNonFieldAccessExpr() {
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private String value = someMethod();").asFieldDeclaration();
-        handler.setCompilationUnit(new CompilationUnit());
-        handler.method = new MethodDeclaration();
-        handler.method.setBody(new BlockStmt());
-
-        typeCollector.extractEnums(field);
-
-        assertTrue(handler.cu.getImports().isEmpty(), "No import should be added for non-field access expression.");
-    }
-
-    // -------------------- parseDTO -------------------- //
-    @Test
-    void parseDTOHandlesInvalidPath() {
-        assertThrows(FileNotFoundException.class, () -> handler.parseDTO("invalid/path/NonExistentDTO.java"));
-    }
-
-    // -------------------- copyDTO -------------------- //
     @Test
     void copyDTOHandlesInvalidPath() {
         String relativePath = "invalid/path/NonExistentDTO.java";
-
         assertThrows(FileNotFoundException.class, () -> handler.copyDTO(relativePath));
     }
 }

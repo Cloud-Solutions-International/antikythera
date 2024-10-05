@@ -1,7 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import org.apache.maven.model.Dependency;
@@ -9,6 +10,7 @@ import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
 import java.io.*;
 import java.nio.channels.Channels;
@@ -24,8 +26,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ProjectGenerator {
+    private static final Logger logger = LoggerFactory.getLogger(ProjectGenerator.class);
+
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
+    private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
     private static final String SUFFIX = ".java";
 
     private final String basePackage;
@@ -176,21 +181,21 @@ public class ProjectGenerator {
     }
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
+        String testPath = PACKAGE_PATH.replace("main","test");
         copyPom();
-        copyTemplate("TestHelper.java", SRC, "test", "java", "com", "cloud", "api", "base");
-        copyTemplate("Configurations.java", SRC, "main", "java", "com", "cloud", "api", "configurations");
+        copyTemplate("TestHelper.java", testPath, "base");
+        copyTemplate("Configurations.java", testPath,  "configurations");
 
         Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
         Files.createDirectories(pathToCopy);
         copyFolder(Paths.get(SRC,"test", "resources"), pathToCopy);
 
-        pathToCopy = Paths.get(outputPath, SRC, "main", "java", "com", "cloud", "api", "constants");
+        pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "constants");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get(SRC,"main", "java", "com", "cloud", "api", "constants"), pathToCopy);
+        copyFolder(Paths.get(PACKAGE_PATH, "constants"), pathToCopy);
 
-        pathToCopy = Paths.get(outputPath, SRC, "main", "java", "com", "cloud", "api", "configurations");
+        pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "configurations");
         Files.createDirectories(pathToCopy);
-
     }
 
     public void generate() throws IOException, XmlPullParserException, EvaluatorException {
@@ -231,5 +236,9 @@ public class ProjectGenerator {
 
     public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
         ProjectGenerator.getInstance().generate();
+        RestControllerParser.Stats stats = RestControllerParser.getStats();
+
+        logger.info("Processed {} controllers", stats.getControllers());
+        logger.info("Processed {} methods", stats.getMethods());
     }
 }

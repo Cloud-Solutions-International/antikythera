@@ -1,5 +1,19 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -11,30 +25,65 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
-
+/**
+ * Class processor will parse a class and track it's dependencies.
+ *
+ */
 public class ClassProcessor extends AbstractCompiler {
+    /*
+     * The overall strategy:
+     *   it is described here even though several different classes are involved.
+     *
+     *   We are only interested in copying the DTOs from the application under test. Broadly a DTO is a
+     *   class is either a return type of a controller or an input to a controller.
+     *
+     *   A controller has a lot of other dependencies, most notably services and even though respositories
+     *   are only supposed to be accessed through services sometimes you find them referred directly in
+     *   the controller. These will not be copied across to the test folder.
+     */
+
+    /**
+     * The logger
+     */
     private static final Logger logger = LoggerFactory.getLogger(ClassProcessor.class);
 
-    /*
-     * The strategy followed is that we iterate through all the fields in the
-     * class and add them to a queue. Then we iterate through the items in
-     * the queue and call the copy method on each one. If an item has already
-     * been copied, it will be in the resolved set that is defined in the
-     * parent, so we will skip it.
+    /**
+     * Essentially dependencies are a graph.
+     *
+     * The key in this map is the fully qualified class. The values will be the other types it
+     * refers to.
      */
-    protected final Set<String> dependencies = new HashSet<>();
-    final Set<String> externalDependencies = new HashSet<>();
+    protected static final Map<String, Set<Dependency>> dependencies = new HashMap<>();
+
     static final Set<String> copied = new HashSet<>();
+
+    /**
+     * A collection of all imports encountered in a class.
+     * This maybe a huge list because sometimes we find wild card imports.
+     */
+    final Set<ImportDeclaration> allImports = new HashSet<>();
+
+    /**
+     * This is a collection of imports that we want to preserve.
+     *
+     * Most classes contain a bunch of imports that are not used + there will be some that are
+     * obsolete after we strip out the unwanted dependencies. Lastly we are trying to avoid
+     * asterisk imports, so they are expanded and then the asterisk is removed.
+     *
+     */
+    protected final Set<ImportDeclaration> keepImports = new HashSet<>();
 
     public ClassProcessor() throws IOException {
         super();
@@ -45,22 +94,44 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param nameAsString a fully qualified class name
      */
-    protected void copyDependencies(String nameAsString) throws IOException {
-        if (nameAsString.endsWith("SUCCESS") || nameAsString.startsWith("org.springframework") || externalDependencies.contains(nameAsString)) {
+    protected void copyDependencies(String nameAsString, Dependency dependency) throws IOException {
+        if (dependency.isExternal() || nameAsString.startsWith("org.springframework")) {
             return;
         }
-        if (!copied.contains(nameAsString) && nameAsString.startsWith(AbstractCompiler.basePackage)) {
-            try {
-                copied.add(nameAsString);
-                DTOHandler handler = new DTOHandler();
-                handler.copyDTO(classToPath(nameAsString));
-                AntikytheraRunTime.addClass(nameAsString, handler.getCompilationUnit());
-            } catch (FileNotFoundException fe) {
-                if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                    logger.warn("Could not find " + nameAsString);
-                }
-                else {
-                    throw fe;
+        /*
+         * First thing is to find the compilation unit. Obviously we can only copy the DTO
+         * if we have a compilation unit.
+         */
+        CompilationUnit depCu = getCompilationUnit(dependency.to);
+        if (depCu != null) {
+            for (var decl : depCu.getTypes()) {
+                String targetName = dependency.to;
+                if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
+                    /*
+                     * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
+                     * it's best to make sure that we haven't copied this file already and also to make
+                     * sure that the class is directly part of the application under test.
+                     */
+                    if (decl.getAnnotations().isEmpty() || decl.getAnnotationByName("Entity").isPresent()) {
+                        /*
+                         * There are lots of beans in a Spring Boot app. Typically these do not need to be
+                         * copied. Those beans can easily be identified by the fact that they have various
+                         * annotations. We skip anything that is not an Entity.
+                         */
+
+                        try {
+                            copied.add(targetName);
+                            DTOHandler handler = new DTOHandler();
+                            handler.copyDTO(classToPath(targetName));
+                            AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                        } catch (FileNotFoundException fe) {
+                            if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                                logger.warn("Could not find {} for copying", targetName);
+                            } else {
+                                throw fe;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -80,84 +151,108 @@ public class ClassProcessor extends AbstractCompiler {
      * These are not copied across with the generated tests.
      *
      * @param type the type to resolve
-     * @param dependencyCu the compilation unit inside which the type was encountered.
      */
-    void solveTypeDependencies(Type type, CompilationUnit dependencyCu)  {
-
+    void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
 
         if (type.isClassOrInterfaceType()) {
-            ClassOrInterfaceType classType = type.asClassOrInterfaceType();
-
-            String mainType = classType.getNameAsString();
-            NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
-
-            if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
-                /*
-                 * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
-                 */
-
-                return;
-            }
-            if (secondaryType != null) {
-                for (Type t : secondaryType) {
-                    // todo find out the proper way to indentify Type parameters like List<T>
-                    if(t.asString().length() != 1 ) {
-                        solveTypeDependencies(t, dependencyCu);
-                    }
-                }
+            if (type.asClassOrInterfaceType().isBoxedType()) {
+                solveConstant(from, type);
             }
             else {
-                try {
-                    String description = classType.resolve().describe();
-                    if (!description.startsWith("java.")) {
-                        for (var jarSolver : jarSolvers) {
-                            if(jarSolver.getKnownClasses().contains(description)) {
-                                externalDependencies.add(description);
-                                return;
-                            }
+                solveClassDependency(from, type);
+            }
+        }
+        else {
+            /*
+             * Primitive constants that are assigned a value based on a static import is the
+             * hardest thing to solve.
+             */
+            solveConstant(from, type);
+        }
+    }
+
+    /**
+     * Solve the dependency problem for a field declaration that has an assignment.
+     * This method does not return anything but has a side effect. It will result
+     * in the dependency graph being updated.
+     *
+     * @param from the node from which we are trying to solve the dependency
+     * @param type the type of the field being resolved.
+     */
+    private void solveConstant(TypeDeclaration<?> from, Type type) {
+        Optional<VariableDeclarator> vdecl = type.findAncestor(VariableDeclarator.class);
+        if (vdecl.isPresent()) {
+            Optional<Expression> optExpr = vdecl.get().getInitializer();
+            if(optExpr.isPresent()) {
+                Expression expr = optExpr.get();
+                if(expr.isNameExpr()) {
+                    String name = expr.asNameExpr().getName().asString();
+                    ImportDeclaration imp = resolveImport(name);
+                    String className = imp.getNameAsString();
+
+                    int index = className.lastIndexOf(".");
+                    if (index > 0) {
+                        String pkg = className.substring(0, index);
+                        CompilationUnit depCu = getCompilationUnit(pkg);
+                        if (depCu != null) {
+                            Dependency dep = new Dependency(from, pkg);
+                            addEdge(from.getFullyQualifiedName().orElse(null), dep);
                         }
-                        dependencies.add(description);
                     }
-                } catch (UnsolvedSymbolException e) {
-                    findImport(dependencyCu, mainType);
                 }
             }
         }
     }
 
     /**
-     * Resolves an import.
-     *
-     * @param dependencyCu the compilation unit with the imports
-     * @param mainType the data type to search for. This is not going to be a fully qualified class name.
-     * @return true if a matching import was found.
+     * Find the compilation unit for the given class
+     * @param className the class name
+     * @return a CompilationUnit instance or null
      */
-    protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
-        /*
-         * Iterates through the imports declared in the compilation unit to see if any match.
-         * if an import is found it's added to the dependency list but we also need to check
-         * whether the import comes from an external jar file. In that case we do not need to
-         * copy the DTO across with the generated tests
-         */
-        for (var ref2 : dependencyCu.getImports()) {
-
-            String[] parts = ref2.getNameAsString().split("\\.");
-            if (parts[parts.length - 1].equals(mainType)) {
-                dependencies.add(ref2.getNameAsString());
-                for (var jarSolver : jarSolvers) {
-                    if(jarSolver.getKnownClasses().contains(ref2.getNameAsString())) {
-                        externalDependencies.add(ref2.getNameAsString());
-                    }
-                }
-                return true;
+    private static CompilationUnit getCompilationUnit(String className) {
+        CompilationUnit depCu = AntikytheraRunTime.getCompilationUnit(className);
+        if (depCu == null) {
+            try {
+                DTOHandler handler = new DTOHandler();
+                handler.parseDTO(AbstractCompiler.classToPath(className));
+                depCu = handler.getCompilationUnit();
+            } catch (IOException iex) {
+                logger.error("Could not find {}", className);
             }
         }
-        return false;
+        return depCu;
     }
+
+    private void solveClassDependency(TypeDeclaration<?> from, Type type) {
+        ClassOrInterfaceType classType = type.asClassOrInterfaceType();
+
+        String mainType = classType.getNameAsString();
+        NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
+
+        if("DateScheduleUtil".equals(mainType) || "Logger".equals(mainType)) {
+            /*
+             * Absolutely no reason for a DTO to have DateScheduleUtil or Logger as a dependency.
+             */
+
+            return;
+        }
+        if (secondaryType != null) {
+            for (Type t : secondaryType) {
+                // todo find out the proper way to indentify Type parameters like List<T>
+                if(t.asString().length() != 1 ) {
+                    solveTypeDependencies(from, t);
+                }
+            }
+        }
+
+        resolveImport(mainType);
+        createEdge(classType, from);
+    }
+
 
     /**
      * Converts a class name to an instance name.
-     * The usually convention. If we want to create an instance of List that variable is usually
+     * The usual convention. If we want to create an instance of List that variable is usually
      * called 'list'
      * @param cdecl type declaration
      * @return a variable name as a string
@@ -184,10 +279,8 @@ public class ClassProcessor extends AbstractCompiler {
      * We do not search jars, external dependencies or the java standard library.
      *
      * @param packageName the package name
-     * @return a set of fully qualified class names
      */
-    protected Set<String> findMatchingClasses(String packageName) {
-        Set<String> matchingClasses = new HashSet<>();
+    protected void findMatchingClasses(String packageName) {
         Path p = Paths.get(basePath, packageName.replace(".", "/"));
         File directory = p.toFile();
 
@@ -198,12 +291,12 @@ public class ClassProcessor extends AbstractCompiler {
                     String fname = f.getName();
                     if (fname.endsWith(ClassProcessor.SUFFIX)) {
                         String imp = packageName + "." + fname.substring(0, fname.length() - 5);
-                        matchingClasses.add(imp);
+                        ImportDeclaration importDeclaration = new ImportDeclaration(imp, false, false);
+                        allImports.add(importDeclaration);
                     }
                 }
             }
         }
-        return matchingClasses;
     }
 
     /**
@@ -214,43 +307,116 @@ public class ClassProcessor extends AbstractCompiler {
      * @param cu the compilation unit
      */
     protected void expandWildCards(CompilationUnit cu) {
-        Set<String> wildCards = new HashSet<>();
+
         for(var imp : cu.getImports()) {
             if(imp.isAsterisk() && !imp.isStatic()) {
                 String packageName = imp.getNameAsString();
                 if (packageName.startsWith(basePackage)) {
-                    wildCards.addAll(findMatchingClasses(packageName));
+                    findMatchingClasses(packageName);
                 }
             }
         }
-        for(String s : wildCards) {
-            // setting asterisk as true and then switching it off is to overcome a bug in javaparser
-            ImportDeclaration impl = new ImportDeclaration(s, false, true);
-            cu.addImport(impl);
-            impl.setAsterisk(false);
+    }
+
+    protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {
+        try {
+            if(typeArg.isPrimitiveType() ||
+                    (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType())) {
+                Node parent = typeArg.getParentNode().orElse(null);
+                if (parent instanceof VariableDeclarator vadecl) {
+                    Expression init = vadecl.getInitializer().orElse(null);
+                    if (init != null) {
+                        JavaParserFieldDeclaration fieldDeclaration =  symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
+                        ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
+                        addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
+                        return true;
+                    }
+                }
+                return false;
+            }
+            String description = typeArg.resolve().describe();
+            if (!description.startsWith("java.")) {
+                Dependency dependency = new Dependency(from, description);
+                for (var jarSolver : jarSolvers) {
+                    if (jarSolver.getKnownClasses().contains(description)) {
+                        dependency.setExtension(true);
+                        return true;
+                    }
+                }
+                addEdge(from.getFullyQualifiedName().orElse(null), dependency);
+            }
+        } catch (UnsolvedSymbolException e) {
+            logger.debug("Unresolvable {}", typeArg.toString());
         }
+        return false;
     }
 
-    protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
-        imports.removeIf(importDeclaration -> {
-        String nameAsString = importDeclaration.getNameAsString();
-        return !(dependencies.contains(nameAsString) ||
-                 externalDependencies.contains(nameAsString) ||
-                 nameAsString.contains("lombok") ||
-                 nameAsString.startsWith("java.") ||
-                 nameAsString.startsWith("com.fasterxml.jackson") ||
-                 nameAsString.startsWith("org.springframework.util") ||
-                 nameAsString.equals("jakarta.validation.constraints.NotNull") ||
-                 (importDeclaration.isStatic() && nameAsString.contains("constants.")));
-        });
+    protected void addEdge(String className, Dependency dependency) {
+        dependencies.computeIfAbsent(className, k -> new HashSet<>()).add(dependency);
     }
 
 
-    public CompilationUnit getCompilationUnit() {
-        return cu;
+    /**
+     * Finds an import that matches the given type name
+     * @param name the name of an interface, a class or an enum. This maybe a fully qualified name or a simple name.
+     * @return an ImportDeclaration instance if one can be found or null
+     */
+    protected ImportDeclaration resolveImport(String name) {
+        for (ImportDeclaration importDeclaration : allImports) {
+            Name importedName = importDeclaration.getName();
+            if (importedName.toString().equals(name)) {
+                keepImports.add(importDeclaration);
+                return importDeclaration;
+            }
+            String[] parts = importedName.toString().split("\\.");
+            if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
+                keepImports.add(importDeclaration);
+                return importDeclaration;
+            }
+
+            if(importDeclaration.isAsterisk()) {
+                ImportDeclaration solvedImport = matchWildCard(name, importedName);
+                if (solvedImport != null) return solvedImport;
+            }
+        }
+        return null;
     }
 
-    public void setCompilationUnit(CompilationUnit cu) {
-        this.cu = cu;
+    /**
+     * Asterisk imports are tricky.
+     * We have so much code for resolving them. That's why you don't want to use them in your code.
+     * Checks all the classes under the package to find if there is a match. Sometimes what we
+     * think to be a package is not really a package but a class and the import happens to be a
+     * static import.
+     *
+     * @param name of the class to match
+     * @param importedName the name in the import
+     * @return an ImportDeclaration instance if one can be found or null.
+     */
+    private ImportDeclaration matchWildCard(String name, Name importedName) {
+        String packageName = importedName.toString();
+        SymbolReference<ResolvedReferenceTypeDeclaration> ref = combinedTypeSolver.tryToSolveType(packageName + "." + name);
+        if (ref.isSolved()) {
+            ImportDeclaration solvedImport = new ImportDeclaration(ref.getCorrespondingDeclaration().getQualifiedName(), false, false);
+            keepImports.add(solvedImport);
+            return solvedImport;
+        }
+        else {
+            ref = combinedTypeSolver.tryToSolveType(packageName);
+            if (ref.isSolved()) {
+                Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
+                if(resolved.isPresent()) {
+                    for(ResolvedFieldDeclaration field : ref.getDeclaration().get().getDeclaredFields()) {
+                        if (field.getName().equals(name)) {
+                            ImportDeclaration solvedImport = new ImportDeclaration(
+                                    packageName + "." + name, field.isStatic(), false);
+                            keepImports.add(solvedImport);
+                            return solvedImport;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

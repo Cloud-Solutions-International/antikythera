@@ -136,15 +136,16 @@ public class SpringEvaluator extends Evaluator {
 
                         String qualifiedName = decl.getType().resolve().asReferenceType().getQualifiedName();
                         try {
+                            Variable v = null;
                             if(qualifiedName.startsWith("java.util")) {
                                 Class<?> clazz = Class.forName(qualifiedName);
-                                Variable v = new Variable(clazz.getMethod("of"));
-                                return v;
+                                v = new Variable(clazz.getMethod("of"));
                             }
                             else {
-                                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(qualifiedName);
-                                return new Variable(DTOBuddy.createDynamicDTO(cu.getTypes().get(0).asClassOrInterfaceDeclaration()));
+                                v = new Variable(DTOBuddy.createDynamicDTO(decl.getType().asClassOrInterfaceType()));
                             }
+                            setLocal(methodCall, decl.getNameAsString(), v);
+                            return v;
                         } catch (Exception e) {
                             logger.error("Error while creating dynamic DTO {}", decl.getType().resolve().asReferenceType().getQualifiedName());
                             throw  new EvaluatorException("in evaluateVariableDeclaration", e);
@@ -357,6 +358,7 @@ public class SpringEvaluator extends Evaluator {
                                             ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
                                             : fields.get(scope.get().asNameExpr().getNameAsString());
                                     if (f != null) {
+
                                         extractTypeFromCall(f.getType(), methodCallExpr);
                                         logger.debug(f.toString());
                                     } else {

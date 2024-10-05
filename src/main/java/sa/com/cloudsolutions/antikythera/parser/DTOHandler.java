@@ -30,17 +30,17 @@ import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
- *
  */
 public class DTOHandler extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DTOHandler.class);
     public static final String STR_GETTER = "Getter";
-
 
     MethodDeclaration method = null;
 
@@ -64,16 +64,21 @@ public class DTOHandler extends ClassProcessor {
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
 
-        for(String dependency : dependencies) {
-            copyDependencies(dependency);
+        for(Map.Entry<String, Set<Dependency>> dependency : dependencies.entrySet()) {
+            for (Dependency dep : dependency.getValue()) {
+                copyDependencies(dependency.getKey(), dep);
+            }
         }
-        dependencies.clear();
     }
 
     public void parseDTO(String relativePath) throws FileNotFoundException {
         compile(relativePath);
         expandWildCards(cu);
-        solveTypes();
+
+        allImports.addAll(cu.getImports());
+        cu.setImports(new NodeList<>());
+
+        removeUnwanted();
 
         for( var  t : cu.getTypes()) {
             if(t.isClassOrInterfaceDeclaration()) {
@@ -85,8 +90,9 @@ public class DTOHandler extends ClassProcessor {
             }
         }
 
-        handleStaticImports(cu.getImports());
-        removeUnusedImports(cu.getImports());
+        for (ImportDeclaration imp : keepImports) {
+            cu.addImport(imp);
+        }
 
         if (method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
@@ -94,27 +100,10 @@ public class DTOHandler extends ClassProcessor {
         }
     }
 
-    void handleStaticImports(NodeList<ImportDeclaration> imports) {
-        imports.stream().filter(importDeclaration -> importDeclaration.getNameAsString().startsWith(basePackage)).forEach(importDeclaration ->
-        {
-            if(importDeclaration.isStatic()) {
-                String importName = importDeclaration.getNameAsString();
-                if(importDeclaration.isAsterisk()) {
-                    dependencies.add(importName);
-                }
-                else {
-                    dependencies.add(importName.substring(0, importName.lastIndexOf(".")));
-                }
-            }
-        });
-    }
-
     /**
-     * Iterates through all the classes in the file and processes them.
-     * If we are inheriting from a class that's part of our AUT, we need to copy it.
-     *
+     * Iterates through all the classes in the compilation unit and processes them.
      */
-    void solveTypes() {
+    void removeUnwanted() {
         cu.getTypes().forEach(typeDeclaration -> {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
@@ -123,18 +112,24 @@ public class DTOHandler extends ClassProcessor {
                 NodeList<AnnotationExpr> annotations = classDecl.getAnnotations();
                 annotations.clear();
                 addLombok(classDecl, annotations);
+
                 // remove constructos and all methods. We are adding the @Getter and @Setter
-                // annotations so no getters and setters are needed. Any other methods can
-                // goto hell because they just shouldn't be here in the first place.
+                // annotations so no getters and setters are needed. All other annotations we will
+                // discard. They maybe required in the application under test but the tests don't
+                // need it themselves.
+
                 classDecl.getConstructors().forEach(Node::remove);
                 classDecl.getMethods().forEach(Node::remove);
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
-                    if(findImport(cu, parent.getName().asString()) || parent.resolve().describe().startsWith("java.lang")) {
-                        return;
-                    }
+
                     String className = cu.getPackageDeclaration().get().getNameAsString() + "." + parent.getNameAsString();
-                    dependencies.add(className);
+                    if (className.startsWith("java")) {
+                        continue;
+                    }
+                    Dependency dependency = new Dependency(typeDeclaration, className);
+                    dependency.setExtension(true);
+                    addEdge(className, dependency);
                 }
                 // we don't want interfaces
                 classDecl.getImplementedTypes().clear();
@@ -214,8 +209,8 @@ public class DTOHandler extends ClassProcessor {
             field.getAnnotations().clear();
             field.setAnnotations(filteredAnnotations);
 
-            extractEnums(field);
-            solveTypeDependencies(field.getElementType(), cu);
+            solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
+                    field.getElementType());
 
             // handle custom getters and setters
             String fieldName = field.getVariables().get(0).getNameAsString();
@@ -231,7 +226,6 @@ public class DTOHandler extends ClassProcessor {
                 generateSetter(field, setterName);
 
             }
-
 
             return super.visit(field, args);
         }
@@ -284,40 +278,11 @@ public class DTOHandler extends ClassProcessor {
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
         }
 
-        void extractEnums(FieldDeclaration field) {
-            Optional<Expression> expr = field.getVariables().get(0).getInitializer();
-            if (expr.isPresent()) {
-                var initializer = expr.get();
-                if (initializer.isMethodCallExpr()) {
-                    MethodCallExpr methodCall = (MethodCallExpr) initializer;
-                    Optional<Expression> nameExpr = methodCall.getScope();
-                    // Check if the scope of the method call is a field access expression
-                    if (nameExpr.isPresent() && nameExpr.get().isFieldAccessExpr()) {
-                        findImport(cu, nameExpr.get().asFieldAccessExpr().getScope().toString());
-                    }
-                }
-                else if(initializer.isFieldAccessExpr()) {
-                    findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
-                }
-                else if (initializer.isNameExpr()) {
-                    findImport(cu, initializer.asNameExpr().toString());
-                }
-            }
-            else {
-                if (method != null) {
-                    MethodCallExpr setter = generateRandomValue(field, cu);
-                    if (setter != null) {
-                        method.getBody().get().addStatement(setter);
-                    }
-                }
-            }
-        }
-
         @Override
         public Visitable visit(MethodDeclaration method, Void args) {
             super.visit(method, args);
             method.getAnnotations().clear();
-            solveTypeDependencies(method.getType(), cu);
+            solveTypeDependencies(method.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null), method.getType());
             return method;
         }
     }
@@ -410,4 +375,7 @@ public class DTOHandler extends ClassProcessor {
         }
     }
 
+    public void setCompilationUnit(CompilationUnit cu) {
+        this.cu = cu;
+    }
 }

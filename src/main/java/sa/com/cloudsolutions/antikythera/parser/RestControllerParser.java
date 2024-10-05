@@ -1,10 +1,11 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +28,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,12 +45,16 @@ public class RestControllerParser extends ClassProcessor {
     public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
     private final File controllers;
 
-    private CompilationUnit gen;
     private HashMap<String, Object> parameterSet;
 
     private final Path dataPath;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern controllerPattern = Pattern.compile(".*/([^/]+)\\.java$");
+
+    /**
+     * Maintain stats of the controllers and methods parsed
+     */
+    private static Stats stats = new Stats();
 
     private boolean evaluatorUnsupported = false;
     File current;
@@ -83,17 +90,17 @@ public class RestControllerParser extends ClassProcessor {
 
     private void processRestController(File path) throws IOException, EvaluatorException {
         current = path;
+        String absolutePath = path.getAbsolutePath();
 
-        logger.info(path.toString());
+        logger.info(absolutePath);
         if (path.isDirectory()) {
-            int i = 0;
             for (File f : path.listFiles()) {
                 if(f.toString().contains(controllers.toString())) {
                     new RestControllerParser(f).start();
-                    i++;
+                    stats.controllers++;
                 }
             }
-            logger.info("Processed {} controllers", i);
+
         } else {
             String p = path.toString().replace("/",".");
             List<String> skip = (List<String>) Settings.getProperty("skip");
@@ -112,6 +119,20 @@ public class RestControllerParser extends ClassProcessor {
                 controllerName = matcher.group(1);
             }
             parameterSet = new HashMap<>();
+            if (!path.exists()) {
+                // if the file ends with /java then we need to replace it with .java but only the
+                // last occurrence
+
+                if(absolutePath.endsWith("java")) {
+                    int idx = absolutePath.lastIndexOf("/");
+                    if (idx != -1) {
+                        char[] letters = absolutePath.toCharArray();
+                        letters[idx] = '.';
+                        path = new File(new String(letters));
+                    }
+                }
+            }
+
             FileInputStream in = new FileInputStream(path);
             cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
             if (cu.getPackageDeclaration().isPresent()) {
@@ -136,7 +157,7 @@ public class RestControllerParser extends ClassProcessor {
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
-        gen.addImport("com.cloud.api.base.TestHelper");
+        gen.addImport("sa.com.cloudsolutions.antikythera.base.TestHelper");
         gen.addImport("org.testng.annotations.Test");
         gen.addImport("org.testng.Assert");
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
@@ -162,15 +183,11 @@ public class RestControllerParser extends ClassProcessor {
          */
         cu.accept(new DepSolvingVisitor(), null);
 
-        for (String s : dependencies) {
-            gen.addImport(s);
-        }
-        for(String s: externalDependencies) {
-            gen.addImport(s);
-        }
-
-        for(String dependency : dependencies) {
-            copyDependencies(dependency);
+        for (Map.Entry<String, Set<Dependency>> dep : dependencies.entrySet()) {
+            gen.addImport(dep.getKey());
+            for(Dependency dependency : dep.getValue()) {
+                copyDependencies(dep.getKey(), dependency);
+            }
         }
 
         /*
@@ -178,8 +195,6 @@ public class RestControllerParser extends ClassProcessor {
          */
         evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
-        dependencies.clear();
-        externalDependencies.clear();
 
         fileContent.append(gen.toString()).append("\n");
         ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
@@ -217,7 +232,8 @@ public class RestControllerParser extends ClassProcessor {
                             MethodDeclaration method = member.asMethodDeclaration();
 
                             if (!method.isPrivate() && method.getName().asString().equals(methodCallExpr.getNameAsString())) {
-                                solveTypeDependencies(method.getType(), dependencyCu);
+                                solveTypeDependencies(method.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
+                                        method.getType());
                             }
                         }
                     }
@@ -279,14 +295,17 @@ public class RestControllerParser extends ClassProcessor {
                 return;
             }
             if (md.isPublic()) {
+                stats.methods++;
                 resolveMethodParameterTypes(md);
-                md.accept(new ReturnStatmentVisitor(), null);
+                md.accept(new ReturnStatmentVisitor(), md);
+                md.accept(new StatementVisitor(), md);
             }
         }
 
         private void resolveMethodParameterTypes(MethodDeclaration md) {
             for(var param : md.getParameters()) {
-                solveTypeDependencies(param.getType(), cu);
+                solveTypeDependencies(md.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
+                        param.getType());
             }
         }
 
@@ -305,7 +324,7 @@ public class RestControllerParser extends ClassProcessor {
                     if (SpringEvaluator.getRepositories().containsKey(classToInstanceName(shortName))) {
                         return;
                     }
-                    solveTypeDependencies(variable.getType(), cu);
+                    solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null), variable.getType());
                 }
             }
         }
@@ -329,30 +348,31 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
+        class StatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            @Override
+            public void visit(ExpressionStmt n, MethodDeclaration md) {
+                super.visit(n, md);
+                Expression expr = n.getExpression();
+                if(expr.isVariableDeclarationExpr()) {
+                    Type t = expr.asVariableDeclarationExpr().getElementType();
+                    TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
+                    if (from != null) {
+                        Dependency dependency = new Dependency(from, t.toDescriptor());
+                        addEdge(from.getFullyQualifiedName().orElseThrow(null), dependency);
+                    }
+                }
+            }
+        }
+
         private void identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
+            TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null) {
+            if (expression != null && from != null) {
                 if (expression.isObjectCreationExpr()) {
                     ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
                     if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for (Expression typeArg : objectCreationExpr.getArguments()) {
-                            try {
-                                if(typeArg.isNameExpr()) {
-                                    String description = ((NameExpr) typeArg).resolve().getType().describe();
-                                    if (!description.startsWith("java.")) {
-                                        for (var jarSolver : jarSolvers) {
-                                            if (jarSolver.getKnownClasses().contains(description)) {
-                                                externalDependencies.add(description);
-                                                return;
-                                            }
-                                        }
-                                        dependencies.add(description);
-                                    }
-                                }
-                            } catch (UnsolvedSymbolException e) {
-                                logger.warn("Unresolvable {}", e);
-                                //findImport(dependencyCu, mainType);
-                            }
+                        for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+                            solveTypeDependencies(from, typeArg);
                         }
                     }
                 }
@@ -381,5 +401,22 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
         return "";
+    }
+
+    public static Stats getStats() {
+        return stats;
+    }
+
+    public static class Stats {
+        int controllers;
+        int methods;
+
+        public int getControllers() {
+            return controllers;
+        }
+
+        public int getMethods() {
+            return methods;
+        }
     }
 }

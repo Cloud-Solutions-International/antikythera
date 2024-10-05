@@ -1,6 +1,9 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -32,10 +35,8 @@ import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
-
-
 /**
- * Sets up the Java Parser and maintains a cache of the clases that have been compiled.
+ * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
  */
 public class AbstractCompiler {
     /*
@@ -102,10 +103,14 @@ public class AbstractCompiler {
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         this.javaParser = new JavaParser(parserConfiguration);
-
-
     }
 
+    /**
+     * Converts a class name to a path name.
+     * Simply replaces the . with the /
+     * @param className the fully qualified class name
+     * @return a path relative to the base
+     */
     public static String classToPath(String className) {
         if(className.endsWith(SUFFIX)) {
             className = className.replace(SUFFIX, "");
@@ -115,6 +120,11 @@ public class AbstractCompiler {
         return path + SUFFIX;
     }
 
+    /**
+     * Given a path creates a fully qualified class name
+     * @param path a file
+     * @return a fully qualified class
+     */
     public static String pathToClass(String path) {
         if(path.endsWith(SUFFIX)) {
             path = path.replace(SUFFIX, "");
@@ -207,5 +217,13 @@ public class AbstractCompiler {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Get the compilation unit for the current class
+     * @return a CompilationUnit instance.
+     */
+    public CompilationUnit getCompilationUnit() {
+        return cu;
     }
 }

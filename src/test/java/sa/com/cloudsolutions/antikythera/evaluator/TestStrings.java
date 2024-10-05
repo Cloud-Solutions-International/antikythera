@@ -17,24 +17,7 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestStrings {
-    Evaluator evaluator;
-    HelloEvaluator eval;
-
-    private final PrintStream standardOut = System.out;
-    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-
-    @AfterEach
-    public void tearDown() {
-        System.setOut(standardOut);
-        AntikytheraRunTime.reset();
-    }
-
-    @BeforeAll
-    public static void setup() throws IOException {
-        Settings.loadConfigMap();
-    }
-
+public class TestStrings extends TestHelper{
     @BeforeEach
     public void each() throws EvaluatorException, IOException {
         eval = new HelloEvaluator();
@@ -92,10 +75,6 @@ public class TestStrings {
             cu = javaParser.parse(file).getResult().get();
             evaluator = new Evaluator();
             evaluator.setupFields(cu);
-        }
-
-        CompilationUnit getCompilationUnit() {
-            return cu;
         }
     }
 }
