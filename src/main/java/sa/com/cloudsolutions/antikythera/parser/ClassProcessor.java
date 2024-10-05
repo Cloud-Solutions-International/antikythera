@@ -66,7 +66,7 @@ public class ClassProcessor extends AbstractCompiler {
      * A collection of all imports encountered in a class.
      * This maybe a huge list because sometimes we find wild card imports.
      */
-    private final Set<ImportDeclaration> allImports = new HashSet<>();
+    final Set<ImportDeclaration> allImports = new HashSet<>();
 
     /**
      * This is a collection of imports that we want to preserve.
@@ -76,7 +76,7 @@ public class ClassProcessor extends AbstractCompiler {
      * asterisk imports, so they are expanded and then the asterisk is removed.
      *
      */
-    private final Set<ImportDeclaration> keepImports = new HashSet<>();
+    protected final Set<ImportDeclaration> keepImports = new HashSet<>();
 
     public ClassProcessor() throws IOException {
         super();
@@ -225,25 +225,6 @@ public class ClassProcessor extends AbstractCompiler {
                 }
             }
         }
-    }
-
-    /**
-     * Removes unused imports.
-     */
-    protected void removeUnusedImports() {
-
-        allImports.removeIf(importDeclaration -> {
-        String nameAsString = importDeclaration.getNameAsString();
-        return !(dependencies.containsKey(nameAsString) ||
-                 nameAsString.contains("lombok") ||
-                 nameAsString.startsWith("java.") ||
-                 nameAsString.startsWith("com.fasterxml.jackson") ||
-                 nameAsString.startsWith("org.springframework.util") ||
-                 keepImports.contains(importDeclaration) ||
-                 (importDeclaration.isStatic() && nameAsString.contains("constants.")));
-        });
-
-
     }
 
     protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {

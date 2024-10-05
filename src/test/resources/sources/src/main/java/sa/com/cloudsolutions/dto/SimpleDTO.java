@@ -19,5 +19,18 @@ public class SimpleDTO {
     private String patient;
     private DietType dietType;
     private Hospital hospital;
-    private Integer group = FIRST_GROUP;
+
+    /*
+     * this constructor should end up being nuked
+     */
+    public SimpleDTO(Long id) {
+        this.id = id;
+    }
+
+    /*
+     * this constructor should end up being nuked.
+     */
+    public SimpleDTO(Hospital hospital) {
+        this.hospital = hospital;
+    }
 }

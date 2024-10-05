@@ -74,6 +74,10 @@ public class DTOHandler extends ClassProcessor {
     public void parseDTO(String relativePath) throws FileNotFoundException {
         compile(relativePath);
         expandWildCards(cu);
+
+        allImports.addAll(cu.getImports());
+        cu.setImports(new NodeList<>());
+
         removeUnwanted();
 
         for( var  t : cu.getTypes()) {
@@ -86,7 +90,9 @@ public class DTOHandler extends ClassProcessor {
             }
         }
 
-        removeUnusedImports();
+        for (ImportDeclaration imp : keepImports) {
+            cu.addImport(imp);
+        }
 
         if (method != null) {
             var variable = classToInstanceName(cu.getTypes().get(0));
