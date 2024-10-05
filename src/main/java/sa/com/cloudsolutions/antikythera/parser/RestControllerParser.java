@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -182,7 +183,7 @@ public class RestControllerParser extends ClassProcessor {
          */
         cu.accept(new DepSolvingVisitor(), null);
 
-        for (Map.Entry<String, List<Dependency>> dep : dependencies.entrySet()) {
+        for (Map.Entry<String, Set<Dependency>> dep : dependencies.entrySet()) {
             gen.addImport(dep.getKey());
             for(Dependency dependency : dep.getValue()) {
                 copyDependencies(dep.getKey(), dependency);

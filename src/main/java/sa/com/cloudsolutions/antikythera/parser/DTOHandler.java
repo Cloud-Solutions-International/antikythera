@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
@@ -63,7 +64,7 @@ public class DTOHandler extends ClassProcessor {
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
 
-        for(Map.Entry<String, List<Dependency>> dependency : dependencies.entrySet()) {
+        for(Map.Entry<String, Set<Dependency>> dependency : dependencies.entrySet()) {
             for (Dependency dep : dependency.getValue()) {
                 copyDependencies(dependency.getKey(), dep);
             }
@@ -73,7 +74,7 @@ public class DTOHandler extends ClassProcessor {
     public void parseDTO(String relativePath) throws FileNotFoundException {
         compile(relativePath);
         expandWildCards(cu);
-        solveTypes();
+        removeUnwanted();
 
         for( var  t : cu.getTypes()) {
             if(t.isClassOrInterfaceDeclaration()) {
@@ -85,7 +86,6 @@ public class DTOHandler extends ClassProcessor {
             }
         }
 
-        handleStaticImports(cu.getImports());
         removeUnusedImports(cu.getImports());
 
         if (method != null) {
@@ -94,27 +94,10 @@ public class DTOHandler extends ClassProcessor {
         }
     }
 
-    void handleStaticImports(NodeList<ImportDeclaration> imports) {
-// todo get this back
-//        imports.stream().filter(importDeclaration -> importDeclaration.isStatic()).forEach(importDeclaration ->
-//        {
-//            String importName = importDeclaration.getNameAsString();
-//            if(importName.startsWith(basePackage)) {
-//
-//                if(importDeclaration.isAsterisk()) {
-//                    dependencies.add(importName);
-//                }
-//                else {
-//                    dependencies.add(importName.substring(0, importName.lastIndexOf(".")));
-//                }
-//            }
-//        });
-    }
-
     /**
      * Iterates through all the classes in the compilation unit and processes them.
      */
-    void solveTypes() {
+    void removeUnwanted() {
         cu.getTypes().forEach(typeDeclaration -> {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
@@ -220,7 +203,6 @@ public class DTOHandler extends ClassProcessor {
             field.getAnnotations().clear();
             field.setAnnotations(filteredAnnotations);
 
-            extractEnums(field);
             solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
                     field.getElementType());
 
@@ -238,7 +220,6 @@ public class DTOHandler extends ClassProcessor {
                 generateSetter(field, setterName);
 
             }
-
 
             return super.visit(field, args);
         }
@@ -289,35 +270,6 @@ public class DTOHandler extends ClassProcessor {
 
             // Add the setter method to the class
             ((ClassOrInterfaceDeclaration) field.getParentNode().get()).addMember(setter);
-        }
-
-        void extractEnums(FieldDeclaration field) {
-            Optional<Expression> expr = field.getVariables().get(0).getInitializer();
-            if (expr.isPresent()) {
-                var initializer = expr.get();
-                if (initializer.isMethodCallExpr()) {
-                    MethodCallExpr methodCall = (MethodCallExpr) initializer;
-                    Optional<Expression> nameExpr = methodCall.getScope();
-                    // Check if the scope of the method call is a field access expression
-                    if (nameExpr.isPresent() && nameExpr.get().isFieldAccessExpr()) {
-                        findImport(cu, nameExpr.get().asFieldAccessExpr().getScope().toString());
-                    }
-                }
-                else if(initializer.isFieldAccessExpr()) {
-                    findImport(cu, initializer.asFieldAccessExpr().getScope().toString());
-                }
-                else if (initializer.isNameExpr()) {
-                    findImport(cu, initializer.asNameExpr().toString());
-                }
-            }
-            else {
-                if (method != null) {
-                    MethodCallExpr setter = generateRandomValue(field, cu);
-                    if (setter != null) {
-                        method.getBody().get().addStatement(setter);
-                    }
-                }
-            }
         }
 
         @Override

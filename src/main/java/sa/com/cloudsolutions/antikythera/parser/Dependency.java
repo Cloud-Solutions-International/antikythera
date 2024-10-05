@@ -78,4 +78,18 @@ public class Dependency {
     public void setExtension(boolean extension) {
         this.extension = extension;
     }
+
+    @Override
+    public int hashCode() {
+        return from.getFullyQualifiedName().hashCode() + to.asString().hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(obj instanceof Dependency other) {
+            return from.getFullyQualifiedName().equals(other.from.getFullyQualifiedName()) && to.asString().equals(other.to.asString());
+        }
+
+        return false;
+    }
 }

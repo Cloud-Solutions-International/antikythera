@@ -1,7 +1,12 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -19,7 +24,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -54,9 +58,11 @@ public class ClassProcessor extends AbstractCompiler {
      * The key in this map is the fully qualified class. The values will be the other types it
      * refers to.
      */
-    protected static final Map<String, List<Dependency>> dependencies = new HashMap<>();
+    protected static final Map<String, Set<Dependency>> dependencies = new HashMap<>();
 
     static final Set<String> copied = new HashSet<>();
+
+    private final Set<String> importsToKeep = new HashSet<>();
 
     public ClassProcessor() throws IOException {
         super();
@@ -137,35 +143,6 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
-    /**
-     * Resolves an import.
-     *
-     * @param dependencyCu the compilation unit with the imports
-     * @param mainType the data type to search for. This is not going to be a fully qualified class name.
-     * @return true if a matching import was found.
-     */
-    protected boolean findImport(CompilationUnit dependencyCu, String mainType) {
-        /*
-         * Iterates through the imports declared in the compilation unit to see if any match.
-         * if an import is found it's added to the dependency list but we also need to check
-         * whether the import comes from an external jar file. In that case we do not need to
-         * copy the DTO across with the generated tests
-         */
-        for (var ref2 : dependencyCu.getImports()) {
-// @todo
-//            String[] parts = ref2.getNameAsString().split("\\.");
-//            if (parts[parts.length - 1].equals(mainType)) {
-//                dependencies.add(ref2.getNameAsString());
-//                for (var jarSolver : jarSolvers) {
-//                    if(jarSolver.getKnownClasses().contains(ref2.getNameAsString())) {
-//                        externalDependencies.add(ref2.getNameAsString());
-//                    }
-//                }
-//                return true;
-//            }
-        }
-        return false;
-    }
 
     /**
      * Converts a class name to an instance name.
@@ -244,6 +221,20 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     protected void removeUnusedImports(NodeList<ImportDeclaration> imports) {
+        Set<String> keepers = new HashSet<>();
+
+        for(ClassOrInterfaceDeclaration cdecl : cu.findAll(ClassOrInterfaceDeclaration.class)) {
+            Set<Dependency> deps = dependencies.get(cdecl.getFullyQualifiedName().orElseGet(null));
+            if(deps != null) {
+                for(Dependency dep : deps) {
+                    try {
+                        keepers.add(dep.to.resolve().describe());
+                    } catch (IllegalStateException e) {
+                        keepers.add(dep.to.toString());
+                    }
+                }
+            }
+        }
         imports.removeIf(importDeclaration -> {
         String nameAsString = importDeclaration.getNameAsString();
         return !(dependencies.containsKey(nameAsString) ||
@@ -251,14 +242,27 @@ public class ClassProcessor extends AbstractCompiler {
                  nameAsString.startsWith("java.") ||
                  nameAsString.startsWith("com.fasterxml.jackson") ||
                  nameAsString.startsWith("org.springframework.util") ||
-                 nameAsString.equals("jakarta.validation.constraints.NotNull") ||
+                 keepers.contains(nameAsString) ||
                  (importDeclaration.isStatic() && nameAsString.contains("constants.")));
         });
+
+
     }
 
     protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {
         try {
-            if(typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType()) {
+            if(typeArg.isPrimitiveType() ||
+                    (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType())) {
+                Node parent = typeArg.getParentNode().orElse(null);
+                if (parent instanceof VariableDeclarator vadecl) {
+                    Expression init = vadecl.getInitializer().orElse(null);
+                    if (init != null) {
+                        JavaParserFieldDeclaration fieldDeclaration =  symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
+                        ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
+                        addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, new ClassOrInterfaceType(declaringType.getQualifiedName() )));
+                        return true;
+                    }
+                }
                 return false;
             }
             String description = typeArg.resolve().describe();
@@ -279,6 +283,6 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     protected void addEdge(String className, Dependency dependency) {
-        dependencies.computeIfAbsent(className, k -> new ArrayList<>()).add(dependency);
+        dependencies.computeIfAbsent(className, k -> new HashSet<>()).add(dependency);
     }
 }

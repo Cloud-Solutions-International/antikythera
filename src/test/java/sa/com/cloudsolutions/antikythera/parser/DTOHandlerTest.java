@@ -31,9 +31,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 
 import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.basePackage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -674,7 +672,7 @@ public class DTOHandlerTest {
         classDecl.addField("String", "field");
 
         handler.cu.addType(classDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
         assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
@@ -690,7 +688,7 @@ public class DTOHandlerTest {
         classDecl.addMethod("someMethod");
 
         handler.cu.addType(classDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(classDecl.getConstructors().isEmpty());
         assertTrue(classDecl.getMethods().isEmpty());
@@ -749,7 +747,7 @@ public class DTOHandlerTest {
         classDecl.addImplementedType("SomeInterface");
 
         handler.cu.addType(classDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(classDecl.getImplementedTypes().isEmpty());
     }
@@ -762,7 +760,7 @@ public class DTOHandlerTest {
         ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow(() -> new IllegalStateException("Class not found"));
         classDecl.addExtendedType("UnresolvedClass");
 
-        assertThrows(RuntimeException.class, () -> handler.solveTypes());
+        assertThrows(RuntimeException.class, () -> handler.removeUnwanted());
     }
 
     @Test
@@ -776,7 +774,7 @@ public class DTOHandlerTest {
         enumDecl.addAnnotation("AllArgsConstructor");
 
         handler.cu.addType(enumDecl);
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(handler.cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("lombok.AllArgsConstructor")));
     }
@@ -789,7 +787,7 @@ public class DTOHandlerTest {
         EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
         enumDecl.addAnnotation("Getter");
 
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertTrue(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
     }
@@ -802,7 +800,7 @@ public class DTOHandlerTest {
         EnumDeclaration enumDecl = cu.getEnumByName("TempEnum").orElseThrow(() -> new IllegalStateException("Enum not found"));
         enumDecl.addAnnotation("Getter");
 
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         long getterImports = cu.getImports().stream().filter(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")).count();
         assertEquals(1, getterImports);
@@ -813,7 +811,7 @@ public class DTOHandlerTest {
         CompilationUnit cu = StaticJavaParser.parse("public enum TempEnum { VALUE1, VALUE2 }");
         handler.setCompilationUnit(cu);
 
-        handler.solveTypes();
+        handler.removeUnwanted();
 
         assertFalse(cu.getImports().stream().anyMatch(importDecl -> importDecl.getNameAsString().equals("lombok.Getter")));
     }
