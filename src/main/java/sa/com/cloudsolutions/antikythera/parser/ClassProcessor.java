@@ -243,7 +243,7 @@ public class ClassProcessor extends AbstractCompiler {
         }
 
         resolveImport(mainType);
-        createEdge(classType, from);
+        createEdge(from, classType);
     }
 
 
@@ -315,11 +315,19 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
-    protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {
+    /**
+     * Build an edge in the dependency graph.
+     *
+     * @param from The node (class) which is dependent on the other. This class is the one that is being parsed.
+     *            It may extend the other class or have a field or local that is of the other class.
+     * @param to the class to which we want to build a dependency to.
+     * @return true if the node was added into the graph.
+     */
+    protected boolean createEdge(TypeDeclaration<?> from, Type to) {
         try {
-            if(typeArg.isPrimitiveType() ||
-                    (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType())) {
-                Node parent = typeArg.getParentNode().orElse(null);
+            if(to.isPrimitiveType() ||
+                    (to.isClassOrInterfaceType() && to.asClassOrInterfaceType().isBoxedType())) {
+                Node parent = to.getParentNode().orElse(null);
                 if (parent instanceof VariableDeclarator vadecl) {
                     Expression init = vadecl.getInitializer().orElse(null);
                     if (init != null) {
@@ -331,7 +339,7 @@ public class ClassProcessor extends AbstractCompiler {
                 }
                 return false;
             }
-            String description = typeArg.resolve().describe();
+            String description = to.resolve().describe();
             if (!description.startsWith("java.")) {
                 Dependency dependency = new Dependency(from, description);
                 for (var jarSolver : jarSolvers) {
@@ -343,7 +351,7 @@ public class ClassProcessor extends AbstractCompiler {
                 addEdge(from.getFullyQualifiedName().orElse(null), dependency);
             }
         } catch (UnsolvedSymbolException e) {
-            logger.debug("Unresolvable {}", typeArg.toString());
+            logger.debug("Unresolvable {}", to.toString());
         }
         return false;
     }
@@ -417,6 +425,10 @@ public class ClassProcessor extends AbstractCompiler {
         return null;
     }
 
+    /**
+     * Iterates the graph and copies the required file to the test project.
+     * @throws IOException if a particular file could not be copied.
+     */
     protected void copyDependencies() throws IOException {
         for(TypeDeclaration<?> declaration : cu.getTypes()) {
             Optional<String> fullyQualifiedName = declaration.getFullyQualifiedName();

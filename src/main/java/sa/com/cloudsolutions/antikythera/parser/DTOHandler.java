@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * Works with Data Transfer Objects (DTOs) and entities.
+ *
  * Recursively copy DTOs from the Application Under Test (AUT).
  */
 public class DTOHandler extends ClassProcessor {

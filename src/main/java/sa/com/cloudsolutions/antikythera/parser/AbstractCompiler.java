@@ -206,6 +206,12 @@ public class AbstractCompiler {
         return param.getNameAsString();
     }
 
+    /**
+     * Because resolve on a class or interface declaration can throw exceptions
+     * Sometimes that exception handling leads to very ugly code
+     * @param node the node to resolve
+     * @return an Optional with the ResolvedType
+     */
     public static Optional<ResolvedType> resolveTypeSafely(ClassOrInterfaceType node) {
         Optional<CompilationUnit> compilationUnit = node.findCompilationUnit();
         if (compilationUnit.isPresent()) {

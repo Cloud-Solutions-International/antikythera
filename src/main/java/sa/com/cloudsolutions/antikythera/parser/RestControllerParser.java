@@ -28,8 +28,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,9 +40,15 @@ import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
+/**
+ * Parses Spring RestControllers to generate tests.
+ */
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-    public static final String ANNOTATION_REQUEST_BODY = "@RequestBody";
+
+    /**
+     * A single controller file or a folder of controllers.
+     */
     private final File controllers;
 
     private HashMap<String, Object> parameterSet;
@@ -162,19 +166,12 @@ public class RestControllerParser extends ClassProcessor {
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
-        gen.addImport("sa.com.cloudsolutions.antikythera.base.TestHelper");
-        gen.addImport("org.testng.annotations.Test");
-        gen.addImport("org.testng.Assert");
-        gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
-        gen.addImport("java.io.IOException");
-        gen.addImport("java.util.List");
-        gen.addImport("java.util.Map");
-        gen.addImport("java.util.Date");
-        gen.addImport("java.util.HashMap");
-        gen.addImport("io.restassured.http.Method");
-        gen.addImport("io.restassured.response.Response");
-        gen.addImport("com.cloud.core.annotations.TestCaseType");
-        gen.addImport("com.cloud.core.enums.TestType");
+        List<String> otherImports = (List<String>) Settings.getProperty("extra_imports");
+        if(otherImports != null) {
+            for (String s : otherImports) {
+                gen.addImport(s);
+            }
+        }
 
         /*
          * There is a very valid reason for doing this in two steps.
@@ -362,7 +359,7 @@ public class RestControllerParser extends ClassProcessor {
                     Type t = expr.asVariableDeclarationExpr().getElementType();
                     TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
                     if (from != null) {
-                        createEdge(t, from );
+                        createEdge(from, t);
                     }
                 }
             }

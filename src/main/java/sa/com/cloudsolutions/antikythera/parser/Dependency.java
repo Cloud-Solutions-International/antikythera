@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.Type;
 
 public class Dependency {
     TypeDeclaration<?> from;
