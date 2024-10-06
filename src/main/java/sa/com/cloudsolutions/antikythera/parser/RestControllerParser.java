@@ -267,7 +267,7 @@ public class RestControllerParser extends ClassProcessor {
                 preConditions = new ArrayList<>();
                 try {
                     evaluator.executeMethod(md);
-                } catch (EvaluatorException e) {
+                } catch (EvaluatorException|ReflectiveOperationException e) {
                     throw new RuntimeException(e);
                 }
             }

@@ -21,7 +21,7 @@ public class TestTryCatch extends TestHelper {
     }
 
     @Test
-    void testChained() throws EvaluatorException {
+    void testChained() throws EvaluatorException, ReflectiveOperationException {
 
         MethodDeclaration doStuff = eval.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();

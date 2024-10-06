@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestStrings extends TestHelper{
     @BeforeEach
-    public void each() throws EvaluatorException, IOException {
+    public void each() throws Exception {
         eval = new HelloEvaluator();
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
-    void testUpperCase() throws EvaluatorException {
+    void testUpperCase() throws EvaluatorException, ReflectiveOperationException {
         Variable u = new Variable("upper cased");
         AntikytheraRunTime.push(u);
         MethodDeclaration helloUpper = eval.getCompilationUnit()
@@ -37,7 +37,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testHello() throws EvaluatorException {
+    void testHello() throws EvaluatorException, ReflectiveOperationException {
         MethodDeclaration helloWorld = eval.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
         evaluator.setScope("helloWorld");
@@ -47,7 +47,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testHelloArgs() throws EvaluatorException {
+    void testHelloArgs() throws EvaluatorException, ReflectiveOperationException {
         MethodDeclaration helloName = eval.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
         evaluator.setScope("helloName");
@@ -58,7 +58,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testChained() throws EvaluatorException {
+    void testChained() throws EvaluatorException, ReflectiveOperationException {
         Variable v = new Variable("World");
         AntikytheraRunTime.push(v);
         MethodDeclaration helloChained = eval.getCompilationUnit()
@@ -70,7 +70,7 @@ public class TestStrings extends TestHelper{
 
     class HelloEvaluator extends AbstractCompiler {
 
-        protected HelloEvaluator() throws IOException, EvaluatorException {
+        protected HelloEvaluator() throws IOException, ReflectiveOperationException{
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Hello.java");
             cu = javaParser.parse(file).getResult().get();
             evaluator = new Evaluator();

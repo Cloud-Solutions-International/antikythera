@@ -41,7 +41,7 @@ public class TestReturnValue {
         System.setOut(new PrintStream(outContent));
     }
     @Test
-    void testPrintName() throws EvaluatorException {
+    void testPrintName() throws EvaluatorException, ReflectiveOperationException {
         CompilationUnit cu = eval.getComplationUnit();
 
         MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printName")).orElseThrow();
@@ -51,7 +51,7 @@ public class TestReturnValue {
     }
 
     @Test
-    void testPrintNumberField() throws  EvaluatorException {
+    void testPrintNumberField() throws  EvaluatorException, ReflectiveOperationException {
         CompilationUnit cu = eval.getComplationUnit();
         MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
         evaluator.executeMethod(printNumber);

@@ -65,7 +65,7 @@ public class SpringEvaluator extends Evaluator {
     private boolean flunk = true;
 
     @Override
-    public void executeMethod(MethodDeclaration md) throws EvaluatorException {
+    public void executeMethod(MethodDeclaration md) throws EvaluatorException, ReflectiveOperationException {
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration cdecl) {
                 if (cdecl.isAnnotationPresent("RestController")) {
@@ -122,7 +122,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws EvaluatorException if there is an error evaluating the expression
      */
     @Override
-    Variable evaluateVariableDeclaration(Expression expr) throws EvaluatorException {
+    Variable evaluateVariableDeclaration(Expression expr) throws EvaluatorException, ReflectiveOperationException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
         for (var decl : varDeclExpr.getVariables()) {
             Optional<Expression> init = decl.getInitializer();
@@ -201,7 +201,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
+    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException, ReflectiveOperationException {
         super.identifyFieldVariables(variable);
 
         if (variable.getType().isClassOrInterfaceType()) {
@@ -240,7 +240,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    void evaluateReturnStatement(Statement statement) throws EvaluatorException {
+    void evaluateReturnStatement(Statement statement) throws EvaluatorException, ReflectiveOperationException {
 
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
@@ -267,7 +267,7 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws EvaluatorException {
+    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws ReflectiveOperationException {
         try {
             if (parent instanceof IfStmt ifStmt) {
                 Expression condition = ifStmt.getCondition();
@@ -404,18 +404,19 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, String methodName, Class<?>[] paramTypes, Object[] args) throws Exception {
-        if(methodName.equals("save") && scopeExpr.isNameExpr()
+    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, ReflectionArguments ref)
+            throws EvaluatorException, ReflectiveOperationException {
+        if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
                 && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
             return null;
         }
         else{
-            return super.handleRegularMethodCall(methodCall, scopeExpr, methodName, paramTypes, args);
+            return super.handleRegularMethodCall(methodCall, scopeExpr, ref);
         }
     }
 
 
-    public boolean evaluateValidatorCondition(Expression condition) throws EvaluatorException {
+    public boolean evaluateValidatorCondition(Expression condition) throws EvaluatorException, ReflectiveOperationException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();

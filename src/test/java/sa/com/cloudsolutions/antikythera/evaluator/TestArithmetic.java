@@ -46,7 +46,7 @@ public class TestArithmetic {
         protected ArithmeticEvaluator() throws IOException {
         }
 
-        void doStuff() throws IOException, EvaluatorException {
+        void doStuff() throws Exception {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Arithmetic.java");
             CompilationUnit cu = javaParser.parse(file).getResult().get();
             evaluator.setupFields(cu);

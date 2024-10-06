@@ -42,7 +42,7 @@ public class TestBunches  {
     }
 
     @Test
-    void testList() throws EvaluatorException {
+    void testList() throws EvaluatorException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration printList = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printList")).orElseThrow();
         evaluator.executeMethod(printList);
@@ -50,7 +50,7 @@ public class TestBunches  {
     }
 
     @Test
-    void testMap() throws EvaluatorException {
+    void testMap() throws EvaluatorException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration printMap = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printMap")).orElseThrow();
         evaluator.executeMethod(printMap);
@@ -58,7 +58,7 @@ public class TestBunches  {
     }
 
     @Test
-    void testWithDTO() throws EvaluatorException {
+    void testWithDTO() throws EvaluatorException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTO")).orElseThrow();
         evaluator.executeMethod(withDTO);
@@ -67,7 +67,7 @@ public class TestBunches  {
 
 
     @Test
-    void testDTOConstructor() throws EvaluatorException {
+    void testDTOConstructor() throws EvaluatorException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTOConstructor")).orElseThrow();
         evaluator.executeMethod(withDTO);
