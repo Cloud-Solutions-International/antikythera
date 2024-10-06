@@ -416,4 +416,19 @@ public class ClassProcessor extends AbstractCompiler {
         }
         return null;
     }
+
+    protected void copyDependencies() throws IOException {
+        for(TypeDeclaration<?> declaration : cu.getTypes()) {
+            Optional<String> fullyQualifiedName = declaration.getFullyQualifiedName();
+            if(fullyQualifiedName.isPresent()) {
+                Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
+
+                if (deps != null) {
+                    for (Dependency dependency : deps) {
+                        copyDependency(fullyQualifiedName.get(), dependency);
+                    }
+                }
+            }
+        }
+    }
 }

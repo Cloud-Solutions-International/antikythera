@@ -87,14 +87,11 @@ public class RestControllerParser extends ClassProcessor {
     }
 
     public void start() throws IOException, EvaluatorException {
-        processRestController(controllers);
+        processControllers(controllers);
     }
 
-    private void processRestController(File path) throws IOException, EvaluatorException {
+    private void processControllers(File path) throws IOException, EvaluatorException {
         current = path;
-        String absolutePath = path.getAbsolutePath();
-
-        logger.info(absolutePath);
         if (path.isDirectory()) {
             for (File f : path.listFiles()) {
                 if(f.toString().contains(controllers.toString())) {
@@ -104,49 +101,55 @@ public class RestControllerParser extends ClassProcessor {
             }
 
         } else {
-            String p = path.toString().replace("/",".");
-            List<String> skip = (List<String>) Settings.getProperty("skip");
-            if(skip != null) {
-                for(String s : skip) {
-                    if (p.endsWith(s)) {
-                        return;
-                    }
-                }
-            }
-
-            Matcher matcher = controllerPattern.matcher(path.toString());
-
-            String controllerName = null;
-            if (matcher.find()) {
-                controllerName = matcher.group(1);
-            }
-            parameterSet = new HashMap<>();
-            if (!path.exists()) {
-                // if the file ends with /java then we need to replace it with .java but only the
-                // last occurrence
-
-                if(absolutePath.endsWith("java")) {
-                    int idx = absolutePath.lastIndexOf("/");
-                    if (idx != -1) {
-                        char[] letters = absolutePath.toCharArray();
-                        letters[idx] = '.';
-                        path = new File(new String(letters));
-                    }
-                }
-            }
-
-            FileInputStream in = new FileInputStream(path);
-            cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-            if (cu.getPackageDeclaration().isPresent()) {
-                processRestController(cu.getPackageDeclaration().get());
-            }
-            File file = new File(dataPath + File.separator + controllerName + "Params.json");
-            objectMapper.writeValue(file, parameterSet);
+            parseController(path);
         }
     }
 
+    private void parseController(File path) throws IOException, EvaluatorException {
+        String absolutePath = path.getAbsolutePath();
+        logger.info(absolutePath);
+
+        String p = path.toString().replace("/",".");
+        List<String> skip = (List<String>) Settings.getProperty("skip");
+        if(skip != null) {
+            for(String s : skip) {
+                if (p.endsWith(s)) {
+                    return;
+                }
+            }
+        }
+
+        Matcher matcher = controllerPattern.matcher(path.toString());
+
+        String controllerName = null;
+        if (matcher.find()) {
+            controllerName = matcher.group(1);
+        }
+        parameterSet = new HashMap<>();
+        if (!path.exists()) {
+            // if the file ends with /java then we need to replace it with .java but only the
+            // last occurrence
+
+            if(absolutePath.endsWith("java")) {
+                int idx = absolutePath.lastIndexOf("/");
+                if (idx != -1) {
+                    char[] letters = absolutePath.toCharArray();
+                    letters[idx] = '.';
+                    path = new File(new String(letters));
+                }
+            }
+        }
+
+        FileInputStream in = new FileInputStream(path);
+        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        if (cu.getPackageDeclaration().isPresent()) {
+            processRestController(cu.getPackageDeclaration().get());
+        }
+        File file = new File(dataPath + File.separator + controllerName + "Params.json");
+        objectMapper.writeValue(file, parameterSet);
+    }
+
     private void processRestController(PackageDeclaration pd) throws IOException, EvaluatorException {
-        StringBuilder fileContent = new StringBuilder();
         expandWildCards(cu);
 
         evaluator = new SpringEvaluator();
@@ -185,12 +188,7 @@ public class RestControllerParser extends ClassProcessor {
          */
         cu.accept(new DepSolvingVisitor(), null);
 
-        for (Map.Entry<String, Set<Dependency>> dep : dependencies.entrySet()) {
-            gen.addImport(dep.getKey());
-            for(Dependency dependency : dep.getValue()) {
-                copyDependency(dep.getKey(), dependency);
-            }
-        }
+       copyDependencies();
 
         /*
          * Pass 2 : Generate the tests
@@ -198,8 +196,9 @@ public class RestControllerParser extends ClassProcessor {
         evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
 
-        fileContent.append(gen.toString()).append("\n");
-        ProjectGenerator.getInstance().writeFilesToTest(pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",fileContent.toString());
+        ProjectGenerator.getInstance().writeFilesToTest(
+                pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",
+                gen.toString());
 
     }
 

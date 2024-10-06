@@ -61,11 +61,7 @@ public class DTOHandler extends ClassProcessor {
 
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
 
-        for(Map.Entry<String, Set<Dependency>> dependency : dependencies.entrySet()) {
-            for (Dependency dep : dependency.getValue()) {
-                copyDependency(dependency.getKey(), dep);
-            }
-        }
+        copyDependencies();
     }
 
     public void parseDTO(String relativePath) throws FileNotFoundException {
@@ -82,7 +78,6 @@ public class DTOHandler extends ClassProcessor {
                 ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
                 if(!cdecl.isInnerClass()) {
                     cdecl.accept(new TypeCollector(), null);
-                    cu.accept(new TypeCollector(), null);
                 }
             }
         }
