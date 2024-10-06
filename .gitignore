@@ -18,8 +18,6 @@ target/
 ### generator files ###
 src/main/resources/generator.yml
 src/main/resources/generator
-src/test/resources/generator.yml
-src/test/resources/generator
 
 src/test/resources/testdata/qa
 
