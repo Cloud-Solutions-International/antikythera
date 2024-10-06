@@ -91,7 +91,8 @@ public class ClassProcessor extends AbstractCompiler {
      * @param nameAsString a fully qualified class name
      */
     protected void copyDependency(String nameAsString, Dependency dependency) throws IOException {
-        if (dependency.isExternal() || nameAsString.startsWith("org.springframework")) {
+        if (dependency.isExternal() || nameAsString.startsWith("java.")
+                || nameAsString.startsWith("org.springframework")) {
             return;
         }
         /*
@@ -335,7 +336,7 @@ public class ClassProcessor extends AbstractCompiler {
                 Dependency dependency = new Dependency(from, description);
                 for (var jarSolver : jarSolvers) {
                     if (jarSolver.getKnownClasses().contains(description)) {
-                        dependency.setExtension(true);
+                        dependency.setExternal(true);
                         return true;
                     }
                 }

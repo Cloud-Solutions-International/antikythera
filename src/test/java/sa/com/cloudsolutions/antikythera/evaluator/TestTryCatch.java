@@ -1,12 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.CompilationUnit;
+
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestTryCatch extends TestHelper {
+class TestTryCatch extends TestHelper {
     @BeforeEach
     public void each() throws AntikytheraException, IOException {
         eval = new TryCatchEvaluator();

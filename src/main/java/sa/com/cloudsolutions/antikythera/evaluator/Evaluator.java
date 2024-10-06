@@ -598,17 +598,28 @@ public class Evaluator {
         printlnMethod.invoke(outField.get(null), args);
     }
 
+    static Class<?> getClass(String className) {
+        try {
+            return Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            logger.info("Could not find class {}", className);
+        }
+        return null;
+    }
+
     Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, ReflectionArguments reflectionArguments)
             throws AntikytheraException, ReflectiveOperationException {
         ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
         ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
 
+        Variable scopedVariable = getLocal(methodCall, scopeExpr.toString());
+
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
         Object[] args = reflectionArguments.getArgs();
-        Class<?> clazz = Class.forName(declaringType.getQualifiedName());
+        Class<?> clazz = scopedVariable  == null ?  getClass(declaringType.getQualifiedName()) : scopedVariable.getClazz();
 
-        if (declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
+        if (clazz != null && declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
             Method method = findMethod(clazz, methodName, paramTypes);
             if(method != null) {
                 if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
@@ -767,7 +778,7 @@ public class Evaluator {
             }
         }
         else {
-            Variable v = null;
+            Variable v;
             Optional<Expression> init = variable.getInitializer();
             if(init.isPresent()) {
                 v = evaluateExpression(init.get());
@@ -869,29 +880,32 @@ public class Evaluator {
         } catch (EvaluatorException|ReflectiveOperationException ex) {
             throw ex;
         } catch (Exception e) {
-            if(catching.isEmpty()) {
-                throw new AUTException("Unhandled exception",e);
-            }
-            TryStmt t = catching.pollLast();
-            boolean matched = false;
-            for(CatchClause clause : t.getCatchClauses()) {
-                if(clause.getParameter().getType().isClassOrInterfaceType()) {
-                    String className = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
-                    if(className.equals(e.getClass().getName())) {
-                        setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
-                        executeBlock(clause.getBody().getStatements());
-                        if(t.getFinallyBlock().isPresent()) {
-                            executeBlock(t.getFinallyBlock().get().getStatements());
-                        }
-                        matched = true;
-                        break;
+            handleApplicationException(e);
+        }
+    }
+
+    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+        if(catching.isEmpty()) {
+            throw new AUTException("Unhandled exception", e);
+        }
+        TryStmt t = catching.pollLast();
+        boolean matched = false;
+        for(CatchClause clause : t.getCatchClauses()) {
+            if(clause.getParameter().getType().isClassOrInterfaceType()) {
+                String className = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
+                if(className.equals(e.getClass().getName())) {
+                    setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                    executeBlock(clause.getBody().getStatements());
+                    if(t.getFinallyBlock().isPresent()) {
+                        executeBlock(t.getFinallyBlock().get().getStatements());
                     }
+                    matched = true;
+                    break;
                 }
             }
-            if(!matched) {
-                throw new AUTException("Unhandled exception", e);
-            }
-
+        }
+        if(!matched) {
+            throw new AUTException("Unhandled exception", e);
         }
     }
 
@@ -932,8 +946,10 @@ public class Evaluator {
                     if(action == null || action.equals("exit")) {
                         throw new GeneratorException("Exception while processing fields", e);
                     }
+
                     logger.error("Exception while processing fields");
                     logger.error("\t{}",e.getMessage());
+
                 } catch (AntikytheraException|ReflectiveOperationException e) {
                     throw new GeneratorException(e);
                 }

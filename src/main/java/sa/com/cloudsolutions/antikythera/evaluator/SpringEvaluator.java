@@ -505,4 +505,10 @@ public class SpringEvaluator extends Evaluator {
             }
         }
     }
+
+    @Override
+    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+        System.out.println(e);
+        super.handleApplicationException(e);
+    }
 }

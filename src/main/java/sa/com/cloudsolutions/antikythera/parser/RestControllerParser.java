@@ -358,8 +358,7 @@ public class RestControllerParser extends ClassProcessor {
                     Type t = expr.asVariableDeclarationExpr().getElementType();
                     TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
                     if (from != null) {
-                        Dependency dependency = new Dependency(from, t.toDescriptor());
-                        addEdge(from.getFullyQualifiedName().orElseThrow(null), dependency);
+                        createEdge(t, from );
                     }
                 }
             }
