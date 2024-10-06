@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.TryStmt;
+import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import com.github.javaparser.ast.stmt.IfStmt;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -822,31 +824,54 @@ public class Evaluator {
     }
 
     protected void executeBlock(List<Statement> statements) throws EvaluatorException, ReflectiveOperationException {
-        for (Statement stmt : statements) {
-            logger.info(stmt.toString());
-            if (stmt.isExpressionStmt()) {
-                evaluateExpression(stmt.asExpressionStmt().getExpression());
-            }
-            else if(stmt.isIfStmt()) {
-                IfStmt ifst = stmt.asIfStmt();
-                Variable v = evaluateExpression(ifst.getCondition());
-                if ( (boolean) v.getValue() ) {
-                    Statement then = ifst.getThenStmt();
-                    executeBlock(then.asBlockStmt().getStatements());
+        try {
+            for (Statement stmt : statements) {
+                logger.info(stmt.toString());
+                if (stmt.isExpressionStmt()) {
+                    evaluateExpression(stmt.asExpressionStmt().getExpression());
+                } else if (stmt.isIfStmt()) {
+                    IfStmt ifst = stmt.asIfStmt();
+                    Variable v = evaluateExpression(ifst.getCondition());
+                    if ((boolean) v.getValue()) {
+                        Statement then = ifst.getThenStmt();
+                        executeBlock(then.asBlockStmt().getStatements());
+                    } else {
+                        System.out.println("Else condition");
+                    }
+                } else if (stmt.isTryStmt()) {
+                    catching.addLast(stmt.asTryStmt());
+                    executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
+                } else if (stmt.isReturnStmt()) {
+                    evaluateReturnStatement(stmt);
+                } else {
+                    logger.info("Unhandled");
                 }
-                else {
-                    System.out.println("Else condition");
+
+            }
+        } catch (EvaluatorException|ReflectiveOperationException ex) {
+            throw ex;
+        } catch (Exception e) {
+            if(catching.isEmpty()) {
+                throw new EvaluatorException("Unhandled exception",e);
+            }
+            TryStmt t = catching.pollLast();
+            boolean matched = false;
+            for(CatchClause clause : t.getCatchClauses()) {
+                if(clause.getParameter().getType().isClassOrInterfaceType()) {
+                    String className = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
+                    if(className.equals(e.getClass().getName())) {
+                        setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                        executeBlock(clause.getBody().getStatements());
+                        if(t.getFinallyBlock().isPresent()) {
+                            executeBlock(t.getFinallyBlock().get().getStatements());
+                        }
+                        matched = true;
+                        break;
+                    }
                 }
             }
-            else if (stmt.isTryStmt()) {
-                catching.add(stmt.asTryStmt());
-                executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
-            }
-            else if(stmt.isReturnStmt()) {
-                evaluateReturnStatement(stmt);
-            }
-            else {
-                logger.info("Unhandled");
+            if(!matched) {
+                throw new EvaluatorException("Unhandled exception", e);
             }
 
         }

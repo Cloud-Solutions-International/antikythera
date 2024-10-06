@@ -8,4 +8,8 @@ public class AUTException extends Exception{
     public AUTException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    public AUTException(Throwable cause) {
+        super(cause);
+    }
 }

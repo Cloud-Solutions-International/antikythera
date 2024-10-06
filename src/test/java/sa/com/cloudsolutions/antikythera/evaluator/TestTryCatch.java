@@ -27,7 +27,8 @@ public class TestTryCatch extends TestHelper {
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
         evaluator.executeMethod(doStuff);
 
-        assertTrue(outContent.toString().contains("Hello, ORLD"));
+        assertTrue(outContent.toString().contains("Caught an exception\n"));
+        assertTrue(outContent.toString().contains("Finally block\n"));
     }
 
     class TryCatchEvaluator extends AbstractCompiler {

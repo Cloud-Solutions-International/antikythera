@@ -30,7 +30,7 @@ class TestEvaluator {
 
 
     @Test
-    public void evaluateExpressionReturnsIntegerLiteral() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateExpressionReturnsIntegerLiteral() throws EvaluatorException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Expression expr = new IntegerLiteralExpr(42);
         Variable result = evaluator.evaluateExpression(expr);
@@ -38,7 +38,7 @@ class TestEvaluator {
     }
 
     @Test
-    public void evaluateExpressionReturnsStringLiteral() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateExpressionReturnsStringLiteral() throws EvaluatorException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Expression expr = new StringLiteralExpr("test");
         Variable result = evaluator.evaluateExpression(expr);
@@ -46,7 +46,7 @@ class TestEvaluator {
     }
 
     @Test
-    public void evaluateExpressionReturnsVariableValue() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateExpressionReturnsVariableValue() throws EvaluatorException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Variable expected = new Variable(42);
         evaluator.setLocal(new IntegerLiteralExpr(42), "testVar", expected);
@@ -56,7 +56,7 @@ class TestEvaluator {
     }
 
     @Test
-    public void evaluateBinaryExpression() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateBinaryExpression() throws EvaluatorException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Variable result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new IntegerLiteralExpr("40"), new IntegerLiteralExpr("2"));
@@ -72,7 +72,7 @@ class TestEvaluator {
     }
 
     @Test
-    public void evaluateMethodCallPrintsToSystemOut() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateMethodCallPrintsToSystemOut() throws EvaluatorException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));
