@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.ast.CompilationUnit;
@@ -36,13 +37,13 @@ public class TestBunches  {
     }
 
     @BeforeEach
-    public void each() throws EvaluatorException, IOException {
+    public void each() throws AntikytheraException, IOException {
         eval = new TestBunches.CollectionEvaluator();
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
-    void testList() throws EvaluatorException, ReflectiveOperationException {
+    void testList() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration printList = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printList")).orElseThrow();
         evaluator.executeMethod(printList);
@@ -50,7 +51,7 @@ public class TestBunches  {
     }
 
     @Test
-    void testMap() throws EvaluatorException, ReflectiveOperationException {
+    void testMap() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration printMap = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printMap")).orElseThrow();
         evaluator.executeMethod(printMap);
@@ -58,7 +59,7 @@ public class TestBunches  {
     }
 
     @Test
-    void testWithDTO() throws EvaluatorException, ReflectiveOperationException {
+    void testWithDTO() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTO")).orElseThrow();
         evaluator.executeMethod(withDTO);
@@ -67,7 +68,7 @@ public class TestBunches  {
 
 
     @Test
-    void testDTOConstructor() throws EvaluatorException, ReflectiveOperationException {
+    void testDTOConstructor() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTOConstructor")).orElseThrow();
         evaluator.executeMethod(withDTO);

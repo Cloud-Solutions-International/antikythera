@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.ast.CompilationUnit;
@@ -25,7 +26,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testUpperCase() throws EvaluatorException, ReflectiveOperationException {
+    void testUpperCase() throws AntikytheraException, ReflectiveOperationException {
         Variable u = new Variable("upper cased");
         AntikytheraRunTime.push(u);
         MethodDeclaration helloUpper = eval.getCompilationUnit()
@@ -37,7 +38,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testHello() throws EvaluatorException, ReflectiveOperationException {
+    void testHello() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloWorld = eval.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
         evaluator.setScope("helloWorld");
@@ -47,7 +48,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testHelloArgs() throws EvaluatorException, ReflectiveOperationException {
+    void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloName = eval.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
         evaluator.setScope("helloName");
@@ -58,7 +59,7 @@ public class TestStrings extends TestHelper{
     }
 
     @Test
-    void testChained() throws EvaluatorException, ReflectiveOperationException {
+    void testChained() throws AntikytheraException, ReflectiveOperationException {
         Variable v = new Variable("World");
         AntikytheraRunTime.push(v);
         MethodDeclaration helloChained = eval.getCompilationUnit()

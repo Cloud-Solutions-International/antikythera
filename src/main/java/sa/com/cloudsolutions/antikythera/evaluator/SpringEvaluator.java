@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
@@ -65,7 +66,7 @@ public class SpringEvaluator extends Evaluator {
     private boolean flunk = true;
 
     @Override
-    public void executeMethod(MethodDeclaration md) throws EvaluatorException, ReflectiveOperationException {
+    public void executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration cdecl) {
                 if (cdecl.isAnnotationPresent("RestController")) {
@@ -122,7 +123,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws EvaluatorException if there is an error evaluating the expression
      */
     @Override
-    Variable evaluateVariableDeclaration(Expression expr) throws EvaluatorException, ReflectiveOperationException {
+    Variable evaluateVariableDeclaration(Expression expr) throws AntikytheraException, ReflectiveOperationException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
         for (var decl : varDeclExpr.getVariables()) {
             Optional<Expression> init = decl.getInitializer();
@@ -201,7 +202,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException, ReflectiveOperationException {
+    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
         super.identifyFieldVariables(variable);
 
         if (variable.getType().isClassOrInterfaceType()) {
@@ -240,7 +241,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    void evaluateReturnStatement(Statement statement) throws EvaluatorException, ReflectiveOperationException {
+    void evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
 
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
@@ -267,7 +268,7 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws ReflectiveOperationException {
+    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws AntikytheraException, ReflectiveOperationException {
         try {
             if (parent instanceof IfStmt ifStmt) {
                 Expression condition = ifStmt.getCondition();
@@ -405,7 +406,7 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, ReflectionArguments ref)
-            throws EvaluatorException, ReflectiveOperationException {
+            throws AntikytheraException, ReflectiveOperationException {
         if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
                 && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
             return null;
@@ -416,7 +417,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
 
-    public boolean evaluateValidatorCondition(Expression condition) throws EvaluatorException, ReflectiveOperationException {
+    public boolean evaluateValidatorCondition(Expression condition) throws AntikytheraException, ReflectiveOperationException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();

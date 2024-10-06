@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.exception;
 
-public class AUTException extends Exception{
+public class AUTException extends AntikytheraException{
     public AUTException(String message) {
         super(message);
     }

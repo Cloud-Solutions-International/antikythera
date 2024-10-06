@@ -36,6 +36,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
@@ -267,7 +268,7 @@ public class RestControllerParser extends ClassProcessor {
                 preConditions = new ArrayList<>();
                 try {
                     evaluator.executeMethod(md);
-                } catch (EvaluatorException|ReflectiveOperationException e) {
+                } catch (AntikytheraException | ReflectiveOperationException e) {
                     throw new RuntimeException(e);
                 }
             }

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.util.List;
@@ -9,7 +10,7 @@ import java.util.List;
 public class Reflect {
 
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator)
-            throws EvaluatorException, ReflectiveOperationException {
+            throws AntikytheraException, ReflectiveOperationException {
         String methodName = methodCall.getNameAsString();
         List<Expression> arguments = methodCall.getArguments();
         Variable[] argValues = new Variable[arguments.size()];

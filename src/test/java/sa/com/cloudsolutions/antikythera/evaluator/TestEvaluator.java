@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
@@ -30,7 +31,7 @@ class TestEvaluator {
 
 
     @Test
-    void evaluateExpressionReturnsIntegerLiteral() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateExpressionReturnsIntegerLiteral() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Expression expr = new IntegerLiteralExpr(42);
         Variable result = evaluator.evaluateExpression(expr);
@@ -38,7 +39,7 @@ class TestEvaluator {
     }
 
     @Test
-    void evaluateExpressionReturnsStringLiteral() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateExpressionReturnsStringLiteral() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Expression expr = new StringLiteralExpr("test");
         Variable result = evaluator.evaluateExpression(expr);
@@ -46,7 +47,7 @@ class TestEvaluator {
     }
 
     @Test
-    void evaluateExpressionReturnsVariableValue() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateExpressionReturnsVariableValue() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Variable expected = new Variable(42);
         evaluator.setLocal(new IntegerLiteralExpr(42), "testVar", expected);
@@ -56,7 +57,7 @@ class TestEvaluator {
     }
 
     @Test
-    void evaluateBinaryExpression() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateBinaryExpression() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         Variable result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new IntegerLiteralExpr("40"), new IntegerLiteralExpr("2"));
@@ -72,7 +73,7 @@ class TestEvaluator {
     }
 
     @Test
-    void evaluateMethodCallPrintsToSystemOut() throws EvaluatorException, ReflectiveOperationException {
+    void evaluateMethodCallPrintsToSystemOut() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));

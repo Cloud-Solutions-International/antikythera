@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.ast.CompilationUnit;
@@ -36,12 +37,12 @@ public class TestReturnValue {
     }
 
     @BeforeEach
-    public void each() throws EvaluatorException, IOException {
+    public void each() throws AntikytheraException, IOException {
         eval = new TestReturnValue.ReturnValueEval();
         System.setOut(new PrintStream(outContent));
     }
     @Test
-    void testPrintName() throws EvaluatorException, ReflectiveOperationException {
+    void testPrintName() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = eval.getComplationUnit();
 
         MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printName")).orElseThrow();
@@ -51,7 +52,7 @@ public class TestReturnValue {
     }
 
     @Test
-    void testPrintNumberField() throws  EvaluatorException, ReflectiveOperationException {
+    void testPrintNumberField() throws  AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = eval.getComplationUnit();
         MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
         evaluator.executeMethod(printNumber);
@@ -60,7 +61,7 @@ public class TestReturnValue {
 
     class ReturnValueEval extends AbstractCompiler {
 
-        protected ReturnValueEval() throws IOException, EvaluatorException {
+        protected ReturnValueEval() throws IOException, AntikytheraException {
             cu = javaParser.parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
             evaluator = new Evaluator();
             evaluator.setupFields(cu);
