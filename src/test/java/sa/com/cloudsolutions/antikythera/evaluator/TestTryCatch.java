@@ -21,14 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestTryCatch extends TestHelper {
     @BeforeEach
     public void each() throws AntikytheraException, IOException {
-        eval = new TryCatchEvaluator();
+        compiler = new TryCatchCompiler();
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testNPE() throws AntikytheraException, ReflectiveOperationException {
 
-        MethodDeclaration doStuff = eval.getCompilationUnit()
+        MethodDeclaration doStuff = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("tryNPE")).orElseThrow();
         evaluator.executeMethod(doStuff);
 
@@ -40,7 +40,7 @@ class TestTryCatch extends TestHelper {
     @Test
     void testNested() throws AntikytheraException, ReflectiveOperationException {
 
-        MethodDeclaration doStuff = eval.getCompilationUnit()
+        MethodDeclaration doStuff = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("nested")).orElseThrow();
         evaluator.executeMethod(doStuff);
 
@@ -55,7 +55,7 @@ class TestTryCatch extends TestHelper {
     @Test
     void testThrowing()  {
 
-        MethodDeclaration doStuff = eval.getCompilationUnit()
+        MethodDeclaration doStuff = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("throwTantrum")).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(1));
@@ -67,7 +67,7 @@ class TestTryCatch extends TestHelper {
     @Test
     void testNotThrowing()  {
 
-        MethodDeclaration doStuff = eval.getCompilationUnit()
+        MethodDeclaration doStuff = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("throwTantrum")).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(2));
@@ -76,9 +76,9 @@ class TestTryCatch extends TestHelper {
         assertTrue(outContent.toString().contains("No tantrum thrown\n"));
     }
 
-    class TryCatchEvaluator extends AbstractCompiler {
+    class TryCatchCompiler extends AbstractCompiler {
 
-        protected TryCatchEvaluator() throws IOException {
+        protected TryCatchCompiler() throws IOException {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/TryCatch.java");
             cu = javaParser.parse(file).getResult().get();
             evaluator = new Evaluator();

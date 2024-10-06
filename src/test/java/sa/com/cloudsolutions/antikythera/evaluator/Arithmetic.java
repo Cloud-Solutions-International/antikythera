@@ -14,6 +14,22 @@ public class Arithmetic {
         doStuff(arithmetic);
     }
 
+
+    public void additionViaStrings() {
+        String a = "10";
+        String b = "20";
+        int c = Integer.parseInt(a) + Integer.parseInt(b);
+        System.out.println(c);
+    }
+
+
+    public void simpleAddition() {
+        int a = 10;
+        int b = 20;
+        int c = a + b;
+        System.out.println(c);
+    }
+
     private static void doStuff(Arithmetic arithmetic) {
         int a = arithmetic.calculate(Integer.parseInt("10"));
         System.out.println(a);

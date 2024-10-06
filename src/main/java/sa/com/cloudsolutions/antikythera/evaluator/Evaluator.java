@@ -257,7 +257,18 @@ public class Evaluator {
                     }
                 }
                 else if(expression.isObjectCreationExpr()) {
-                    return createObject(expr, decl, expression);
+                    v = createObject(expr, decl, expression);
+                    if (v != null) {
+                        v.setType(decl.getType());
+                        setLocal(expression, decl.getNameAsString(), v);
+                    }
+                }
+                else {
+                    v = evaluateExpression(expression);
+                    if (v != null) {
+                        v.setType(decl.getType());
+                        setLocal(expression, decl.getNameAsString(), v);
+                    }
                 }
 
             }
@@ -355,6 +366,8 @@ public class Evaluator {
 
     /**
      * Find local variable
+     * Does not look at fields. You probably want to call getValue() instead.
+     *
      * @param node the node representing the current expresion.
      *             It's primary purpose is to help identify the current block
      * @param name the name of the variable to look up
@@ -364,7 +377,7 @@ public class Evaluator {
         Variable v = null;
         Node n = node;
 
-        while(true) {
+        while (true) {
             BlockStmt block = findBlockStatement(n);
             int hash = (block != null) ? block.hashCode() : 0;
 
@@ -372,7 +385,8 @@ public class Evaluator {
 
             if (localsVars != null) {
                 v = localsVars.get(name);
-                return v;
+                if (v != null )
+                    return v;
             }
             if(n instanceof MethodDeclaration) {
                 localsVars = this.locals.get(hash);
@@ -397,19 +411,26 @@ public class Evaluator {
      * Sets a local variable
      * @param node An expression representing the code being currently executed. It will be used to identify the
      *             encapsulating block.
-     * @param nameAsString the variable name
+     * @param nameAsString the variable name.
+     *                     If the variable is already available as a local it's value will be replaced.
      * @param v The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        BlockStmt block = findBlockStatement(node);
-        int hash = (block != null) ? block.hashCode() : 0;
-
-        Map<String, Variable> localVars = this.locals.get(hash);
-        if(localVars == null) {
-            localVars = new HashMap<>();
-            this.locals.put(hash, localVars);
+        Variable old = getValue(node, nameAsString);
+        if (old != null) {
+            old.setValue(v.getValue());
         }
-        localVars.put(nameAsString, v);
+        else {
+            BlockStmt block = findBlockStatement(node);
+            int hash = (block != null) ? block.hashCode() : 0;
+
+            Map<String, Variable> localVars = this.locals.get(hash);
+            if (localVars == null) {
+                localVars = new HashMap<>();
+                this.locals.put(hash, localVars);
+            }
+            localVars.put(nameAsString, v);
+        }
     }
 
     /**
@@ -872,6 +893,12 @@ public class Evaluator {
                     }
                 } else if (stmt.isReturnStmt()) {
                     evaluateReturnStatement(stmt);
+                } else if (stmt.isForStmt() || stmt.isForEachStmt() || stmt.isDoStmt() || stmt.isSwitchStmt() || stmt.isWhileStmt()) {
+                    logger.warn("Some block statements are not being handled at the moment");
+                } else if (stmt.isBlockStmt()) {
+                    // in C like languages it's possible to have a block that is not directly
+                    // associated with a condtional, loop or method etc.
+                    executeBlock(stmt.asBlockStmt().getStatements());
                 } else {
                     logger.info("Unhandled");
                 }
@@ -981,5 +1008,4 @@ class NumericComparator {
             throw new IllegalArgumentException("Cannot compare " + left + " and " + right);
         }
     }
-
 }

@@ -11,7 +11,7 @@ import java.io.PrintStream;
 
 public class TestHelper {
     Evaluator evaluator;
-    AbstractCompiler eval;
+    AbstractCompiler compiler;
 
     final PrintStream standardOut = System.out;
     final ByteArrayOutputStream outContent = new ByteArrayOutputStream();

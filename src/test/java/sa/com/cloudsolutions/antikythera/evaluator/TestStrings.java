@@ -1,17 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -21,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestStrings extends TestHelper{
     @BeforeEach
     public void each() throws Exception {
-        eval = new HelloEvaluator();
+        compiler = new HelloEvaluator();
         System.setOut(new PrintStream(outContent));
     }
 
@@ -29,7 +23,7 @@ public class TestStrings extends TestHelper{
     void testUpperCase() throws AntikytheraException, ReflectiveOperationException {
         Variable u = new Variable("upper cased");
         AntikytheraRunTime.push(u);
-        MethodDeclaration helloUpper = eval.getCompilationUnit()
+        MethodDeclaration helloUpper = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloUpper")).orElseThrow();
         evaluator.setScope("helloUpper");
         evaluator.executeMethod(helloUpper);
@@ -39,7 +33,7 @@ public class TestStrings extends TestHelper{
 
     @Test
     void testHello() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration helloWorld = eval.getCompilationUnit()
+        MethodDeclaration helloWorld = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
         evaluator.setScope("helloWorld");
         evaluator.executeMethod(helloWorld);
@@ -49,7 +43,7 @@ public class TestStrings extends TestHelper{
 
     @Test
     void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration helloName = eval.getCompilationUnit()
+        MethodDeclaration helloName = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
         evaluator.setScope("helloName");
         Variable v = new Variable("Cloud Solutions");
@@ -62,7 +56,7 @@ public class TestStrings extends TestHelper{
     void testChained() throws AntikytheraException, ReflectiveOperationException {
         Variable v = new Variable("World");
         AntikytheraRunTime.push(v);
-        MethodDeclaration helloChained = eval.getCompilationUnit()
+        MethodDeclaration helloChained = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloChained")).orElseThrow();
         evaluator.executeMethod(helloChained);
 
