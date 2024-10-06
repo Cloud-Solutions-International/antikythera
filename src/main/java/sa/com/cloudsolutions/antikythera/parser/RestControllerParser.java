@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
@@ -269,7 +270,11 @@ public class RestControllerParser extends ClassProcessor {
                 try {
                     evaluator.executeMethod(md);
                 } catch (AntikytheraException | ReflectiveOperationException e) {
-                    throw new RuntimeException(e);
+                    if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                        logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
+                    } else {
+                        throw new GeneratorException(e);
+                    }
                 }
             }
         }

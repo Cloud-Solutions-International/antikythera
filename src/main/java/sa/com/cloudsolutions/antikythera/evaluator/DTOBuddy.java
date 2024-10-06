@@ -126,7 +126,7 @@ public class DTOBuddy {
         }
 
         return builder.make()
-                .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
+                .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
     }
 

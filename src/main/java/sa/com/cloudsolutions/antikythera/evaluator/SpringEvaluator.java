@@ -94,26 +94,64 @@ public class SpringEvaluator extends Evaluator {
             String paramString = String.valueOf(param);
 
             if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
-                Variable v = new Variable(switch (param.getTypeAsString()) {
-                    case "Boolean" -> false;
-                    case "float", "Float", "double", "Double" -> 0.0;
-                    case "Integer", "int" -> 0;
-                    case "Long", "long" -> 0L;
-                    case "String" -> "Ibuprofen";
-                    default -> "0";
-                });
+                /*
+                 * Request parameters are typically strings or numbers.
+                 */
+                Variable v = mockParameter(param.getTypeAsString());
                 AntikytheraRunTime.push(v);
             } else if (paramString.startsWith("@RequestBody")) {
+                /*
+                 * Request body on the other hand will be more complex and will most likely be a DTO.
+                 */
                 Type t = param.getType();
                 if (t.isClassOrInterfaceType()) {
-                    Object o = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
-                    Variable v = new Variable(o);
-                    AntikytheraRunTime.push(v);
+                    String className = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
+                    if (className.startsWith("java")) {
+                        /*
+                         * However you can't rule out the possibility that this is a Map or a List or even a
+                         * boxed type.
+                         */
+                        if (t.asClassOrInterfaceType().isBoxedType()) {
+                            Variable v = mockParameter(param.getTypeAsString());
+                            AntikytheraRunTime.push(v);
+                        }
+                        else {
+                            if (className.startsWith("java.util")) {
+                                Variable v = new Variable(switch(className){
+                                    case "java.util.List" -> new ArrayList<>();
+                                    case "java.util.Map" -> new HashMap<>();
+                                    default -> null;
+                                });
+                                AntikytheraRunTime.push(v);
+                            }
+                            else {
+                                Class<?> clazz = Class.forName(className);
+                                Variable v = new Variable(clazz.newInstance());
+                                AntikytheraRunTime.push(v);
+                            }
+                        }
+                    }
+                    else {
+                        Object o = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
+                        Variable v = new Variable(o);
+                        AntikytheraRunTime.push(v);
+                    }
                 } else {
                     logger.warn("Unhandled {}", t);
                 }
             }
         }
+    }
+
+    private static Variable mockParameter(String typeName) {
+        return new Variable(switch (typeName) {
+            case "Boolean" -> false;
+            case "float", "Float", "double", "Double" -> 0.0;
+            case "Integer", "int" -> 0;
+            case "Long", "long" -> 0L;
+            case "String" -> "Ibuprofen";
+            default -> "0";
+        });
     }
 
     /**
