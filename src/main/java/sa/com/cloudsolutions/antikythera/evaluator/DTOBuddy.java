@@ -108,7 +108,19 @@ public class DTOBuddy {
 //                        Object o = DTOBuddy.createDynamicDTO(qualifiedName, field.getType().asReferenceType().getTypeDeclaration().get());
 //                        fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(o.getClass());
 //                    }
-                    continue;
+                    if (field.getType().describe().contains("List") || field.getType().describe().contains("Set") || field.getType().describe().contains("Map")) {
+                        Class<?> collectionType = Class.forName(field.getType().describe().split("<")[0]);
+                        try {
+                            Class<?> elementType = Class.forName(field.getType().describe().split("<")[1].replace(">", ""));
+                            fieldType = TypeDescription.Generic.Builder.parameterizedType(collectionType, elementType).build();
+                        } catch (ClassNotFoundException ce) {
+                            Class<?> dynamicFieldClass = createDynamicDTO(field.getType().asReferenceType().getTypeParametersMap().get(0).b.describe());
+                            fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(dynamicFieldClass);
+                        }
+                    } else {
+                        Class<?> dynamicFieldClass = createDynamicDTO(field.getType().describe());
+                        fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(dynamicFieldClass);
+                    }
                 }
             }
 
@@ -129,6 +141,16 @@ public class DTOBuddy {
                 .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
                 .getLoaded();
     }
+
+    public static Class<?> createDynamicDTO(String className) throws ClassNotFoundException {
+        ByteBuddy byteBuddy = new ByteBuddy();
+        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className);
+
+        return builder.make()
+                .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
+                .getLoaded();
+    }
+
 
     private static Class<?> resolvePrimitiveType(String typeName) {
         switch (typeName) {
