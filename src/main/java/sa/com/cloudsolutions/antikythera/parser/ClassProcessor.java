@@ -11,7 +11,6 @@ import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclar
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -174,21 +173,20 @@ public class ClassProcessor extends AbstractCompiler {
      * @param type the type to resolve
      */
     void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
-
-        if (type.isClassOrInterfaceType()) {
-            if (type.asClassOrInterfaceType().isBoxedType()) {
+        if(from != null && type != null) {
+            if (type.isClassOrInterfaceType()) {
+                if (type.asClassOrInterfaceType().isBoxedType()) {
+                    solveConstant(from, type);
+                } else {
+                    solveClassDependency(from, type);
+                }
+            } else {
+                /*
+                 * Primitive constants that are assigned a value based on a static import is the
+                 * hardest thing to solve.
+                 */
                 solveConstant(from, type);
             }
-            else {
-                solveClassDependency(from, type);
-            }
-        }
-        else {
-            /*
-             * Primitive constants that are assigned a value based on a static import is the
-             * hardest thing to solve.
-             */
-            solveConstant(from, type);
         }
     }
 
