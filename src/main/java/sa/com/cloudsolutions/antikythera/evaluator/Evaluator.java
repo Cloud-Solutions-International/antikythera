@@ -148,7 +148,7 @@ public class Evaluator {
             /*
              * Literal expressions are the easiest.
              */
-            return evaluatorLiteral(expr);
+            return evaluateLiteral(expr);
 
         } else if (expr.isVariableDeclarationExpr()) {
             /*
@@ -187,7 +187,7 @@ public class Evaluator {
         return null;
     }
 
-    private static Variable evaluatorLiteral(Expression expr) {
+    private static Variable evaluateLiteral(Expression expr) {
         if (expr.isBooleanLiteralExpr()) {
             return new Variable(expr.asBooleanLiteralExpr().getValue());
         } else if (expr.isDoubleLiteralExpr()) {
@@ -470,6 +470,12 @@ public class Evaluator {
             }
             if (scopeExpr.isMethodCallExpr()) {
                 returnValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
+                MethodCallExpr chained = methodCall.clone();
+                chained.setScope(new NameExpr(returnValue.getValue().toString()));
+                returnValue = evaluateMethodCall(chained);
+            }
+            else if (scopeExpr.isLiteralExpr()) {
+                returnValue = evaluateLiteral(scopeExpr.asLiteralExpr());
                 MethodCallExpr chained = methodCall.clone();
                 chained.setScope(new NameExpr(returnValue.getValue().toString()));
                 returnValue = evaluateMethodCall(chained);

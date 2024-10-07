@@ -18,32 +18,18 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestReturnValue {
+class TestReturnValue extends TestHelper {
     Evaluator evaluator;
-    TestReturnValue.ReturnValueEval eval;
-
-    private final PrintStream standardOut = System.out;
-    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-
-    @AfterEach
-    public void tearDown() {
-        System.setOut(standardOut);
-        AntikytheraRunTime.reset();
-    }
-
-    @BeforeAll
-    public static void setup() throws IOException {
-        Settings.loadConfigMap();
-    }
 
     @BeforeEach
     public void each() throws AntikytheraException, IOException {
-        eval = new TestReturnValue.ReturnValueEval();
+        compiler = new TestReturnValue.ReturnValueEval();
         System.setOut(new PrintStream(outContent));
     }
+
     @Test
     void testPrintName() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = eval.getComplationUnit();
+        CompilationUnit cu = compiler.getCompilationUnit();
 
         MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printName")).orElseThrow();
         evaluator.executeMethod(printName);
@@ -53,7 +39,7 @@ public class TestReturnValue {
 
     @Test
     void testPrintNumberField() throws  AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = eval.getComplationUnit();
+        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
         evaluator.executeMethod(printNumber);
         assertTrue(outContent.toString().contains("10"));
@@ -68,8 +54,5 @@ public class TestReturnValue {
             evaluator.setScope("returnValue");
         }
 
-        public CompilationUnit getComplationUnit() {
-            return cu;
-        }
     }
 }

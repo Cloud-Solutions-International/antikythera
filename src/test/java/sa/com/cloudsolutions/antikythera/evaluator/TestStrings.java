@@ -12,7 +12,7 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestStrings extends TestHelper{
+class TestStrings extends TestHelper{
     @BeforeEach
     public void each() throws Exception {
         compiler = new HelloEvaluator();
