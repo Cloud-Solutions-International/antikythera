@@ -741,6 +741,13 @@ public class Evaluator {
             case NOT_EQUALS:
                 return new Variable(!left.getValue().equals(right.getValue()));
 
+            case OR:
+                if (  (left.getClazz().equals(Boolean.class) || left.getClazz().equals(boolean.class))
+                        && (right.getClazz().equals(Boolean.class) || right.getClazz().equals(boolean.class))) {
+                    return new Variable( (Boolean)left.getValue() || (Boolean)right.getValue());
+                }
+                return null;
+
             case PLUS:
                 return addOperation(left, right);
 
@@ -868,53 +875,72 @@ public class Evaluator {
     protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
         try {
             for (Statement stmt : statements) {
-                logger.info(stmt.toString());
-                if (stmt.isExpressionStmt()) {
-                    evaluateExpression(stmt.asExpressionStmt().getExpression());
-                } else if (stmt.isIfStmt()) {
-                    IfStmt ifst = stmt.asIfStmt();
-                    Variable v = evaluateExpression(ifst.getCondition());
-                    if ((boolean) v.getValue()) {
-                        Statement then = ifst.getThenStmt();
-                        executeBlock(then.asBlockStmt().getStatements());
-                    } else {
-                        Optional<Statement> elseBlock = ifst.getElseStmt();
-                        if(elseBlock.isPresent()) {
-                            executeBlock(elseBlock.get().asBlockStmt().getStatements());
-                        }
-                    }
-                } else if (stmt.isTryStmt()) {
-                    catching.addLast(stmt.asTryStmt());
-                    executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
-                } else if (stmt.isThrowStmt()) {
-                    ThrowStmt t = stmt.asThrowStmt();
-                    if(t.getExpression().isObjectCreationExpr()) {
-                        ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
-                        Variable v = createObject(stmt, null, oce);
-                        if (v.getValue() instanceof Exception ex) {
-                            throw ex;
-                        }
-                        else {
-                            logger.error("Should have an exception");
-                        }
-                    }
-                } else if (stmt.isReturnStmt()) {
-                    evaluateReturnStatement(stmt);
-                } else if (stmt.isForStmt() || stmt.isForEachStmt() || stmt.isDoStmt() || stmt.isSwitchStmt() || stmt.isWhileStmt()) {
-                    logger.warn("Some block statements are not being handled at the moment");
-                } else if (stmt.isBlockStmt()) {
-                    // in C like languages it's possible to have a block that is not directly
-                    // associated with a condtional, loop or method etc.
-                    executeBlock(stmt.asBlockStmt().getStatements());
-                } else {
-                    logger.info("Unhandled");
-                }
-
+                executeStatement(stmt);
             }
         } catch (EvaluatorException|ReflectiveOperationException ex) {
             throw ex;
         } catch (Exception e) {
             handleApplicationException(e);
+        }
+    }
+
+    private void executeStatement(Statement stmt) throws Exception {
+        logger.info(stmt.toString());
+        if (stmt.isExpressionStmt()) {
+            evaluateExpression(stmt.asExpressionStmt().getExpression());
+        } else if (stmt.isIfStmt()) {
+            ifThenElseBlock(stmt);
+        } else if (stmt.isTryStmt()) {
+            catching.addLast(stmt.asTryStmt());
+            executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
+        } else if (stmt.isThrowStmt()) {
+            ThrowStmt t = stmt.asThrowStmt();
+            if(t.getExpression().isObjectCreationExpr()) {
+                ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
+                Variable v = createObject(stmt, null, oce);
+                if (v.getValue() instanceof Exception ex) {
+                    throw ex;
+                }
+                else {
+                    logger.error("Should have an exception");
+                }
+            }
+        } else if (stmt.isReturnStmt()) {
+            evaluateReturnStatement(stmt);
+        } else if (stmt.isForStmt() || stmt.isForEachStmt() || stmt.isDoStmt() || stmt.isSwitchStmt() || stmt.isWhileStmt()) {
+            logger.warn("Some block statements are not being handled at the moment");
+        } else if (stmt.isBlockStmt()) {
+            // in C like languages it's possible to have a block that is not directly
+            // associated with a condtional, loop or method etc.
+            executeBlock(stmt.asBlockStmt().getStatements());
+        } else {
+            logger.info("Unhandled");
+        }
+    }
+
+    private void ifThenElseBlock(Statement stmt) throws Exception {
+        IfStmt ifst = stmt.asIfStmt();
+        Variable v = evaluateExpression(ifst.getCondition());
+        if ((boolean) v.getValue()) {
+            Statement then = ifst.getThenStmt();
+            if (then.isBlockStmt()) {
+                executeBlock(then.asBlockStmt().getStatements());
+            }
+            else {
+                executeStatement(then);
+            }
+        } else {
+
+            Optional<Statement> elseBlock = ifst.getElseStmt();
+            if(elseBlock.isPresent()) {
+                Statement el = elseBlock.get();
+                if(el.isBlockStmt()) {
+                    executeBlock(el.asBlockStmt().getStatements());
+                }
+                else {
+                    executeStatement(el);
+                }
+            }
         }
     }
 

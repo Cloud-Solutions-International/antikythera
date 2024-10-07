@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -177,8 +178,11 @@ public class SpringEvaluator extends Evaluator {
                         try {
                             Variable v = null;
                             if(qualifiedName.startsWith("java.util")) {
-                                Class<?> clazz = Class.forName(qualifiedName);
-                                v = new Variable(clazz.getMethod("of"));
+                                switch (qualifiedName) {
+                                    case "java.util.List" -> v = new Variable(new ArrayList<>());
+                                    case "java.util.Map" -> v = new Variable(new HashMap<>());
+                                    case "java.util.Set" -> v = new Variable(new HashSet<>());
+                                }
                             }
                             else {
                                 v = new Variable(DTOBuddy.createDynamicDTO(decl.getType().asClassOrInterfaceType()));
