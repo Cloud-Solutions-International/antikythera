@@ -37,7 +37,6 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.sql.Connection;
@@ -226,7 +225,7 @@ public class RepositoryParser extends ClassProcessor {
      * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(String method, RepositoryQuery rql) throws FileNotFoundException {
+    public ResultSet executeQuery(String method, RepositoryQuery rql) throws IOException {
         try {
             current = rql;
 
@@ -313,13 +312,11 @@ public class RepositoryParser extends ClassProcessor {
      * @return a compilation unit
      * @throws FileNotFoundException if the entity cannot be found in the AUT
      */
-    private CompilationUnit findEntity(Type entity) throws FileNotFoundException {
+    private CompilationUnit findEntity(Type entity) throws IOException {
         String nameAsString = entity.asClassOrInterfaceType().resolve().describe();
-        String fileName = basePath + File.separator + nameAsString.replaceAll("\\.","/") + SUFFIX;
-        return javaParser.parse(
-                new File(fileName)).getResult().orElseThrow(
-                        () -> new IllegalStateException("Parse error")
-        );
+        ClassProcessor processor = new ClassProcessor();
+        processor.compile(AbstractCompiler.classToPath(nameAsString));
+        return processor.getCompilationUnit();
     }
 
     /**
@@ -330,7 +327,7 @@ public class RepositoryParser extends ClassProcessor {
      * @return
      * @throws FileNotFoundException
      */
-    private void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws FileNotFoundException {
+    private void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws IOException {
 
         if(stmt instanceof  Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
@@ -397,7 +394,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param select the select statement
      * @throws FileNotFoundException if we are unable to find related entities.
      */
-    private void processJoins(CompilationUnit entity, PlainSelect select) throws FileNotFoundException {
+    private void processJoins(CompilationUnit entity, PlainSelect select) throws IOException {
         List<CompilationUnit> units = new ArrayList<>();
         units.add(entity);
 

@@ -96,16 +96,14 @@ public class RestControllerParser extends ClassProcessor {
         String absolutePath = path.getAbsolutePath();
         logger.info(absolutePath);
 
-        String p = path.toString().replace("/", ".");
-        List<?> skip = Settings.getProperty("skip", List.class).orElseGet(List::of);
-        for (Object s : skip) {
-            if (p.endsWith(s.toString())) {
-                return;
-            }
+        if (shouldSkip(AbstractCompiler.absolutePathToClassName(absolutePath))) {
+            return;
         }
 
-        FileInputStream in = new FileInputStream(path);
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        compile(AbstractCompiler.classToPath(
+                AbstractCompiler.absolutePathToClassName(absolutePath)
+        ));
+
         if (cu.getPackageDeclaration().isPresent()) {
             processRestController(cu.getPackageDeclaration().get());
         }

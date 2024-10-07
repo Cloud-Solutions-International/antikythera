@@ -87,18 +87,6 @@ public class ClassProcessor extends AbstractCompiler {
      */
     protected final Set<ImportDeclaration> keepImports = new HashSet<>();
 
-
-    protected static Set<String> annotationFilter = new HashSet<>();
-
-    static {
-        annotationFilter.add("Service");
-        annotationFilter.add("Controller");
-        annotationFilter.add("RestController");
-        annotationFilter.add("Configuration");
-        annotationFilter.add("Component");
-        annotationFilter.add("SpringApplication");
-    }
-
     public ClassProcessor() throws IOException {
         super();
     }
@@ -130,39 +118,22 @@ public class ClassProcessor extends AbstractCompiler {
                      * it's best to make sure that we haven't copied this file already and also to make
                      * sure that the class is directly part of the application under test.
                      */
-                    if (validateAnnotations(decl)) {
-                        /*
-                         * There are lots of beans in a Spring Boot app. Typically these do not need to be
-                         * copied. Those beans can easily be identified by the fact that they have various
-                         * annotations. We skip anything that is not an Entity.
-                         */
 
-                        try {
-                            copied.add(targetName);
-                            DTOHandler handler = new DTOHandler();
-                            handler.copyDTO(classToPath(targetName));
-                            AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
-                        } catch (FileNotFoundException fe) {
-                            if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                                logger.warn("Could not find {} for copying", targetName);
-                            } else {
-                                throw fe;
-                            }
+                    try {
+                        copied.add(targetName);
+                        DTOHandler handler = new DTOHandler();
+                        handler.copyDTO(classToPath(targetName));
+                        AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                    } catch (FileNotFoundException fe) {
+                        if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                            logger.warn("Could not find {} for copying", targetName);
+                        } else {
+                            throw fe;
                         }
                     }
                 }
             }
         }
-    }
-
-    private boolean validateAnnotations(TypeDeclaration<?> type) {
-        for (AnnotationExpr ann : type.getAnnotations()) {
-            String name = ann.getNameAsString();
-            if (annotationFilter.contains(name)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
@@ -396,7 +367,6 @@ public class ClassProcessor extends AbstractCompiler {
     protected void addEdge(String className, Dependency dependency) {
         dependencies.computeIfAbsent(className, k -> new HashSet<>()).add(dependency);
     }
-
 
     /**
      * Finds an import that matches the given type name

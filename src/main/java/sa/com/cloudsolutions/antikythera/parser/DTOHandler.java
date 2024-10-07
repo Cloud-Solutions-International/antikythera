@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -26,11 +27,13 @@ import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -59,7 +62,13 @@ public class DTOHandler extends ClassProcessor {
             return;
         }
         parseDTO(relativePath);
-        ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
+
+        String className = AbstractCompiler.pathToClass(relativePath);
+        if (! (AntikytheraRunTime.isServiceClass(className) || AntikytheraRunTime.isControllerClass(className)
+                || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
+            ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
+        }
+
         copyDependencies();
     }
 
@@ -69,8 +78,6 @@ public class DTOHandler extends ClassProcessor {
 
             allImports.addAll(cu.getImports());
             cu.setImports(new NodeList<>());
-
-            removeUnwanted();
 
             for (var t : cu.getTypes()) {
                 if (t.isClassOrInterfaceDeclaration()) {
@@ -105,6 +112,8 @@ public class DTOHandler extends ClassProcessor {
                     }
                 }
             }
+
+            removeUnwanted();
 
             for (ImportDeclaration imp : keepImports) {
                 cu.addImport(imp);
@@ -200,8 +209,6 @@ public class DTOHandler extends ClassProcessor {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-
-
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
                     || fieldAsString.equals("Logger")
@@ -227,24 +234,47 @@ public class DTOHandler extends ClassProcessor {
             field.getAnnotations().clear();
             field.setAnnotations(filteredAnnotations);
 
-            solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
-                    field.getElementType());
+            Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
 
-            // handle custom getters and setters
-            String fieldName = field.getVariables().get(0).getNameAsString();
-            String className = cu.getTypes().get(0).getNameAsString();
-            Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+            if (ancestor.isPresent()) {
+                /*
+                 * We need not have this ancestor check because java can't have global variables but that's the
+                 * way the library is structured.
+                 * Having identified that we have a field, we need to solve it's type dependencies. Matters are
+                 * slightly complicated by the fact that sometimes a field may have an initializer. This may be
+                 * a method call (which we will ignore for now) but this is more often simply an object creation
+                 * It may look like this:
+                 *
+                 *     List<String> list = new ArrayList<>();
+                 *
+                 * Because the field type and the initializer differ we need to solve the type dependencies for
+                 * the initializer as well.
+                 */
+                solveTypeDependencies(ancestor.get(), field.getElementType());
+                VariableDeclarator firstVariable = field.getVariables().get(0);
+                firstVariable.getInitializer().ifPresent(init -> {
+                    if (init.isObjectCreationExpr()) {
+                        solveTypeDependencies(ancestor.get(), init.asObjectCreationExpr().getType());
+                    }
+                });
 
-            if(!methodNames.isEmpty()){
-                String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
-                String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
 
-                // Use custom getter and setter names
-                generateGetter(field, getterName);
-                generateSetter(field, setterName);
+                // handle custom getters and setters
 
+                String fieldName = firstVariable.getNameAsString();
+                String className = cu.getTypes().get(0).getNameAsString();
+                Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+
+                if(!methodNames.isEmpty()){
+                    String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
+                    String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
+
+                    // Use custom getter and setter names
+                    generateGetter(field, getterName);
+                    generateSetter(field, setterName);
+
+                }
             }
-
             return super.visit(field, args);
         }
 
