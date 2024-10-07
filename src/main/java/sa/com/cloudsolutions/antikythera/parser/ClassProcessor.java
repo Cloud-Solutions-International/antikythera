@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
@@ -10,6 +11,7 @@ import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclar
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -81,6 +83,18 @@ public class ClassProcessor extends AbstractCompiler {
      */
     protected final Set<ImportDeclaration> keepImports = new HashSet<>();
 
+
+    protected static Set<String> annotationFilter = new HashSet<>();
+
+    static {
+        annotationFilter.add("Service");
+        annotationFilter.add("Controller");
+        annotationFilter.add("RestController");
+        annotationFilter.add("Configuration");
+        annotationFilter.add("Component");
+        annotationFilter.add("SpringApplication");
+    }
+
     public ClassProcessor() throws IOException {
         super();
     }
@@ -109,7 +123,7 @@ public class ClassProcessor extends AbstractCompiler {
                      * it's best to make sure that we haven't copied this file already and also to make
                      * sure that the class is directly part of the application under test.
                      */
-                    if (decl.getAnnotations().isEmpty() || decl.getAnnotationByName("Entity").isPresent()) {
+                    if (validateAnnotations(decl)) {
                         /*
                          * There are lots of beans in a Spring Boot app. Typically these do not need to be
                          * copied. Those beans can easily be identified by the fact that they have various
@@ -132,6 +146,16 @@ public class ClassProcessor extends AbstractCompiler {
                 }
             }
         }
+    }
+
+    private boolean validateAnnotations(TypeDeclaration<?> type) {
+        for (AnnotationExpr ann : type.getAnnotations()) {
+            String name = ann.getNameAsString();
+            if (annotationFilter.contains(name)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -214,7 +238,7 @@ public class ClassProcessor extends AbstractCompiler {
                 handler.parseDTO(AbstractCompiler.classToPath(className));
                 depCu = handler.getCompilationUnit();
             } catch (IOException iex) {
-                logger.error("Could not find {}", className);
+                logger.debug("No compilation unit for {}", className);
             }
         }
         return depCu;
@@ -343,6 +367,11 @@ public class ClassProcessor extends AbstractCompiler {
                 addEdge(from.getFullyQualifiedName().orElse(null), dependency);
             }
         } catch (UnsolvedSymbolException e) {
+            ImportDeclaration decl = resolveImport(typeArg.asClassOrInterfaceType().getNameAsString());
+            if (decl != null && !decl.getNameAsString().startsWith("java.")) {
+                addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, decl.getNameAsString()));
+                return true;
+            }
             logger.debug("Unresolvable {}", typeArg.toString());
         }
         return false;

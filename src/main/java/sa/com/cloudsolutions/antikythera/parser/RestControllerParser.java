@@ -28,8 +28,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -119,34 +117,12 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
-        Matcher matcher = controllerPattern.matcher(path.toString());
-
-        String controllerName = null;
-        if (matcher.find()) {
-            controllerName = matcher.group(1);
-        }
-        parameterSet = new HashMap<>();
-        if (!path.exists()) {
-            // if the file ends with /java then we need to replace it with .java but only the
-            // last occurrence
-
-            if(absolutePath.endsWith("java")) {
-                int idx = absolutePath.lastIndexOf("/");
-                if (idx != -1) {
-                    char[] letters = absolutePath.toCharArray();
-                    letters[idx] = '.';
-                    path = new File(new String(letters));
-                }
-            }
-        }
-
         FileInputStream in = new FileInputStream(path);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         if (cu.getPackageDeclaration().isPresent()) {
             processRestController(cu.getPackageDeclaration().get());
         }
-        File file = new File(dataPath + File.separator + controllerName + "Params.json");
-        objectMapper.writeValue(file, parameterSet);
+
     }
 
     private void processRestController(PackageDeclaration pd) throws IOException, EvaluatorException {
@@ -162,19 +138,12 @@ public class RestControllerParser extends ClassProcessor {
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
-        gen.addImport("sa.com.cloudsolutions.antikythera.base.TestHelper");
-        gen.addImport("org.testng.annotations.Test");
-        gen.addImport("org.testng.Assert");
-        gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
-        gen.addImport("java.io.IOException");
-        gen.addImport("java.util.List");
-        gen.addImport("java.util.Map");
-        gen.addImport("java.util.Date");
-        gen.addImport("java.util.HashMap");
-        gen.addImport("io.restassured.http.Method");
-        gen.addImport("io.restassured.response.Response");
-        gen.addImport("com.cloud.core.annotations.TestCaseType");
-        gen.addImport("com.cloud.core.enums.TestType");
+        List<String> otherImports = (List<String>) Settings.getProperty("extra_imports");
+        if(otherImports != null) {
+            for (String s : otherImports) {
+                gen.addImport(s);
+            }
+        }
 
         /*
          * There is a very valid reason for doing this in two steps.

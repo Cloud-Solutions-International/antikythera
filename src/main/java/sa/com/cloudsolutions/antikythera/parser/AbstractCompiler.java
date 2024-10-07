@@ -141,12 +141,13 @@ public class AbstractCompiler {
      * @param relativePath a path name relative to the base path of the application.
      * @throws FileNotFoundException when the source code cannot be found
      */
-    public void compile(String relativePath) throws FileNotFoundException {
+    public boolean compile(String relativePath) throws FileNotFoundException {
         String className = pathToClass(relativePath);
 
         cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
-            return;
+            // this has already been compiled
+            return true;
         }
 
         logger.debug("\t{}", relativePath);
@@ -159,6 +160,8 @@ public class AbstractCompiler {
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         AntikytheraRunTime.addClass(className, cu);
 
+        // fresh meat
+        return false;
     }
 
     /**

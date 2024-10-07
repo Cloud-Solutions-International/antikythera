@@ -58,37 +58,36 @@ public class DTOHandler extends ClassProcessor {
             return;
         }
         parseDTO(relativePath);
-
         ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-
         copyDependencies();
     }
 
     public void parseDTO(String relativePath) throws FileNotFoundException {
-        compile(relativePath);
-        expandWildCards(cu);
+        if (! compile(relativePath)) {
+            expandWildCards(cu);
 
-        allImports.addAll(cu.getImports());
-        cu.setImports(new NodeList<>());
+            allImports.addAll(cu.getImports());
+            cu.setImports(new NodeList<>());
 
-        removeUnwanted();
+            removeUnwanted();
 
-        for( var  t : cu.getTypes()) {
-            if(t.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                if(!cdecl.isInnerClass()) {
-                    cdecl.accept(new TypeCollector(), null);
+            for (var t : cu.getTypes()) {
+                if (t.isClassOrInterfaceDeclaration()) {
+                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                    if (!cdecl.isInnerClass()) {
+                        cdecl.accept(new TypeCollector(), null);
+                    }
                 }
             }
-        }
 
-        for (ImportDeclaration imp : keepImports) {
-            cu.addImport(imp);
-        }
+            for (ImportDeclaration imp : keepImports) {
+                cu.addImport(imp);
+            }
 
-        if (method != null) {
-            var variable = classToInstanceName(cu.getTypes().get(0));
-            method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
+            if (method != null) {
+                var variable = classToInstanceName(cu.getTypes().get(0));
+                method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
+            }
         }
     }
 
@@ -169,7 +168,7 @@ public class DTOHandler extends ClassProcessor {
     /**
      * Listens for events of field declarations.
      * All annotations associated with the field are removed. Then we try to extract
-     * it's type. If the type is defined in the application under test we copy it.
+     * its type. If the type is defined in the application under test we copy it.
      */
     class TypeCollector extends ModifierVisitor<Void> {
 
@@ -189,6 +188,7 @@ public class DTOHandler extends ClassProcessor {
             for (AnnotationExpr annotation : field.getAnnotations()) {
                 String annotationName = annotation.getNameAsString();
                 if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+                    resolveImport(annotationName);
                     filteredAnnotations.add(annotation);
                 }
                 else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
@@ -358,12 +358,16 @@ public class DTOHandler extends ClassProcessor {
         Settings.loadConfigMap();
 
         if (args.length != 1) {
-            logger.error("Usage: java DTOHandler <base-path> <relative-path>");
-
+            logger.error("Usage: java DTOHandler <relative-path> | <class-name>");
         }
         else {
             DTOHandler processor = new DTOHandler();
-            processor.copyDTO(args[0]);
+            if (args[0].endsWith(".java")) {
+                processor.copyDTO(args[0]);
+            }
+            else {
+                processor.copyDTO(processor.classToPath(args[0]));
+            }
         }
     }
 
