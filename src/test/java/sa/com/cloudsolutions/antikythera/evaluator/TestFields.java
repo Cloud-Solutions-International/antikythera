@@ -39,7 +39,7 @@ class TestFields extends TestHelper {
             JavaParserTypeSolver solver = new JavaParserTypeSolver(path.replace("/resources/sources/src/main",""));
             combinedTypeSolver.add(solver);
 
-            cu = javaParser.parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Employee.java")).getResult().get();
+            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Employee.java")).getResult().get();
             evaluator = new Evaluator();
             evaluator.setupFields(cu);
         }

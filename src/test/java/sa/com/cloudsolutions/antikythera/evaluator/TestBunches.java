@@ -80,7 +80,7 @@ public class TestBunches  {
         protected CollectionEvaluator() throws IOException, EvaluatorException {
             evaluator = new Evaluator();
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Bunches.java");
-            cu = javaParser.parse(file).getResult().get();
+            cu = getJavaParser().parse(file).getResult().get();
             evaluator.setupFields(cu);
 
         }

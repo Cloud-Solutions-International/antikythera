@@ -20,7 +20,7 @@ public class CustomTypeSolverTest extends AbstractCompiler {
         combinedTypeSolver.add(solver);
 
         File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/A.java");
-        CompilationUnit cuA = javaParser.parse(file).getResult().get();
+        CompilationUnit cuA = getJavaParser().parse(file).getResult().get();
 
         cuA.getTypes().forEach(type -> {
             JavaParserClassDeclaration classDeclaration = new JavaParserClassDeclaration(type.asClassOrInterfaceDeclaration(), solver);
@@ -28,7 +28,7 @@ public class CustomTypeSolverTest extends AbstractCompiler {
         });
 
         file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/B.java");
-        CompilationUnit cuB = javaParser.parse(file).getResult().get();
+        CompilationUnit cuB = getJavaParser().parse(file).getResult().get();
 
         TypeDeclaration<?> cdecl = cuB.getType(0);
         System.out.println(cdecl);

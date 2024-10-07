@@ -48,7 +48,7 @@ class TestReturnValue extends TestHelper {
     class ReturnValueEval extends AbstractCompiler {
 
         protected ReturnValueEval() throws IOException, AntikytheraException {
-            cu = javaParser.parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
+            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
             evaluator = new Evaluator();
             evaluator.setupFields(cu);
             evaluator.setScope("returnValue");

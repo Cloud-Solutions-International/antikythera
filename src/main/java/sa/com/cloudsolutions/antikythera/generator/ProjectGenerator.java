@@ -240,5 +240,6 @@ public class ProjectGenerator {
 
         logger.info("Processed {} controllers", stats.getControllers());
         logger.info("Processed {} methods", stats.getMethods());
+        logger.info("Generated {} tests", stats.getTests());
     }
 }

@@ -123,7 +123,8 @@ public class ClassProcessor extends AbstractCompiler {
                         copied.add(targetName);
                         DTOHandler handler = new DTOHandler();
                         handler.copyDTO(classToPath(targetName));
-                        AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                        // todo delete this if not needed
+                       // AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
                     } catch (FileNotFoundException fe) {
                         if (Settings.getProperty("dependencies.on_error").equals("log")) {
                             logger.warn("Could not find {} for copying", targetName);

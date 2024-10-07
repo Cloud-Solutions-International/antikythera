@@ -28,6 +28,7 @@ import com.github.javaparser.ast.type.VoidType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
 import java.io.File;
 import java.sql.ResultSet;
@@ -60,6 +61,7 @@ public class SpringTestGenerator implements  TestGenerator {
      */
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse returnType) {
+        RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
         for (AnnotationExpr annotation : md.getAnnotations()) {
             if (annotation.getNameAsString().equals("GetMapping") ) {
                 buildGetMethodTests(md, annotation, returnType);

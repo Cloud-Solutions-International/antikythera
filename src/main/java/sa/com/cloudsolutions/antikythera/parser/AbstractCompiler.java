@@ -243,4 +243,8 @@ public class AbstractCompiler {
         }
         return false;
     }
+
+    protected JavaParser getJavaParser() {
+        return javaParser;
+    }
 }

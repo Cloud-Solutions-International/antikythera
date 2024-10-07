@@ -27,6 +27,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -151,8 +152,28 @@ public class RestControllerParser extends ClassProcessor {
          */
         evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
+
         for(ImportDeclaration imp : keepImports) {
-            gen.addImport(imp);
+            String name = imp.getNameAsString();
+            if (! (AntikytheraRunTime.isServiceClass(name)
+                    || AntikytheraRunTime.isInterface(name)
+                    || AntikytheraRunTime.isAbstractClass(name)
+                    || AntikytheraRunTime.isControllerClass(name)
+                    || AntikytheraRunTime.isComponentClass(name))) {
+                boolean found = false;
+                var deps = dependencies.get(cu.getTypes().get(0).getFullyQualifiedName().get());
+                if(deps != null) {
+                    for (Dependency depdency : deps) {
+                        if (depdency.getTo().equals(name)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) {
+                        gen.addImport(name);
+                    }
+                }
+            }
         }
 
         ProjectGenerator.getInstance().writeFilesToTest(
@@ -333,6 +354,7 @@ public class RestControllerParser extends ClassProcessor {
     public static class Stats {
         int controllers;
         int methods;
+        int tests = 0;
 
         public int getControllers() {
             return controllers;
@@ -340,6 +362,14 @@ public class RestControllerParser extends ClassProcessor {
 
         public int getMethods() {
             return methods;
+        }
+
+        public void setTests(int tests) {
+            this.tests = tests;
+        }
+
+        public int getTests() {
+            return tests;
         }
     }
 }

@@ -40,15 +40,18 @@ public class AntikytheraRunTime {
     }
 
     public static boolean isServiceClass(String className) {
-        return resolved.get(className).serviceClass;
+        ClassInfo classInfo = resolved.get(className);
+        return classInfo != null && classInfo.serviceClass;
     }
 
     public static boolean isControllerClass(String className) {
-        return resolved.get(className).controllerClass;
+        ClassInfo classInfo = resolved.get(className);
+        return classInfo != null && classInfo.controllerClass;
     }
 
     public static boolean isComponentClass(String className) {
-        return resolved.get(className).componentClass;
+        ClassInfo classInfo = resolved.get(className);
+        return classInfo != null && classInfo.componentClass;
     }
 
     public static void reset() {
@@ -67,12 +70,24 @@ public class AntikytheraRunTime {
         return stack.isEmpty();
     }
 
+    public static boolean isInterface(String name) {
+        ClassInfo classInfo = resolved.get(name);
+        return classInfo != null && classInfo.isInterface;
+    }
+
+    public static boolean isAbstractClass(String name) {
+        ClassInfo classInfo = resolved.get(name);
+        return classInfo != null && classInfo.abstractClass;
+    }
+
     static class ClassInfo {
         private String className;
         private CompilationUnit cu;
         private boolean serviceClass;
         private boolean controllerClass;
         private boolean componentClass;
+        private boolean isInterface;
+        private boolean abstractClass;
 
         protected ClassInfo() {}
 
@@ -85,10 +100,20 @@ public class AntikytheraRunTime {
                 if(type.isPublic()) {
                     if(type.isAnnotationPresent("Service")) {
                         classInfo.serviceClass = true;
-                    } else if(type.isAnnotationPresent("RestController")) {
+                    } else if(type.isAnnotationPresent("RestController")
+                                || type.isAnnotationPresent("Controller")) {
                         classInfo.controllerClass = true;
                     } else if(type.isAnnotationPresent("Component")) {
                         classInfo.componentClass = true;
+                    }
+
+                    if(type.isClassOrInterfaceDeclaration()) {
+                        if (type.asClassOrInterfaceDeclaration().isInterface()) {
+                            classInfo.isInterface = true;
+                        }
+                        if (type.asClassOrInterfaceDeclaration().isAbstract()) {
+                            classInfo.abstractClass = true;
+                        }
                     }
                 }
             }

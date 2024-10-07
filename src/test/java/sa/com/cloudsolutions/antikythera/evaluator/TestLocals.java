@@ -33,7 +33,7 @@ public class TestLocals extends TestHelper {
 
         protected TestLocalsCompiler() throws IOException {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Locals.java");
-            cu = javaParser.parse(file).getResult().get();
+            cu = getJavaParser().parse(file).getResult().get();
             evaluator = new Evaluator();
             evaluator.setupFields(cu);
         }
