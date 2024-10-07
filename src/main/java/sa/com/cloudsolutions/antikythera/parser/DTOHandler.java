@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -75,7 +76,32 @@ public class DTOHandler extends ClassProcessor {
                 if (t.isClassOrInterfaceDeclaration()) {
                     ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
                     if (!cdecl.isInnerClass()) {
+                        /*
+                         * we are iterating through all the types defined in the source file through the for loop
+                         * above. At this point we create a visitor and identifying the various dependencies will
+                         * be the job of the visitor.
+                         * However the visitor will not look at parent classes so we do that below.
+                         */
                         cdecl.accept(new TypeCollector(), null);
+                    }
+                    for(var ext : cdecl.getExtendedTypes()) {
+                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
+                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
+                        if (imp != null) {
+                            keepImports.add(imp);
+                            Dependency dep = new Dependency(t, imp.getNameAsString());
+                            addEdge(t.getFullyQualifiedName().get(), dep);
+                        }
+                        else {
+                            /*
+                             * No import for this. Lets find out if there exists a class in the same folder
+                             */
+                            cu.getPackageDeclaration().ifPresent(pkg -> {
+                                String className = pkg.getNameAsString() + "." + ext.getNameAsString();
+                                Dependency dep = new Dependency(t, className);
+                                addEdge(t.getFullyQualifiedName().get(), dep);
+                            });
+                        }
                     }
                 }
             }

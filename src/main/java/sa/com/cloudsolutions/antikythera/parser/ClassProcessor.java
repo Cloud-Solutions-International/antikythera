@@ -120,6 +120,9 @@ public class ClassProcessor extends AbstractCompiler {
         CompilationUnit depCu = getCompilationUnit(dependency.to);
         if (depCu != null) {
             for (var decl : depCu.getTypes()) {
+                if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
+                    continue;
+                }
                 String targetName = dependency.to;
                 if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
                     /*

@@ -212,7 +212,6 @@ public class RestControllerParser extends ClassProcessor {
          */
         @Override
         public void visit(MethodDeclaration md, Void arg) {
-            System.out.println(md.getName());
             super.visit(md, arg);
             evaluatorUnsupported = false;
             if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
@@ -274,12 +273,9 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         class StatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
-            int i = 0;
             @Override
             public void visit(ExpressionStmt n, MethodDeclaration md) {
                 super.visit(n, md);
-                System.out.println("\t" + i + " : " + n);
-                i++;
                 Expression expr = n.getExpression();
                 if(expr.isVariableDeclarationExpr()) {
                     Type t = expr.asVariableDeclarationExpr().getElementType();

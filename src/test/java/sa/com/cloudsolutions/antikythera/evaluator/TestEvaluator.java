@@ -23,13 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator {
-
-    CompilationUnit dto = StaticJavaParser.parse(getClass().getClassLoader().getResourceAsStream(
-            "sources/src/main/java/sa/com/cloudsolutions/dto/SimpleDTO.java"));
-    CompilationUnit exp = StaticJavaParser.parse(getClass().getClassLoader().getResourceAsStream(
-            "sources/src/main/java/sa/com/cloudsolutions/expressions/SimpleDTOExpressions.java"));
-
-
     @Test
     void evaluateExpressionReturnsIntegerLiteral() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator();
