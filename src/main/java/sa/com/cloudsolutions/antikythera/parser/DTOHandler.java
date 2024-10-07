@@ -113,7 +113,9 @@ public class DTOHandler extends ClassProcessor {
                 }
             }
 
-            removeUnwanted();
+            if (!AntikytheraRunTime.isInterface( AbstractCompiler.pathToClass(relativePath))) {
+                removeUnwanted();
+            }
 
             for (ImportDeclaration imp : keepImports) {
                 cu.addImport(imp);

@@ -216,6 +216,7 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
+
     /**
      * Class to resolve dependencies of the controller.
      *

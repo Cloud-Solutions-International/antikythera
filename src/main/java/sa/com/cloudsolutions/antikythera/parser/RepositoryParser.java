@@ -172,8 +172,6 @@ public class RepositoryParser extends ClassProcessor {
      * @throws IOException
      */
     public void process() throws IOException {
-        cu.accept(new Visitor(), null);
-
         var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
         var parents = cls.getExtendedTypes();
         if(!parents.isEmpty() && parents.get(0).toString().startsWith(JPA_REPOSITORY)) {
@@ -183,6 +181,7 @@ public class RepositoryParser extends ClassProcessor {
                 entityCu = findEntity(entityType);
                 table = findTableName(entityCu);
 
+                cu.accept(new Visitor(), null);
             }
         }
     }

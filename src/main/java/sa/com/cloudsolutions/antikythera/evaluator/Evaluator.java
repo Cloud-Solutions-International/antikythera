@@ -639,7 +639,7 @@ public class Evaluator {
         ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
         ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
 
-        Variable scopedVariable = getLocal(methodCall, scopeExpr.toString());
+        Variable scopedVariable = getValue(methodCall, scopeExpr.toString());
 
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
@@ -698,19 +698,20 @@ public class Evaluator {
 
         switch (operator) {
             case EQUALS: {
-                if (left == null && right == null) {
-                    return new Variable(Boolean.TRUE);
+                if (left == null) {
+                    if (right == null || right.getValue() == null) {
+                        return new Variable(Boolean.TRUE);
+                    }
+                    return new Variable(Boolean.FALSE);
                 }
-                if (left == null && right.getValue() == null) {
-                    return new Variable(Boolean.TRUE);
+                if (right == null) {
+                    if (left.getValue() == null) {
+                        return new Variable(Boolean.TRUE);
+                    }
+                    return new Variable(Boolean.FALSE);
                 }
-                if (right == null && left.getValue() == null) {
-                    return new Variable(Boolean.TRUE);
-                }
-                if (left.getValue() == null && right.getValue() == null) {
-                    return new Variable(Boolean.TRUE);
-                }
-                return new Variable( ((Comparable<?>) left.getValue()).equals(right.getValue()));
+
+                return new Variable( left.getValue().equals(right.getValue()));
             }
 
             case GREATER:
