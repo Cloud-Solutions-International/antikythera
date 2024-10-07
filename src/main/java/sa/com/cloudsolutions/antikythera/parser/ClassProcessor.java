@@ -4,11 +4,13 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
 import org.slf4j.Logger;
@@ -28,8 +30,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -343,10 +348,22 @@ public class ClassProcessor extends AbstractCompiler {
                 if (parent instanceof VariableDeclarator vadecl) {
                     Expression init = vadecl.getInitializer().orElse(null);
                     if (init != null) {
-                        JavaParserFieldDeclaration fieldDeclaration =  symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
-                        ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
-                        addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
-                        return true;
+                        if (init.isFieldAccessExpr()) {
+                            FieldAccessExpr fae = init.asFieldAccessExpr();
+                            ResolvedValueDeclaration rfd = fae.resolve();
+                            addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, rfd.getType().describe()));
+
+                        }
+                        else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
+                                !init.isMethodCallExpr() && !init.isLiteralExpr()) {
+                            JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
+                            ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
+                            addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
+                            return true;
+                        }
+                    }
+                    else {
+                        logger.debug("Variable {} being initialized through method call but it should not matter", typeArg);
                     }
                 }
                 return false;
@@ -443,17 +460,23 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     protected void copyDependencies() throws IOException {
-        for(TypeDeclaration<?> declaration : cu.getTypes()) {
+        List<Map.Entry<String, Dependency>> toCopy = new ArrayList<>();
+
+        for (TypeDeclaration<?> declaration : cu.getTypes()) {
             Optional<String> fullyQualifiedName = declaration.getFullyQualifiedName();
-            if(fullyQualifiedName.isPresent()) {
+            if (fullyQualifiedName.isPresent()) {
                 Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
 
                 if (deps != null) {
                     for (Dependency dependency : deps) {
-                        copyDependency(fullyQualifiedName.get(), dependency);
+                        toCopy.add(new AbstractMap.SimpleEntry<>(fullyQualifiedName.get(), dependency));
                     }
                 }
             }
+        }
+
+        for (Map.Entry<String, Dependency> entry : toCopy) {
+            copyDependency(entry.getKey(), entry.getValue());
         }
     }
 }
