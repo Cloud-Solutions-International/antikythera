@@ -190,6 +190,9 @@ public class SpringEvaluator extends Evaluator {
                             throw  new EvaluatorException("in evaluateVariableDeclaration", e);
                         }
                     }
+                    else if(scope.isPresent() && scope.get().isFieldAccessExpr()) {
+                        System.out.println("bada");
+                    }
                     else {
                         Variable v = evaluateMethodCall(methodCall);
                         if (v != null) {
@@ -251,25 +254,27 @@ public class SpringEvaluator extends Evaluator {
             Type t = variable.getType().asClassOrInterfaceType();
             String className = t.resolve().describe();
 
-            ClassProcessor proc = new ClassProcessor();
-            proc.compile(AbstractCompiler.classToPath(className));
-            CompilationUnit cu = proc.getCompilationUnit();
-            for (var typeDecl : cu.getTypes()) {
-                if (typeDecl.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                    if (cdecl.getNameAsString().equals(shortName)) {
-                        for (var ext : cdecl.getExtendedTypes()) {
-                            if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                /*
-                                 * We have found a repository. Now we need to process it. Afterwards
-                                 * it will be added to the repositories map, to be identified by the
-                                 * field name.
-                                 */
-                                RepositoryParser parser = new RepositoryParser();
-                                parser.compile(AbstractCompiler.classToPath(className));
-                                parser.process();
-                                respositories.put(variable.getNameAsString(), parser);
-                                break;
+            if (!className.startsWith("java.")) {
+                ClassProcessor proc = new ClassProcessor();
+                proc.compile(AbstractCompiler.classToPath(className));
+                CompilationUnit cu = proc.getCompilationUnit();
+                for (var typeDecl : cu.getTypes()) {
+                    if (typeDecl.isClassOrInterfaceDeclaration()) {
+                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                        if (cdecl.getNameAsString().equals(shortName)) {
+                            for (var ext : cdecl.getExtendedTypes()) {
+                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                    /*
+                                     * We have found a repository. Now we need to process it. Afterwards
+                                     * it will be added to the repositories map, to be identified by the
+                                     * field name.
+                                     */
+                                    RepositoryParser parser = new RepositoryParser();
+                                    parser.compile(AbstractCompiler.classToPath(className));
+                                    parser.process();
+                                    respositories.put(variable.getNameAsString(), parser);
+                                    break;
+                                }
                             }
                         }
                     }

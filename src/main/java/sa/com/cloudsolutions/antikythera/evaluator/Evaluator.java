@@ -343,8 +343,8 @@ public class Evaluator {
                 }
             }
         } catch (Exception e) {
-            logger.error("Could not create an instance of type {} going to try again with bytebuddy", type);
-            logger.error("The error was {}", e.getMessage());
+            logger.warn("Could not create an instance of type {} going to try again with bytebuddy", type);
+            logger.warn("The error was {}", e.getMessage());
 
         }
 

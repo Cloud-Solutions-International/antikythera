@@ -173,20 +173,18 @@ public class ClassProcessor extends AbstractCompiler {
      * @param type the type to resolve
      */
     void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
-        if(from != null && type != null) {
-            if (type.isClassOrInterfaceType()) {
-                if (type.asClassOrInterfaceType().isBoxedType()) {
-                    solveConstant(from, type);
-                } else {
-                    solveClassDependency(from, type);
-                }
-            } else {
-                /*
-                 * Primitive constants that are assigned a value based on a static import is the
-                 * hardest thing to solve.
-                 */
+        if (type.isClassOrInterfaceType()) {
+            if (type.asClassOrInterfaceType().isBoxedType()) {
                 solveConstant(from, type);
+            } else {
+                solveClassDependency(from, type);
             }
+        } else {
+            /*
+             * Primitive constants that are assigned a value based on a static import is the
+             * hardest thing to solve.
+             */
+            solveConstant(from, type);
         }
     }
 
@@ -308,7 +306,7 @@ public class ClassProcessor extends AbstractCompiler {
             if (files != null) {
                 for (File f : files) {
                     String fname = f.getName();
-                    if (fname.endsWith(ClassProcessor.SUFFIX)) {
+                    if (fname.endsWith(AbstractCompiler.SUFFIX)) {
                         String imp = packageName + "." + fname.substring(0, fname.length() - 5);
                         ImportDeclaration importDeclaration = new ImportDeclaration(imp, false, false);
                         allImports.add(importDeclaration);
@@ -370,7 +368,7 @@ public class ClassProcessor extends AbstractCompiler {
                 addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, decl.getNameAsString()));
                 return true;
             }
-            logger.debug("Unresolvable {}", typeArg.toString());
+            logger.debug("Unresolvable {}", typeArg);
         }
         return false;
     }
@@ -430,7 +428,7 @@ public class ClassProcessor extends AbstractCompiler {
             if (ref.isSolved()) {
                 Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
                 if(resolved.isPresent()) {
-                    for(ResolvedFieldDeclaration field : ref.getDeclaration().get().getDeclaredFields()) {
+                    for(ResolvedFieldDeclaration field : resolved.get().getDeclaredFields()) {
                         if (field.getName().equals(name)) {
                             ImportDeclaration solvedImport = new ImportDeclaration(
                                     packageName + "." + name, field.isStatic(), false);
