@@ -2,12 +2,15 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserFieldDeclaration;
 import org.slf4j.Logger;
@@ -27,8 +30,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -91,7 +97,8 @@ public class ClassProcessor extends AbstractCompiler {
      * @param nameAsString a fully qualified class name
      */
     protected void copyDependency(String nameAsString, Dependency dependency) throws IOException {
-        if (dependency.isExternal() || nameAsString.startsWith("org.springframework")) {
+        if (dependency.isExternal() || nameAsString.startsWith("java.")
+                || nameAsString.startsWith("org.springframework")) {
             return;
         }
         /*
@@ -101,6 +108,9 @@ public class ClassProcessor extends AbstractCompiler {
         CompilationUnit depCu = getCompilationUnit(dependency.to);
         if (depCu != null) {
             for (var decl : depCu.getTypes()) {
+                if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
+                    continue;
+                }
                 String targetName = dependency.to;
                 if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
                     /*
@@ -108,24 +118,18 @@ public class ClassProcessor extends AbstractCompiler {
                      * it's best to make sure that we haven't copied this file already and also to make
                      * sure that the class is directly part of the application under test.
                      */
-                    if (decl.getAnnotations().isEmpty() || decl.getAnnotationByName("Entity").isPresent()) {
-                        /*
-                         * There are lots of beans in a Spring Boot app. Typically these do not need to be
-                         * copied. Those beans can easily be identified by the fact that they have various
-                         * annotations. We skip anything that is not an Entity.
-                         */
 
-                        try {
-                            copied.add(targetName);
-                            DTOHandler handler = new DTOHandler();
-                            handler.copyDTO(classToPath(targetName));
-                            AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
-                        } catch (FileNotFoundException fe) {
-                            if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                                logger.warn("Could not find {} for copying", targetName);
-                            } else {
-                                throw fe;
-                            }
+                    try {
+                        copied.add(targetName);
+                        DTOHandler handler = new DTOHandler();
+                        handler.copyDTO(classToPath(targetName));
+                        // todo delete this if not needed
+                       // AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+                    } catch (FileNotFoundException fe) {
+                        if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                            logger.warn("Could not find {} for copying", targetName);
+                        } else {
+                            throw fe;
                         }
                     }
                 }
@@ -149,16 +153,13 @@ public class ClassProcessor extends AbstractCompiler {
      * @param type the type to resolve
      */
     void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
-
         if (type.isClassOrInterfaceType()) {
             if (type.asClassOrInterfaceType().isBoxedType()) {
                 solveConstant(from, type);
-            }
-            else {
+            } else {
                 solveClassDependency(from, type);
             }
-        }
-        else {
+        } else {
             /*
              * Primitive constants that are assigned a value based on a static import is the
              * hardest thing to solve.
@@ -213,7 +214,7 @@ public class ClassProcessor extends AbstractCompiler {
                 handler.parseDTO(AbstractCompiler.classToPath(className));
                 depCu = handler.getCompilationUnit();
             } catch (IOException iex) {
-                logger.error("Could not find {}", className);
+                logger.debug("No compilation unit for {}", className);
             }
         }
         return depCu;
@@ -285,7 +286,7 @@ public class ClassProcessor extends AbstractCompiler {
             if (files != null) {
                 for (File f : files) {
                     String fname = f.getName();
-                    if (fname.endsWith(ClassProcessor.SUFFIX)) {
+                    if (fname.endsWith(AbstractCompiler.SUFFIX)) {
                         String imp = packageName + "." + fname.substring(0, fname.length() - 5);
                         ImportDeclaration importDeclaration = new ImportDeclaration(imp, false, false);
                         allImports.add(importDeclaration);
@@ -322,10 +323,22 @@ public class ClassProcessor extends AbstractCompiler {
                 if (parent instanceof VariableDeclarator vadecl) {
                     Expression init = vadecl.getInitializer().orElse(null);
                     if (init != null) {
-                        JavaParserFieldDeclaration fieldDeclaration =  symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
-                        ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
-                        addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
-                        return true;
+                        if (init.isFieldAccessExpr()) {
+                            FieldAccessExpr fae = init.asFieldAccessExpr();
+                            ResolvedValueDeclaration rfd = fae.resolve();
+                            addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, rfd.getType().describe()));
+
+                        }
+                        else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
+                                !init.isMethodCallExpr() && !init.isLiteralExpr()) {
+                            JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
+                            ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
+                            addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
+                            return true;
+                        }
+                    }
+                    else {
+                        logger.debug("Variable {} being initialized through method call but it should not matter", typeArg);
                     }
                 }
                 return false;
@@ -335,14 +348,19 @@ public class ClassProcessor extends AbstractCompiler {
                 Dependency dependency = new Dependency(from, description);
                 for (var jarSolver : jarSolvers) {
                     if (jarSolver.getKnownClasses().contains(description)) {
-                        dependency.setExtension(true);
+                        dependency.setExternal(true);
                         return true;
                     }
                 }
                 addEdge(from.getFullyQualifiedName().orElse(null), dependency);
             }
         } catch (UnsolvedSymbolException e) {
-            logger.debug("Unresolvable {}", typeArg.toString());
+            ImportDeclaration decl = resolveImport(typeArg.asClassOrInterfaceType().getNameAsString());
+            if (decl != null && !decl.getNameAsString().startsWith("java.")) {
+                addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, decl.getNameAsString()));
+                return true;
+            }
+            logger.debug("Unresolvable {}", typeArg);
         }
         return false;
     }
@@ -350,7 +368,6 @@ public class ClassProcessor extends AbstractCompiler {
     protected void addEdge(String className, Dependency dependency) {
         dependencies.computeIfAbsent(className, k -> new HashSet<>()).add(dependency);
     }
-
 
     /**
      * Finds an import that matches the given type name
@@ -402,7 +419,7 @@ public class ClassProcessor extends AbstractCompiler {
             if (ref.isSolved()) {
                 Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
                 if(resolved.isPresent()) {
-                    for(ResolvedFieldDeclaration field : ref.getDeclaration().get().getDeclaredFields()) {
+                    for(ResolvedFieldDeclaration field : resolved.get().getDeclaredFields()) {
                         if (field.getName().equals(name)) {
                             ImportDeclaration solvedImport = new ImportDeclaration(
                                     packageName + "." + name, field.isStatic(), false);
@@ -414,5 +431,26 @@ public class ClassProcessor extends AbstractCompiler {
             }
         }
         return null;
+    }
+
+    protected void copyDependencies() throws IOException {
+        List<Map.Entry<String, Dependency>> toCopy = new ArrayList<>();
+
+        for (TypeDeclaration<?> declaration : cu.getTypes()) {
+            Optional<String> fullyQualifiedName = declaration.getFullyQualifiedName();
+            if (fullyQualifiedName.isPresent()) {
+                Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
+
+                if (deps != null) {
+                    for (Dependency dependency : deps) {
+                        toCopy.add(new AbstractMap.SimpleEntry<>(fullyQualifiedName.get(), dependency));
+                    }
+                }
+            }
+        }
+
+        for (Map.Entry<String, Dependency> entry : toCopy) {
+            copyDependency(entry.getKey(), entry.getValue());
+        }
     }
 }

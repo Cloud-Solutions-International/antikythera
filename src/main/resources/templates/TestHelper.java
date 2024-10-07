@@ -34,7 +34,11 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public abstract class TestHelper {
+import com.cloud.api.base.APIBaseTest;
+import com.cloud.api.base.APIBaseService;
+import com.cloud.api.base.APIBaseClass;
+
+public abstract class TestHelper extends APIBaseTest {
 
     private String baseURI;
     public static HashMap<String, String> loginProperties = null;

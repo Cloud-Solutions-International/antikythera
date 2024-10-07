@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import com.github.javaparser.ast.CompilationUnit;
@@ -17,32 +18,18 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestReturnValue {
+class TestReturnValue extends TestHelper {
     Evaluator evaluator;
-    TestReturnValue.ReturnValueEval eval;
-
-    private final PrintStream standardOut = System.out;
-    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-
-    @AfterEach
-    public void tearDown() {
-        System.setOut(standardOut);
-        AntikytheraRunTime.reset();
-    }
-
-    @BeforeAll
-    public static void setup() throws IOException {
-        Settings.loadConfigMap();
-    }
 
     @BeforeEach
-    public void each() throws EvaluatorException, IOException {
-        eval = new TestReturnValue.ReturnValueEval();
+    public void each() throws AntikytheraException, IOException {
+        compiler = new TestReturnValue.ReturnValueEval();
         System.setOut(new PrintStream(outContent));
     }
+
     @Test
-    void testPrintName() throws EvaluatorException {
-        CompilationUnit cu = eval.getComplationUnit();
+    void testPrintName() throws AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
 
         MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printName")).orElseThrow();
         evaluator.executeMethod(printName);
@@ -51,8 +38,8 @@ public class TestReturnValue {
     }
 
     @Test
-    void testPrintNumberField() throws  EvaluatorException {
-        CompilationUnit cu = eval.getComplationUnit();
+    void testPrintNumberField() throws  AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
         evaluator.executeMethod(printNumber);
         assertTrue(outContent.toString().contains("10"));
@@ -60,15 +47,12 @@ public class TestReturnValue {
 
     class ReturnValueEval extends AbstractCompiler {
 
-        protected ReturnValueEval() throws IOException, EvaluatorException {
-            cu = javaParser.parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
+        protected ReturnValueEval() throws IOException, AntikytheraException {
+            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
             evaluator = new Evaluator();
             evaluator.setupFields(cu);
             evaluator.setScope("returnValue");
         }
 
-        public CompilationUnit getComplationUnit() {
-            return cu;
-        }
     }
 }

@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -25,11 +27,13 @@ import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -59,41 +63,68 @@ public class DTOHandler extends ClassProcessor {
         }
         parseDTO(relativePath);
 
-        ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-
-        for(Map.Entry<String, Set<Dependency>> dependency : dependencies.entrySet()) {
-            for (Dependency dep : dependency.getValue()) {
-                copyDependency(dependency.getKey(), dep);
-            }
+        String className = AbstractCompiler.pathToClass(relativePath);
+        if (! (AntikytheraRunTime.isServiceClass(className) || AntikytheraRunTime.isControllerClass(className)
+                || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
+            ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
         }
+
+        copyDependencies();
     }
 
     public void parseDTO(String relativePath) throws FileNotFoundException {
-        compile(relativePath);
-        expandWildCards(cu);
+        if (! compile(relativePath)) {
+            expandWildCards(cu);
 
-        allImports.addAll(cu.getImports());
-        cu.setImports(new NodeList<>());
+            allImports.addAll(cu.getImports());
+            cu.setImports(new NodeList<>());
 
-        removeUnwanted();
-
-        for( var  t : cu.getTypes()) {
-            if(t.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                if(!cdecl.isInnerClass()) {
-                    cdecl.accept(new TypeCollector(), null);
-                    cu.accept(new TypeCollector(), null);
+            for (var t : cu.getTypes()) {
+                if (t.isClassOrInterfaceDeclaration()) {
+                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                    if (!cdecl.isInnerClass()) {
+                        /*
+                         * we are iterating through all the types defined in the source file through the for loop
+                         * above. At this point we create a visitor and identifying the various dependencies will
+                         * be the job of the visitor.
+                         * However the visitor will not look at parent classes so we do that below.
+                         */
+                        cdecl.accept(new TypeCollector(), null);
+                    }
+                    for(var ext : cdecl.getExtendedTypes()) {
+                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
+                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
+                        if (imp != null) {
+                            keepImports.add(imp);
+                            Dependency dep = new Dependency(t, imp.getNameAsString());
+                            addEdge(t.getFullyQualifiedName().get(), dep);
+                        }
+                        else {
+                            /*
+                             * No import for this. Lets find out if there exists a class in the same folder
+                             */
+                            cu.getPackageDeclaration().ifPresent(pkg -> {
+                                String className = pkg.getNameAsString() + "." + ext.getNameAsString();
+                                Dependency dep = new Dependency(t, className);
+                                addEdge(t.getFullyQualifiedName().get(), dep);
+                            });
+                        }
+                    }
                 }
             }
-        }
 
-        for (ImportDeclaration imp : keepImports) {
-            cu.addImport(imp);
-        }
+            if (!AntikytheraRunTime.isInterface( AbstractCompiler.pathToClass(relativePath))) {
+                removeUnwanted();
+            }
 
-        if (method != null) {
-            var variable = classToInstanceName(cu.getTypes().get(0));
-            method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
+            for (ImportDeclaration imp : keepImports) {
+                cu.addImport(imp);
+            }
+
+            if (method != null) {
+                var variable = classToInstanceName(cu.getTypes().get(0));
+                method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
+            }
         }
     }
 
@@ -174,14 +205,12 @@ public class DTOHandler extends ClassProcessor {
     /**
      * Listens for events of field declarations.
      * All annotations associated with the field are removed. Then we try to extract
-     * it's type. If the type is defined in the application under test we copy it.
+     * its type. If the type is defined in the application under test we copy it.
      */
     class TypeCollector extends ModifierVisitor<Void> {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-
-
             String fieldAsString = field.getElementType().toString();
             if (fieldAsString.equals("DateScheduleUtil")
                     || fieldAsString.equals("Logger")
@@ -194,6 +223,7 @@ public class DTOHandler extends ClassProcessor {
             for (AnnotationExpr annotation : field.getAnnotations()) {
                 String annotationName = annotation.getNameAsString();
                 if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+                    resolveImport(annotationName);
                     filteredAnnotations.add(annotation);
                 }
                 else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
@@ -206,24 +236,47 @@ public class DTOHandler extends ClassProcessor {
             field.getAnnotations().clear();
             field.setAnnotations(filteredAnnotations);
 
-            solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null),
-                    field.getElementType());
+            Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
 
-            // handle custom getters and setters
-            String fieldName = field.getVariables().get(0).getNameAsString();
-            String className = cu.getTypes().get(0).getNameAsString();
-            Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+            if (ancestor.isPresent()) {
+                /*
+                 * We need not have this ancestor check because java can't have global variables but that's the
+                 * way the library is structured.
+                 * Having identified that we have a field, we need to solve it's type dependencies. Matters are
+                 * slightly complicated by the fact that sometimes a field may have an initializer. This may be
+                 * a method call (which we will ignore for now) but this is more often simply an object creation
+                 * It may look like this:
+                 *
+                 *     List<String> list = new ArrayList<>();
+                 *
+                 * Because the field type and the initializer differ we need to solve the type dependencies for
+                 * the initializer as well.
+                 */
+                solveTypeDependencies(ancestor.get(), field.getElementType());
+                VariableDeclarator firstVariable = field.getVariables().get(0);
+                firstVariable.getInitializer().ifPresent(init -> {
+                    if (init.isObjectCreationExpr()) {
+                        solveTypeDependencies(ancestor.get(), init.asObjectCreationExpr().getType());
+                    }
+                });
 
-            if(!methodNames.isEmpty()){
-                String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
-                String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
 
-                // Use custom getter and setter names
-                generateGetter(field, getterName);
-                generateSetter(field, setterName);
+                // handle custom getters and setters
 
+                String fieldName = firstVariable.getNameAsString();
+                String className = cu.getTypes().get(0).getNameAsString();
+                Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
+
+                if(!methodNames.isEmpty()){
+                    String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
+                    String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
+
+                    // Use custom getter and setter names
+                    generateGetter(field, getterName);
+                    generateSetter(field, setterName);
+
+                }
             }
-
             return super.visit(field, args);
         }
 
@@ -363,12 +416,16 @@ public class DTOHandler extends ClassProcessor {
         Settings.loadConfigMap();
 
         if (args.length != 1) {
-            logger.error("Usage: java DTOHandler <base-path> <relative-path>");
-
+            logger.error("Usage: java DTOHandler <relative-path> | <class-name>");
         }
         else {
             DTOHandler processor = new DTOHandler();
-            processor.copyDTO(args[0]);
+            if (args[0].endsWith(".java")) {
+                processor.copyDTO(args[0]);
+            }
+            else {
+                processor.copyDTO(processor.classToPath(args[0]));
+            }
         }
     }
 

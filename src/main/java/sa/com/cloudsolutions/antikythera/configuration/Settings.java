@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
+import javax.swing.text.html.Option;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -19,7 +20,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Scanner;
+import java.util.Set;
 
 /**
  * Manages the configuration properties from generator.yml file or generator.cfg file.
@@ -192,6 +195,24 @@ public class Settings {
         return value;
     }
 
+    /**
+     * Get the property value for the given key.
+     * The cls parameter is used to cast the result to the given class so that the callers
+     * need not clutter their call with casts
+     *
+     * @param key the key to search for
+     * @param cls try to map the result to this class
+     * @return an optional with the result if it's found
+     */
+    public static <T> Optional<T> getProperty(String key, Class<T> cls) {
+        Object property = getProperty(key);
+        if(property != null) {
+            return Optional.of(cls.cast(property));
+        }
+
+        return Optional.empty();
+    }
+
     public static Object getProperty(String key) {
 
         Object property = props.get(key);
@@ -200,8 +221,8 @@ public class Settings {
         }
         String[] parts = key.split("\\.");
         if(parts.length > 1) {
-            Map<String, Object> map = (Map<String, Object>) props.get(parts[0]);
-            if(map != null) {
+            Object result = props.get(parts[0]);
+            if (result instanceof Map<?,?> map) {
                 return map.get(parts[1]);
             }
         }
@@ -214,8 +235,8 @@ public class Settings {
 
     private static String[] getDependencies(String artifactIds) {
         Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
-        if (deps instanceof String) {
-            return ((String) deps).split(",");
+        if (deps instanceof String s) {
+            return s.split(",");
         }
         Map<String, Object> dependencies = (Map<String, Object>) deps;
         if (dependencies == null) {

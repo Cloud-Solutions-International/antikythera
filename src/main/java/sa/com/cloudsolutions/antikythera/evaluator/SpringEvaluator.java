@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
@@ -65,7 +66,7 @@ public class SpringEvaluator extends Evaluator {
     private boolean flunk = true;
 
     @Override
-    public void executeMethod(MethodDeclaration md) throws EvaluatorException {
+    public void executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration cdecl) {
                 if (cdecl.isAnnotationPresent("RestController")) {
@@ -93,26 +94,64 @@ public class SpringEvaluator extends Evaluator {
             String paramString = String.valueOf(param);
 
             if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
-                Variable v = new Variable(switch (param.getTypeAsString()) {
-                    case "Boolean" -> false;
-                    case "float", "Float", "double", "Double" -> 0.0;
-                    case "Integer", "int" -> 0;
-                    case "Long", "long" -> 0L;
-                    case "String" -> "Ibuprofen";
-                    default -> "0";
-                });
+                /*
+                 * Request parameters are typically strings or numbers.
+                 */
+                Variable v = mockParameter(param.getTypeAsString());
                 AntikytheraRunTime.push(v);
             } else if (paramString.startsWith("@RequestBody")) {
+                /*
+                 * Request body on the other hand will be more complex and will most likely be a DTO.
+                 */
                 Type t = param.getType();
                 if (t.isClassOrInterfaceType()) {
-                    Object o = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
-                    Variable v = new Variable(o);
-                    AntikytheraRunTime.push(v);
+                    String className = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
+                    if (className.startsWith("java")) {
+                        /*
+                         * However you can't rule out the possibility that this is a Map or a List or even a
+                         * boxed type.
+                         */
+                        if (t.asClassOrInterfaceType().isBoxedType()) {
+                            Variable v = mockParameter(param.getTypeAsString());
+                            AntikytheraRunTime.push(v);
+                        }
+                        else {
+                            if (className.startsWith("java.util")) {
+                                Variable v = new Variable(switch(className){
+                                    case "java.util.List" -> new ArrayList<>();
+                                    case "java.util.Map" -> new HashMap<>();
+                                    default -> null;
+                                });
+                                AntikytheraRunTime.push(v);
+                            }
+                            else {
+                                Class<?> clazz = Class.forName(className);
+                                Variable v = new Variable(clazz.newInstance());
+                                AntikytheraRunTime.push(v);
+                            }
+                        }
+                    }
+                    else {
+                        Object o = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
+                        Variable v = new Variable(o);
+                        AntikytheraRunTime.push(v);
+                    }
                 } else {
                     logger.warn("Unhandled {}", t);
                 }
             }
         }
+    }
+
+    private static Variable mockParameter(String typeName) {
+        return new Variable(switch (typeName) {
+            case "Boolean" -> false;
+            case "float", "Float", "double", "Double" -> 0.0;
+            case "Integer", "int" -> 0;
+            case "Long", "long" -> 0L;
+            case "String" -> "Ibuprofen";
+            default -> "0";
+        });
     }
 
     /**
@@ -122,7 +161,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws EvaluatorException if there is an error evaluating the expression
      */
     @Override
-    Variable evaluateVariableDeclaration(Expression expr) throws EvaluatorException {
+    Variable evaluateVariableDeclaration(Expression expr) throws AntikytheraException, ReflectiveOperationException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
         for (var decl : varDeclExpr.getVariables()) {
             Optional<Expression> init = decl.getInitializer();
@@ -150,6 +189,9 @@ public class SpringEvaluator extends Evaluator {
                             logger.error("Error while creating dynamic DTO {}", decl.getType().resolve().asReferenceType().getQualifiedName());
                             throw  new EvaluatorException("in evaluateVariableDeclaration", e);
                         }
+                    }
+                    else if(scope.isPresent() && scope.get().isFieldAccessExpr()) {
+                        System.out.println("bada");
                     }
                     else {
                         Variable v = evaluateMethodCall(methodCall);
@@ -201,7 +243,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, EvaluatorException {
+    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
         super.identifyFieldVariables(variable);
 
         if (variable.getType().isClassOrInterfaceType()) {
@@ -212,25 +254,27 @@ public class SpringEvaluator extends Evaluator {
             Type t = variable.getType().asClassOrInterfaceType();
             String className = t.resolve().describe();
 
-            ClassProcessor proc = new ClassProcessor();
-            proc.compile(AbstractCompiler.classToPath(className));
-            CompilationUnit cu = proc.getCompilationUnit();
-            for (var typeDecl : cu.getTypes()) {
-                if (typeDecl.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                    if (cdecl.getNameAsString().equals(shortName)) {
-                        for (var ext : cdecl.getExtendedTypes()) {
-                            if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                /*
-                                 * We have found a repository. Now we need to process it. Afterwards
-                                 * it will be added to the repositories map, to be identified by the
-                                 * field name.
-                                 */
-                                RepositoryParser parser = new RepositoryParser();
-                                parser.compile(AbstractCompiler.classToPath(className));
-                                parser.process();
-                                respositories.put(variable.getNameAsString(), parser);
-                                break;
+            if (!className.startsWith("java.")) {
+                ClassProcessor proc = new ClassProcessor();
+                proc.compile(AbstractCompiler.classToPath(className));
+                CompilationUnit cu = proc.getCompilationUnit();
+                for (var typeDecl : cu.getTypes()) {
+                    if (typeDecl.isClassOrInterfaceDeclaration()) {
+                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                        if (cdecl.getNameAsString().equals(shortName)) {
+                            for (var ext : cdecl.getExtendedTypes()) {
+                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                    /*
+                                     * We have found a repository. Now we need to process it. Afterwards
+                                     * it will be added to the repositories map, to be identified by the
+                                     * field name.
+                                     */
+                                    RepositoryParser parser = new RepositoryParser();
+                                    parser.compile(AbstractCompiler.classToPath(className));
+                                    parser.process();
+                                    respositories.put(variable.getNameAsString(), parser);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -240,7 +284,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    void evaluateReturnStatement(Statement statement) throws EvaluatorException {
+    void evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
 
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
@@ -267,7 +311,7 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws EvaluatorException {
+    private void evaluateReturnStatement(Node parent, ReturnStmt stmt) throws AntikytheraException, ReflectiveOperationException {
         try {
             if (parent instanceof IfStmt ifStmt) {
                 Expression condition = ifStmt.getCondition();
@@ -404,18 +448,19 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, String methodName, Class<?>[] paramTypes, Object[] args) throws Exception {
-        if(methodName.equals("save") && scopeExpr.isNameExpr()
+    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, ReflectionArguments ref)
+            throws AntikytheraException, ReflectiveOperationException {
+        if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
                 && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
             return null;
         }
         else{
-            return super.handleRegularMethodCall(methodCall, scopeExpr, methodName, paramTypes, args);
+            return super.handleRegularMethodCall(methodCall, scopeExpr, ref);
         }
     }
 
 
-    public boolean evaluateValidatorCondition(Expression condition) throws EvaluatorException {
+    public boolean evaluateValidatorCondition(Expression condition) throws AntikytheraException, ReflectiveOperationException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
             Expression left = binaryExpr.getLeft();
@@ -502,5 +547,11 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
         }
+    }
+
+    @Override
+    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+        System.out.println(e);
+        super.handleApplicationException(e);
     }
 }

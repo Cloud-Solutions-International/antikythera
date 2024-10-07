@@ -1,9 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ast.ImportDeclaration;
-import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -70,7 +67,7 @@ public class AbstractCompiler {
 
     public static final String SUFFIX = ".java";
 
-    protected JavaParser javaParser;
+    private final JavaParser javaParser;
     protected JavaSymbolSolver symbolResolver;
     protected CombinedTypeSolver combinedTypeSolver;
     protected ArrayList<JarTypeSolver> jarSolvers;
@@ -141,12 +138,13 @@ public class AbstractCompiler {
      * @param relativePath a path name relative to the base path of the application.
      * @throws FileNotFoundException when the source code cannot be found
      */
-    public void compile(String relativePath) throws FileNotFoundException {
+    public boolean compile(String relativePath) throws FileNotFoundException {
         String className = pathToClass(relativePath);
 
         cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
-            return;
+            // this has already been compiled
+            return true;
         }
 
         logger.debug("\t{}", relativePath);
@@ -159,6 +157,8 @@ public class AbstractCompiler {
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
         AntikytheraRunTime.addClass(className, cu);
 
+        // fresh meat
+        return false;
     }
 
     /**
@@ -166,8 +166,8 @@ public class AbstractCompiler {
      * Warning: Most of the time you should use a Visitor instead of this method
      *
      * @param cu Compilation unit
-     * @String className
-     * @return
+     * @param className the name of the class that we are searching for in the compilation unit
+     * @return a collection of fields in this class
      */
     public static Map<String, FieldDeclaration> getFields(CompilationUnit cu, String className) {
         Map<String, FieldDeclaration> fields = new HashMap<>();
@@ -213,17 +213,38 @@ public class AbstractCompiler {
                 return Optional.of(node.resolve());
             } catch (Exception e) {
                 // Handle the exception or log it
-                logger.info("Error resolving type: {}", node.toString());
+                logger.info("Error resolving type: {}", node);
             }
         }
         return Optional.empty();
     }
 
+    public static String absolutePathToClassName(String abs) {
+        abs = abs.replace(basePath, "");
+        if(abs.startsWith("/")) {
+            abs = abs.substring(1);
+        }
+        return abs.replace(SUFFIX, "").replace("/",".");
+    }
     /**
      * Get the compilation unit for the current class
      * @return a CompilationUnit instance.
      */
     public CompilationUnit getCompilationUnit() {
         return cu;
+    }
+
+    protected static boolean shouldSkip(String p) {
+        List<?> skip = Settings.getProperty("skip", List.class).orElseGet(List::of);
+        for (Object s : skip) {
+            if (p.endsWith(s.toString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected JavaParser getJavaParser() {
+        return javaParser;
     }
 }
