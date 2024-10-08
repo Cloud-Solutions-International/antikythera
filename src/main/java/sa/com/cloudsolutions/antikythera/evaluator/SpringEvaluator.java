@@ -94,13 +94,7 @@ public class SpringEvaluator extends Evaluator {
             var param = md.getParameter(i);
             String paramString = String.valueOf(param);
 
-            if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
-                /*
-                 * Request parameters are typically strings or numbers.
-                 */
-                Variable v = mockParameter(param.getTypeAsString());
-                AntikytheraRunTime.push(v);
-            } else if (paramString.startsWith("@RequestBody")) {
+            if (paramString.startsWith("@RequestBody")) {
                 /*
                  * Request body on the other hand will be more complex and will most likely be a DTO.
                  */
@@ -140,6 +134,13 @@ public class SpringEvaluator extends Evaluator {
                 } else {
                     logger.warn("Unhandled {}", t);
                 }
+            }
+            else {
+                /*
+                 * Request parameters are typically strings or numbers.
+                 */
+                Variable v = mockParameter(param.getTypeAsString());
+                AntikytheraRunTime.push(v);
             }
         }
     }

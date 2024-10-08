@@ -710,7 +710,9 @@ public class Evaluator {
                     }
                     return new Variable(Boolean.FALSE);
                 }
-
+                if (left.getValue() == right.getValue()) {
+                    return new Variable(Boolean.TRUE);
+                }
                 return new Variable( left.getValue().equals(right.getValue()));
             }
 
