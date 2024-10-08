@@ -30,11 +30,9 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
@@ -63,17 +61,12 @@ public class DTOHandler extends ClassProcessor {
         }
         parseDTO(relativePath);
 
-        String className = AbstractCompiler.pathToClass(relativePath);
-        if (! (AntikytheraRunTime.isServiceClass(className) || AntikytheraRunTime.isControllerClass(className)
-                || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
-            ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
-        }
-
         copyDependencies();
     }
 
-    public void parseDTO(String relativePath) throws FileNotFoundException {
-        if (! compile(relativePath)) {
+    public void parseDTO(String relativePath) throws IOException {
+        compile(relativePath);
+        if (cu != null) {
             CompilationUnit tmp = cu;
             cu = cu.clone();
 
@@ -90,28 +83,14 @@ public class DTOHandler extends ClassProcessor {
                          * we are iterating through all the types defined in the source file through the for loop
                          * above. At this point we create a visitor and identifying the various dependencies will
                          * be the job of the visitor.
-                         * However the visitor will not look at parent classes so we do that below.
+                         * Because the visitor will not look at parent classes so we do that below.
                          */
                         cdecl.accept(new TypeCollector(), null);
                     }
                     for(var ext : cdecl.getExtendedTypes()) {
                         ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
                         ImportDeclaration imp = resolveImport(parent.getNameAsString());
-                        if (imp != null) {
-                            keepImports.add(imp);
-                            Dependency dep = new Dependency(t, imp.getNameAsString());
-                            addEdge(t.getFullyQualifiedName().get(), dep);
-                        }
-                        else {
-                            /*
-                             * No import for this. Lets find out if there exists a class in the same folder
-                             */
-                            cu.getPackageDeclaration().ifPresent(pkg -> {
-                                String className = pkg.getNameAsString() + "." + ext.getNameAsString();
-                                Dependency dep = new Dependency(t, className);
-                                addEdge(t.getFullyQualifiedName().get(), dep);
-                            });
-                        }
+                        addEdgeFromImport(t, ext, imp);
                     }
                 }
             }
@@ -127,6 +106,14 @@ public class DTOHandler extends ClassProcessor {
             if (method != null) {
                 var variable = classToInstanceName(cu.getTypes().get(0));
                 method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
+            }
+
+
+            String className = AbstractCompiler.pathToClass(relativePath);
+            if (! (AntikytheraRunTime.isServiceClass(className) || AntikytheraRunTime.isInterface(className)
+                    || AntikytheraRunTime.isControllerClass(className)
+                    || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
+                ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
             }
 
             cu = tmp;
