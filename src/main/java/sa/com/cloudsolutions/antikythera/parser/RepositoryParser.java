@@ -549,7 +549,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param expr to be converted
      * @return the converted expression
      */
-    private Expression convertExpressionToSnakeCase(Expression expr, boolean where) {
+    Expression convertExpressionToSnakeCase(Expression expr, boolean where) {
         if (expr instanceof AndExpression) {
             AndExpression andExpr = (AndExpression) expr;
             andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), where));

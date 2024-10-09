@@ -2,6 +2,16 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.relational.Between;
+import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.schema.Column;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,5 +76,35 @@ class TestRepositoryParser {
         queries = parser.getQueries();
         assertTrue(queries.containsKey("findAllById"));
         assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findAllById").getQuery());
+    }
+
+    @Test
+    void convertExpressionToSnakeCaseAndExpression() {
+        AndExpression andExpr = new AndExpression(new Column("firstName"), new Column("lastName"));
+        Expression result = parser.convertExpressionToSnakeCase(andExpr, true);
+        assertEquals("first_name AND last_name", result.toString());
+    }
+
+    @Test
+    void convertExpressionToSnakeCaseIsNullExpression() {
+        IsNullExpression isNullExpr = new IsNullExpression(new Column("middleName"));
+        Expression result = parser.convertExpressionToSnakeCase(isNullExpr, true);
+        assertEquals("middle_name IS NULL", result.toString());
+    }
+
+    @Test
+    void convertExpressionToSnakeCaseComparisonOperator() {
+        EqualsTo equalsExpr = new EqualsTo(new Column("salary"), new LongValue(5000));
+        Expression result = parser.convertExpressionToSnakeCase(equalsExpr, true);
+        assertEquals("salary = 5000", result.toString());
+    }
+
+    @Test
+    void convertExpressionToSnakeCaseFunction() {
+        Function functionExpr = new Function();
+        functionExpr.setName("SUM");
+        functionExpr.setParameters(new ExpressionList(new Column("totalAmount")));
+        Expression result = parser.convertExpressionToSnakeCase(functionExpr, true);
+        assertEquals("SUM(total_amount)", result.toString());
     }
 }
