@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,13 +94,7 @@ public class SpringEvaluator extends Evaluator {
             var param = md.getParameter(i);
             String paramString = String.valueOf(param);
 
-            if (paramString.startsWith("@RequestParam") || paramString.startsWith("@PathVariable")) {
-                /*
-                 * Request parameters are typically strings or numbers.
-                 */
-                Variable v = mockParameter(param.getTypeAsString());
-                AntikytheraRunTime.push(v);
-            } else if (paramString.startsWith("@RequestBody")) {
+            if (paramString.startsWith("@RequestBody")) {
                 /*
                  * Request body on the other hand will be more complex and will most likely be a DTO.
                  */
@@ -140,6 +135,13 @@ public class SpringEvaluator extends Evaluator {
                     logger.warn("Unhandled {}", t);
                 }
             }
+            else {
+                /*
+                 * Request parameters are typically strings or numbers.
+                 */
+                Variable v = mockParameter(param.getTypeAsString());
+                AntikytheraRunTime.push(v);
+            }
         }
     }
 
@@ -177,8 +179,11 @@ public class SpringEvaluator extends Evaluator {
                         try {
                             Variable v = null;
                             if(qualifiedName.startsWith("java.util")) {
-                                Class<?> clazz = Class.forName(qualifiedName);
-                                v = new Variable(clazz.getMethod("of"));
+                                switch (qualifiedName) {
+                                    case "java.util.List" -> v = new Variable(new ArrayList<>());
+                                    case "java.util.Map" -> v = new Variable(new HashMap<>());
+                                    case "java.util.Set" -> v = new Variable(new HashSet<>());
+                                }
                             }
                             else {
                                 v = new Variable(DTOBuddy.createDynamicDTO(decl.getType().asClassOrInterfaceType()));
@@ -220,8 +225,9 @@ public class SpringEvaluator extends Evaluator {
                  * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                  * to the arguments that are passed in when the method is actually being called.
                  */
-                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(methodCall.getNameAsString()).get(0);
-                if (!repoMethod.getNameAsString().equals("save")) {
+                MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
+                String nameAsString = repoMethod.getNameAsString();
+                if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
                         q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(methodCall.getArgument(i), i));
                         q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));

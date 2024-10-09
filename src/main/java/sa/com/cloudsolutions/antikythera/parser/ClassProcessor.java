@@ -98,6 +98,7 @@ public class ClassProcessor extends AbstractCompiler {
      */
     protected void copyDependency(String nameAsString, Dependency dependency) throws IOException {
         if (dependency.isExternal() || nameAsString.startsWith("java.")
+                || AntikytheraRunTime.isInterface(nameAsString)
                 || nameAsString.startsWith("org.springframework")) {
             return;
         }
@@ -123,8 +124,7 @@ public class ClassProcessor extends AbstractCompiler {
                         copied.add(targetName);
                         DTOHandler handler = new DTOHandler();
                         handler.copyDTO(classToPath(targetName));
-                        // todo delete this if not needed
-                       // AntikytheraRunTime.addClass(targetName, handler.getCompilationUnit());
+
                     } catch (FileNotFoundException fe) {
                         if (Settings.getProperty("dependencies.on_error").equals("log")) {
                             logger.warn("Could not find {} for copying", targetName);
@@ -185,15 +185,17 @@ public class ClassProcessor extends AbstractCompiler {
                 if(expr.isNameExpr()) {
                     String name = expr.asNameExpr().getName().asString();
                     ImportDeclaration imp = resolveImport(name);
-                    String className = imp.getNameAsString();
+                    if (imp != null) {
+                        String className = imp.getNameAsString();
 
-                    int index = className.lastIndexOf(".");
-                    if (index > 0) {
-                        String pkg = className.substring(0, index);
-                        CompilationUnit depCu = getCompilationUnit(pkg);
-                        if (depCu != null) {
-                            Dependency dep = new Dependency(from, pkg);
-                            addEdge(from.getFullyQualifiedName().orElse(null), dep);
+                        int index = className.lastIndexOf(".");
+                        if (index > 0) {
+                            String pkg = className.substring(0, index);
+                            CompilationUnit depCu = getCompilationUnit(pkg);
+                            if (depCu != null) {
+                                Dependency dep = new Dependency(from, pkg);
+                                addEdge(from.getFullyQualifiedName().orElse(null), dep);
+                            }
                         }
                     }
                 }
@@ -242,8 +244,20 @@ public class ClassProcessor extends AbstractCompiler {
             }
         }
 
-        resolveImport(mainType);
-        createEdge(classType, from);
+        ImportDeclaration imp = resolveImport(mainType);
+        if (imp == null) {
+            /*
+             * No import for this. Lets find out if there exists a class in the same folder
+             */
+            cu.getPackageDeclaration().ifPresent(pkg -> {
+                String className = pkg.getNameAsString() + "." + mainType;
+                Dependency dep = new Dependency(from, className);
+                addEdge(from.getFullyQualifiedName().get(), dep);
+            });
+        }
+        else {
+            createEdge(classType, from);
+        }
     }
 
 
@@ -365,8 +379,8 @@ public class ClassProcessor extends AbstractCompiler {
         return false;
     }
 
-    protected void addEdge(String className, Dependency dependency) {
-        dependencies.computeIfAbsent(className, k -> new HashSet<>()).add(dependency);
+    protected void addEdge(String fromName, Dependency dependency) {
+        dependencies.computeIfAbsent(fromName, k -> new HashSet<>()).add(dependency);
     }
 
     /**
@@ -453,4 +467,23 @@ public class ClassProcessor extends AbstractCompiler {
             copyDependency(entry.getKey(), entry.getValue());
         }
     }
+
+    protected void addEdgeFromImport(TypeDeclaration<?> fromType, ClassOrInterfaceType ext, ImportDeclaration imp) {
+        if (imp != null) {
+            keepImports.add(imp);
+            Dependency dep = new Dependency(fromType, imp.getNameAsString());
+            addEdge(fromType.getFullyQualifiedName().get(), dep);
+        }
+        else {
+            /*
+             * No import for this. Lets find out if there exists a class in the same folder
+             */
+            cu.getPackageDeclaration().ifPresent(pkg -> {
+                String className = pkg.getNameAsString() + "." + ext.getNameAsString();
+                Dependency dep = new Dependency(fromType, className);
+                addEdge(fromType.getFullyQualifiedName().get(), dep);
+            });
+        }
+    }
+
 }

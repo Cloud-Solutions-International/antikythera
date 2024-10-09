@@ -150,6 +150,7 @@ public class RestControllerParser extends ClassProcessor {
         /*
          * Pass 2 : Generate the tests
          */
+        AntikytheraRunTime.reset();
         evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
 
