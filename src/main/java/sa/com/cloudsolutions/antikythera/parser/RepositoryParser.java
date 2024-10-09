@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ParseResult;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -324,21 +325,24 @@ public class RepositoryParser extends ClassProcessor {
      * @param entityCu a compilation unit representing the entity
      * @return the table name as a string.
      */
-    private static String findTableName(CompilationUnit entityCu) {
+    static String findTableName(CompilationUnit entityCu) {
         String table = null;
         if(entityCu != null) {
-            for (var ann : entityCu.getTypes().get(0).getAnnotations()) {
-                if (ann.getNameAsString().equals("Table")) {
-                    if (ann.isNormalAnnotationExpr()) {
-                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("name")) {
-                                table = pair.getValue().toString();
-                            }
+            Optional<AnnotationExpr> ann = entityCu.getTypes().get(0).getAnnotationByName("Table");
+            if (ann.isPresent()) {
+                if (ann.get().isNormalAnnotationExpr()) {
+                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                        if (pair.getNameAsString().equals("name")) {
+                            table = pair.getValue().toString().replace("\"", "");
                         }
-                    } else {
-                        table = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
                     }
+                } else {
+                    table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
                 }
+                return table;
+            }
+            else {
+                return camelToSnake(entityCu.getTypes().get(0).getNameAsString());
             }
         }
         else {
@@ -669,8 +673,8 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     private void mapPlaceHolders(Expression right, String name) {
-        if(right instanceof  JdbcParameter) {
-            int pos = ((JdbcParameter) right).getIndex();
+        if(right instanceof  JdbcParameter rhs) {
+            int pos = rhs.getIndex();
             RepositoryQuery.QueryMethodParameter params = current.getMethodParameters().get(pos - 1);
             params.getPlaceHolderId().add(pos);
             params.setColumnName(name);
@@ -743,7 +747,7 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    private void parseNonAnnotatedMethod(String methodName) {
+    void parseNonAnnotatedMethod(String methodName) {
         List<String> components = extractComponents(methodName);
         StringBuilder sql = new StringBuilder();
         boolean top = false;
@@ -753,6 +757,16 @@ public class RepositoryParser extends ClassProcessor {
             String tableName = findTableName(entityCu);
             if(tableName != null){
                 switch (component) {
+                    case "findAll":
+                        sql.append("SELECT * FROM ").append(tableName.replace("\"", ""));
+                        break;
+
+                    case "findAllById":
+                        sql.append("SELECT * FROM ")
+                                .append(tableName.replace("\"", ""))
+                                .append(" WHERE id = ?");
+                        break;
+
                     case "findBy":
                     case "get":
                         sql.append("SELECT * FROM ")
