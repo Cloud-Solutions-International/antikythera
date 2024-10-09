@@ -669,6 +669,7 @@ public class Evaluator {
                 }
             } else {
                 Variable v = evaluateExpression(scopeExpr);
+
                 if (declaringType.getQualifiedName().equals("java.util.List") || declaringType.getQualifiedName().equals("java.util.Map")) {
                     for (int i = 0; i < args.length; i++) {
                         paramTypes[i] = Object.class;

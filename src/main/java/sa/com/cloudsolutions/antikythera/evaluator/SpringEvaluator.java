@@ -183,6 +183,7 @@ public class SpringEvaluator extends Evaluator {
                                     case "java.util.List" -> v = new Variable(new ArrayList<>());
                                     case "java.util.Map" -> v = new Variable(new HashMap<>());
                                     case "java.util.Set" -> v = new Variable(new HashSet<>());
+                                    case "java.util.Optional" -> v = new Variable(Optional.empty());
                                 }
                             }
                             else {
