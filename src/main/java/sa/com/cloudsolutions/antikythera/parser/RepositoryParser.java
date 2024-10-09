@@ -1,5 +1,8 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ParseResult;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -100,6 +103,34 @@ public class RepositoryParser extends ClassProcessor {
     private Type entityType;
     private RepositoryQuery current;
 
+    private static final String JPA = """
+            public interface JpaRepository<T, ID> extends PagingAndSortingRepository<T, ID>, QueryByExampleExecutor<T> {
+                    List<T> findAll();
+                    List<T> findAll(Sort sort);
+                    List<T> findAllById(Iterable<ID> ids);
+                    <S extends T> List<S> saveAll(Iterable<S> entities);
+                    <S extends T> S saveAndFlush(S entity);
+                    <S extends T> List<S> saveAllAndFlush(Iterable<S> entities);
+                    void deleteInBatch(Iterable<T> entities);
+                    void deleteAllInBatch(Iterable<T> entities);
+                    void deleteAllByIdInBatch(Iterable<ID> ids);
+                    void deleteAllInBatch();
+                    T getOne(ID id);
+                    T getById(ID id);
+                    <S extends T> List<S> findAll(Example<S> example);
+                    <S extends T> List<S> findAll(Example<S> example, Sort sort);
+                    Optional<T> findById(ID id);
+                    boolean existsById(ID id);
+                    long count();
+                    void deleteById(ID id);
+                    void delete(T entity);
+                    void deleteAll(Iterable<? extends T> entities);
+                    void deleteAll();
+                }
+            """;
+
+    private static CompilationUnit repoCu = null;
+
     public RepositoryParser() throws IOException {
         super();
         queries = new HashMap<>();
@@ -182,6 +213,17 @@ public class RepositoryParser extends ClassProcessor {
                 table = findTableName(entityCu);
 
                 cu.accept(new Visitor(), null);
+
+                /* JpaRepository interface defines a bunch of useful queries s well. But this interface
+                 * is not part of the application under test. So we will add the queries here.
+                 */
+                if(repoCu == null) {
+                    ParseResult<CompilationUnit> repo = getJavaParser().parse(JPA);
+                    if (repo.isSuccessful()) {
+                        repo.getResult().ifPresent(r -> repoCu = r);
+                    }
+                }
+                repoCu.accept(new Visitor(), null);
             }
         }
     }
@@ -693,109 +735,113 @@ public class RepositoryParser extends ClassProcessor {
                 }
             }
 
-            if(query != null) {
+            if (query != null) {
                 queries.put(n.getNameAsString(), new RepositoryQuery(cleanUp(query), nt));
+            } else {
+                parseNonAnnotatedMethod(methodName);
             }
-            else {
-                List<String> components = extractComponents(methodName);
-                StringBuilder sql = new StringBuilder();
-                boolean top = false;
-                boolean ordering = false;
-                for(int i= 0 ; i < components.size() ; i++) {
-                    String component = components.get(i);
-                    String tableName = findTableName(entityCu);
-                    if(tableName != null){
-                        switch (component) {
-                            case "findBy":
-                            case "get":
-                                sql.append("SELECT * FROM ")
-                                        .append(tableName.replace("\"", ""))
-                                        .append(" WHERE ");
-
-                                break;
-                            case "findFirstBy":
-                            case "findTopBy":
-                                top = true;
-                                sql.append("SELECT * FROM ")
-                                        .append(tableName.replace("\"", ""))
-                                        .append(" WHERE ");
-                                break;
-
-                            case "And":
-                            case "Or":
-                            case "Not":
-                                sql.append(component).append(" ");
-                                break;
-                            case "Containing":
-                            case "Like":
-                                sql.append(" LIKE '%?%'");
-                                break;
-                            case "OrderBy":
-                                ordering = true;
-                                sql.append(" ORDER BY ");
-                                break;
-                            case "":
-                                break;
-                            default:
-                                sql.append(camelToSnake(component));
-                                if (!ordering) {
-                                    if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
-                                        sql.append(" In  (?) ");
-                                        i++;
-                                    } else {
-                                        sql.append(" = ? ");
-                                    }
-                                } else {
-                                    sql.append(" ");
-                                }
-
-                        }
-                    }
-                    else {
-                        logger.warn("Table name cannot be null");
-                    }
-                }
-                if(top) {
-                    if(dialect.equals(ORACLE)) {
-                        sql.append(" FETCH FIRST 1 ROWS ONLY");
-                    }
-                    else {
-                        sql.append(" LIMIT 1");
-                    }
-                }
-                queries.put(n.getNameAsString(), new RepositoryQuery(sql.toString(), true));
-            }
-        }
-
-        /**
-         * Recursively search method names for sql components
-         * @param methodName name of the method
-         * @return a list of components
-         */
-        private  List<String> extractComponents(String methodName) {
-            List<String> components = new ArrayList<>();
-            String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|In|Desc|Not|Containing|Like|Or";
-            Pattern pattern = Pattern.compile(keywords);
-            Matcher matcher = pattern.matcher(methodName);
-
-            // Add spaces around each keyword
-            StringBuffer sb = new StringBuffer();
-            while (matcher.find()) {
-                matcher.appendReplacement(sb, " " + matcher.group() + " ");
-            }
-            matcher.appendTail(sb);
-
-            // Split the modified method name by spaces
-            String[] parts = sb.toString().split("\\s+");
-            for (String part : parts) {
-                if (!part.isEmpty()) {
-                    components.add(part);
-                }
-            }
-
-            return components;
         }
     }
+
+    private void parseNonAnnotatedMethod(String methodName) {
+        List<String> components = extractComponents(methodName);
+        StringBuilder sql = new StringBuilder();
+        boolean top = false;
+        boolean ordering = false;
+        for(int i= 0 ; i < components.size() ; i++) {
+            String component = components.get(i);
+            String tableName = findTableName(entityCu);
+            if(tableName != null){
+                switch (component) {
+                    case "findBy":
+                    case "get":
+                        sql.append("SELECT * FROM ")
+                                .append(tableName.replace("\"", ""))
+                                .append(" WHERE ");
+
+                        break;
+                    case "findFirstBy":
+                    case "findTopBy":
+                        top = true;
+                        sql.append("SELECT * FROM ")
+                                .append(tableName.replace("\"", ""))
+                                .append(" WHERE ");
+                        break;
+
+                    case "And":
+                    case "Or":
+                    case "Not":
+                        sql.append(component).append(" ");
+                        break;
+                    case "Containing":
+                    case "Like":
+                        sql.append(" LIKE '%?%'");
+                        break;
+                    case "OrderBy":
+                        ordering = true;
+                        sql.append(" ORDER BY ");
+                        break;
+                    case "":
+                        break;
+                    default:
+                        sql.append(camelToSnake(component));
+                        if (!ordering) {
+                            if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
+                                sql.append(" In  (?) ");
+                                i++;
+                            } else {
+                                sql.append(" = ? ");
+                            }
+                        } else {
+                            sql.append(" ");
+                        }
+
+                }
+            }
+            else {
+                logger.warn("Table name cannot be null");
+            }
+        }
+        if(top) {
+            if(dialect.equals(ORACLE)) {
+                sql.append(" FETCH FIRST 1 ROWS ONLY");
+            }
+            else {
+                sql.append(" LIMIT 1");
+            }
+        }
+        queries.put(methodName, new RepositoryQuery(sql.toString(), true));
+    }
+
+    /**
+     * Recursively search method names for sql components
+     * @param methodName name of the method
+     * @return a list of components
+     */
+    private  List<String> extractComponents(String methodName) {
+        List<String> components = new ArrayList<>();
+        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|In|Desc|Not|Containing|Like|Or";
+        Pattern pattern = Pattern.compile(keywords);
+        Matcher matcher = pattern.matcher(methodName);
+
+        // Add spaces around each keyword
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, " " + matcher.group() + " ");
+        }
+        matcher.appendTail(sb);
+
+        // Split the modified method name by spaces
+        String[] parts = sb.toString().split("\\s+");
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                components.add(part);
+            }
+        }
+
+        return components;
+    }
+
 
     /**
      * CLean up method to be called before handing over to JSQL
@@ -836,5 +882,26 @@ public class RepositoryParser extends ClassProcessor {
         return queries;
     }
 
+    public MethodDeclaration getMethodDeclaration(MethodCallExpr methodCall) {
+
+        List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
+        MethodDeclaration md = getMethodDeclaration(methodCall, methods);
+        if (md == null) {
+            methods = repoCu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
+            md = getMethodDeclaration(methodCall, methods);
+            return md;
+        }
+        return null;
+    }
+
+    private static MethodDeclaration getMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+        for (MethodDeclaration method : methods) {
+            if (method.getParameters().size() == methodCall.getArguments().size()) {
+                // todo proper handling of types
+                return method;
+            }
+        }
+        return null;
+    }
 }
 

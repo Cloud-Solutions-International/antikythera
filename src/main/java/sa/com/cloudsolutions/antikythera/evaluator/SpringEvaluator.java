@@ -225,8 +225,9 @@ public class SpringEvaluator extends Evaluator {
                  * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                  * to the arguments that are passed in when the method is actually being called.
                  */
-                MethodDeclaration repoMethod = repository.getCompilationUnit().getTypes().get(0).getMethodsByName(methodCall.getNameAsString()).get(0);
-                if (!repoMethod.getNameAsString().equals("save")) {
+                MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
+                String nameAsString = repoMethod.getNameAsString();
+                if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
                         q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(methodCall.getArgument(i), i));
                         q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
