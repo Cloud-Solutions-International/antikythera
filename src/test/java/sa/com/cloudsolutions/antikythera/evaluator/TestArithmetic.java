@@ -38,7 +38,7 @@ class TestArithmetic extends  TestHelper {
         protected ArithmeticCompiler() throws IOException {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Arithmetic.java");
             cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator();
+            evaluator = new Evaluator("");
             evaluator.setupFields(cu);
 
         }

@@ -60,6 +60,10 @@ public class SpringEvaluator extends Evaluator {
 
     private MethodDeclaration currentMethod;
 
+    public SpringEvaluator(String className) {
+        super(className);
+    }
+
     public static Map<String, RepositoryParser> getRepositories() {
         return respositories;
     }

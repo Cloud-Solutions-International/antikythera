@@ -68,7 +68,7 @@ class TestStrings extends TestHelper{
         protected HelloEvaluator() throws IOException, ReflectiveOperationException{
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Hello.java");
             cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator();
+            evaluator = new Evaluator("");
             evaluator.setupFields(cu);
         }
     }

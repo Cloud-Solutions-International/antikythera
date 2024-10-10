@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.Name;
@@ -213,7 +212,7 @@ public class ClassProcessor extends AbstractCompiler {
         if (depCu == null) {
             try {
                 DTOHandler handler = new DTOHandler();
-                handler.parseDTO(AbstractCompiler.classToPath(className));
+                handler.parse(AbstractCompiler.classToPath(className));
                 depCu = handler.getCompilationUnit();
             } catch (IOException iex) {
                 logger.debug("No compilation unit for {}", className);

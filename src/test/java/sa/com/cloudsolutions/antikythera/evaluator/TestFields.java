@@ -40,7 +40,7 @@ class TestFields extends TestHelper {
             combinedTypeSolver.add(solver);
 
             cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Employee.java")).getResult().get();
-            evaluator = new Evaluator();
+            evaluator = new Evaluator("");
             evaluator.setupFields(cu);
         }
     }

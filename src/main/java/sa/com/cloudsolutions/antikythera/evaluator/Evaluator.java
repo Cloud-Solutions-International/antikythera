@@ -66,6 +66,7 @@ public class Evaluator {
      */
     protected final Map<String, Variable> fields;
     static Map<String, Object> finches;
+    private final String className;
 
     protected Variable returnValue;
 
@@ -105,10 +106,10 @@ public class Evaluator {
         }
     }
 
-    public Evaluator (){
+    public Evaluator (String className){
+        this.className = className;
         locals = new HashMap<>();
         fields = new HashMap<>();
-
     }
 
     /**
@@ -795,10 +796,8 @@ public class Evaluator {
 
     void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
         if (variable.getType().isClassOrInterfaceType()) {
-
             Type t = variable.getType().asClassOrInterfaceType();
             String className = t.resolve().describe();
-
 
             if(finches.get(className) != null) {
                 Variable v = new Variable(t);
@@ -813,6 +812,9 @@ public class Evaluator {
                     v.setType(t);
                 }
                 fields.put(variable.getNameAsString(), v);
+            }
+            else {
+                System.out.println(AntikytheraRunTime.getCompilationUnit(className));
             }
         }
         else {

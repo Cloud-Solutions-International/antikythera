@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
@@ -108,19 +109,32 @@ public class RestControllerParser extends ClassProcessor {
         if (cu.getPackageDeclaration().isPresent()) {
             processRestController(cu.getPackageDeclaration().get());
         }
+    }
 
+    private TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
+        for (var type : cu.getTypes()) {
+            if (type.isClassOrInterfaceDeclaration()) {
+                if (type.asClassOrInterfaceDeclaration().isPublic()) {
+                    return type;
+                }
+            }
+        }
+        return null;
     }
 
     private void processRestController(PackageDeclaration pd) throws IOException {
         expandWildCards(cu);
 
-        evaluator = new SpringEvaluator();
+        TypeDeclaration<?> type = getPublicClass(cu);
+
+        evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
+
         SpringTestGenerator generator = new SpringTestGenerator();
         evaluator.addGenerator(generator);
         generator.setCommonPath(getCommonPath());
 
         CompilationUnit gen = generator.getCompilationUnit();
-        ClassOrInterfaceDeclaration cdecl = gen.addClass(cu.getTypes().get(0).getName() + "Test");
+        ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getFullyQualifiedName().get() + "Test");
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
@@ -162,10 +176,10 @@ public class RestControllerParser extends ClassProcessor {
                     || AntikytheraRunTime.isControllerClass(name)
                     || AntikytheraRunTime.isComponentClass(name))) {
                 boolean found = false;
-                var deps = dependencies.get(cu.getTypes().get(0).getFullyQualifiedName().get());
+                var deps = dependencies.get(type.getFullyQualifiedName().get());
                 if(deps != null) {
-                    for (Dependency depdency : deps) {
-                        if (depdency.getTo().equals(name)) {
+                    for (Dependency dependency : deps) {
+                        if (dependency.getTo().equals(name)) {
                             found = true;
                             break;
                         }
@@ -178,7 +192,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         ProjectGenerator.getInstance().writeFilesToTest(
-                pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",
+                pd.getName().asString(), type.getFullyQualifiedName().get() + "Test.java",
                 gen.toString());
 
     }

@@ -59,12 +59,12 @@ public class DTOHandler extends ClassProcessor {
         if (relativePath.contains("SearchParams")){
             return;
         }
-        parseDTO(relativePath);
+        parse(relativePath);
 
         copyDependencies();
     }
 
-    public void parseDTO(String relativePath) throws IOException {
+    public void parse(String relativePath) throws IOException {
         compile(relativePath);
         if (cu != null) {
             CompilationUnit tmp = cu;
