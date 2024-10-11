@@ -39,8 +39,8 @@ public class Settings {
     private Settings() {}
 
     /**
-     * Load the configuration from a file.
-     * @throws IOException
+     * Load the configuration from the default generator.yml file.
+     * @throws IOException if the file could not be read.
      */
     public static void loadConfigMap() throws IOException {
         if (props == null) {
@@ -54,6 +54,12 @@ public class Settings {
         }
     }
 
+    public static void loadConfigMap(File f) throws IOException {
+        if(props == null) {
+            props = new HashMap<>();
+            loadYamlConfig(f);
+        }
+    }
     /**
      * Load configuration from a yaml file
      *
@@ -70,6 +76,10 @@ public class Settings {
         Map<String, Object> yamlProps = mapper.readValue(yamlFile, Map.class);
         Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault("variables", new HashMap<>());
         props.put("variables", variables);
+
+        if (variables != null) {
+            variables.replaceAll((k, value) -> replaceEnvVariables((String) value));
+        }
 
         replaceVariables(yamlProps, props);
 

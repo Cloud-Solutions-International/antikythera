@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -16,6 +17,11 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestFields extends TestHelper {
+
+    @BeforeAll
+    public static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+    }
 
     @BeforeEach
     public void each() throws Exception {
