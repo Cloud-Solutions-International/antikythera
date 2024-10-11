@@ -352,7 +352,16 @@ public class Evaluator {
         if (vx == null) {
             Object instance  = null;
             try {
-                instance = DTOBuddy.createDynamicDTO(type);
+                List<Expression> arguments = oce.getArguments();
+                Object[] constructorArgs = new Object[arguments.size()];
+
+                for (int i = 0; i < arguments.size(); i++) {
+                    Variable arg = evaluateExpression(arguments.get(i));
+                    constructorArgs[i] = arg.getValue();
+                }
+
+                // Create the dynamic DTO with the extracted arguments
+                instance = DTOBuddy.createDynamicDTO(type, constructorArgs);
                 vx = new Variable(type, instance);
             } catch (Exception e) {
                 logger.error("An error occurred in creating a variable with bytebuddy", e);

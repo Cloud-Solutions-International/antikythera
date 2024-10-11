@@ -61,13 +61,6 @@
             <version>3.8.6</version>
         </dependency>
 
-        <!--  remove ??
-        <dependency>
-            <groupId>org.codehaus.plexus</groupId>
-            <artifactId>plexus-utils</artifactId>
-            <version>3.4.1</version>
-        </dependency>
-        -->
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
