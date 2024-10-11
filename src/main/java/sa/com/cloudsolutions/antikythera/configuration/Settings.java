@@ -43,22 +43,18 @@ public class Settings {
      * @throws IOException if the file could not be read.
      */
     public static void loadConfigMap() throws IOException {
-        if (props == null) {
-            props = new HashMap<>();
-            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
-            if (yamlFile.exists()) {
-                loadYamlConfig(yamlFile);
-            } else {
-                throw new FileNotFoundException(yamlFile.getPath());
-            }
+        props = new HashMap<>();
+        File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
+        if (yamlFile.exists()) {
+            loadYamlConfig(yamlFile);
+        } else {
+            throw new FileNotFoundException(yamlFile.getPath());
         }
     }
 
     public static void loadConfigMap(File f) throws IOException {
-        if(props == null) {
-            props = new HashMap<>();
-            loadYamlConfig(f);
-        }
+        props = new HashMap<>();
+        loadYamlConfig(f);
     }
     /**
      * Load configuration from a yaml file
@@ -237,6 +233,25 @@ public class Settings {
             }
         }
         return null;
+    }
+
+
+    /**
+     * The base package for the AUT.
+     * It helps to identify if a class we are looking at is something we should
+     * try to compile or not.
+     */
+    public static String getBasePackage() {
+        return (String) props.get(Constants.BASE_PACKAGE);
+    }
+
+
+    /**
+     * the top level folder for the AUT source code.
+     * If there is a java class without a package it should be in this folder.
+     */
+    public static String getBasePath() {
+        return (String) props.get(Constants.BASE_PATH);
     }
 
     public static String[] getArtifacts() {
