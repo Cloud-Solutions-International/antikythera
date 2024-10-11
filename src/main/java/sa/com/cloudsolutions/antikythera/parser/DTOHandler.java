@@ -104,7 +104,7 @@ public class DTOHandler extends ClassProcessor {
             }
 
             if (method != null) {
-                var variable = classToInstanceName(cu.getTypes().get(0));
+                var variable = classToInstanceName(getPublicClass(cu));
                 method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
             }
 
@@ -256,7 +256,7 @@ public class DTOHandler extends ClassProcessor {
                 // handle custom getters and setters
 
                 String fieldName = firstVariable.getNameAsString();
-                String className = cu.getTypes().get(0).getNameAsString();
+                String className = getPublicClass(cu).getNameAsString();
                 Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
                 if(!methodNames.isEmpty()){
@@ -338,7 +338,7 @@ public class DTOHandler extends ClassProcessor {
      * @param field
      */
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
-        TypeDeclaration<?> cdecl = cu.getTypes().get(0);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getPublicClass(cu);
 
         if (!field.isStatic()) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
@@ -349,7 +349,7 @@ public class DTOHandler extends ClassProcessor {
                     ? field.getElementType().asClassOrInterfaceType().getNameAsString()
                     : field.getElementType().asString();
 
-            String className = cu.getTypes().get(0).getNameAsString();
+            String className = AbstractCompiler.getPublicClass(cu).getNameAsString();
             Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
             String argument = switch (type) {

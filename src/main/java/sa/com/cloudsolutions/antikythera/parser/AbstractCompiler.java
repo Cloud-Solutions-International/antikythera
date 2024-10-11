@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -230,5 +231,16 @@ public class AbstractCompiler {
 
     protected JavaParser getJavaParser() {
         return javaParser;
+    }
+
+    protected static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
+        for (var type : cu.getTypes()) {
+            if (type.isClassOrInterfaceDeclaration()) {
+                if (type.asClassOrInterfaceDeclaration().isPublic()) {
+                    return type;
+                }
+            }
+        }
+        return null;
     }
 }

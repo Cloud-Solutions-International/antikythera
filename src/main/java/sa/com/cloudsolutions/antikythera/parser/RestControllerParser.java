@@ -111,17 +111,6 @@ public class RestControllerParser extends ClassProcessor {
         }
     }
 
-    private TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
-        for (var type : cu.getTypes()) {
-            if (type.isClassOrInterfaceDeclaration()) {
-                if (type.asClassOrInterfaceDeclaration().isPublic()) {
-                    return type;
-                }
-            }
-        }
-        return null;
-    }
-
     private void processRestController(PackageDeclaration pd) throws IOException {
         expandWildCards(cu);
 
@@ -347,7 +336,7 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path from the RequestMapping Annotation or an empty string
      */
     private String getCommonPath() {
-        for (var classAnnotation : cu.getTypes().get(0).getAnnotations()) {
+        for (var classAnnotation : getPublicClass(cu).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();

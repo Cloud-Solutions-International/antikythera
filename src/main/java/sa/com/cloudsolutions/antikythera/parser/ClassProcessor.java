@@ -111,13 +111,13 @@ public class ClassProcessor extends AbstractCompiler {
          * First thing is to find the compilation unit. Obviously we can only copy the DTO
          * if we have a compilation unit.
          */
-        CompilationUnit depCu = getCompilationUnit(dependency.to);
+        CompilationUnit depCu = getCompilationUnit(dependency.getTo());
         if (depCu != null) {
             for (var decl : depCu.getTypes()) {
                 if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
                     continue;
                 }
-                String targetName = dependency.to;
+                String targetName = dependency.getTo();
                 if (!copied.contains(targetName) && targetName.startsWith(Settings.getBasePackage())) {
                     /*
                      * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
@@ -524,6 +524,17 @@ public class ClassProcessor extends AbstractCompiler {
 
             cu.getImports().addAll(keepImports);
             cu = tmp;
+        }
+    }
+
+    protected void compileDependencies() throws IOException {
+        Optional<String> fullyQualifiedName = getPublicClass(cu).getFullyQualifiedName();
+        if (fullyQualifiedName.isPresent()) {
+            Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
+            for (Dependency dep : deps) {
+                ClassProcessor cp = new ClassProcessor();
+                cp.compile(AbstractCompiler.classToPath(dep.getTo()));
+            }
         }
     }
 

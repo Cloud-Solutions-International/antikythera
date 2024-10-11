@@ -814,7 +814,23 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else {
-                System.out.println(AntikytheraRunTime.getCompilationUnit(className));
+                CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(className);
+                if (compilationUnit != null) {
+                    Optional<Expression> init = variable.getInitializer();
+                    if (init.isPresent()) {
+                        if(init.get().isObjectCreationExpr()) {
+                            createObject(variable, variable, init.get());
+                        }
+                        else {
+                            Evaluator eval = new Evaluator(className);
+                            Variable v = new Variable(eval);
+                            fields.put(variable.getNameAsString(), v);
+                        }
+                    }
+                }
+                else {
+                    System.out.println("Unsolved " + className);
+                }
             }
         }
         else {

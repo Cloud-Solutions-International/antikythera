@@ -28,7 +28,6 @@ class TestFields extends TestHelper {
         System.setOut(new PrintStream(outContent));
     }
 
-
     @Test
     void testPrintNumberField() throws  AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
@@ -37,10 +36,10 @@ class TestFields extends TestHelper {
         assertTrue(outContent.toString().contains("10"));
     }
 
-
     class TestFieldsCompiler extends ClassProcessor {
         protected TestFieldsCompiler() throws IOException, AntikytheraException {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
+            compileDependencies();
             evaluator = new Evaluator("");
             evaluator.setupFields(cu);
         }

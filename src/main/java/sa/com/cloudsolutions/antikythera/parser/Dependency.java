@@ -4,13 +4,13 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
 
 public class Dependency {
-    TypeDeclaration<?> from;
-    String to;
-    boolean returnType;
-    boolean parameter;
-    boolean controller;
-    boolean external;
-    boolean extension;
+    private TypeDeclaration<?> from;
+    private String to;
+    private boolean returnType;
+    private boolean parameter;
+    private boolean controller;
+    private boolean external;
+    private boolean extension;
 
     public Dependency(TypeDeclaration<?> from, String to, boolean returnType, boolean isParameter) {
         this.from = from;
