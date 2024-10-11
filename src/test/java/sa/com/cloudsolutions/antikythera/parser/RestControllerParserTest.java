@@ -15,24 +15,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
-import static sa.com.cloudsolutions.antikythera.parser.ClassProcessor.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RestControllerParserTest {
 
     private RestControllerParser parser;
-    private static String basePath;
     private static String outputPath;
 
     @BeforeEach
     void setUp() throws IOException {
         Settings.loadConfigMap();
-        basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
         String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
-        parser = new RestControllerParser(Paths.get(basePath,controllers.replaceAll("\\.","/")).toFile());
+        parser = new RestControllerParser(Paths.get(Settings.getBasePath(),controllers.replaceAll("\\.","/")).toFile());
     }
 
 

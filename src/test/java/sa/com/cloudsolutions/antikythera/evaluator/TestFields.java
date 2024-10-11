@@ -2,13 +2,12 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,13 +38,9 @@ class TestFields extends TestHelper {
     }
 
 
-    class TestFieldsCompiler extends AbstractCompiler {
+    class TestFieldsCompiler extends ClassProcessor {
         protected TestFieldsCompiler() throws IOException, AntikytheraException {
-            String path = Settings.getProperty("base_path", String.class).orElseGet(() -> "");
-            JavaParserTypeSolver solver = new JavaParserTypeSolver(path.replace("/resources/sources/src/main",""));
-            combinedTypeSolver.add(solver);
-
-            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Employee.java")).getResult().get();
+            parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
             evaluator = new Evaluator("");
             evaluator.setupFields(cu);
         }

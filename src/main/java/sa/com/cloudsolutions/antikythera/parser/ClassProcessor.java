@@ -1,10 +1,16 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.visitor.ModifierVisitor;
+import com.github.javaparser.ast.visitor.Visitable;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
@@ -112,7 +118,7 @@ public class ClassProcessor extends AbstractCompiler {
                     continue;
                 }
                 String targetName = dependency.to;
-                if (!copied.contains(targetName) && targetName.startsWith(AbstractCompiler.basePackage)) {
+                if (!copied.contains(targetName) && targetName.startsWith(Settings.getBasePackage())) {
                     /*
                      * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
                      * it's best to make sure that we haven't copied this file already and also to make
@@ -291,7 +297,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param packageName the package name
      */
     protected void findMatchingClasses(String packageName) {
-        Path p = Paths.get(basePath, packageName.replace(".", "/"));
+        Path p = Paths.get(Settings.getBasePath(), packageName.replace(".", "/"));
         File directory = p.toFile();
 
         if (directory.exists() && directory.isDirectory()) {
@@ -321,7 +327,7 @@ public class ClassProcessor extends AbstractCompiler {
         for(var imp : cu.getImports()) {
             if(imp.isAsterisk() && !imp.isStatic()) {
                 String packageName = imp.getNameAsString();
-                if (packageName.startsWith(basePackage)) {
+                if (packageName.startsWith(Settings.getBasePackage())) {
                     findMatchingClasses(packageName);
                 }
             }
@@ -486,4 +492,99 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
 
+    public void parse(String relativePath) throws IOException {
+        compile(relativePath);
+        if (cu != null) {
+            CompilationUnit tmp = cu;
+            cu = cu.clone();
+
+            expandWildCards(cu);
+            allImports.addAll(cu.getImports());
+            cu.setImports(new NodeList<>());
+
+            for (var t : cu.getTypes()) {
+                if (t.isClassOrInterfaceDeclaration()) {
+                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                    if (!cdecl.isInnerClass()) {
+                        /*
+                         * we are iterating through all the types defined in the source file through the for loop
+                         * above. At this point we create a visitor and identifying the various dependencies will
+                         * be the job of the visitor.
+                         * Because the visitor will not look at parent classes so we do that below.
+                         */
+                        cdecl.accept(createTypeCollector(), null);
+                    }
+                    for(var ext : cdecl.getExtendedTypes()) {
+                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
+                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
+                        addEdgeFromImport(t, ext, imp);
+                    }
+                }
+            }
+
+            cu.getImports().addAll(keepImports);
+            cu = tmp;
+        }
+    }
+
+    class TypeCollector extends ModifierVisitor<Void> {
+
+        @Override
+        public Visitable visit(FieldDeclaration field, Void args) {
+            String fieldAsString = field.getElementType().toString();
+            if (fieldAsString.equals("DateScheduleUtil")
+                    || fieldAsString.equals("Logger")
+                    || fieldAsString.equals("Sort.Direction")) {
+                return null;
+            }
+
+            // Filter annotations to retain only @JsonFormat and @JsonIgnore
+            NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
+            for (AnnotationExpr annotation : field.getAnnotations()) {
+                String annotationName = annotation.getNameAsString();
+                if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+                    resolveImport(annotationName);
+                    filteredAnnotations.add(annotation);
+                }
+                else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
+                    switch(field.getElementType().asString()) {
+                        case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
+                            break;
+                    }
+                }
+            }
+            field.getAnnotations().clear();
+            field.setAnnotations(filteredAnnotations);
+
+            Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
+
+            if (ancestor.isPresent()) {
+                /*
+                 * We need not have this ancestor check because java can't have global variables but that's the
+                 * way the library is structured.
+                 * Having identified that we have a field, we need to solve it's type dependencies. Matters are
+                 * slightly complicated by the fact that sometimes a field may have an initializer. This may be
+                 * a method call (which we will ignore for now) but this is more often simply an object creation
+                 * It may look like this:
+                 *
+                 *     List<String> list = new ArrayList<>();
+                 *
+                 * Because the field type and the initializer differ we need to solve the type dependencies for
+                 * the initializer as well.
+                 */
+                solveTypeDependencies(ancestor.get(), field.getElementType());
+                VariableDeclarator firstVariable = field.getVariables().get(0);
+                firstVariable.getInitializer().ifPresent(init -> {
+                    if (init.isObjectCreationExpr()) {
+                        solveTypeDependencies(ancestor.get(), init.asObjectCreationExpr().getType());
+                    }
+                });
+            }
+            return super.visit(field, args);
+        }
+    }
+
+    private ModifierVisitor createTypeCollector() {
+        return new TypeCollector();
+    }
 }

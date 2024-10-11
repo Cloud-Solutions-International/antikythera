@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
@@ -52,19 +53,6 @@ public class AbstractCompiler {
      */
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
-
-    /**
-     * The base package for the AUT.
-     * It helps to identify if a class we are looking at is something we should
-     * try to compile or not.
-     */
-    protected static String basePackage;
-    /**
-     * the top level folder for the AUT source code.
-     * If there is a java class without a package it should be in this folder.
-     */
-    protected static String basePath;
-
     public static final String SUFFIX = ".java";
 
     private final JavaParser javaParser;
@@ -75,13 +63,9 @@ public class AbstractCompiler {
     protected CompilationUnit cu;
 
     protected AbstractCompiler() throws IOException {
-        if(basePackage == null || basePath == null) {
-            basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-            basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-        }
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+        combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
 
         jarSolvers = new ArrayList<>();
         for(String jarFile : Settings.getJarFiles()) {
@@ -148,7 +132,7 @@ public class AbstractCompiler {
         }
 
         logger.debug("\t{}", relativePath);
-        Path sourcePath = Paths.get(basePath, relativePath);
+        Path sourcePath = Paths.get(Settings.getBasePath(), relativePath);
 
         File file = sourcePath.toFile();
 
@@ -220,7 +204,7 @@ public class AbstractCompiler {
     }
 
     public static String absolutePathToClassName(String abs) {
-        abs = abs.replace(basePath, "");
+        abs = abs.replace(Settings.getBasePath(), "");
         if(abs.startsWith("/")) {
             abs = abs.substring(1);
         }
