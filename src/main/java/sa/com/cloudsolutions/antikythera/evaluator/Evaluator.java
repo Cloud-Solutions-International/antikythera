@@ -495,6 +495,22 @@ public class Evaluator {
             try {
                 if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
                     handleSystemOutMethodCall(reflectionArguments);
+                } else if(scopeExpr.isNameExpr()) {
+                    Variable v = getValue(methodCall, scopeExpr.toString());
+                    if (v != null) {
+                        Class<?> clazz = v.getClazz();
+                        String methodName = reflectionArguments.getMethodName();
+                        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
+                        Object[] args = reflectionArguments.getArgs();
+                        Method method = findMethod(clazz, methodName, paramTypes);
+                        if (method != null) {
+                            Variable result = new Variable(method.invoke(v.getValue(), args));
+                            AntikytheraRunTime.push(result);
+                            return result;
+                        }
+                        throw new EvaluatorException("Error evaluating method call: " + methodName);
+                    }
+
                 } else {
                     return handleRegularMethodCall(methodCall, scopeExpr, reflectionArguments);
                 }
@@ -828,7 +844,8 @@ public class Evaluator {
                     Optional<Expression> init = variable.getInitializer();
                     if (init.isPresent()) {
                         if(init.get().isObjectCreationExpr()) {
-                            createObject(variable, variable, init.get());
+                            Variable v = createObject(variable, variable, init.get());
+                            fields.put(variable.getNameAsString(), v);
                         }
                         else {
                             Evaluator eval = new Evaluator(className);

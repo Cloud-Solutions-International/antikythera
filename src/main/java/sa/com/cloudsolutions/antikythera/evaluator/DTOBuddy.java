@@ -122,7 +122,7 @@ public class DTOBuddy {
         // Define constructor with specific parameters and call super()
         builder = builder.defineConstructor(Visibility.PUBLIC)
                 .withParameters(getConstructorParameterTypes(constructorArgs))
-                .intercept(SuperMethodCall.INSTANCE.andThen(net.bytebuddy.implementation.StubMethod.INSTANCE));
+                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()));
 
         for (ResolvedFieldDeclaration field : fields) {
             String fieldName = field.getName();
