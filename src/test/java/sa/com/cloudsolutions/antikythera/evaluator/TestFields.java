@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestFields extends TestHelper {
@@ -43,7 +44,7 @@ class TestFields extends TestHelper {
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("simpleAccess")).orElseThrow();
         evaluator.executeMethod(ts);
-        assertTrue(!outContent.toString().contains("null"));
+        assertEquals("Hornblower\nnull\nColombo\n", outContent.toString() );
     }
 
     class TestFieldsCompiler extends ClassProcessor {

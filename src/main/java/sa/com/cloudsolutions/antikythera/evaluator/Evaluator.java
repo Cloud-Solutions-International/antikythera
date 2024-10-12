@@ -371,10 +371,9 @@ public class Evaluator {
                         }
                     }
                     if (matched) {
-                        for (Expression arg : oce.getArguments()) {
-                            AntikytheraRunTime.push(evaluateExpression(arg));
+                        for(int i = oce.getArguments().size() -1 ; i >= 0 ; i--) {
+                            AntikytheraRunTime.push(evaluateExpression(oce.getArguments().get(i)));
                         }
-
                         eval.executeConstructor(constructor);
                         return new Variable(eval);
                     }
@@ -574,6 +573,9 @@ public class Evaluator {
                     Variable v = getValue(methodCall, scopeExpr.toString());
                     if (v != null) {
                         if (v.getValue() instanceof Evaluator eval) {
+                            for (int i = reflectionArguments.getArgs().length - 1 ; i >= 0 ; i--) {
+                                AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
+                            }
                             return eval.executeMethod(methodCall);
                         }
                         Class<?> clazz = v.getClazz();
@@ -594,20 +596,14 @@ public class Evaluator {
             } catch (IllegalStateException e) {
                 return handleIllegalStateException(reflectionArguments, e);
             }
-        } else {
-            Optional<Node> n = methodCall.resolve().toAst();
-            if (n.isPresent() && n.get() instanceof MethodDeclaration) {
-                executeMethod((MethodDeclaration) n.get());
-                return returnValue;
-            }
         }
-        return null;
+        return executeMethod(methodCall);
     }
 
     private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         Optional<Node> n = methodCall.resolve().toAst();
-        if (n.isPresent() && n.get() instanceof MethodDeclaration) {
-            return executeMethod((MethodDeclaration) n.get());
+        if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
+            return executeMethod(md);
         }
         return null;
     }
