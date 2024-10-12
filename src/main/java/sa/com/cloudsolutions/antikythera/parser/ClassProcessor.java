@@ -56,7 +56,7 @@ public class ClassProcessor extends AbstractCompiler {
      *   We are only interested in copying the DTOs from the application under test. Broadly a DTO is a
      *   class is either a return type of a controller or an input to a controller.
      *
-     *   A controller has a lot of other dependencies, most notably services and even though respositories
+     *   A controller has a lot of other dependencies, most notably services and even though repositories
      *   are only supposed to be accessed through services sometimes you find them referred directly in
      *   the controller. These will not be copied across to the test folder.
      */
@@ -296,7 +296,7 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param packageName the package name
      */
-    protected void findMatchingClasses(String packageName) {
+    protected void findClassInPackage(String packageName) {
         Path p = Paths.get(Settings.getBasePath(), packageName.replace(".", "/"));
         File directory = p.toFile();
 
@@ -328,7 +328,7 @@ public class ClassProcessor extends AbstractCompiler {
             if(imp.isAsterisk() && !imp.isStatic()) {
                 String packageName = imp.getNameAsString();
                 if (packageName.startsWith(Settings.getBasePackage())) {
-                    findMatchingClasses(packageName);
+                    findClassInPackage(packageName);
                 }
             }
         }

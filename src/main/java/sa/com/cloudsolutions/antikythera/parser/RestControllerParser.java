@@ -7,7 +7,6 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
@@ -77,6 +76,13 @@ public class RestControllerParser extends ClassProcessor {
         processControllers(controllers);
     }
 
+    /**
+     * Process the controllers in the given folder.
+     * If the path is a directory, it will process all the files in the directory.
+     * @param path the path in which to look for controllers
+     * @throws IOException if the file could not be read
+     * @throws EvaluatorException if the file could not be processed due to compilation related issues.
+     */
     private void processControllers(File path) throws IOException, EvaluatorException {
         current = path;
         if (path.isDirectory()) {

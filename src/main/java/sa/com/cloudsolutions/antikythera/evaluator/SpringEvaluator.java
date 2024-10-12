@@ -71,7 +71,7 @@ public class SpringEvaluator extends Evaluator {
     private boolean flunk = true;
 
     @Override
-    public void executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration cdecl) {
                 if (cdecl.isAnnotationPresent("RestController")) {
@@ -85,7 +85,7 @@ public class SpringEvaluator extends Evaluator {
         } catch (Exception e) {
             throw new EvaluatorException("Error while mocking controller arguments", e);
         }
-        super.executeMethod(md);
+        return super.executeMethod(md);
     }
 
     /**

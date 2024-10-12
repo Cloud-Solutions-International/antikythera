@@ -64,6 +64,11 @@ public class DTOHandler extends ClassProcessor {
         copyDependencies();
     }
 
+    /**
+     * Apply java parser on the class at the given path
+     * @param relativePath a relative path to a java file
+     * @throws IOException if the file could not be read.
+     */
     public void parse(String relativePath) throws IOException {
         compile(relativePath);
         if (cu != null) {

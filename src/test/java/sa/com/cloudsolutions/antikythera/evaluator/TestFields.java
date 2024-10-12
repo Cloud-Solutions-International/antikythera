@@ -33,8 +33,17 @@ class TestFields extends TestHelper {
         // this test is broken due to what i believe to be a bug in java parser.
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("toString")).orElseThrow();
+        Variable v = evaluator.executeMethod(ts);
+        assertTrue(v.getValue().toString().contains("Hornblower"));
+    }
+
+    @Test
+    void testAccessor() throws  AntikytheraException, ReflectiveOperationException {
+        // this test is broken due to what i believe to be a bug in java parser.
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("simpleAccess")).orElseThrow();
         evaluator.executeMethod(ts);
-        assertTrue(outContent.toString().contains("10"));
+        assertTrue(!outContent.toString().contains("null"));
     }
 
     class TestFieldsCompiler extends ClassProcessor {

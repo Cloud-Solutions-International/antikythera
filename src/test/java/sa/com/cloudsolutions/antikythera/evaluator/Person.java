@@ -19,7 +19,15 @@ public class Person {
         this.email = email;
     }
 
-    public Object getName() {
+    public String getName() {
         return name;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public String getAddress() {
+        return address;
     }
 }

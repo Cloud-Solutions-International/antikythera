@@ -9,6 +9,13 @@ public class Employee {
         System.out.println(patient);
     }
 
+    public void simpleAccess() {
+        System.out.println(p.getName());
+        System.out.println(p.getAddress());
+        p.setAddress("Colombo");
+        System.out.println(p.getAddress());
+    }
+
     @Override
     public String toString() {
         return "Patient id = %d , Name = %s".formatted(id, p.getName());
