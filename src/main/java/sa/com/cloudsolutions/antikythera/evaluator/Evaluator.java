@@ -353,11 +353,12 @@ public class Evaluator {
         Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
         if (res.isPresent()) {
             ResolvedType resolved = type.resolve();
-            String className = resolved.describe();
-            Evaluator eval = new Evaluator(className);
-            eval.setupFields(AntikytheraRunTime.getCompilationUnit(className));
+            String resolvedClass = resolved.describe();
+            Evaluator eval = new Evaluator(resolvedClass);
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
 
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
+            eval.setupFields(cu);
+
             for (ConstructorDeclaration constructor : cu.findAll(ConstructorDeclaration.class)) {
                 ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
                 if (resolvedConstructor.getNumberOfParams() == oce.getArguments().size()) {
@@ -396,21 +397,21 @@ public class Evaluator {
             Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
             if (res.isPresent()) {
                 ResolvedType resolved = type.resolve();
-                String className = resolved.describe();
+                String resolvedClass = resolved.describe();
 
                 if (resolved.isReferenceType()) {
                     var typeDecl = resolved.asReferenceType().getTypeDeclaration();
                     if (typeDecl.isPresent() && typeDecl.get().getClassName().contains(".")) {
-                        className = className.replaceFirst("\\.([^\\.]+)$", "\\$$1");
+                        resolvedClass = resolvedClass.replaceFirst("\\.([^\\.]+)$", "\\$$1");
                     }
                 }
 
-                Class<?> clazz = Class.forName(className);
+                Class<?> clazz = Class.forName(resolvedClass);
 
                 Class<?> outer = clazz.getEnclosingClass();
                 if (outer != null) {
                     for (Class<?> c : outer.getDeclaredClasses()) {
-                        if (c.getName().equals(className)) {
+                        if (c.getName().equals(resolvedClass)) {
                             List<Expression> arguments = oce.getArguments();
                             Class<?>[] paramTypes = new Class<?>[arguments.size() + 1];
                             Object[] args = new Object[arguments.size() + 1];
@@ -527,8 +528,8 @@ public class Evaluator {
     private static BlockStmt findBlockStatement(Node expr) {
         Node currentNode = expr;
         while (currentNode != null) {
-            if (currentNode instanceof BlockStmt) {
-                return (BlockStmt) currentNode;
+            if (currentNode instanceof BlockStmt blockStmt) {
+                return blockStmt;
             }
             currentNode = currentNode.getParentNode().orElse(null);
         }
@@ -546,10 +547,10 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        Optional<Expression> scope = methodCall.getScope();
+        Optional<Expression> methodScope = methodCall.getScope();
 
-        if (scope.isPresent()) {
-            Expression scopeExpr = scope.get();
+        if (methodScope.isPresent()) {
+            Expression scopeExpr = methodScope.get();
             // todo fix this hack
             if (scopeExpr.toString().equals("logger")) {
                 return null;
@@ -914,14 +915,14 @@ public class Evaluator {
     void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
         if (variable.getType().isClassOrInterfaceType()) {
             Type t = variable.getType().asClassOrInterfaceType();
-            String className = t.resolve().describe();
+            String resolvedClass = t.resolve().describe();
 
-            if(finches.get(className) != null) {
+            if(finches.get(resolvedClass) != null) {
                 Variable v = new Variable(t);
-                v.setValue(finches.get(className));
+                v.setValue(finches.get(resolvedClass));
                 fields.put(variable.getNameAsString(), v);
             }
-            else if (className.startsWith("java")) {
+            else if (resolvedClass.startsWith("java")) {
                 Variable v = null;
                 Optional<Expression> init = variable.getInitializer();
                 if(init.isPresent()) {
@@ -931,39 +932,47 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else {
-                CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(className);
+                CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 if (compilationUnit != null) {
-                    Optional<Expression> init = variable.getInitializer();
-                    if (init.isPresent()) {
-                        if(init.get().isObjectCreationExpr()) {
-                            Variable v = createObject(variable, variable, init.get());
-                            fields.put(variable.getNameAsString(), v);
-                        }
-                        else {
-                            Evaluator eval = new Evaluator(className);
-                            Variable v = new Variable(eval);
-                            fields.put(variable.getNameAsString(), v);
-                        }
-                    }
+                    resolveFieldRepresentedByCode(variable, resolvedClass);
                 }
                 else {
-                    System.out.println("Unsolved " + className);
+                    System.out.println("Unsolved " + resolvedClass);
                 }
             }
         }
         else {
-            Variable v;
-            Optional<Expression> init = variable.getInitializer();
-            if(init.isPresent()) {
-                v = evaluateExpression(init.get());
-                v.setType(variable.getType());
+            resolveNonClassFields(variable);
+        }
+    }
+
+    private void resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+        Optional<Expression> init = variable.getInitializer();
+        if (init.isPresent()) {
+            if(init.get().isObjectCreationExpr()) {
+                Variable v = createObject(variable, variable, init.get());
+                fields.put(variable.getNameAsString(), v);
             }
             else {
-                v = new Variable(variable.getType());
+                Evaluator eval = new Evaluator(resolvedClass);
+                Variable v = new Variable(eval);
+                fields.put(variable.getNameAsString(), v);
             }
-            v.setPrimitive(true);
-            fields.put(variable.getNameAsString(), v);
         }
+    }
+
+    private void resolveNonClassFields(VariableDeclarator variable) throws AntikytheraException, ReflectiveOperationException {
+        Variable v;
+        Optional<Expression> init = variable.getInitializer();
+        if(init.isPresent()) {
+            v = evaluateExpression(init.get());
+            v.setType(variable.getType());
+        }
+        else {
+            v = new Variable(variable.getType());
+        }
+        v.setPrimitive(true);
+        fields.put(variable.getNameAsString(), v);
     }
 
 
@@ -1124,8 +1133,8 @@ public class Evaluator {
         boolean matched = false;
         for(CatchClause clause : t.getCatchClauses()) {
             if(clause.getParameter().getType().isClassOrInterfaceType()) {
-                String className = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
-                if(className.equals(e.getClass().getName())) {
+                String resolvedClass = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
+                if(resolvedClass.equals(e.getClass().getName())) {
                     setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
                     executeBlock(clause.getBody().getStatements());
                     if(t.getFinallyBlock().isPresent()) {
