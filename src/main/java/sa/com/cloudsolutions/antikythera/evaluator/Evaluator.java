@@ -495,6 +495,7 @@ public class Evaluator {
             try {
                 if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
                     handleSystemOutMethodCall(reflectionArguments);
+                    return null;
                 } else if(scopeExpr.isNameExpr()) {
                     Variable v = getValue(methodCall, scopeExpr.toString());
                     if (v != null) {
@@ -505,15 +506,16 @@ public class Evaluator {
                         Method method = findMethod(clazz, methodName, paramTypes);
                         if (method != null) {
                             Variable result = new Variable(method.invoke(v.getValue(), args));
+                            result.setClazz(clazz);
                             AntikytheraRunTime.push(result);
                             return result;
                         }
                         throw new EvaluatorException("Error evaluating method call: " + methodName);
                     }
 
-                } else {
-                    return handleRegularMethodCall(methodCall, scopeExpr, reflectionArguments);
                 }
+
+                return handleRegularMethodCall(methodCall, scopeExpr, reflectionArguments);
             } catch (IllegalStateException e) {
                 return handleIllegalStateException(reflectionArguments, e);
             }
