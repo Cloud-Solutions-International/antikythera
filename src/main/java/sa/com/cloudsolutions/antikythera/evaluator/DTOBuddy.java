@@ -8,16 +8,10 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import net.bytebuddy.ByteBuddy;
-import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
-import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
-import net.bytebuddy.implementation.MethodCall;
-import net.bytebuddy.implementation.StubMethod;
-import net.bytebuddy.implementation.SuperMethodCall;
-
 
 import java.lang.reflect.Method;
 import java.util.Collection;
@@ -42,8 +36,8 @@ public class DTOBuddy {
             throws ReflectiveOperationException {
         String className = dtoType.resolve().asReferenceType().getQualifiedName();
 
-        Class<?> clazz = createDynamicDTO(dtoType.resolve().asReferenceType().getDeclaredFields(), className, constructorArgs);
-        Object instance = clazz.getDeclaredConstructor(getConstructorParameterTypes(constructorArgs)).newInstance(constructorArgs);
+        Class<?> clazz = createDynamicDTO(dtoType.resolve().asReferenceType().getDeclaredFields(), className);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
         setDefaults(dtoType.resolve().asReferenceType().getDeclaredFields(), instance);
         return instance;
     }
@@ -120,9 +114,9 @@ public class DTOBuddy {
         DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className);
 
         // Define constructor with specific parameters and call super()
-        builder = builder.defineConstructor(Visibility.PUBLIC)
-                .withParameters(getConstructorParameterTypes(constructorArgs))
-                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()));
+//        builder = builder.defineConstructor(Visibility.PUBLIC)
+//                .withParameters(getConstructorParameterTypes(constructorArgs))
+//                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()));
 
         for (ResolvedFieldDeclaration field : fields) {
             String fieldName = field.getName();
@@ -138,6 +132,23 @@ public class DTOBuddy {
                 try {
                     fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(field.getType().describe()));
                 } catch (ClassNotFoundException cex) {
+                    // This field has a class that's not coming from an external library, but it's only available
+                    // as source code. We need to create a dynamic class for it.
+
+                    // then again there are cycles!
+
+//                    String qualifiedName = field.getType().asReferenceType().getQualifiedName();
+//                    if (qualifiedName.startsWith("java.util")) {
+//                        if (qualifiedName.equals("java.util.List")) {
+//                            fieldType = TypeDescription.Generic.Builder.parameterizedType(List.class, Object.class).build();
+//                        } else {
+//                            Class<?> clazz = Class.forName(qualifiedName);
+//                            fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(clazz);
+//                        }
+//                    } else {
+//                        Object o = DTOBuddy.createDynamicDTO(qualifiedName, field.getType().asReferenceType().getTypeDeclaration().get());
+//                        fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(o.getClass());
+//                    }
                     continue;
                 }
             }
@@ -193,4 +204,6 @@ public class DTOBuddy {
         }
         return parameterTypes;
     }
+
+
 }

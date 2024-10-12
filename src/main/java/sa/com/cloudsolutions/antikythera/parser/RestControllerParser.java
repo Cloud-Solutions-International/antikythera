@@ -40,8 +40,6 @@ public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
     private final File controllers;
 
-    private final Path dataPath;
-
     /**
      * Maintain stats of the controllers and methods parsed
      */
@@ -65,7 +63,7 @@ public class RestControllerParser extends ClassProcessor {
         super();
         this.controllers = controllers;
 
-        dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
+        Path dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
@@ -123,7 +121,7 @@ public class RestControllerParser extends ClassProcessor {
         generator.setCommonPath(getCommonPath());
 
         CompilationUnit gen = generator.getCompilationUnit();
-        ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getFullyQualifiedName().get() + "Test");
+        ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getNameAsString() + "Test");
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
@@ -181,7 +179,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         ProjectGenerator.getInstance().writeFilesToTest(
-                pd.getName().asString(), type.getFullyQualifiedName().get() + "Test.java",
+                pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 
     }
@@ -207,6 +205,7 @@ public class RestControllerParser extends ClassProcessor {
 
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
+                evaluator.reset();
                 try {
                     evaluator.executeMethod(md);
                 } catch (AntikytheraException | ReflectiveOperationException e) {

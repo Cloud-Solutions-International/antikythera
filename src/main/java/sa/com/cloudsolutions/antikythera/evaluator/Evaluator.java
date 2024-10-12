@@ -184,6 +184,19 @@ public class Evaluator {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
             return createObject(expr, null, expr);
+        } else if(expr.isFieldAccessExpr()) {
+            FieldAccessExpr fae = expr.asFieldAccessExpr();
+            try {
+                String name = fae.resolve().getType().describe();
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(name);
+//                if (cu != null) {
+//                    VoidVisitorAdapter<Void> adapter = new FieldVisitor();
+//                    adapter.visit(cu, null);
+//                }
+            } catch (Exception e) {
+                throw new EvaluatorException("Error evaluating field access expression", e);
+            }
+            System.out.println("Fields baby");
         }
         return null;
     }
@@ -1064,6 +1077,10 @@ public class Evaluator {
                 }
             }
         }
+    }
+
+    public void reset() {
+        locals.clear();
     }
 }
 

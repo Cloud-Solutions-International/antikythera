@@ -905,7 +905,7 @@ public class RepositoryParser extends ClassProcessor {
             md = getMethodDeclaration(methodCall, methods);
             return md;
         }
-        return null;
+        return md;
     }
 
     private static MethodDeclaration getMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
