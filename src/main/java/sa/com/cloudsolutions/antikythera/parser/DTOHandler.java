@@ -31,8 +31,10 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
@@ -137,11 +139,8 @@ public class DTOHandler extends ClassProcessor {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
 
-                // remove all annotations. Later we will add some of them back.
-                NodeList<AnnotationExpr> annotations = classDecl.getAnnotations();
-                annotations.clear();
-                addLombok(classDecl, annotations);
-
+                // Remove all annotations except lombok.
+                cleanUpAnnotations(classDecl);
                 // remove constructos and all methods. We are adding the @Getter and @Setter
                 // annotations so no getters and setters are needed. All other annotations we will
                 // discard. They maybe required in the application under test but the tests don't
@@ -180,27 +179,23 @@ public class DTOHandler extends ClassProcessor {
     }
 
     /**
-     * Add Lombok annotations to the class if it has any non static final fields
-     * @param classDecl the class to which we are going to add lombok annotations
-     * @param annotations the existing annotations (which will probably be empty)
+     * Cleans up all the annotations in the clas.
+     * The only annotations that we will preserve are four annotations from lombok
+     * @param classDecl the class which we are going to clean up.
      */
-    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
-        String[] annotationsToAdd;
-        if (classDecl.getFields().size() <= 255) {
-            annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
-        } else {
-            annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
-        }
-
-        if (classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
-            for (String annotation : annotationsToAdd) {
-                ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
+    void cleanUpAnnotations(ClassOrInterfaceDeclaration classDecl) {
+        NodeList<AnnotationExpr> annotations = classDecl.getAnnotations();
+        Set<AnnotationExpr> preserve = new HashSet<>();
+        for (AnnotationExpr annotation : annotations) {
+            String annotationName = annotation.getNameAsString();
+            if (annotationName.equals(STR_GETTER) || annotationName.equals("Setter") || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")) {
+                preserve.add(annotation);
+                ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotationName, false, false);
                 cu.addImport(importDeclaration);
-                NormalAnnotationExpr annotationExpr = new NormalAnnotationExpr();
-                annotationExpr.setName(new Name(annotation));
-                annotations.add(annotationExpr);
             }
         }
+        annotations.clear();
+        annotations.addAll(preserve);
     }
 
     /**

@@ -300,32 +300,31 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     void evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
-
+        /*
+         * Leg work is done in the overloaded method.
+         */
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
         if (parent.isPresent() ) {
             // the return statement will have a parent no matter what but the optionals approach
             // requires the use of isPresent.
-            evaluateReturnStatement(parent.get(), stmt);
-        }
-        ControllerResponse response = identifyReturnType(stmt.asReturnStmt(), currentMethod);
-
-        if(response != null) {
-            if(flunk) {
+            ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
+            if (response != null) {
+                if (flunk) {
+                    for (TestGenerator generator : generators) {
+                        generator.createTests(currentMethod, response);
+                    }
+                    flunk = false;
+                }
                 for (TestGenerator generator : generators) {
                     generator.createTests(currentMethod, response);
                 }
-                flunk = false;
+                Variable v = new Variable(response);
+                AntikytheraRunTime.push(v);
+                return;
             }
-            for (TestGenerator generator : generators) {
-                generator.createTests(currentMethod, response);
-            }
-            Variable v = new Variable(response);
-            AntikytheraRunTime.push(v);
         }
-        else {
-            super.evaluateReturnStatement(stmt);
-        }
+        super.evaluateReturnStatement(stmt);
     }
 
     private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) throws AntikytheraException, ReflectiveOperationException {
@@ -347,10 +346,11 @@ public class SpringEvaluator extends Evaluator {
                         // we have found ourselves a conditional return statement.
                         Expression condition = ifStmt.getCondition();
                         if (evaluateValidatorCondition(condition)) {
-                            identifyReturnType(stmt, currentMethod);
+                            ControllerResponse response = identifyReturnType(stmt, currentMethod);
                             if (!flunk) {
                                 buildPreconditions(currentMethod, condition);
                             }
+                            return response;
                         }
                     } else if (gramps.get() instanceof MethodDeclaration) {
                         return identifyReturnType(stmt, currentMethod);
