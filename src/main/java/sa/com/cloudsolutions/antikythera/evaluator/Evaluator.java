@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ThrowStmt;
@@ -305,7 +306,9 @@ public class Evaluator {
      * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
      *                           We recursively fetch it's parent until we reach the start of the block. This is
      *                           needed because local variables are local to a block rather than a method.
-     * @param decl  The variable declaration
+     * @param decl  The variable declaration. Pass null here if you don't want to create local variable.
+     *              This would typically be the case if you have a method call and one of the arguments
+     *              to the method call is a new instance.
      * @param expression The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
@@ -359,7 +362,11 @@ public class Evaluator {
 
             eval.setupFields(cu);
 
-            for (ConstructorDeclaration constructor : cu.findAll(ConstructorDeclaration.class)) {
+            List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
+            if (constructors.isEmpty()) {
+                return new Variable(eval);
+            }
+            for (ConstructorDeclaration constructor : constructors) {
                 ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
                 if (resolvedConstructor.getNumberOfParams() == oce.getArguments().size()) {
                     boolean matched = true;
@@ -923,13 +930,7 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else if (resolvedClass.startsWith("java")) {
-                Variable v = null;
-                Optional<Expression> init = variable.getInitializer();
-                if(init.isPresent()) {
-                    v = evaluateExpression(init.get());
-                    v.setType(t);
-                }
-                fields.put(variable.getNameAsString(), v);
+                setupPrimitiveOrBoxedField(variable, t);
             }
             else {
                 CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
@@ -944,6 +945,44 @@ public class Evaluator {
         else {
             resolveNonClassFields(variable);
         }
+    }
+
+    private void setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = null;
+        Optional<Expression> init = variable.getInitializer();
+        if(init.isPresent()) {
+            v = evaluateExpression(init.get());
+            if (v == null && init.get().isNameExpr()) {
+                /*
+                 * This is probably a constant that is imported as static.
+                 */
+
+                NameExpr nameExpr = init.get().asNameExpr();
+                String name = nameExpr.getNameAsString();
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
+                for (ImportDeclaration importDeclaration : cu.getImports()) {
+                    Name importedName = importDeclaration.getName();
+                    String[] parts = importedName.toString().split("\\.");
+
+                    if (importedName.toString().equals(name)) {
+                        Evaluator eval = new Evaluator(importedName.toString());
+                        v = eval.getFields().get(name);
+                        break;
+                    }
+                    if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
+                        int last = importedName.toString().lastIndexOf(".");
+                        String cname = importedName.toString().substring(0, last);
+                        CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
+                        Evaluator eval = new Evaluator(cname);
+                        eval.setupFields(dep);
+                        v = eval.getFields().get(name);
+                        break;
+                    }
+                }
+            }
+            v.setType(t);
+        }
+        fields.put(variable.getNameAsString(), v);
     }
 
     private void resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {

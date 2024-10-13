@@ -266,7 +266,7 @@ public class AbstractCompiler {
      * @param className the name of the class to find
      * @return the type declaration or null if no match is found
      */
-    protected static TypeDeclaration<?> getMatchingClass(CompilationUnit cu, String className) {
+    public static TypeDeclaration<?> getMatchingClass(CompilationUnit cu, String className) {
         for (var type : cu.getTypes()) {
             if (type.getNameAsString().equals(className)) {
                 return type;
