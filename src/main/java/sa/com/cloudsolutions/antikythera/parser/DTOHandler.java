@@ -141,13 +141,12 @@ public class DTOHandler extends ClassProcessor {
 
                 // Remove all annotations except lombok.
                 cleanUpAnnotations(classDecl);
-                // remove constructos and all methods. We are adding the @Getter and @Setter
-                // annotations so no getters and setters are needed. All other annotations we will
-                // discard. They maybe required in the application under test but the tests don't
-                // need it themselves.
-
+                // Remove all the constructors for now, we may have to add them back later.
                 classDecl.getConstructors().forEach(Node::remove);
-                classDecl.getMethods().forEach(Node::remove);
+                // Remove all methods that are not getters or setters. These are DTOs they
+                // should not have any logic.
+                cleanUpMethods(classDecl);
+
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
 
@@ -176,6 +175,21 @@ public class DTOHandler extends ClassProcessor {
                 }
             }
         });
+    }
+
+    private void cleanUpMethods(ClassOrInterfaceDeclaration classDecl) {
+        Set<MethodDeclaration> keep = new HashSet<>();
+        for(MethodDeclaration md : classDecl.getMethods()) {
+            if (md.getNameAsString().startsWith("get") || md.getNameAsString().startsWith("set")) {
+                keep.add(md);
+            }
+        }
+        // for some reason clear throws an exception
+        classDecl.getMethods().forEach(Node::remove);
+        for(MethodDeclaration md : keep) {
+            classDecl.addMember(md);
+        }
+
     }
 
     /**
