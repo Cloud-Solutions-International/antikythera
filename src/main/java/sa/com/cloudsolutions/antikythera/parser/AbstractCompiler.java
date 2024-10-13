@@ -1,7 +1,12 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
@@ -280,4 +285,30 @@ public class AbstractCompiler {
         String[] parts = fullyQualifiedClassName.split(".");
         return getMatchingClass(cu, parts[parts.length - 1]);
     }
+
+    public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
+        return findMatchingConstructor(cu.findAll(ConstructorDeclaration.class), oce.getArguments());
+    }
+
+    private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
+        for (ConstructorDeclaration constructor : constructors) {
+            ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
+            if (resolvedConstructor.getNumberOfParams() == arguments.size()) {
+                boolean matched = true;
+                for (int i = 0; i < resolvedConstructor.getNumberOfParams(); i++) {
+                    ResolvedParameterDeclaration p = resolvedConstructor.getParam(i);
+                    ResolvedType argType = arguments.get(i).calculateResolvedType();
+                    if (!p.getType().describe().equals(argType.describe())) {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched) {
+                    return Optional.of(constructor);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
 }

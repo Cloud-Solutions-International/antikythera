@@ -217,7 +217,13 @@ public class Evaluator {
         } else if (expr.isCharLiteralExpr()) {
             return new Variable(expr.asCharLiteralExpr().getValue());
         } else if (expr.isLongLiteralExpr()) {
-            return new Variable(Long.parseLong(expr.asLongLiteralExpr().getValue()));
+            String value = expr.asLongLiteralExpr().getValue();
+            if (value.endsWith("L")) {
+                return new Variable(Long.parseLong(value.replaceFirst("L","")));
+            }
+            else {
+                return new Variable(Long.parseLong(value));
+            }
         } else if (expr.isNullLiteralExpr()) {
             return new Variable(null);
         }
@@ -322,22 +328,7 @@ public class Evaluator {
         if (vx == null) {
             vx = createUsingEvaluator(type, oce);
             if(vx == null) {
-                Object instance = null;
-                try {
-                    List<Expression> arguments = oce.getArguments();
-                    Object[] constructorArgs = new Object[arguments.size()];
-
-                    for (int i = 0; i < arguments.size(); i++) {
-                        Variable arg = evaluateExpression(arguments.get(i));
-                        constructorArgs[i] = arg.getValue();
-                    }
-
-                    // Create the dynamic DTO with the extracted arguments
-                    instance = DTOBuddy.createDynamicDTO(type, constructorArgs);
-                    vx = new Variable(type, instance);
-                } catch (Exception e) {
-                    logger.error("An error occurred in creating a variable with bytebuddy", e);
-                }
+                vx = createUsingByteBuddy(oce, type);
             }
         }
         if (decl != null) {
@@ -345,6 +336,28 @@ public class Evaluator {
         }
 
         return vx;
+    }
+
+    private Variable createUsingByteBuddy(ObjectCreationExpr oce, ClassOrInterfaceType type) {
+        if (Settings.getProperty("bytebuddy") != null) {
+
+            try {
+                List<Expression> arguments = oce.getArguments();
+                Object[] constructorArgs = new Object[arguments.size()];
+
+                for (int i = 0; i < arguments.size(); i++) {
+                    Variable arg = evaluateExpression(arguments.get(i));
+                    constructorArgs[i] = arg.getValue();
+                }
+
+                // Create the dynamic DTO with the extracted arguments
+                Object instance = DTOBuddy.createDynamicDTO(type, constructorArgs);
+                return new Variable(type, instance);
+            } catch (Exception e) {
+                logger.error("An error occurred in creating a variable with bytebuddy", e);
+            }
+        }
+        return null;
     }
 
     /**
@@ -366,30 +379,20 @@ public class Evaluator {
             if (constructors.isEmpty()) {
                 return new Variable(eval);
             }
-            for (ConstructorDeclaration constructor : constructors) {
-                ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
-                if (resolvedConstructor.getNumberOfParams() == oce.getArguments().size()) {
-                    boolean matched = true;
-                    for (int i = 0; i < resolvedConstructor.getNumberOfParams(); i++) {
-                        ResolvedParameterDeclaration p = resolvedConstructor.getParam(i);
-                        ResolvedType argType = oce.getArgument(i).calculateResolvedType();
-                        if (!p.getType().describe().equals(argType.describe())) {
-                            matched = false;
-                            break;
-                        }
-                    }
-                    if (matched) {
-                        for(int i = oce.getArguments().size() -1 ; i >= 0 ; i--) {
-                            AntikytheraRunTime.push(evaluateExpression(oce.getArguments().get(i)));
-                        }
-                        eval.executeConstructor(constructor);
-                        return new Variable(eval);
-                    }
+
+            Optional<ConstructorDeclaration> matchingConstructor = AbstractCompiler.findMatchingConstructor(cu, oce);
+            if (matchingConstructor.isPresent()) {
+                ConstructorDeclaration constructor = matchingConstructor.get();
+                for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+                    AntikytheraRunTime.push(evaluateExpression(oce.getArguments().get(i)));
                 }
+                eval.executeConstructor(constructor);
+                return new Variable(eval);
             }
         }
         return null;
     }
+
 
     /**
      * Create a new object using reflection.
@@ -969,7 +972,7 @@ public class Evaluator {
                         v = eval.getFields().get(name);
                         break;
                     }
-                    if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
+                    else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
@@ -981,6 +984,10 @@ public class Evaluator {
                 }
             }
             v.setType(t);
+        }
+        else
+        {
+            v = new Variable(null);
         }
         fields.put(variable.getNameAsString(), v);
     }

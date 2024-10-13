@@ -131,7 +131,9 @@ public class SpringEvaluator extends Evaluator {
                         }
                     }
                     else {
-                        Object o = DTOBuddy.createDynamicDTO(t.asClassOrInterfaceType());
+
+                        Evaluator o = new Evaluator(className);
+                        o.setupFields(AntikytheraRunTime.getCompilationUnit(className));
                         Variable v = new Variable(o);
                         AntikytheraRunTime.push(v);
                     }
