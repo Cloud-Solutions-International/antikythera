@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -17,9 +18,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.VoidType;
@@ -177,11 +176,49 @@ public class DTOHandler extends ClassProcessor {
         });
     }
 
+    /**
+     * Cleans up methods in the class declaration.
+     *    remove all methods that are not getters or setters.
+     *    clear out the body if a getter or setter has more than one line and replace it with a single line
+     *       that will either be an assignment or a return statement.
+     *    get rid of getters that take any sort of arguments.
+     *
+     * @param classDecl a Class or Interface that to be cleaned up (but obviously we are only interested in classes)
+     */
     private void cleanUpMethods(ClassOrInterfaceDeclaration classDecl) {
         Set<MethodDeclaration> keep = new HashSet<>();
         for(MethodDeclaration md : classDecl.getMethods()) {
-            if (md.getNameAsString().startsWith("get") || md.getNameAsString().startsWith("set")) {
+            String methodName = md.getNameAsString();
+            if (methodName.startsWith("get") || methodName.startsWith("set")) {
                 keep.add(md);
+
+                Optional<BlockStmt> body = md.getBody();
+                if(body.isPresent()) {
+                    NodeList<Statement> statements = body.get().getStatements();
+                    if(statements.size() > 1 || statements.get(0).isBlockStmt() || statements.get(0).isIfStmt()) {
+                        if (methodName.startsWith("get")) {
+                            if(md.getParameters().isEmpty()) {
+                                body.get().getStatements().clear();
+                                body.get().addStatement(new ReturnStmt(new NameExpr(methodName.replaceFirst("get", ""))));
+                            }
+                            else {
+                                keep.remove(md);
+                            }
+                        }
+                        else if (methodName.startsWith("set")) {
+                            body.get().getStatements().clear();
+                            if (!md.getParameters().isEmpty()) {
+                                String fieldName = classToInstanceName(methodName.replaceFirst("set", ""));
+                                Optional<FieldDeclaration> fd = classDecl.getFieldByName(fieldName);
+                                Parameter parameter = md.getParameters().get(0);
+                                if (fd.isPresent() && fd.get().getElementType().equals(parameter.getType())) {
+                                    body.get().addStatement(new AssignExpr(new NameExpr("this." + fieldName),
+                                            new NameExpr(parameter.getNameAsString()), AssignExpr.Operator.ASSIGN));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         // for some reason clear throws an exception
@@ -202,7 +239,8 @@ public class DTOHandler extends ClassProcessor {
         Set<AnnotationExpr> preserve = new HashSet<>();
         for (AnnotationExpr annotation : annotations) {
             String annotationName = annotation.getNameAsString();
-            if (annotationName.equals(STR_GETTER) || annotationName.equals("Setter") || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")) {
+            if (annotationName.equals(STR_GETTER) || annotationName.equals("Setter") || annotationName.equals("Data")
+                    || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")) {
                 preserve.add(annotation);
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotationName, false, false);
                 cu.addImport(importDeclaration);
