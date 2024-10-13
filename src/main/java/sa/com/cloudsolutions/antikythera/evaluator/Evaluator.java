@@ -6,8 +6,6 @@ import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
-import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -205,7 +203,7 @@ public class Evaluator {
         return null;
     }
 
-    private static Variable evaluateLiteral(Expression expr) {
+    private static Variable evaluateLiteral(Expression expr) throws EvaluatorException {
         if (expr.isBooleanLiteralExpr()) {
             return new Variable(expr.asBooleanLiteralExpr().getValue());
         } else if (expr.isDoubleLiteralExpr()) {
@@ -227,8 +225,7 @@ public class Evaluator {
         } else if (expr.isNullLiteralExpr()) {
             return new Variable(null);
         }
-        logger.warn("Unknown literal expression {}", expr);
-        return null;
+        throw new EvaluatorException("Unknown literal expression %s".formatted(expr));
     }
 
     private Variable evaluateAssignment(Expression expr) throws AntikytheraException, ReflectiveOperationException {
@@ -384,6 +381,9 @@ public class Evaluator {
             if (matchingConstructor.isPresent()) {
                 ConstructorDeclaration constructor = matchingConstructor.get();
                 for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+                    /*
+                     * Push method arguments
+                     */
                     AntikytheraRunTime.push(evaluateExpression(oce.getArguments().get(i)));
                 }
                 eval.executeConstructor(constructor);
@@ -585,10 +585,14 @@ public class Evaluator {
                     if (v != null) {
                         if (v.getValue() instanceof Evaluator eval) {
                             for (int i = reflectionArguments.getArgs().length - 1 ; i >= 0 ; i--) {
+                                /*
+                                 * Push method arguments
+                                 */
                                 AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
                             }
                             return eval.executeMethod(methodCall);
                         }
+
                         Class<?> clazz = v.getClazz();
                         String methodName = reflectionArguments.getMethodName();
                         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
@@ -597,7 +601,14 @@ public class Evaluator {
                         if (method != null) {
                             Variable result = new Variable(method.invoke(v.getValue(), args));
                             result.setClazz(clazz);
-                            AntikytheraRunTime.push(result);
+                            /*
+                             * check if the method returns a value, and push it into the stack so that
+                             * it can be popped off by the caller
+                             */
+                            if (method.getReturnType() != void.class) {
+                                AntikytheraRunTime.push(result);
+                            }
+
                             return result;
                         }
                         throw new EvaluatorException("Error evaluating method call: " + methodName);
@@ -605,7 +616,7 @@ public class Evaluator {
                 }
                 return handleRegularMethodCall(methodCall, scopeExpr, reflectionArguments);
             } catch (IllegalStateException e) {
-                return handleIllegalStateException(reflectionArguments, e);
+                return handleUnsolvableMethodCall(reflectionArguments, e);
             }
         }
         return executeMethod(methodCall);
@@ -619,22 +630,22 @@ public class Evaluator {
         return null;
     }
 
-    private Variable handleIllegalStateException(ReflectionArguments reflectionArguments, IllegalStateException e) throws EvaluatorException {
+    private Variable handleUnsolvableMethodCall(ReflectionArguments reflectionArguments, IllegalStateException e) throws EvaluatorException {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
         Object[] args = reflectionArguments.getArgs();
 
-        Class<?> clazz = returnValue.getValue().getClass();
+        Class<?> clazz = returnValue.getClazz();
         try {
 
             Method method = findMethod(clazz, methodName, paramTypes);
             if (method != null) {
                 Variable v = new Variable(method.invoke(returnValue.getValue(), args));
-                AntikytheraRunTime.push(v);
+                v.setClazz(method.getReturnType());
                 return v;
             }
             throw new EvaluatorException("Error evaluating method call: " + methodName, e);
-        } catch (Exception ex) {
+        } catch (ReflectiveOperationException ex) {
             throw new EvaluatorException("Error evaluating method call: " + methodName, e);
         }
     }
@@ -771,9 +782,8 @@ public class Evaluator {
             Method method = findMethod(clazz, methodName, paramTypes);
             if(method != null) {
                 if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                    Variable v = new Variable(method.invoke(null, args));
-                    AntikytheraRunTime.push(v);
-                    return v;
+                    return new Variable(method.invoke(null, args));
+
                 } else {
                     /*
                      * Some methods take an Object[] as the only argument and that will match against our
@@ -783,9 +793,7 @@ public class Evaluator {
                     if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Object[].class)) {
                         finalArgs = new Object[]{args};
                     }
-                    Variable v = new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), finalArgs));
-                    AntikytheraRunTime.push(v);
-                    return v;
+                    return  new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), finalArgs));
                 }
             }
             throw new EvaluatorException(String.format("Method %s not found ", methodName));
@@ -987,7 +995,7 @@ public class Evaluator {
         }
         else
         {
-            v = new Variable(null);
+            v = new Variable(t, null);
         }
         fields.put(variable.getNameAsString(), v);
     }
@@ -1060,11 +1068,7 @@ public class Evaluator {
 
         executeBlock(statements);
 
-        if (!AntikytheraRunTime.isEmptyStack()) {
-            return AntikytheraRunTime.pop();
-
-        }
-        return null;
+        return returnValue;
     }
 
     public void executeConstructor(ConstructorDeclaration md) throws AntikytheraException, ReflectiveOperationException {
@@ -1196,7 +1200,7 @@ public class Evaluator {
         }
     }
 
-    void evaluateReturnStatement(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
+    Variable evaluateReturnStatement(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
         Optional<Expression> expr = stmt.asReturnStmt().getExpression();
         if(expr.isPresent()) {
             returnValue = evaluateExpression(expr.get());
@@ -1204,7 +1208,7 @@ public class Evaluator {
         else {
             returnValue = null;
         }
-        AntikytheraRunTime.push(returnValue);
+        return returnValue;
     }
 
     public void setupFields(CompilationUnit cu)  {

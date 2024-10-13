@@ -33,8 +33,8 @@ class TestSpringEvaluator {
         CompilationUnit cu = cp.getCompilationUnit();
         SpringEvaluator eval = new SpringEvaluator("sa.com.cloudsolutions.controller.SimpleController");
 
+        eval.executeMethod(cu.findFirst(MethodDeclaration.class).get());
+        assertNotNull(eval.returnValue);
 
-        Variable v = eval.executeMethod(cu.findFirst(MethodDeclaration.class).get());
-        assertNotNull(v);
     }
 }

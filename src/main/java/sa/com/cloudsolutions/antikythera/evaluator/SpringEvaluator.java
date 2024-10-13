@@ -112,6 +112,9 @@ public class SpringEvaluator extends Evaluator {
                          */
                         if (t.asClassOrInterfaceType().isBoxedType()) {
                             Variable v = mockParameter(param.getTypeAsString());
+                            /*
+                             * We need to push this variable to the stack so that it can be used later.
+                             */
                             AntikytheraRunTime.push(v);
                         }
                         else {
@@ -121,11 +124,17 @@ public class SpringEvaluator extends Evaluator {
                                     case "java.util.Map" -> new HashMap<>();
                                     default -> null;
                                 });
+                                /*
+                                 * Pushed to be popped later in the callee
+                                 */
                                 AntikytheraRunTime.push(v);
                             }
                             else {
                                 Class<?> clazz = Class.forName(className);
                                 Variable v = new Variable(clazz.newInstance());
+                                /*
+                                 * PUsh arguments
+                                 */
                                 AntikytheraRunTime.push(v);
                             }
                         }
@@ -135,6 +144,9 @@ public class SpringEvaluator extends Evaluator {
                         Evaluator o = new Evaluator(className);
                         o.setupFields(AntikytheraRunTime.getCompilationUnit(className));
                         Variable v = new Variable(o);
+                        /*
+                         * Args to be popped by the callee
+                         */
                         AntikytheraRunTime.push(v);
                     }
                 } else {
@@ -143,7 +155,8 @@ public class SpringEvaluator extends Evaluator {
             }
             else {
                 /*
-                 * Request parameters are typically strings or numbers.
+                 * Request parameters are typically strings or numbers and these are pushed into the stack
+                 * to be popped in the callee
                  */
                 Variable v = mockParameter(param.getTypeAsString());
                 AntikytheraRunTime.push(v);
@@ -301,7 +314,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    void evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
+    Variable evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
         /*
          * Leg work is done in the overloaded method.
          */
@@ -323,10 +336,11 @@ public class SpringEvaluator extends Evaluator {
                 }
                 Variable v = new Variable(response);
                 AntikytheraRunTime.push(v);
-                return;
+                return v;
             }
         }
         super.evaluateReturnStatement(stmt);
+        return null;
     }
 
     private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) throws AntikytheraException, ReflectiveOperationException {
