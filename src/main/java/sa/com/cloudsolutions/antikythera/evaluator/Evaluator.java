@@ -1137,7 +1137,7 @@ public class Evaluator {
                 }
             }
         } else if (stmt.isReturnStmt()) {
-            evaluateReturnStatement(stmt);
+            returnValue = evaluateReturnStatement(stmt);
         } else if (stmt.isForStmt() || stmt.isForEachStmt() || stmt.isDoStmt() || stmt.isSwitchStmt() || stmt.isWhileStmt()) {
             logger.warn("Some block statements are not being handled at the moment");
         } else if (stmt.isBlockStmt()) {
