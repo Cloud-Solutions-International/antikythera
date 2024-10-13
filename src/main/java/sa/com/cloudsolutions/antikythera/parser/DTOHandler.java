@@ -274,12 +274,13 @@ public class DTOHandler extends ClassProcessor {
                 // handle custom getters and setters
 
                 String fieldName = firstVariable.getNameAsString();
-                String className = getPublicClass(cu).getNameAsString();
+                TypeDeclaration<?> cdecl = getPublicClass(cu);
+                String className = cdecl.getNameAsString();
                 Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
                 if(!methodNames.isEmpty()){
                     String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
-                    String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
+                    String setterName = methodNames.getOrDefault("setter", findNameOfSetter(fieldName, cdecl));
 
                     // Use custom getter and setter names
                     generateGetter(field, getterName);
@@ -362,12 +363,13 @@ public class DTOHandler extends ClassProcessor {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
             String instance = classToInstanceName(cdecl);
             String fieldName = field.getVariables().get(0).getNameAsString();
-            MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
+            String sn = findNameOfSetter(fieldName, cdecl);
+            MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), sn);
             String type = field.getElementType().isClassOrInterfaceType()
                     ? field.getElementType().asClassOrInterfaceType().getNameAsString()
                     : field.getElementType().asString();
 
-            String className = AbstractCompiler.getPublicClass(cu).getNameAsString();
+            String className = cdecl.getFullyQualifiedName().get();
             Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
             String argument = switch (type) {
@@ -377,7 +379,8 @@ public class DTOHandler extends ClassProcessor {
                         setter = new MethodCallExpr(new NameExpr(instance), setterName);
                     }
                     if (fieldName.startsWith("is") && methodNames.isEmpty()) {
-                        setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName.replaceFirst("is", "")));
+                        setter = new MethodCallExpr(new NameExpr(instance),
+                                findNameOfSetter(fieldName.replaceFirst("is", ""), cdecl));
                     }
                     yield isArray ? "new boolean[] {true, false}" : "true";
                 }
@@ -420,6 +423,22 @@ public class DTOHandler extends ClassProcessor {
             }
         }
         return null;
+    }
+
+    /**
+     * Given the field name and the class declaration find the name of the setter.
+     * People don't apparently always use java beans naming conventions. So we can't blindly use
+     * the name of the field to find the setter. That's why we can't rely on lombok either.
+     * @param fieldName
+     * @param cdecl
+     * @return
+     */
+    private static String findNameOfSetter(String fieldName, TypeDeclaration cdecl) {
+        String name = "set" + fieldName;
+        if (cdecl.getMethodsByName(name).isEmpty()) {
+            name = "set" + capitalize(fieldName);
+        }
+        return name;
     }
 
     public static void main(String[] args) throws IOException{
