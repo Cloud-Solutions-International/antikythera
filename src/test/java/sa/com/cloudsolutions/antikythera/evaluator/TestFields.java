@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestFields extends TestHelper {
@@ -45,6 +46,15 @@ class TestFields extends TestHelper {
         assertEquals("Hornblower\nnull\nColombo\n", outContent.toString() );
     }
 
+    @Test
+    void testChains() throws AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("chained")).orElseThrow();
+        Variable v = evaluator.executeMethod(ts);
+        assertNull(v.getValue());
+        assertEquals("false\n", outContent.toString() );
+
+    }
     class TestFieldsCompiler extends ClassProcessor {
         protected TestFieldsCompiler() throws IOException, AntikytheraException {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));

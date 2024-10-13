@@ -3,9 +3,11 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
+import groovy.util.Eval;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -557,69 +559,92 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        Optional<Expression> methodScope = methodCall.getScope();
+        LinkedList<Expression> chain = new LinkedList<>();
+        Expression expr = methodCall;
+        Variable variable = null;
 
-        if (methodScope.isPresent()) {
-            Expression scopeExpr = methodScope.get();
-            // todo fix this hack
-            if (scopeExpr.toString().equals("logger")) {
-                return null;
+        while (methodCall.getScope().isPresent()) {
+            if (expr.isMethodCallExpr()) {
+                MethodCallExpr mce = expr.asMethodCallExpr();
+                chain.addLast(mce.getScope().get());
+                expr = mce.getScope().get();
             }
-            if (scopeExpr.isMethodCallExpr()) {
-                returnValue = evaluateMethodCall(scopeExpr.asMethodCallExpr());
-                MethodCallExpr chained = methodCall.clone();
-                chained.setScope(new NameExpr(returnValue.getValue().toString()));
-                returnValue = evaluateMethodCall(chained);
+            else if (expr.isFieldAccessExpr()) {
+                FieldAccessExpr mce = expr.asFieldAccessExpr();
+                chain.addLast(mce.getScope());
+                expr = mce.getScope();
             }
-            else if (scopeExpr.isLiteralExpr()) {
-                returnValue = evaluateLiteral(scopeExpr.asLiteralExpr());
-            }
-            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
-            try {
-                if (scopeExpr.isFieldAccessExpr() && scopeExpr.asFieldAccessExpr().getScope().toString().equals("System")) {
-                    handleSystemOutMethodCall(reflectionArguments);
-                    return null;
-                } else if(scopeExpr.isNameExpr()) {
-                    Variable v = getValue(methodCall, scopeExpr.toString());
-                    if (v != null) {
-                        if (v.getValue() instanceof Evaluator eval) {
-                            for (int i = reflectionArguments.getArgs().length - 1 ; i >= 0 ; i--) {
-                                /*
-                                 * Push method arguments
-                                 */
-                                AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
-                            }
-                            return eval.executeMethod(methodCall);
-                        }
-
-                        Class<?> clazz = v.getClazz();
-                        String methodName = reflectionArguments.getMethodName();
-                        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
-                        Object[] args = reflectionArguments.getArgs();
-                        Method method = findMethod(clazz, methodName, paramTypes);
-                        if (method != null) {
-                            Variable result = new Variable(method.invoke(v.getValue(), args));
-                            result.setClazz(clazz);
-                            /*
-                             * check if the method returns a value, and push it into the stack so that
-                             * it can be popped off by the caller
-                             */
-                            if (method.getReturnType() != void.class) {
-                                AntikytheraRunTime.push(result);
-                            }
-
-                            return result;
-                        }
-                        throw new EvaluatorException("Error evaluating method call: " + methodName);
-                    }
-                }
-                return handleRegularMethodCall(methodCall, scopeExpr, reflectionArguments);
-            } catch (IllegalStateException e) {
-                return handleUnsolvableMethodCall(reflectionArguments, e);
+            else {
+                break;
             }
         }
-        return executeMethod(methodCall);
+
+        while(!chain.isEmpty()) {
+            expr = chain.pollLast();
+            if (expr.isNameExpr()) {
+                if(expr.asNameExpr().getNameAsString().equals("System")) {
+                    variable = new Variable(System.class);
+                    variable.setClazz(System.class);
+                }
+                else {
+                    variable = getValue(expr, expr.asNameExpr().getNameAsString());
+                }
+            }
+            else if(expr.isFieldAccessExpr()) {
+                /*
+                 * When we get here the getValue should have returned to us a valid field. That means
+                 * we will have an evaluator instance as the 'value' in the variable v
+                 */
+                if (variable.getClazz().equals(System.class)) {
+                    Field field = System.class.getField(expr.asFieldAccessExpr().getNameAsString());
+                    variable = new Variable(field.get(null));
+                }
+                else {
+                    Evaluator eval = (Evaluator) variable.getValue();
+                    variable = eval.getValue(expr, expr.asFieldAccessExpr().getNameAsString());
+                }
+            }
+            else if(expr.isMethodCallExpr()) {
+                variable = evaluateMethodCall(variable, expr.asMethodCallExpr());
+            }
+            else if (expr.isLiteralExpr()) {
+                variable = evaluateLiteral(expr);
+            }
+        }
+        variable = evaluateMethodCall(variable, methodCall);
+        return variable;
+    }
+
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        try {
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+
+            if (v != null) {
+                if (v.getValue() instanceof Evaluator eval) {
+                    for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
+                        /*
+                         * Push method arguments
+                         */
+                        AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
+                    }
+                    return eval.executeMethod(methodCall);
+                }
+
+                Class<?> clazz = v.getClazz();
+                String methodName = reflectionArguments.getMethodName();
+                Class<?>[] paramTypes = reflectionArguments.getParamTypes();
+                Object[] args = reflectionArguments.getArgs();
+                Method method = findMethod(clazz, methodName, paramTypes);
+                if (method != null) {
+                    returnValue = new Variable(method.invoke(v.getValue(), args));
+                    return returnValue;
+                }
+                throw new EvaluatorException("Error evaluating method call: " + methodName);
+            }
+        } catch (Exception ex) {
+            throw new EvaluatorException("Error evaluating method call", ex);
+        }
+        return null;
     }
 
     private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
@@ -677,6 +702,9 @@ public class Evaluator {
                 }
                 boolean found = true;
                 for(int i = 0 ; i < paramTypes.length ; i++) {
+                    if (types[i].isAssignableFrom(paramTypes[i])) {
+                        continue;
+                    }
                     if (types[i].equals(paramTypes[i])) {
                         continue;
                     }

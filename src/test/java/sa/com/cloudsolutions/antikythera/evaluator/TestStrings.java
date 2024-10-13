@@ -42,6 +42,15 @@ class TestStrings extends TestHelper{
     }
 
     @Test
+    void testLongChain() throws AntikytheraException, ReflectiveOperationException {
+        MethodDeclaration helloWorld = compiler.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("longChain")).orElseThrow();
+        evaluator.setScope("helloWorld");
+        evaluator.executeMethod(helloWorld);
+
+        assertTrue(outContent.toString().contains("his is a field"));
+    }
+    @Test
     void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloName = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();

@@ -16,6 +16,10 @@ public class Employee {
         System.out.println(p.getAddress());
     }
 
+    public void chained() {
+        System.out.println(p.name.toUpperCase().contains("horn"));
+    }
+
     @Override
     public String toString() {
         return "Patient id = %d , Name = %s".formatted(id, p.getName());

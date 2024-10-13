@@ -2,7 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 public class Person {
     private int id;
-    private String name;
+    String name;
     private String address;
     private String phone;
     private String email;
