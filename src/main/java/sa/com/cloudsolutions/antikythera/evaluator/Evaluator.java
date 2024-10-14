@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Deque;
 import java.util.HashMap;
@@ -615,11 +616,11 @@ public class Evaluator {
         return variable;
     }
 
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException {
         try {
-            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
             if (v != null) {
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+
                 if (v.getValue() instanceof Evaluator eval) {
                     for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
                         /*
@@ -630,21 +631,31 @@ public class Evaluator {
                     return eval.executeMethod(methodCall);
                 }
 
-                Class<?> clazz = v.getClazz();
-                String methodName = reflectionArguments.getMethodName();
-                Class<?>[] paramTypes = reflectionArguments.getParamTypes();
-                Object[] args = reflectionArguments.getArgs();
-                Method method = findMethod(clazz, methodName, paramTypes);
-                if (method != null) {
-                    returnValue = new Variable(method.invoke(v.getValue(), args));
-                    return returnValue;
-                }
-                throw new EvaluatorException("Error evaluating method call: " + methodName);
+                return reflectiveMethodCall(v, reflectionArguments);
+            } else {
+                return executeMethod(methodCall);
             }
-        } catch (Exception ex) {
+        } catch (ReflectiveOperationException ex) {
             throw new EvaluatorException("Error evaluating method call", ex);
         }
-        return null;
+    }
+
+    private Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException, EvaluatorException {
+        Class<?> clazz = v.getClazz();
+        String methodName = reflectionArguments.getMethodName();
+        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
+        Object[] args = reflectionArguments.getArgs();
+        Method method = findMethod(clazz, methodName, paramTypes);
+        if (method != null) {
+            Object[] finalArgs = args;
+            if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Object[].class)) {
+                finalArgs = new Object[]{args};
+            }
+
+            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            return returnValue;
+        }
+        throw new EvaluatorException("Error evaluating method call: " + methodName);
     }
 
     private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
@@ -767,23 +778,6 @@ public class Evaluator {
         return null;
     }
 
-    /**
-     * Simulates a System.out method call
-     * @param reflectionArguments the set of arguments to use
-     * @throws ReflectiveOperationException if the operation cannot be carried out with reflection
-     */
-    private void handleSystemOutMethodCall(ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
-        Object[] args = reflectionArguments.getArgs();
-        Class<?> systemClass = Class.forName("java.lang.System");
-        Field outField = systemClass.getField("out");
-        Class<?> printStreamClass = outField.getType();
-        for (int i = 0; i < args.length; i++) {
-            paramTypes[i] = Object.class;
-        }
-        Method printlnMethod = printStreamClass.getMethod("println", paramTypes);
-        printlnMethod.invoke(outField.get(null), args);
-    }
 
     static Class<?> getClass(String className) {
         try {
