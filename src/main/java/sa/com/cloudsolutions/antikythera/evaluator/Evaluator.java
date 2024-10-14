@@ -568,8 +568,12 @@ public class Evaluator {
         while (true) {
             if (expr.isMethodCallExpr()) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
-                chain.addLast(mce.getScope().get());
-                expr = mce.getScope().get();
+                Optional<Expression> scopeD = mce.getScope();
+                if (scopeD.isEmpty()) {
+                    break;
+                }
+                chain.addLast(scopeD.get());
+                expr = scopeD.get();
             }
             else if (expr.isFieldAccessExpr()) {
                 FieldAccessExpr mce = expr.asFieldAccessExpr();
