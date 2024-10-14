@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.google.errorprone.annotations.Var;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -496,15 +497,16 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, ReflectionArguments ref)
+    Variable handleRegularMethodCall(MethodCallExpr methodCall, Variable scopedExpression)
             throws AntikytheraException, ReflectiveOperationException {
-        if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
-                && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
-            return null;
-        }
-        else{
-            return super.handleRegularMethodCall(methodCall, scopeExpr, ref);
-        }
+//        if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
+//                && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
+//            return null;
+//        }
+//        else{
+//            return super.handleRegularMethodCall(methodCall, null);
+//        }
+        return null;
     }
 
 

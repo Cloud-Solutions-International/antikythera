@@ -7,6 +7,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
+import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
 import groovy.util.Eval;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -564,7 +565,7 @@ public class Evaluator {
         Expression expr = methodCall;
         Variable variable = null;
 
-        while (methodCall.getScope().isPresent()) {
+        while (true) {
             if (expr.isMethodCallExpr()) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
                 chain.addLast(mce.getScope().get());
@@ -583,13 +584,7 @@ public class Evaluator {
         while(!chain.isEmpty()) {
             expr = chain.pollLast();
             if (expr.isNameExpr()) {
-                if(expr.asNameExpr().getNameAsString().equals("System")) {
-                    variable = new Variable(System.class);
-                    variable.setClazz(System.class);
-                }
-                else {
-                    variable = getValue(expr, expr.asNameExpr().getNameAsString());
-                }
+                variable = resolveExpression(expr.asNameExpr());
             }
             else if(expr.isFieldAccessExpr()) {
                 /*
@@ -614,6 +609,40 @@ public class Evaluator {
         }
         variable = evaluateMethodCall(variable, methodCall);
         return variable;
+    }
+
+    private Variable resolveExpression(NameExpr expr) {
+        if(expr.getNameAsString().equals("System")) {
+            Variable variable = new Variable(System.class);
+            variable.setClazz(System.class);
+            return variable;
+        }
+        else {
+            Variable v = getValue(expr, expr.asNameExpr().getNameAsString());
+            if (v == null) {
+                /*
+                 * We know that we don't have a matching local variable or field. That indicates the
+                 * presence of an import, or this is part of java.lang package
+                 */
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
+                ImportDeclaration imp = AbstractCompiler.findImport(cu, expr.getNameAsString());
+                String fullyQualifiedName;
+                if (imp == null) {
+                    /*
+                     * Guessing this to be java.lang
+                     */
+                    fullyQualifiedName = "java.lang." + expr.getNameAsString();
+                }
+                else {
+                    fullyQualifiedName = imp.getNameAsString();
+                }
+                Class<?> clazz = getClass(fullyQualifiedName);
+                v = new Variable(clazz);
+                v.setClazz(clazz);
+            }
+
+            return v;
+        }
     }
 
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException {
@@ -703,6 +732,7 @@ public class Evaluator {
 
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
+            logger.info(m.getName());
             if (m.getName().equals(methodName)) {
                 Class<?>[] types = m.getParameterTypes();
                 if(types.length == 1 && types[0].equals(Object[].class)) {
@@ -788,12 +818,12 @@ public class Evaluator {
         return null;
     }
 
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Expression scopeExpr, ReflectionArguments reflectionArguments)
+    Variable handleRegularMethodCall(MethodCallExpr methodCall, Variable scopedVariable)
             throws AntikytheraException, ReflectiveOperationException {
         ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
         ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
+        ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
 
-        Variable scopedVariable = getValue(methodCall, scopeExpr.toString());
 
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
@@ -815,35 +845,26 @@ public class Evaluator {
                     if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Object[].class)) {
                         finalArgs = new Object[]{args};
                     }
-                    return  new Variable(method.invoke(evaluateExpression(scopeExpr).getValue(), finalArgs));
+                    return  new Variable(method.invoke(scopedVariable.getValue(), finalArgs));
                 }
             }
             throw new EvaluatorException(String.format("Method %s not found ", methodName));
         } else {
-            if (scopeExpr.toString().equals(this.scope)) {
-                Optional<Node> method = resolvedMethod.toAst();
-                if (method.isPresent()) {
-                    executeMethod((MethodDeclaration) method.get());
-                    return returnValue;
-                }
-            } else {
-                Variable v = evaluateExpression(scopeExpr);
 
                 if (declaringType.getQualifiedName().equals("java.util.List") || declaringType.getQualifiedName().equals("java.util.Map")) {
                     for (int i = 0; i < args.length; i++) {
                         paramTypes[i] = Object.class;
                     }
                 }
-                Method method = findMethod(v.getValue().getClass(), methodName, paramTypes);
+                Method method = findMethod(scopedVariable.getValue().getClass(), methodName, paramTypes);
                 if(method != null) {
-                    Variable response = new Variable(method.invoke(v.getValue(), args));
+                    Variable response = new Variable(method.invoke(scopedVariable.getValue(), args));
                     response.setClazz(method.getReturnType());
                     return response;
                 }
                 throw new EvaluatorException(String.format("Method %s not found ", methodName));
-            }
+
         }
-        return null;
     }
 
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator,

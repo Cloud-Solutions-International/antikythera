@@ -416,7 +416,8 @@ public class ClassProcessor extends AbstractCompiler {
 
     /**
      * Asterisk imports are tricky.
-     * We have so much code for resolving them. That's why you don't want to use them in your code.
+     * We have so much code for resolving them. Please make life easier for compiler writes
+     * don't want to use them in your code.
      * Checks all the classes under the package to find if there is a match. Sometimes what we
      * think to be a package is not really a package but a class and the import happens to be a
      * static import.

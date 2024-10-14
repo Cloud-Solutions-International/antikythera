@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -311,4 +312,16 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    public static ImportDeclaration findImport(CompilationUnit cu, String className) {
+        for (ImportDeclaration imp : cu.getImports()) {
+            if (imp.getNameAsString().equals(className)) {
+                return imp;
+            }
+            String[] parts = imp.getNameAsString().split(".");
+            if (imp.getNameAsString().equals(parts[parts.length - 1])) {
+                return imp;
+            }
+        }
+        return null;
+    }
 }
