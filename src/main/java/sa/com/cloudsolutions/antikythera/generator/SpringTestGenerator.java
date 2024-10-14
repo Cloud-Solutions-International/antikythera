@@ -189,12 +189,12 @@ public class SpringTestGenerator implements  TestGenerator {
                             Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
                             Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
                             if (requestParam.isPresent()) {
-                                String name = AbstractCompiler.getParamName(p);
+                                String name = AbstractCompiler.getRestParameterName(p);
                                 if (name.equals(arg.getArgument().toString())) {
                                     request.getQueryParameters().put(name, rs.getObject(col).toString());
                                 }
                             } else if (pathParam.isPresent()) {
-                                String name = AbstractCompiler.getParamName(p);
+                                String name = AbstractCompiler.getRestParameterName(p);
                                 final String target = '{' + name + '}';
                                 if (name.equals(arg.getArgument().toString())) {
                                     request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
@@ -456,7 +456,7 @@ public class SpringTestGenerator implements  TestGenerator {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
 
-            String paramName = AbstractCompiler.getParamName(param);
+            String paramName = AbstractCompiler.getRestParameterName(param);
             if (paramString.startsWith("@RequestParam")) {
                 if (!request.getQueryParameters().containsKey(paramName)) {
                     request.addQueryParameter(paramName, switch (param.getTypeAsString()) {

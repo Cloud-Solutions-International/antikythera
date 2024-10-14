@@ -20,17 +20,36 @@ public class Variable {
      * It maybe null and that maybe intentional because the variable is supposed to be null.
      */
     private Object value;
+
+    /**
+     * True if this represents a primitive type as the value
+     */
     private boolean primitive;
 
+    /**
+     * Create an object having the given value and java parser type.
+     * @param type the identified java parser type
+     * @param value the value to hole
+     */
     public Variable (Type type, Object value) {
-        setValue(value);
         setType(type);
+        setValue(value);
     }
 
+    /**
+     * Creates an instance with null as the value and of the given java parser type.
+     * @param type the identified java parser type.
+     */
     public Variable(Type type) {
         this.type = type;
     }
 
+    /**
+     * Create an instance with the given value.
+     *
+     * if the value is not null, it's class will be detected and saved in the class field.
+     * @param value
+     */
     public Variable(Object value) {
         this.value = value;
         if (value != null) {
@@ -55,6 +74,22 @@ public class Variable {
 
     public void setType(Type type) {
         this.type = type;
+        if (this.clazz == null) {
+            this.clazz = switch (type.asString()) {
+                case "String" -> String.class;
+                case "Double" -> Double.class;
+                case "Integer" -> Integer.class;
+                case "Boolean" -> Boolean.class;
+                case "Long" -> Long.class;
+                case "Float" -> Float.class;
+                case "Short" -> Short.class;
+                case "Byte" -> Byte.class;
+                case "Character" -> Character.class;
+                default -> {
+                    yield null;
+                }
+            };
+        }
     }
 
     public boolean isPrimitive() {
@@ -69,8 +104,8 @@ public class Variable {
         return value == null ? "null" : value.toString();
     }
 
-    public Class getClazz() {
-        return clazz;
+    public Class<?> getClazz() {
+        return clazz == null && value != null ? value.getClass() : clazz;
     }
 
     public void setClazz(Class clazz) {

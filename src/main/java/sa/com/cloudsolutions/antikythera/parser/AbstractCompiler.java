@@ -1,9 +1,15 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -45,26 +51,14 @@ public class AbstractCompiler {
      * means we have List and StringUtils.
      *
      * A relative path is a path that's relative to the base path of the project.
-     *
-     * Many of the fields are static, naturally indicating that they should be shared
-     * amongst all instances of the class. Others like the ComppilationUnit property
+     */
+    /*
+     * Many of the fields in this class are static, naturally indicating that they should be shared
+     * amongst all instances of the class. Others like the CompilationUnit property
      * are specific to each instance.
      */
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
-
-    /**
-     * The base package for the AUT.
-     * It helps to identify if a class we are looking at is something we should
-     * try to compile or not.
-     */
-    protected static String basePackage;
-    /**
-     * the top level folder for the AUT source code.
-     * If there is a java class without a package it should be in this folder.
-     */
-    protected static String basePath;
-
     public static final String SUFFIX = ".java";
 
     private final JavaParser javaParser;
@@ -75,13 +69,9 @@ public class AbstractCompiler {
     protected CompilationUnit cu;
 
     protected AbstractCompiler() throws IOException {
-        if(basePackage == null || basePath == null) {
-            basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-            basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-        }
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+        combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
 
         jarSolvers = new ArrayList<>();
         for(String jarFile : Settings.getJarFiles()) {
@@ -148,7 +138,7 @@ public class AbstractCompiler {
         }
 
         logger.debug("\t{}", relativePath);
-        Path sourcePath = Paths.get(basePath, relativePath);
+        Path sourcePath = Paths.get(Settings.getBasePath(), relativePath);
 
         File file = sourcePath.toFile();
 
@@ -186,7 +176,12 @@ public class AbstractCompiler {
         return fields;
     }
 
-    public static String getParamName(Parameter param) {
+    /**
+     * Get the name of the parameter for a rest controller
+     * @param param the parameter
+     * @return the name of the parameter
+     */
+    public static String getRestParameterName(Parameter param) {
         String paramString = String.valueOf(param);
         if(paramString.startsWith("@PathVariable")) {
             Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
@@ -206,6 +201,13 @@ public class AbstractCompiler {
         return param.getNameAsString();
     }
 
+    /**
+     * Alternative approach to resolving a class in Java Parser without having to catch exception
+     *
+     * In other words we are catching it here and giving you null
+     * @param node the node to resolve
+     * @return an optional of the resolved type
+     */
     public static Optional<ResolvedType> resolveTypeSafely(ClassOrInterfaceType node) {
         Optional<CompilationUnit> compilationUnit = node.findCompilationUnit();
         if (compilationUnit.isPresent()) {
@@ -220,7 +222,7 @@ public class AbstractCompiler {
     }
 
     public static String absolutePathToClassName(String abs) {
-        abs = abs.replace(basePath, "");
+        abs = abs.replace(Settings.getBasePath(), "");
         if(abs.startsWith("/")) {
             abs = abs.substring(1);
         }
@@ -246,5 +248,80 @@ public class AbstractCompiler {
 
     protected JavaParser getJavaParser() {
         return javaParser;
+    }
+
+    /**
+     * Get the public class in a compilation unit
+     * @param cu the compilation unit
+     * @return the public class
+     */
+    protected static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
+        for (var type : cu.getTypes()) {
+            if (type.isClassOrInterfaceDeclaration()) {
+                if (type.asClassOrInterfaceDeclaration().isPublic()) {
+                    return type;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the class inside the compilation unit that matches the class name
+     * @param cu compilation unit
+     * @param className the name of the class to find
+     * @return the type declaration or null if no match is found
+     */
+    public static TypeDeclaration<?> getMatchingClass(CompilationUnit cu, String className) {
+        for (var type : cu.getTypes()) {
+            if (type.getNameAsString().equals(className)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    protected static TypeDeclaration<?> getMatchingClass(String fullyQualifiedClassName) {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedClassName);
+        String[] parts = fullyQualifiedClassName.split(".");
+        return getMatchingClass(cu, parts[parts.length - 1]);
+    }
+
+    public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
+        return findMatchingConstructor(cu.findAll(ConstructorDeclaration.class), oce.getArguments());
+    }
+
+    private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
+        for (ConstructorDeclaration constructor : constructors) {
+            ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
+            if (resolvedConstructor.getNumberOfParams() == arguments.size()) {
+                boolean matched = true;
+                for (int i = 0; i < resolvedConstructor.getNumberOfParams(); i++) {
+                    ResolvedParameterDeclaration p = resolvedConstructor.getParam(i);
+                    ResolvedType argType = arguments.get(i).calculateResolvedType();
+                    if (!p.getType().describe().equals(argType.describe())) {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched) {
+                    return Optional.of(constructor);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public static ImportDeclaration findImport(CompilationUnit cu, String className) {
+        for (ImportDeclaration imp : cu.getImports()) {
+            if (imp.getNameAsString().equals(className)) {
+                return imp;
+            }
+            String[] parts = imp.getNameAsString().split(".");
+            if (imp.getNameAsString().equals(parts[parts.length - 1])) {
+                return imp;
+            }
+        }
+        return null;
     }
 }

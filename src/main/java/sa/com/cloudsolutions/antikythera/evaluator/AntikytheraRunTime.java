@@ -23,6 +23,9 @@ public class AntikytheraRunTime {
      * We are not using a stack data structure here, but a Deque. This is because
      * Deque is a double-ended queue, which can be used as a stack. It is more
      * efficient than a Stack in java which is synchronized.
+     *
+     * WHile it's normal practice to also place the return value of a method call into the
+     * stack, we are not doing so in here.
      */
     protected static final Deque<Variable> stack = new LinkedList<>();
 

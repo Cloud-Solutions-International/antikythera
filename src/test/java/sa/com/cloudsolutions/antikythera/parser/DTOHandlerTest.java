@@ -64,7 +64,7 @@ class DTOHandlerTest {
     }
 
     @Test
-    void addLombokAddsAllAnnotationsForSmallClass() throws IOException {
+    void cleanUpAnnotationsAddsAllAnnotationsForSmallClass() throws IOException {
         NodeList<AnnotationExpr> annotations = new NodeList<>();
         // Create a temporary Java file with no fields
         Path tempFilePath = Files.createTempFile("TempClass", ".java");
@@ -91,48 +91,13 @@ class DTOHandlerTest {
             classDecl.addField("String", "field" + i);
         }
 
-        handler.addLombok(classDecl, annotations);
+        handler.cleanUpAnnotations(classDecl);
 
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("NoArgsConstructor")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("AllArgsConstructor")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
-    }
-
-    @Test
-    void addLombokAddsLimitedAnnotationsForLargeClass() throws IOException {
-        NodeList<AnnotationExpr> annotations = new NodeList<>();
-        // Create a temporary Java file with no fields
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        // Parse the temporary file
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        FileInputStream in = new FileInputStream(tempFilePath.toFile());
-        CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        handler.setCompilationUnit(cu);
-        ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow();
-
-        for (int i = 0; i < 256; i++) {
-            classDecl.addField("String", "field" + i);
-        }
-
-        handler.addLombok(classDecl, annotations);
-
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("NoArgsConstructor")));
+        // this class didn't have lomboks so they should not be there now
+        assertFalse(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
+        assertFalse(annotations.stream().anyMatch(a -> a.getNameAsString().equals("NoArgsConstructor")));
         assertFalse(annotations.stream().anyMatch(a -> a.getNameAsString().equals("AllArgsConstructor")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
+        assertFalse(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
     }
 
     @Test
@@ -160,17 +125,19 @@ class DTOHandlerTest {
         ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow();
         classDecl.addField("String", "field", Modifier.Keyword.STATIC, Modifier.Keyword.FINAL);
 
-        handler.addLombok(classDecl, annotations);
+        handler.cleanUpAnnotations(classDecl);
 
         assertTrue(annotations.isEmpty());
     }
 
     @Test
-    void addLombokAddsAnnotationsForNonStaticNonFinalFields() throws IOException {
-        NodeList<AnnotationExpr> annotations = new NodeList<>();
+    void cleanUpAnnotationsAddsAnnotationsForNonStaticNonFinalFields() throws IOException {
+
         // Create a temporary Java file with no fields
         Path tempFilePath = Files.createTempFile("TempClass", ".java");
         Files.write(tempFilePath, """
+            @Getter
+            @Setter
             public class TempClass {
             }
         """.getBytes());
@@ -190,11 +157,11 @@ class DTOHandlerTest {
         ClassOrInterfaceDeclaration classDecl = cu.getClassByName("TempClass").orElseThrow();
         classDecl.addField("String", "field");
 
-        handler.addLombok(classDecl, annotations);
-
+        handler.cleanUpAnnotations(classDecl);
+        NodeList<AnnotationExpr> annotations = cu.getType(0).getAnnotations();
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("NoArgsConstructor")));
-        assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("AllArgsConstructor")));
+        assertFalse(annotations.stream().anyMatch(a -> a.getNameAsString().equals("NoArgsConstructor")));
+        assertFalse(annotations.stream().anyMatch(a -> a.getNameAsString().equals("AllArgsConstructor")));
         assertTrue(annotations.stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
     }
 
@@ -577,22 +544,6 @@ class DTOHandlerTest {
 //            assertEquals(classProcessor.dependencies.size(), 1);
 //        }
 //    }
-
-    // -------------------- solveTypes -------------------- //
-    @Test
-    void solveTypesAddsLombokAnnotationsToClass() throws IOException {
-        handler.setCompilationUnit(StaticJavaParser.parse("public class TempClass {}"));
-
-        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration();
-        classDecl.setName("TempClass");
-        classDecl.addField("String", "field");
-
-        handler.cu.addType(classDecl);
-        handler.removeUnwanted();
-
-        assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Getter")));
-        assertTrue(classDecl.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Setter")));
-    }
 
     @Test
     void solveTypesRemovesConstructorsAndMethods() throws IOException {

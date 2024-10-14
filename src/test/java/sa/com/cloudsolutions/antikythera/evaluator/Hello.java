@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 public class Hello {
+    Integer field = 10;
+
     public void helloWorld() {
         System.out.println("Hello, Antikythera");
     }
@@ -14,8 +16,17 @@ public class Hello {
         System.out.println("Hello, " + upper);
     }
 
+    public void longChain() {
+        String a = field.toString().replace("10","This IS A FIELD").toUpperCase().toString().toLowerCase().substring(1);
+        System.out.println(a);
+    }
     public void helloChained(String name) {
         String a = name.toUpperCase().substring(1);
         System.out.println("Hello, " + a);
+    }
+
+    public static void main(String[] args) {
+        Hello hello = new Hello();
+        hello.longChain();
     }
 }

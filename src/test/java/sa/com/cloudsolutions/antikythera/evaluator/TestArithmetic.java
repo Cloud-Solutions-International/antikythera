@@ -22,6 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test that basic arithmetic works.
  */
 class TestArithmetic extends  TestHelper {
+    @BeforeAll
+    public static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+    }
 
     @BeforeEach
     public void each() throws IOException {
@@ -36,11 +40,10 @@ class TestArithmetic extends  TestHelper {
 
     class ArithmeticCompiler extends AbstractCompiler {
         protected ArithmeticCompiler() throws IOException {
-            File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Arithmetic.java");
-            cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator();
-            evaluator.setupFields(cu);
+            compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Arithmetic"));
 
+            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Arithmetic");
+            evaluator.setupFields(cu);
         }
     }
 

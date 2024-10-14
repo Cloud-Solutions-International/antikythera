@@ -20,8 +20,6 @@ public class MediumDTO {
     private String name;
     private String description;
 
-
-
     private Map<String, SimpleDTO> simpleMap;
     private Map<String, List<SimpleDTO>> mediumMap;
     private Map<String, Map<String, List<SimpleDTO>>> complexMap;

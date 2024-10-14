@@ -78,7 +78,7 @@ public class TestBunches  {
 
     class CollectionEvaluator extends AbstractCompiler {
         protected CollectionEvaluator() throws IOException, EvaluatorException {
-            evaluator = new Evaluator();
+            evaluator = new Evaluator("");
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Bunches.java");
             cu = getJavaParser().parse(file).getResult().get();
             evaluator.setupFields(cu);

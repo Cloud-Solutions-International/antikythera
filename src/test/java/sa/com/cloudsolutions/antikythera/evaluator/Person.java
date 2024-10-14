@@ -2,7 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 public class Person {
     private int id;
-    private String name;
+    String name;
     private String address;
     private String phone;
     private String email;
@@ -19,7 +19,15 @@ public class Person {
         this.email = email;
     }
 
-    public Object getName() {
+    public String getName() {
         return name;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public String getAddress() {
+        return address;
     }
 }

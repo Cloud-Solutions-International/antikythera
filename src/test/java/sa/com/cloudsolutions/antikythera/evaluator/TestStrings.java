@@ -42,6 +42,15 @@ class TestStrings extends TestHelper{
     }
 
     @Test
+    void testLongChain() throws AntikytheraException, ReflectiveOperationException {
+        MethodDeclaration helloWorld = compiler.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("longChain")).orElseThrow();
+        evaluator.setScope("helloWorld");
+        evaluator.executeMethod(helloWorld);
+
+        assertTrue(outContent.toString().contains("his is a field"));
+    }
+    @Test
     void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloName = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
@@ -68,7 +77,7 @@ class TestStrings extends TestHelper{
         protected HelloEvaluator() throws IOException, ReflectiveOperationException{
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Hello.java");
             cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator();
+            evaluator = new Evaluator("");
             evaluator.setupFields(cu);
         }
     }

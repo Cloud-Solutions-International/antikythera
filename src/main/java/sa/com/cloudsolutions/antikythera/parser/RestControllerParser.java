@@ -39,8 +39,6 @@ public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
     private final File controllers;
 
-    private final Path dataPath;
-
     /**
      * Maintain stats of the controllers and methods parsed
      */
@@ -64,7 +62,7 @@ public class RestControllerParser extends ClassProcessor {
         super();
         this.controllers = controllers;
 
-        dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
+        Path dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
@@ -78,6 +76,13 @@ public class RestControllerParser extends ClassProcessor {
         processControllers(controllers);
     }
 
+    /**
+     * Process the controllers in the given folder.
+     * If the path is a directory, it will process all the files in the directory.
+     * @param path the path in which to look for controllers
+     * @throws IOException if the file could not be read
+     * @throws EvaluatorException if the file could not be processed due to compilation related issues.
+     */
     private void processControllers(File path) throws IOException, EvaluatorException {
         current = path;
         if (path.isDirectory()) {
@@ -108,19 +113,21 @@ public class RestControllerParser extends ClassProcessor {
         if (cu.getPackageDeclaration().isPresent()) {
             processRestController(cu.getPackageDeclaration().get());
         }
-
     }
 
     private void processRestController(PackageDeclaration pd) throws IOException {
         expandWildCards(cu);
 
-        evaluator = new SpringEvaluator();
+        TypeDeclaration<?> type = getPublicClass(cu);
+
+        evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
+
         SpringTestGenerator generator = new SpringTestGenerator();
         evaluator.addGenerator(generator);
         generator.setCommonPath(getCommonPath());
 
         CompilationUnit gen = generator.getCompilationUnit();
-        ClassOrInterfaceDeclaration cdecl = gen.addClass(cu.getTypes().get(0).getName() + "Test");
+        ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getNameAsString() + "Test");
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
 
@@ -162,10 +169,10 @@ public class RestControllerParser extends ClassProcessor {
                     || AntikytheraRunTime.isControllerClass(name)
                     || AntikytheraRunTime.isComponentClass(name))) {
                 boolean found = false;
-                var deps = dependencies.get(cu.getTypes().get(0).getFullyQualifiedName().get());
+                var deps = dependencies.get(type.getFullyQualifiedName().get());
                 if(deps != null) {
-                    for (Dependency depdency : deps) {
-                        if (depdency.getTo().equals(name)) {
+                    for (Dependency dependency : deps) {
+                        if (dependency.getTo().equals(name)) {
                             found = true;
                             break;
                         }
@@ -178,7 +185,7 @@ public class RestControllerParser extends ClassProcessor {
         }
 
         ProjectGenerator.getInstance().writeFilesToTest(
-                pd.getName().asString(), cu.getTypes().get(0).getName() + "Test.java",
+                pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 
     }
@@ -204,6 +211,7 @@ public class RestControllerParser extends ClassProcessor {
 
             if (md.isPublic()) {
                 preConditions = new ArrayList<>();
+                evaluator.reset();
                 try {
                     evaluator.executeMethod(md);
                 } catch (AntikytheraException | ReflectiveOperationException e) {
@@ -333,7 +341,7 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path from the RequestMapping Annotation or an empty string
      */
     private String getCommonPath() {
-        for (var classAnnotation : cu.getTypes().get(0).getAnnotations()) {
+        for (var classAnnotation : getPublicClass(cu).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();

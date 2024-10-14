@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -17,9 +18,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.VoidType;
@@ -31,8 +30,10 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Recursively copy DTOs from the Application Under Test (AUT).
@@ -59,12 +60,17 @@ public class DTOHandler extends ClassProcessor {
         if (relativePath.contains("SearchParams")){
             return;
         }
-        parseDTO(relativePath);
+        parse(relativePath);
 
         copyDependencies();
     }
 
-    public void parseDTO(String relativePath) throws IOException {
+    /**
+     * Apply java parser on the class at the given path
+     * @param relativePath a relative path to a java file
+     * @throws IOException if the file could not be read.
+     */
+    public void parse(String relativePath) throws IOException {
         compile(relativePath);
         if (cu != null) {
             CompilationUnit tmp = cu;
@@ -104,7 +110,7 @@ public class DTOHandler extends ClassProcessor {
             }
 
             if (method != null) {
-                var variable = classToInstanceName(cu.getTypes().get(0));
+                var variable = classToInstanceName(getPublicClass(cu));
                 method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
             }
 
@@ -115,7 +121,11 @@ public class DTOHandler extends ClassProcessor {
                     || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
                 ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
             }
-
+            /*
+             * We roll back the changes that we made to the compilation unit here. But theres' one modification
+             * that we do keep. And that is the resolved imports. It makes things easier for the evaluator
+             */
+            tmp.setImports(cu.getImports());
             cu = tmp;
         }
     }
@@ -128,18 +138,14 @@ public class DTOHandler extends ClassProcessor {
             if(typeDeclaration.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration classDecl = typeDeclaration.asClassOrInterfaceDeclaration();
 
-                // remove all annotations. Later we will add some of them back.
-                NodeList<AnnotationExpr> annotations = classDecl.getAnnotations();
-                annotations.clear();
-                addLombok(classDecl, annotations);
-
-                // remove constructos and all methods. We are adding the @Getter and @Setter
-                // annotations so no getters and setters are needed. All other annotations we will
-                // discard. They maybe required in the application under test but the tests don't
-                // need it themselves.
-
+                // Remove all annotations except lombok.
+                cleanUpAnnotations(classDecl);
+                // Remove all the constructors for now, we may have to add them back later.
                 classDecl.getConstructors().forEach(Node::remove);
-                classDecl.getMethods().forEach(Node::remove);
+                // Remove all methods that are not getters or setters. These are DTOs they
+                // should not have any logic.
+                cleanUpMethods(classDecl);
+
                 // resolve the parent class
                 for (var parent : classDecl.getExtendedTypes()) {
 
@@ -171,27 +177,77 @@ public class DTOHandler extends ClassProcessor {
     }
 
     /**
-     * Add Lombok annotations to the class if it has any non static final fields
-     * @param classDecl the class to which we are going to add lombok annotations
-     * @param annotations the existing annotations (which will probably be empty)
+     * Cleans up methods in the class declaration.
+     *    remove all methods that are not getters or setters.
+     *    clear out the body if a getter or setter has more than one line and replace it with a single line
+     *       that will either be an assignment or a return statement.
+     *    get rid of getters that take any sort of arguments.
+     *
+     * @param classDecl a Class or Interface that to be cleaned up (but obviously we are only interested in classes)
      */
-    void addLombok(ClassOrInterfaceDeclaration classDecl, NodeList<AnnotationExpr> annotations) {
-        String[] annotationsToAdd;
-        if (classDecl.getFields().size() <= 255) {
-            annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "AllArgsConstructor", "Setter"};
-        } else {
-            annotationsToAdd = new String[]{STR_GETTER, "NoArgsConstructor", "Setter"};
-        }
+    private void cleanUpMethods(ClassOrInterfaceDeclaration classDecl) {
+        Set<MethodDeclaration> keep = new HashSet<>();
+        for(MethodDeclaration md : classDecl.getMethods()) {
+            String methodName = md.getNameAsString();
+            if (methodName.startsWith("get") || methodName.startsWith("set")) {
+                keep.add(md);
 
-        if (classDecl.getFields().stream().filter(field -> !(field.isStatic() && field.isFinal())).anyMatch(field -> true)) {
-            for (String annotation : annotationsToAdd) {
-                ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotation, false, false);
-                cu.addImport(importDeclaration);
-                NormalAnnotationExpr annotationExpr = new NormalAnnotationExpr();
-                annotationExpr.setName(new Name(annotation));
-                annotations.add(annotationExpr);
+                Optional<BlockStmt> body = md.getBody();
+                if(body.isPresent()) {
+                    NodeList<Statement> statements = body.get().getStatements();
+                    if(statements.size() > 1 || statements.get(0).isBlockStmt() || statements.get(0).isIfStmt()) {
+                        if (methodName.startsWith("get")) {
+                            if(md.getParameters().isEmpty()) {
+                                body.get().getStatements().clear();
+                                body.get().addStatement(new ReturnStmt(new NameExpr(methodName.replaceFirst("get", ""))));
+                            }
+                            else {
+                                keep.remove(md);
+                            }
+                        }
+                        else if (methodName.startsWith("set")) {
+                            body.get().getStatements().clear();
+                            if (!md.getParameters().isEmpty()) {
+                                String fieldName = classToInstanceName(methodName.replaceFirst("set", ""));
+                                Optional<FieldDeclaration> fd = classDecl.getFieldByName(fieldName);
+                                Parameter parameter = md.getParameters().get(0);
+                                if (fd.isPresent() && fd.get().getElementType().equals(parameter.getType())) {
+                                    body.get().addStatement(new AssignExpr(new NameExpr("this." + fieldName),
+                                            new NameExpr(parameter.getNameAsString()), AssignExpr.Operator.ASSIGN));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+        // for some reason clear throws an exception
+        classDecl.getMethods().forEach(Node::remove);
+        for(MethodDeclaration md : keep) {
+            classDecl.addMember(md);
+        }
+
+    }
+
+    /**
+     * Cleans up all the annotations in the clas.
+     * The only annotations that we will preserve are four annotations from lombok
+     * @param classDecl the class which we are going to clean up.
+     */
+    void cleanUpAnnotations(ClassOrInterfaceDeclaration classDecl) {
+        NodeList<AnnotationExpr> annotations = classDecl.getAnnotations();
+        Set<AnnotationExpr> preserve = new HashSet<>();
+        for (AnnotationExpr annotation : annotations) {
+            String annotationName = annotation.getNameAsString();
+            if (annotationName.equals(STR_GETTER) || annotationName.equals("Setter") || annotationName.equals("Data")
+                    || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")) {
+                preserve.add(annotation);
+                ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotationName, false, false);
+                cu.addImport(importDeclaration);
+            }
+        }
+        annotations.clear();
+        annotations.addAll(preserve);
     }
 
     /**
@@ -256,12 +312,13 @@ public class DTOHandler extends ClassProcessor {
                 // handle custom getters and setters
 
                 String fieldName = firstVariable.getNameAsString();
-                String className = cu.getTypes().get(0).getNameAsString();
+                TypeDeclaration<?> cdecl = getPublicClass(cu);
+                String className = cdecl.getNameAsString();
                 Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
                 if(!methodNames.isEmpty()){
                     String getterName = methodNames.getOrDefault("getter", "get" + capitalize(fieldName));
-                    String setterName = methodNames.getOrDefault("setter", "set" + capitalize(fieldName));
+                    String setterName = methodNames.getOrDefault("setter", findNameOfSetter(fieldName, cdecl));
 
                     // Use custom getter and setter names
                     generateGetter(field, getterName);
@@ -338,18 +395,19 @@ public class DTOHandler extends ClassProcessor {
      * @param field
      */
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
-        TypeDeclaration<?> cdecl = cu.getTypes().get(0);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getPublicClass(cu);
 
         if (!field.isStatic()) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
             String instance = classToInstanceName(cdecl);
             String fieldName = field.getVariables().get(0).getNameAsString();
-            MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName));
+            String sn = findNameOfSetter(fieldName, cdecl);
+            MethodCallExpr setter = new MethodCallExpr(new NameExpr(instance), sn);
             String type = field.getElementType().isClassOrInterfaceType()
                     ? field.getElementType().asClassOrInterfaceType().getNameAsString()
                     : field.getElementType().asString();
 
-            String className = cu.getTypes().get(0).getNameAsString();
+            String className = cdecl.getFullyQualifiedName().get();
             Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
             String argument = switch (type) {
@@ -359,7 +417,8 @@ public class DTOHandler extends ClassProcessor {
                         setter = new MethodCallExpr(new NameExpr(instance), setterName);
                     }
                     if (fieldName.startsWith("is") && methodNames.isEmpty()) {
-                        setter = new MethodCallExpr(new NameExpr(instance), "set" + capitalize(fieldName.replaceFirst("is", "")));
+                        setter = new MethodCallExpr(new NameExpr(instance),
+                                findNameOfSetter(fieldName.replaceFirst("is", ""), cdecl));
                     }
                     yield isArray ? "new boolean[] {true, false}" : "true";
                 }
@@ -402,6 +461,22 @@ public class DTOHandler extends ClassProcessor {
             }
         }
         return null;
+    }
+
+    /**
+     * Given the field name and the class declaration find the name of the setter.
+     * People don't apparently always use java beans naming conventions. So we can't blindly use
+     * the name of the field to find the setter. That's why we can't rely on lombok either.
+     * @param fieldName
+     * @param cdecl
+     * @return
+     */
+    private static String findNameOfSetter(String fieldName, TypeDeclaration cdecl) {
+        String name = "set" + fieldName;
+        if (cdecl.getMethodsByName(name).isEmpty()) {
+            name = "set" + capitalize(fieldName);
+        }
+        return name;
     }
 
     public static void main(String[] args) throws IOException{

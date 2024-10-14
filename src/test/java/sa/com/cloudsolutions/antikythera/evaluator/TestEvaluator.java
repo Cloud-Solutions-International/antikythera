@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestEvaluator {
     @Test
     void evaluateExpressionReturnsIntegerLiteral() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator();
+        Evaluator evaluator = new Evaluator("");
         Expression expr = new IntegerLiteralExpr(42);
         Variable result = evaluator.evaluateExpression(expr);
         assertEquals(42, result.getValue());
@@ -33,7 +33,7 @@ class TestEvaluator {
 
     @Test
     void evaluateExpressionReturnsStringLiteral() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator();
+        Evaluator evaluator = new Evaluator("");
         Expression expr = new StringLiteralExpr("test");
         Variable result = evaluator.evaluateExpression(expr);
         assertEquals("test", result.getValue());
@@ -41,7 +41,7 @@ class TestEvaluator {
 
     @Test
     void evaluateExpressionReturnsVariableValue() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator();
+        Evaluator evaluator = new Evaluator("");
         Variable expected = new Variable(42);
         evaluator.setLocal(new IntegerLiteralExpr(42), "testVar", expected);
         Expression expr = new NameExpr("testVar");
@@ -51,7 +51,7 @@ class TestEvaluator {
 
     @Test
     void evaluateBinaryExpression() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator();
+        Evaluator evaluator = new Evaluator("");
         Variable result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new IntegerLiteralExpr("40"), new IntegerLiteralExpr("2"));
         assertEquals(42, result.getValue());
@@ -67,7 +67,7 @@ class TestEvaluator {
 
     @Test
     void evaluateMethodCallPrintsToSystemOut() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator();
+        Evaluator evaluator = new Evaluator("");
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));
         MethodCallExpr methodCall = new MethodCallExpr(new FieldAccessExpr(new NameExpr("System"), "out"), "println", NodeList.nodeList(new StringLiteralExpr("Hello World")));
