@@ -439,7 +439,6 @@ public class SpringEvaluator extends Evaluator {
                         : fields.get(md.getType().asString()).getType();
                 if(type != null) {
                     extractTypeFromCall(type, methodCallExpr);
-                    logger.debug(type.toString());
                 }
                 else {
                     logger.debug("Type not found {}", scope.get());
@@ -461,7 +460,6 @@ public class SpringEvaluator extends Evaluator {
             else if (typeArg.isObjectCreationExpr()) {
                 Variable v = createObject(returnStmt, null, typeArg.asObjectCreationExpr());
                 response.setType(v.getType());
-                System.out.println("BABE");
             }
             else if (typeArg.isNameExpr()) {
                 String nameAsString = typeArg.asNameExpr().getNameAsString();
@@ -484,7 +482,7 @@ public class SpringEvaluator extends Evaluator {
                         if (f != null) {
 
                             extractTypeFromCall(f.getType(), methodCallExpr);
-                            logger.debug(f.toString());
+
                         } else {
                             logger.debug("Type not found {}", scope.get());
                         }
@@ -601,5 +599,22 @@ public class SpringEvaluator extends Evaluator {
     @Override
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         super.handleApplicationException(e);
+    }
+
+    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+        if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
+            return true;
+        }
+        Optional<Node> parent = variable.getParentNode();
+        if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd) {
+            if (fd.getAnnotationByName("Autowired").isPresent()) {
+                Evaluator eval = new Evaluator(resolvedClass);
+                Variable v = new Variable(eval);
+                fields.put(variable.getNameAsString(), v);
+
+                return true;
+            }
+        }
+        return false;
     }
 }
