@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -205,11 +206,8 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
             evaluatorUnsupported = false;
-            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
-                return;
-            }
 
-            if (md.isPublic()) {
+            if (checkEligible(md)) {
                 preConditions = new ArrayList<>();
                 evaluator.reset();
                 try {
@@ -222,6 +220,25 @@ public class RestControllerParser extends ClassProcessor {
                     }
                 }
             }
+        }
+
+        private boolean checkEligible(MethodDeclaration md) {
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                return false;
+            }
+            if (md.isPublic()) {
+                Optional<String> ctrl  = Settings.getProperty("controllers", String.class);
+                if(ctrl.isPresent()) {
+                    String[] controllers = ctrl.get().split(",");
+                    if (controllers.length > 1 && md.getNameAsString().equals(controllers[controllers.length -1])) {
+                        return true;
+                    }
+                }
+                else {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -285,7 +302,10 @@ public class RestControllerParser extends ClassProcessor {
 
         /**
          * Nested inner class to handle return statements.
-         *
+         * To generate tests, points of exit from a controller function are crucial. It maybe that the exit
+         * happens due to a validation failure or because the method has completed successfully.
+         * We will investigate the return to find that out and then based on the condition will taylor the
+         * inputs accordingly.
          */
         class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
             /**
@@ -301,11 +321,21 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
+        /**
+         * Visit each statement in a method to identify the types used.
+         * This is used to build a dependency graph so that classes that are part of the AUT can be processed
+         * as needed. There is no need to process all classes. Only those in the dependency graph.
+         */
         class StatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            /**
+             * This method will be called for each statement in a method.
+             * @param statement the statment being processed
+             * @param md the method declaration
+             */
             @Override
-            public void visit(ExpressionStmt n, MethodDeclaration md) {
-                super.visit(n, md);
-                Expression expr = n.getExpression();
+            public void visit(ExpressionStmt statement, MethodDeclaration md) {
+                super.visit(statement, md);
+                Expression expr = statement.getExpression();
                 if(expr.isVariableDeclarationExpr()) {
                     Type t = expr.asVariableDeclarationExpr().getElementType();
                     if (!t.isPrimitiveType()) {
