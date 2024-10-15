@@ -434,13 +434,16 @@ public class SpringEvaluator extends Evaluator {
         try {
             Optional<Expression> scope = methodCallExpr.getScope();
             if (scope.isPresent()) {
-                Type type = (scope.get().isFieldAccessExpr())
-                        ? fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType()
-                        : fields.get(md.getType().asString()).getType();
-                if(type != null) {
-                    extractTypeFromCall(type, methodCallExpr);
+                Type type;
+                if (scope.get().isFieldAccessExpr()) {
+                    type = fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType();
+                } else {
+                    type = fields.get(scope.get().asNameExpr().getNameAsString()).getType();
                 }
-                else {
+
+                if (type != null) {
+                    extractTypeFromCall(type, methodCallExpr);
+                } else {
                     logger.debug("Type not found {}", scope.get());
                 }
             }
