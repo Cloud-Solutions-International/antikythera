@@ -55,6 +55,15 @@ public class Reflect {
             } else {
                 try {
                     String className = arguments.get(0).calculateResolvedType().describe();
+                    className = switch (className) {
+                        case "boolean" -> "java.lang.Boolean";
+                        case "int" -> "java.lang.Integer";
+                        case "long" -> "java.lang.Long";
+                        case "float" -> "java.lang.Float";
+                        case "double" -> "java.lang.Double";
+                        case "char" -> "java.lang.Character";
+                        default -> className;
+                    };
                     paramTypes[i] = Class.forName(className);
                 } catch (UnsolvedSymbolException us) {
                     paramTypes[i] = Object.class;

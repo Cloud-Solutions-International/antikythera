@@ -210,6 +210,7 @@ public class RestControllerParser extends ClassProcessor {
             if (checkEligible(md)) {
                 preConditions = new ArrayList<>();
                 evaluator.reset();
+                AntikytheraRunTime.reset();
                 try {
                     evaluator.executeMethod(md);
                 } catch (AntikytheraException | ReflectiveOperationException e) {
@@ -229,14 +230,15 @@ public class RestControllerParser extends ClassProcessor {
             if (md.isPublic()) {
                 Optional<String> ctrl  = Settings.getProperty("controllers", String.class);
                 if(ctrl.isPresent()) {
-                    String[] controllers = ctrl.get().split(",");
-                    if (controllers.length > 1 && md.getNameAsString().equals(controllers[controllers.length -1])) {
-                        return true;
+                    String[] controllers = ctrl.get().split("#");
+                    if (controllers.length > 1) {
+                        if (md.getNameAsString().equals(controllers[controllers.length - 1])) {
+                            return true;
+                        }
+                        return false;
                     }
                 }
-                else {
-                    return true;
-                }
+                return true;
             }
             return false;
         }

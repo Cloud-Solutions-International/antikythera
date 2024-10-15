@@ -226,7 +226,15 @@ public class Evaluator {
                 }
             }
         }
-
+        else {
+            Variable v = getFields().get(fae.getScope().toString());
+            if (v != null) {
+                Object obj = v.getValue();
+                Field field = obj.getClass().getDeclaredField(fae.getNameAsString());
+                field.setAccessible(true);
+                return new Variable(field.get(obj));
+            }
+        }
         return null;
     }
 

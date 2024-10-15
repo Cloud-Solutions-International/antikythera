@@ -199,12 +199,13 @@ public class SpringEvaluator extends Evaluator {
                         String qualifiedName = decl.getType().resolve().asReferenceType().getQualifiedName();
                         try {
                             Variable v = null;
-                            if(qualifiedName.startsWith("java.util")) {
+                            if(qualifiedName.startsWith("java.")) {
                                 switch (qualifiedName) {
                                     case "java.util.List" -> v = new Variable(new ArrayList<>());
                                     case "java.util.Map" -> v = new Variable(new HashMap<>());
                                     case "java.util.Set" -> v = new Variable(new HashSet<>());
                                     case "java.util.Optional" -> v = new Variable(Optional.empty());
+                                    case "java.lang.Long" -> v = new Variable(0L);
                                 }
                             }
                             else {
