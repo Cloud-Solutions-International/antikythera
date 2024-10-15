@@ -736,7 +736,7 @@ public class Evaluator {
 
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
-            logger.info(m.getName());
+
             if (m.getName().equals(methodName)) {
                 Class<?>[] types = m.getParameterTypes();
                 if(types.length == 1 && types[0].equals(Object[].class)) {
@@ -1047,7 +1047,7 @@ public class Evaluator {
         fields.put(variable.getNameAsString(), v);
     }
 
-    private void resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
@@ -1059,7 +1059,9 @@ public class Evaluator {
                 Variable v = new Variable(eval);
                 fields.put(variable.getNameAsString(), v);
             }
+            return true;
         }
+        return false;
     }
 
     private void resolveNonClassFields(VariableDeclarator variable) throws AntikytheraException, ReflectiveOperationException {

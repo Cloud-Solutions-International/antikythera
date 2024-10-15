@@ -602,4 +602,13 @@ public class SpringEvaluator extends Evaluator {
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         super.handleApplicationException(e);
     }
+
+    @Override
+    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+        if (super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
+            return true;
+        }
+
+        return false;
+    }
 }
