@@ -5,12 +5,9 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.stmt.CatchClause;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
-import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
-import groovy.util.Eval;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -46,7 +43,6 @@ import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Deque;
 import java.util.HashMap;
@@ -194,19 +190,42 @@ public class Evaluator {
         } else if (expr.isObjectCreationExpr()) {
             return createObject(expr, null, expr);
         } else if(expr.isFieldAccessExpr()) {
-            FieldAccessExpr fae = expr.asFieldAccessExpr();
-            try {
-                String name = fae.resolve().getType().describe();
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(name);
-//                if (cu != null) {
-//                    VoidVisitorAdapter<Void> adapter = new FieldVisitor();
-//                    adapter.visit(cu, null);
-//                }
-            } catch (Exception e) {
-                throw new EvaluatorException("Error evaluating field access expression", e);
-            }
-            System.out.println("Fields baby");
+            return evaluateFieldAccessExpression(expr);
         }
+        return null;
+    }
+
+    private Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
+        FieldAccessExpr fae = expr.asFieldAccessExpr();
+
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
+        ImportDeclaration imp = ClassProcessor.findImport(cu, fae.getScope().toString());
+        if (imp != null) {
+            CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+            if (dep == null) {
+                /*
+                 * Use class loader
+                 */
+                Class<?> clazz = Class.forName(imp.getNameAsString());
+                Field field = clazz.getDeclaredField(fae.getNameAsString());
+                field.setAccessible(true);
+                return new Variable(field.get(null));
+            }
+            else {
+                TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingClass(dep, fae.getScope().toString());
+                if (typeDeclaration != null) {
+                    Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
+
+                    if (fieldDeclaration.isPresent()) {
+                        FieldDeclaration field = fieldDeclaration.get();
+                        Variable v = new Variable(field.getVariable(0).getType().asString());
+                        v.setValue(field.getVariable(0).getInitializer().get().toString());
+                        return v;
+                    }
+                }
+            }
+        }
+
         return null;
     }
 
@@ -423,9 +442,10 @@ public class Evaluator {
     private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
         try {
             Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
+            String resolvedClass = null;
             if (res.isPresent()) {
                 ResolvedType resolved = type.resolve();
-                String resolvedClass = resolved.describe();
+                resolvedClass = resolved.describe();
 
                 if (resolved.isReferenceType()) {
                     var typeDecl = resolved.asReferenceType().getTypeDeclaration();
@@ -433,44 +453,60 @@ public class Evaluator {
                         resolvedClass = resolvedClass.replaceFirst("\\.([^\\.]+)$", "\\$$1");
                     }
                 }
-
-                Class<?> clazz = Class.forName(resolvedClass);
-
-                Class<?> outer = clazz.getEnclosingClass();
-                if (outer != null) {
-                    for (Class<?> c : outer.getDeclaredClasses()) {
-                        if (c.getName().equals(resolvedClass)) {
-                            List<Expression> arguments = oce.getArguments();
-                            Class<?>[] paramTypes = new Class<?>[arguments.size() + 1];
-                            Object[] args = new Object[arguments.size() + 1];
-
-                            // todo this is wrong, this should first check for an existing instance in the current scope
-                            // and then if an instance is not found build using the most suitable arguments.
-                            args[0] = outer.getDeclaredConstructors()[0].newInstance();
-                            paramTypes[0] = outer;
-
-                            for (int i = 0; i < arguments.size(); i++) {
-                                Variable vv = evaluateExpression(arguments.get(i));
-                                Class<?> wrapperClass = vv.getValue().getClass();
-                                paramTypes[i + 1] =wrapperClass;
-                                args[i + 1] = vv.getValue();
-                            }
-
-                            Constructor<?> cons = findConstructor(c, paramTypes);
-                            if(cons !=  null) {
-                                Object instance = cons.newInstance(args);
-                                return new Variable(type, instance);
-                            }
-                            else {
-                                throw new EvaluatorException("Could not find a constructor for class " + c.getName());
-                            }
-                        }
-                    }
-                } else {
-                    Object instance = clazz.getDeclaredConstructor().newInstance();
-                    return new Variable(type, instance);
+            }
+            else {
+                ImportDeclaration importDeclaration = AbstractCompiler.findImport(
+                    AntikytheraRunTime.getCompilationUnit(this.className), type.getNameAsString());
+                if (importDeclaration != null) {
+                    resolvedClass = importDeclaration.getNameAsString();
                 }
             }
+
+            Class<?> clazz = Class.forName(resolvedClass);
+
+            Class<?> outer = clazz.getEnclosingClass();
+            if (outer != null) {
+                for (Class<?> c : outer.getDeclaredClasses()) {
+                    if (c.getName().equals(resolvedClass)) {
+                        List<Expression> arguments = oce.getArguments();
+                        Class<?>[] paramTypes = new Class<?>[arguments.size() + 1];
+                        Object[] args = new Object[arguments.size() + 1];
+
+                        // todo this is wrong, this should first check for an existing instance in the current scope
+                        // and then if an instance is not found build using the most suitable arguments.
+                        args[0] = outer.getDeclaredConstructors()[0].newInstance();
+                        paramTypes[0] = outer;
+
+                        for (int i = 0; i < arguments.size(); i++) {
+                            Variable vv = evaluateExpression(arguments.get(i));
+                            Class<?> wrapperClass = vv.getValue().getClass();
+                            paramTypes[i + 1] =wrapperClass;
+                            args[i + 1] = vv.getValue();
+                        }
+
+                        Constructor<?> cons = findConstructor(c, paramTypes);
+                        if(cons !=  null) {
+                            Object instance = cons.newInstance(args);
+                            return new Variable(type, instance);
+                        }
+                        else {
+                            throw new EvaluatorException("Could not find a constructor for class " + c.getName());
+                        }
+                    }
+                }
+            } else {
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this);
+
+                Constructor<?> cons = findConstructor(clazz, reflectionArguments.getParamTypes());
+                if(cons !=  null) {
+                    Object instance = cons.newInstance(reflectionArguments.getArgs());
+                    return new Variable(type, instance);
+                }
+                else {
+                    throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
+                }
+            }
+
         } catch (Exception e) {
             logger.warn("Could not create an instance of type {} using reflection", type);
             logger.warn("The error was {}", e.getMessage());

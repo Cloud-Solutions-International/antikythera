@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.CastExpr;
 import com.google.errorprone.annotations.Var;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -493,7 +494,12 @@ public class SpringEvaluator extends Evaluator {
                 } catch (IOException e) {
                     throw new GeneratorException("Exception while identifying dependencies", e);
                 }
+            } else if (typeArg.isCastExpr()) {
+                CastExpr castExpr = typeArg.asCastExpr();
+                //Variable v = evaluateExpression(castExpr.getExpression());
+                response.setType(castExpr.getType());
             }
+
         }
     }
 
@@ -545,12 +551,12 @@ public class SpringEvaluator extends Evaluator {
 
 
     /**
-     * Identifies the preconditions to be fullfilled by a check point in the controller.
+     * Identifies the preconditions to be fulfilled by a check point in the controller.
      *
      * A controller may have multiple validations represented by various if conditions, we need to setup
      * parameters so that these conditions will pass and move forward to the next state.
-     * @param md
-     * @param expr
+     * @param md the MethodDeclaration for the method being tested.
+     * @param expr the expression currently being evaluated
      */
     private void buildPreconditions(MethodDeclaration md, Expression expr) {
         if(expr instanceof BinaryExpr) {
