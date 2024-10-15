@@ -199,28 +199,29 @@ public class Evaluator {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
-        ImportDeclaration imp = ClassProcessor.findImport(cu, fae.getScope().toString());
-        if (imp != null) {
-            CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-            if (dep == null) {
-                /*
-                 * Use class loader
-                 */
-                Class<?> clazz = Class.forName(imp.getNameAsString());
-                Field field = clazz.getDeclaredField(fae.getNameAsString());
-                field.setAccessible(true);
-                return new Variable(field.get(null));
-            }
-            else {
-                TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingClass(dep, fae.getScope().toString());
-                if (typeDeclaration != null) {
-                    Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
+        if (cu != null) {
+            ImportDeclaration imp = ClassProcessor.findImport(cu, fae.getScope().toString());
+            if (imp != null) {
+                CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                if (dep == null) {
+                    /*
+                     * Use class loader
+                     */
+                    Class<?> clazz = Class.forName(imp.getNameAsString());
+                    Field field = clazz.getDeclaredField(fae.getNameAsString());
+                    field.setAccessible(true);
+                    return new Variable(field.get(null));
+                } else {
+                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingClass(dep, fae.getScope().toString());
+                    if (typeDeclaration != null) {
+                        Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
 
-                    if (fieldDeclaration.isPresent()) {
-                        FieldDeclaration field = fieldDeclaration.get();
-                        Variable v = new Variable(field.getVariable(0).getType().asString());
-                        v.setValue(field.getVariable(0).getInitializer().get().toString());
-                        return v;
+                        if (fieldDeclaration.isPresent()) {
+                            FieldDeclaration field = fieldDeclaration.get();
+                            Variable v = new Variable(field.getVariable(0).getType().asString());
+                            v.setValue(field.getVariable(0).getInitializer().get().toString());
+                            return v;
+                        }
                     }
                 }
             }
@@ -652,9 +653,12 @@ public class Evaluator {
                     Field field = System.class.getField(expr.asFieldAccessExpr().getNameAsString());
                     variable = new Variable(field.get(null));
                 }
-                else {
-                    Evaluator eval = (Evaluator) variable.getValue();
+                else if (variable.getValue() instanceof Evaluator eval) {
                     variable = eval.getValue(expr, expr.asFieldAccessExpr().getNameAsString());
+                }
+                else {
+                    variable = evaluateFieldAccessExpression(expr.asFieldAccessExpr());
+
                 }
             }
             else if(expr.isMethodCallExpr()) {
@@ -739,6 +743,9 @@ public class Evaluator {
             }
 
             returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                returnValue.setClazz(method.getReturnType());
+            }
             return returnValue;
         }
         throw new EvaluatorException("Error evaluating method call: " + methodName);

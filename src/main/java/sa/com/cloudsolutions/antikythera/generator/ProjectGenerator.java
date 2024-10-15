@@ -201,12 +201,13 @@ public class ProjectGenerator {
     public void generate() throws IOException, XmlPullParserException, EvaluatorException {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
-        if (controllers.endsWith(SUFFIX)) {
-            Path path = Paths.get(basePath, controllers.replace(".", "/").replace("/java", SUFFIX));
+        String controllersCleaned = controllers.split("#")[0];
+        if (controllersCleaned.matches(".*\\.java$")) {
+            Path path = Paths.get(basePath, controllersCleaned.replace(".", "/").replace("/java", SUFFIX));
             RestControllerParser processor = new RestControllerParser(path.toFile());
             processor.start();
         } else {
-            Path path = Paths.get(basePath, controllers.replace(".", "/"));
+            Path path = Paths.get(basePath, controllersCleaned.replace(".", "/"));
             RestControllerParser processor = new RestControllerParser(path.toFile());
             processor.start();
         }
