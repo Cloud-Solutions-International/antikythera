@@ -198,6 +198,13 @@ public class ProjectGenerator {
         Files.createDirectories(pathToCopy);
     }
 
+    /**
+     * Generate tests for the controllers
+     * @throws IOException if any of the files associated with the application under test cannot be read, or
+     *      if the output folder cannot be written to
+     * @throws XmlPullParserException if attempts to convert the POM file to an xml tree fail
+     * @throws EvaluatorException if evaluating java expressions in the AUT code fails.
+     */
     public void generate() throws IOException, XmlPullParserException, EvaluatorException {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
