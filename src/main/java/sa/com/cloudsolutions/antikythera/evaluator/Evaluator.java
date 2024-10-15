@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.stmt.CatchClause;
@@ -40,6 +41,7 @@ import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclar
 import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -707,9 +709,29 @@ public class Evaluator {
     }
 
     private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        Optional<Node> n = methodCall.resolve().toAst();
-        if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
-            return executeMethod(md);
+        Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+        if (cdecl.isPresent()) {
+            ClassOrInterfaceDeclaration c = cdecl.get();
+            Optional<MethodDeclaration> mdecl = c.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
+            if (mdecl.isPresent()) {
+                return executeMethod(mdecl.get());
+            }
+            else {
+                if (methodCall.getNameAsString().startsWith("get") && (
+                        c.getAnnotationByName("Data").isPresent()
+                                || c.getAnnotationByName("Getter").isPresent())) {
+                    String field = ClassProcessor.classToInstanceName(
+                            methodCall.getNameAsString().replace("get","")
+                    );
+                    return new Variable(getValue(methodCall, field).getValue());
+                }
+            }
+        }
+        else {
+            Optional<Node> n = methodCall.resolve().toAst();
+            if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
+                return executeMethod(md);
+            }
         }
         return null;
     }
