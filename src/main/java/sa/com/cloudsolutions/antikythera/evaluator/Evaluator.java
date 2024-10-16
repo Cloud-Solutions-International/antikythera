@@ -389,6 +389,8 @@ public class Evaluator {
 
     /**
      * Evaluates a variable declaration expression.
+     * Will return the result of the variable declaration as well as saving it in the symbol table.
+     *
      * @param expr the expression
      * @return a Variable or null if the expression could not be evaluated or results in null
      * @throws EvaluatorException if there is an error evaluating the expression
@@ -1417,12 +1419,9 @@ public class Evaluator {
         } else if (stmt.isReturnStmt()) {
             returnValue = evaluateReturnStatement(stmt);
         } else if (stmt.isForStmt()) {
-            ForStmt forStmt = stmt.asForStmt();
-            for (Node n : forStmt.getInitialization()) {
-                Variable v = new Variable(null);
-                System.out.println(v);
-            }
-            System.out.println(forStmt);
+
+            executeForLoop(stmt.asForStmt());
+
         } else if (stmt.isForEachStmt()) {
             ForEachStmt forEachStmt = stmt.asForEachStmt();
             Variable v = evaluateExpression(forEachStmt.getIterable());
@@ -1446,6 +1445,26 @@ public class Evaluator {
         } else {
             logger.info("Unhandled statement: {}", stmt);
         }
+    }
+
+    private void executeForLoop(ForStmt forStmt) throws AntikytheraException, ReflectiveOperationException {
+        loops.addLast(true);
+
+        for (Node n : forStmt.getInitialization()) {
+            if (n instanceof VariableDeclarationExpr vdecl) {
+                evaluateExpression(vdecl);
+            }
+        }
+        while ((boolean) evaluateExpression(forStmt.getCompare().orElseThrow()).getValue() &&
+                Boolean.TRUE.equals(loops.peekLast())) {
+            executeBlock(forStmt.getBody().asBlockStmt().getStatements());
+            for (Node n : forStmt.getUpdate()) {
+                if(n instanceof Expression e) {
+                    evaluateExpression(e);
+                }
+            }
+        }
+        loops.pollLast();
     }
 
     private void executeWhile(WhileStmt whileStmt) throws AntikytheraException, ReflectiveOperationException {
