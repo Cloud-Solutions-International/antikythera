@@ -219,6 +219,8 @@ public class RestControllerParser extends ClassProcessor {
                     } else {
                         throw new GeneratorException(e);
                     }
+                } finally {
+                    logger.info(md.getNameAsString());
                 }
             }
         }

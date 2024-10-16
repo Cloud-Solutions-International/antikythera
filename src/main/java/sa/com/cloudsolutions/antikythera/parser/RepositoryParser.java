@@ -679,14 +679,14 @@ public class RepositoryParser extends ClassProcessor {
             params.getPlaceHolderId().add(pos);
             params.setColumnName(name);
 
-            System.out.println("Mapping " + name + " to " + params.getParameter().getName());
+            logger.debug("Mapping " + name + " to " + params.getParameter().getName());
         }
         else {
             String placeHolder = ((JdbcNamedParameter) right).getName();
             for(RepositoryQuery.QueryMethodParameter p : current.getMethodParameters()) {
                 if(p.getPlaceHolderName().equals(placeHolder)) {
                     p.setColumnName(name);
-                    System.out.println("Mapping " + name + " to " + p.getParameter().getName());
+                    logger.debug("Mapping " + name + " to " + p.getParameter().getName());
                     break;
                 }
             }

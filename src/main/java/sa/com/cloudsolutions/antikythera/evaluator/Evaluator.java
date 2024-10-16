@@ -706,8 +706,15 @@ public class Evaluator {
                     fullyQualifiedName = imp.getNameAsString();
                 }
                 Class<?> clazz = getClass(fullyQualifiedName);
-                v = new Variable(clazz);
-                v.setClazz(clazz);
+                if (clazz != null) {
+                    v = new Variable(clazz);
+                    v.setClazz(clazz);
+                }
+                else {
+                    Evaluator eval = new Evaluator(fullyQualifiedName);
+                    eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
+                    v = new Variable(eval);
+                }
             }
 
             return v;
@@ -759,9 +766,23 @@ public class Evaluator {
         throw new EvaluatorException("Error evaluating method call: " + methodName);
     }
 
+    /**
+     * Execute a method call.
+     *
+     * This method is called when we have a method call that maybe a part of the current class.
+     *
+     * @param methodCall the method call expression
+     * @return the result of executing that code.
+     * @throws EvaluatorException if there is an error evaluating the method call or if the
+     *          feature is not yet implemented.
+     */
     private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {
+            /*
+             * At this point we are searching for the method call in the current class. For example it
+             * maybe a getter or setter that has been defined through lombok annotations.
+             */
             ClassOrInterfaceDeclaration c = cdecl.get();
             Optional<MethodDeclaration> mdecl = c.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
             if (mdecl.isPresent()) {
@@ -775,6 +796,17 @@ public class Evaluator {
                             methodCall.getNameAsString().replace("get","")
                     );
                     return new Variable(getValue(methodCall, field).getValue());
+                }
+                else if (methodCall.getScope().isPresent()){
+                    /*
+                     * At this point we switch to searching for the method call in other classes in the AUT
+                     */
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
+                    TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu, methodCall.getScope().get().toString());
+                    mdecl = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
+                    if (mdecl.isPresent()) {
+                        return executeMethod(mdecl.get());
+                    }
                 }
             }
         }
@@ -1261,7 +1293,7 @@ public class Evaluator {
     }
 
     private void executeStatement(Statement stmt) throws Exception {
-        logger.info(stmt.toString());
+
         if (stmt.isExpressionStmt()) {
             evaluateExpression(stmt.asExpressionStmt().getExpression());
         } else if (stmt.isIfStmt()) {
@@ -1290,7 +1322,7 @@ public class Evaluator {
             // associated with a condtional, loop or method etc.
             executeBlock(stmt.asBlockStmt().getStatements());
         } else {
-            logger.info("Unhandled");
+            logger.info("Unhandled statement: {}", stmt);
         }
     }
 
