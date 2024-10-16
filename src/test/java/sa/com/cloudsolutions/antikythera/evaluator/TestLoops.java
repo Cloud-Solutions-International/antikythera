@@ -48,6 +48,15 @@ public class TestLoops extends  TestHelper {
     }
 
     @Test
+    void testWhileWithBreak() throws AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration whileLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("whileLoopWithBreak")).orElseThrow();
+        Variable v = evaluator.executeMethod(whileLoop);
+        assertNull(v.getValue());
+        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
+    }
+
+    @Test
     void testForEachLoop() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration forLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("forEachLoop")).orElseThrow();

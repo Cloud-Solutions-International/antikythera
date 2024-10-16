@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
+import java.util.Stack;
 
 
 /**
@@ -79,9 +80,18 @@ public class Evaluator {
      */
     protected final Map<String, Variable> fields;
     static Map<String, Object> finches;
+
+    /**
+     * The fully qualified name of the class for which we created this evaluator.
+     */
     private final String className;
 
+    /**
+     * The most recent return value that was encountered.
+     */
     protected Variable returnValue;
+
+    protected LinkedList<Boolean> loops = new LinkedList<>();
 
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
@@ -1372,7 +1382,9 @@ public class Evaluator {
     protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
         try {
             for (Statement stmt : statements) {
-                executeStatement(stmt);
+                if(loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                    executeStatement(stmt);
+                }
             }
         } catch (EvaluatorException|ReflectiveOperationException ex) {
             throw ex;
@@ -1422,19 +1434,26 @@ public class Evaluator {
             SwitchStmt switchExpr = stmt.asSwitchStmt();
             System.out.println("bada");
         } else if(stmt.isWhileStmt()) {
-            WhileStmt whileStmt = stmt.asWhileStmt();
-            while((boolean)evaluateExpression(whileStmt.getCondition()).getValue()) {
-                executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+            executeWhile(stmt.asWhileStmt());
 
-            }
-            logger.warn("Some block statements are not being handled at the moment");
         } else if (stmt.isBlockStmt()) {
             // in C like languages it's possible to have a block that is not directly
             // associated with a condtional, loop or method etc.
             executeBlock(stmt.asBlockStmt().getStatements());
+        } else if (stmt.isBreakStmt()) {
+            loops.pollLast();
+            loops.addLast(Boolean.FALSE);
         } else {
             logger.info("Unhandled statement: {}", stmt);
         }
+    }
+
+    private void executeWhile(WhileStmt whileStmt) throws AntikytheraException, ReflectiveOperationException {
+        loops.push(true);
+        while((boolean)evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
+            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+        }
+        loops.pollLast();
     }
 
     /**

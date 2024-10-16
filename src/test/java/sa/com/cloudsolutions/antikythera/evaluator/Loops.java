@@ -22,6 +22,17 @@ public class Loops {
         }
     }
 
+    private void whileLoopWithBreak() {
+        int i = 0;
+        while (i < 20) {
+            System.out.println(i);
+            i++;
+            if(i == 10) {
+                break;
+            }
+        }
+    }
+
     private void doWhileLoop() {
         int i = 0;
         do {
