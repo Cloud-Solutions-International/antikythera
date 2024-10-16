@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.CastExpr;
 import com.google.errorprone.annotations.Var;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -434,14 +435,16 @@ public class SpringEvaluator extends Evaluator {
         try {
             Optional<Expression> scope = methodCallExpr.getScope();
             if (scope.isPresent()) {
-                Type type = (scope.get().isFieldAccessExpr())
-                        ? fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType()
-                        : fields.get(md.getType().asString()).getType();
-                if(type != null) {
-                    extractTypeFromCall(type, methodCallExpr);
-                    logger.debug(type.toString());
+                Type type;
+                if (scope.get().isFieldAccessExpr()) {
+                    type = fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType();
+                } else {
+                    type = fields.get(scope.get().asNameExpr().getNameAsString()).getType();
                 }
-                else {
+
+                if (type != null) {
+                    extractTypeFromCall(type, methodCallExpr);
+                } else {
                     logger.debug("Type not found {}", scope.get());
                 }
             }
@@ -461,7 +464,6 @@ public class SpringEvaluator extends Evaluator {
             else if (typeArg.isObjectCreationExpr()) {
                 Variable v = createObject(returnStmt, null, typeArg.asObjectCreationExpr());
                 response.setType(v.getType());
-                System.out.println("BABE");
             }
             else if (typeArg.isNameExpr()) {
                 String nameAsString = typeArg.asNameExpr().getNameAsString();
@@ -484,7 +486,7 @@ public class SpringEvaluator extends Evaluator {
                         if (f != null) {
 
                             extractTypeFromCall(f.getType(), methodCallExpr);
-                            logger.debug(f.toString());
+
                         } else {
                             logger.debug("Type not found {}", scope.get());
                         }
@@ -492,7 +494,12 @@ public class SpringEvaluator extends Evaluator {
                 } catch (IOException e) {
                     throw new GeneratorException("Exception while identifying dependencies", e);
                 }
+            } else if (typeArg.isCastExpr()) {
+                CastExpr castExpr = typeArg.asCastExpr();
+                //Variable v = evaluateExpression(castExpr.getExpression());
+                response.setType(castExpr.getType());
             }
+
         }
     }
 
@@ -544,12 +551,12 @@ public class SpringEvaluator extends Evaluator {
 
 
     /**
-     * Identifies the preconditions to be fullfilled by a check point in the controller.
+     * Identifies the preconditions to be fulfilled by a check point in the controller.
      *
      * A controller may have multiple validations represented by various if conditions, we need to setup
      * parameters so that these conditions will pass and move forward to the next state.
-     * @param md
-     * @param expr
+     * @param md the MethodDeclaration for the method being tested.
+     * @param expr the expression currently being evaluated
      */
     private void buildPreconditions(MethodDeclaration md, Expression expr) {
         if(expr instanceof BinaryExpr) {
@@ -601,5 +608,22 @@ public class SpringEvaluator extends Evaluator {
     @Override
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         super.handleApplicationException(e);
+    }
+
+    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+        if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
+            return true;
+        }
+        Optional<Node> parent = variable.getParentNode();
+        if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd) {
+            if (fd.getAnnotationByName("Autowired").isPresent()) {
+                Evaluator eval = new Evaluator(resolvedClass);
+                Variable v = new Variable(eval);
+                fields.put(variable.getNameAsString(), v);
+
+                return true;
+            }
+        }
+        return false;
     }
 }

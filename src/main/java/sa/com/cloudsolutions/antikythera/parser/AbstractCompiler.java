@@ -317,8 +317,8 @@ public class AbstractCompiler {
             if (imp.getNameAsString().equals(className)) {
                 return imp;
             }
-            String[] parts = imp.getNameAsString().split(".");
-            if (imp.getNameAsString().equals(parts[parts.length - 1])) {
+            String[] parts = imp.getNameAsString().split("\\.");
+            if (parts.length > 0 && className.equals(parts[parts.length - 1])) {
                 return imp;
             }
         }
