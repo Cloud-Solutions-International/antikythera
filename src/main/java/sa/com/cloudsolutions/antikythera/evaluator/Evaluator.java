@@ -171,13 +171,7 @@ public class Evaluator {
 
             return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
         } else if (expr.isUnaryExpr()) {
-            Expression unaryExpr = expr.asUnaryExpr().getExpression();
-            if (expr.asUnaryExpr().getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
-                Variable v = evaluateExpression(unaryExpr);
-                v.setValue(!(Boolean)v.getValue());
-                return v;
-            }
-            logger.warn("Negation is the only unary operation supported at the moment");
+            return  evaluateUnaryExpression(expr);
         } else if (expr.isMethodCallExpr()) {
             /*
              * Method calls are the toughest nuts to crack. Some method calls will be from the Java api
@@ -192,6 +186,28 @@ public class Evaluator {
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         }
+        return null;
+    }
+
+    private Variable evaluateUnaryExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+        Expression unaryExpr = expr.asUnaryExpr().getExpression();
+        if (expr.asUnaryExpr().getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
+            Variable v = evaluateExpression(unaryExpr);
+            v.setValue(!(Boolean)v.getValue());
+            return v;
+        }
+        else if(expr.asUnaryExpr().getOperator().equals(UnaryExpr.Operator.MINUS)) {
+            Variable v = evaluateExpression(unaryExpr);
+            if (v.getValue() instanceof Integer n) {
+                v.setValue(-1 * n);
+            } else if (v.getValue() instanceof Double d) {
+                v.setValue(-1 * d);
+            } else if (v.getValue() instanceof Long l) {
+                v.setValue(-1 * l);
+            }
+            return v;
+        }
+        logger.warn("Negation is the only unary operation supported at the moment");
         return null;
     }
 
@@ -797,12 +813,21 @@ public class Evaluator {
                     );
                     return new Variable(getValue(methodCall, field).getValue());
                 }
+                if (methodCall.getNameAsString().startsWith("set") && (
+                        c.getAnnotationByName("Data").isPresent()
+                                || c.getAnnotationByName("Setter").isPresent())) {
+                    String field = ClassProcessor.classToInstanceName(
+                            methodCall.getNameAsString().replace("set","")
+                    );
+                    return new Variable(getValue(methodCall, field).getValue());
+                }
                 else if (methodCall.getScope().isPresent()){
                     /*
                      * At this point we switch to searching for the method call in other classes in the AUT
                      */
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
-                    TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu, methodCall.getScope().get().toString());
+                    TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
+                            ClassProcessor.instanceToClassName(methodCall.getScope().get().toString()));
                     mdecl = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
                     if (mdecl.isPresent()) {
                         return executeMethod(mdecl.get());
@@ -1288,6 +1313,7 @@ public class Evaluator {
         } catch (EvaluatorException|ReflectiveOperationException ex) {
             throw ex;
         } catch (Exception e) {
+            e.printStackTrace();
             handleApplicationException(e);
         }
     }
