@@ -5,9 +5,16 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.stmt.DoStmt;
+import com.github.javaparser.ast.stmt.ForEachStmt;
+import com.github.javaparser.ast.stmt.ForStmt;
+import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
+import com.github.javaparser.ast.stmt.WhileStmt;
+import com.github.javaparser.ast.type.ArrayType;
+import com.google.errorprone.annotations.Var;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -41,6 +48,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -185,18 +193,73 @@ public class Evaluator {
             return createObject(expr, null, expr);
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
+        } else if(expr.isArrayInitializerExpr()) {
+            ArrayInitializerExpr arrayInitializerExpr = expr.asArrayInitializerExpr();
+            return createArray(arrayInitializerExpr);
         }
+        return null;
+    }
+
+    Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
+
+        Optional<Node> parent = arrayInitializerExpr.getParentNode();
+        if (parent.isPresent() && parent.get() instanceof ArrayType arrayType) {
+            // Get the component type of the array
+            Type componentType = arrayType.getComponentType();
+            Class<?> componentClass = Class.forName(componentType.asString());
+
+            // Extract the elements from the ArrayInitializerExpr
+            List<Expression> values = arrayInitializerExpr.getValues();
+
+            // Create an array of the appropriate type
+            Object array = Array.newInstance(componentClass, values.size());
+
+            // Populate the array with the extracted elements
+            for (int i = 0; i < values.size(); i++) {
+                // Assuming the elements are literals for simplicity
+                // You may need to handle different types of expressions here
+                Array.set(array, i, evaluateExpression(values.get(i)).getValue());
+            }
+
+            return new Variable(array);
+        }
+
         return null;
     }
 
     private Variable evaluateUnaryExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
         Expression unaryExpr = expr.asUnaryExpr().getExpression();
-        if (expr.asUnaryExpr().getOperator().equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
+        UnaryExpr.Operator operator = expr.asUnaryExpr().getOperator();
+        if (operator.equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
             Variable v = evaluateExpression(unaryExpr);
             v.setValue(!(Boolean)v.getValue());
             return v;
         }
-        else if(expr.asUnaryExpr().getOperator().equals(UnaryExpr.Operator.MINUS)) {
+        else if(operator.equals(UnaryExpr.Operator.POSTFIX_INCREMENT)
+                || operator.equals(UnaryExpr.Operator.PREFIX_INCREMENT)) {
+            Variable v = evaluateExpression(unaryExpr);
+            if (v.getValue() instanceof Integer n) {
+                v.setValue(++n);
+            } else if (v.getValue() instanceof Double d) {
+                v.setValue(++d);
+            } else if (v.getValue() instanceof Long l) {
+                v.setValue(++l);
+            }
+            return evaluateExpression(unaryExpr);
+        }
+        else if(operator.equals(UnaryExpr.Operator.POSTFIX_DECREMENT)
+                || operator.equals(UnaryExpr.Operator.PREFIX_DECREMENT)) {
+            Variable v = evaluateExpression(unaryExpr);
+            if (v.getValue() instanceof Integer n) {
+                v.setValue(--n);
+            } else if (v.getValue() instanceof Double d) {
+                v.setValue(--d);
+            } else if (v.getValue() instanceof Long l) {
+                v.setValue(--l);
+            }
+            return evaluateExpression(unaryExpr);
+        }
+        else if(operator.equals(UnaryExpr.Operator.MINUS)) {
             Variable v = evaluateExpression(unaryExpr);
             if (v.getValue() instanceof Integer n) {
                 v.setValue(-1 * n);
@@ -207,6 +270,7 @@ public class Evaluator {
             }
             return v;
         }
+
         logger.warn("Negation is the only unary operation supported at the moment");
         return null;
     }
@@ -1329,19 +1393,40 @@ public class Evaluator {
             executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
         } else if (stmt.isThrowStmt()) {
             ThrowStmt t = stmt.asThrowStmt();
-            if(t.getExpression().isObjectCreationExpr()) {
+            if (t.getExpression().isObjectCreationExpr()) {
                 ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
                 Variable v = createObject(stmt, null, oce);
                 if (v.getValue() instanceof Exception ex) {
                     throw ex;
-                }
-                else {
+                } else {
                     logger.error("Should have an exception");
                 }
             }
         } else if (stmt.isReturnStmt()) {
             returnValue = evaluateReturnStatement(stmt);
-        } else if (stmt.isForStmt() || stmt.isForEachStmt() || stmt.isDoStmt() || stmt.isSwitchStmt() || stmt.isWhileStmt()) {
+        } else if (stmt.isForStmt()) {
+            ForStmt forStmt = stmt.asForStmt();
+            for (Node n : forStmt.getInitialization()) {
+                Variable v = new Variable(null);
+                System.out.println(v);
+            }
+            System.out.println(forStmt);
+        } else if (stmt.isForEachStmt()) {
+            ForEachStmt forEachStmt = stmt.asForEachStmt();
+            Variable v = evaluateExpression(forEachStmt.getIterable());
+            System.out.println(forEachStmt);
+        } else if (stmt.isDoStmt()) {
+            DoStmt doStmt = stmt.asDoStmt();
+            System.out.println();
+        } else if(stmt.isSwitchStmt()) {
+            SwitchStmt switchExpr = stmt.asSwitchStmt();
+            System.out.println("bada");
+        } else if(stmt.isWhileStmt()) {
+            WhileStmt whileStmt = stmt.asWhileStmt();
+            while((boolean)evaluateExpression(whileStmt.getCondition()).getValue()) {
+                executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+
+            }
             logger.warn("Some block statements are not being handled at the moment");
         } else if (stmt.isBlockStmt()) {
             // in C like languages it's possible to have a block that is not directly

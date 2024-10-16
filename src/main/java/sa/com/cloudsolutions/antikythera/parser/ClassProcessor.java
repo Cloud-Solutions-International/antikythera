@@ -536,9 +536,11 @@ public class ClassProcessor extends AbstractCompiler {
         Optional<String> fullyQualifiedName = getPublicClass(cu).getFullyQualifiedName();
         if (fullyQualifiedName.isPresent()) {
             Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
-            for (Dependency dep : deps) {
-                ClassProcessor cp = new ClassProcessor();
-                cp.compile(AbstractCompiler.classToPath(dep.getTo()));
+            if (deps != null) {
+                for (Dependency dep : deps) {
+                    ClassProcessor cp = new ClassProcessor();
+                    cp.compile(AbstractCompiler.classToPath(dep.getTo()));
+                }
             }
         }
     }

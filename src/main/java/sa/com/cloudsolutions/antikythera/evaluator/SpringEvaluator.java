@@ -504,20 +504,6 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    @Override
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Variable scopedExpression)
-            throws AntikytheraException, ReflectiveOperationException {
-//        if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
-//                && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
-//            return null;
-//        }
-//        else{
-//            return super.handleRegularMethodCall(methodCall, null);
-//        }
-        return null;
-    }
-
-
     public boolean evaluateValidatorCondition(Expression condition) throws AntikytheraException, ReflectiveOperationException {
         if (condition.isBinaryExpr()) {
             BinaryExpr binaryExpr = condition.asBinaryExpr();
