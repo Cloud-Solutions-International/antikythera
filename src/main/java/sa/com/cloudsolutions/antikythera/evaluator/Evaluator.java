@@ -1396,6 +1396,15 @@ public class Evaluator {
         }
     }
 
+    /**
+     * Execute a statment.
+     * In the java parser architecture a statement is not always a single line of code. They can be
+     * block statements as well. For example when an IF condition is encountered that counts as
+     * statement. It's child elements the then and else blocks are also block statements.
+     *
+     * @param stmt the statement to execute
+     * @throws Exception if the execution fails.
+     */
     private void executeStatement(Statement stmt) throws Exception {
 
         if (stmt.isExpressionStmt()) {
@@ -1417,7 +1426,9 @@ public class Evaluator {
                 }
             }
         } else if (stmt.isReturnStmt()) {
+
             returnValue = evaluateReturnStatement(stmt);
+
         } else if (stmt.isForStmt()) {
 
             executeForLoop(stmt.asForStmt());

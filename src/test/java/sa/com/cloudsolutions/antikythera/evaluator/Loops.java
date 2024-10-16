@@ -14,6 +14,15 @@ public class Loops {
         }
     }
 
+    private void forLoopWithBreak() {
+        for (int i = 0; i < 20; ++i) {
+            if (i == 10) {
+                break;
+            }
+            System.out.println(i);
+        }
+    }
+
     private void whileLoop() {
         int i = 0;
         while (i < 10) {
