@@ -419,6 +419,7 @@ public class Evaluator {
             Optional<Expression> init = decl.getInitializer();
             if (init.isPresent()) {
                 v = initializeVariable(decl, init.get());
+                v.setInitializer(init.get());
             }
             else {
                 /*
@@ -447,21 +448,21 @@ public class Evaluator {
             v = evaluateMethodCall(methodCall);
             if (v != null) {
                 v.setType(decl.getType());
-                setLocal(methodCall, decl.getNameAsString(), v);
+                setLocal(decl, decl.getNameAsString(), v);
             }
         }
         else if(init.isObjectCreationExpr()) {
             v = createObject(init, decl, init);
             if (v != null) {
                 v.setType(decl.getType());
-                setLocal(init, decl.getNameAsString(), v);
+                setLocal(decl, decl.getNameAsString(), v);
             }
         }
         else {
             v = evaluateExpression(init);
             if (v != null) {
                 v.setType(decl.getType());
-                setLocal(init, decl.getNameAsString(), v);
+                setLocal(decl, decl.getNameAsString(), v);
             }
         }
         return v;
@@ -745,13 +746,32 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        LinkedList<Expression> chain = new LinkedList<>();
         Expression expr = methodCall;
         Variable variable = null;
         Optional<Expression> scoped = methodCall.getScope();
         if (scoped.isPresent() && scoped.get().toString().equals("logger")) {
             return null;
         }
-        LinkedList<Expression> chain = buildScopeChain(expr);
+        while (true) {
+            if (expr.isMethodCallExpr()) {
+                MethodCallExpr mce = expr.asMethodCallExpr();
+                Optional<Expression> scopeD = mce.getScope();
+                if (scopeD.isEmpty()) {
+                    break;
+                }
+                chain.addLast(scopeD.get());
+                expr = scopeD.get();
+            }
+            else if (expr.isFieldAccessExpr()) {
+                FieldAccessExpr mce = expr.asFieldAccessExpr();
+                chain.addLast(mce.getScope());
+                expr = mce.getScope();
+            }
+            else {
+                break;
+            }
+        }
 
         while(!chain.isEmpty()) {
             expr = chain.pollLast();
@@ -782,32 +802,9 @@ public class Evaluator {
                 variable = evaluateLiteral(expr);
             }
         }
+
         variable = evaluateMethodCall(variable, methodCall);
         return variable;
-    }
-
-    LinkedList<Expression> buildScopeChain(Expression expr) {
-        LinkedList<Expression> chain = new LinkedList<>();
-        while (true) {
-            if (expr.isMethodCallExpr()) {
-                MethodCallExpr mce = expr.asMethodCallExpr();
-                Optional<Expression> scopeD = mce.getScope();
-                if (scopeD.isEmpty()) {
-                    break;
-                }
-                chain.addLast(scopeD.get());
-                expr = scopeD.get();
-            }
-            else if (expr.isFieldAccessExpr()) {
-                FieldAccessExpr mce = expr.asFieldAccessExpr();
-                chain.addLast(mce.getScope());
-                expr = mce.getScope();
-            }
-            else {
-                break;
-            }
-        }
-        return chain;
     }
 
     private Variable resolveExpression(TypeExpr expr) {
@@ -898,13 +895,14 @@ public class Evaluator {
             }
             return returnValue;
         }
+
         throw new EvaluatorException("Error evaluating method call: " + methodName);
     }
 
     /**
      * Execute a method call.
      *
-     * This method is called when we have a method call that maybe a part of the current class.
+     * This method is called when we have a AUT method call that maybe a part of the current class.
      *
      * @param methodCall the method call expression
      * @return the result of executing that code.

@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -254,22 +255,27 @@ public class SpringEvaluator extends Evaluator {
             // the return statement will have a parent no matter what but the optionals approach
             // requires the use of isPresent.
             ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
-            if (response != null) {
-                if (flunk) {
-                    for (TestGenerator generator : generators) {
-                        generator.createTests(currentMethod, response);
-                    }
-                    flunk = false;
-                }
+            return createTests(response);
+        }
+
+        return null;
+    }
+
+    private Variable createTests(ControllerResponse response) {
+        if (response != null) {
+            if (flunk) {
                 for (TestGenerator generator : generators) {
                     generator.createTests(currentMethod, response);
                 }
-                Variable v = new Variable(response);
-                AntikytheraRunTime.push(v);
-                return v;
+                flunk = false;
             }
+            for (TestGenerator generator : generators) {
+                generator.createTests(currentMethod, response);
+            }
+            Variable v = new Variable(response);
+            AntikytheraRunTime.push(v);
+            return v;
         }
-
         return null;
     }
 
@@ -348,7 +354,6 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
-
     /**
      * Identifies the preconditions to be fulfilled by a check point in the controller.
      *
@@ -404,6 +409,14 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    /**
+     * Resolves fields while taking into consideration the AutoWired annotation of srping
+     * @param variable a variable declaration statement
+     * @param resolvedClass the name of the class that the field is of
+     * @return true if the resolution was successfull
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
     @Override
     boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
         if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
@@ -426,27 +439,17 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException {
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException {
         try {
-            if (v != null) {
-                ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
-                if (v.getValue() instanceof Evaluator eval) {
-                    for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
-                        /*
-                         * Push method arguments
-                         */
-                        AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
-                    }
-                    return eval.executeMethod(methodCall);
-                }
-
-                return reflectiveMethodCall(v, reflectionArguments);
-            } else {
-                return executeMethod(methodCall);
+            return super.evaluateMethodCall(v, methodCall);
+        } catch (AntikytheraException aex) {
+            if (aex instanceof EvaluatorException eex) {
+                throw eex;
             }
-        } catch (ReflectiveOperationException ex) {
-            throw new EvaluatorException("Error evaluating method call", ex);
+            ControllerResponse response = new ControllerResponse();
+            response.setStatusCode(500);
+
         }
+        return null;
     }
 }

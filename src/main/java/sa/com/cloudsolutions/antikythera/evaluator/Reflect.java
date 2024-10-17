@@ -22,7 +22,7 @@ public class Reflect {
      * @return A ReflectionArguments object which contains all the information required to execute a method
      *          using reflection.
      * @throws AntikytheraException if something goes wrong with the parser related code
-     * @throws ReflectiveOperationException if reflective oeprations fail
+     * @throws ReflectiveOperationException if reflective operations fail
      */
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator)
             throws AntikytheraException, ReflectiveOperationException {

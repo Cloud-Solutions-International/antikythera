@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 
 public class Variable {
@@ -17,9 +18,11 @@ public class Variable {
 
     /**
      * The value of this variable.
-     * It maybe null and that maybe intentional because the variable is supposed to be null.
+     * The value could be intentionally null, when the variable is supposed to be null.
      */
     private Object value;
+
+    private Expression initializer;
 
     /**
      * True if this represents a primitive type as the value
@@ -108,7 +111,15 @@ public class Variable {
         return clazz == null && value != null ? value.getClass() : clazz;
     }
 
-    public void setClazz(Class clazz) {
+    public void setClazz(Class<?> clazz) {
         this.clazz = clazz;
+    }
+
+    public Expression getInitializer() {
+        return initializer;
+    }
+
+    public void setInitializer(Expression initializer) {
+        this.initializer = initializer;
     }
 }
