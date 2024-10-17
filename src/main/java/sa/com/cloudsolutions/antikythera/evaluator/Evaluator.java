@@ -249,11 +249,11 @@ public class Evaluator {
                 || operator.equals(UnaryExpr.Operator.PREFIX_INCREMENT)) {
             Variable v = evaluateExpression(unaryExpr);
             if (v.getValue() instanceof Integer n) {
-                v.setValue(++n);
+                v.setValue(n + 1);
             } else if (v.getValue() instanceof Double d) {
-                v.setValue(++d);
+                v.setValue(d + 1);
             } else if (v.getValue() instanceof Long l) {
-                v.setValue(++l);
+                v.setValue(l + 1);
             }
             return evaluateExpression(unaryExpr);
         }
@@ -261,11 +261,11 @@ public class Evaluator {
                 || operator.equals(UnaryExpr.Operator.PREFIX_DECREMENT)) {
             Variable v = evaluateExpression(unaryExpr);
             if (v.getValue() instanceof Integer n) {
-                v.setValue(--n);
+                v.setValue(n - 1);
             } else if (v.getValue() instanceof Double d) {
-                v.setValue(--d);
+                v.setValue(d - 1);
             } else if (v.getValue() instanceof Long l) {
-                v.setValue(--l);
+                v.setValue(l - 1);
             }
             return evaluateExpression(unaryExpr);
         }
@@ -362,6 +362,7 @@ public class Evaluator {
             case PLUS -> evaluateBinaryExpression(BinaryExpr.Operator.PLUS, target, value);
             case MULTIPLY -> evaluateBinaryExpression(BinaryExpr.Operator.MULTIPLY, target, value);
             case MINUS -> evaluateBinaryExpression(BinaryExpr.Operator.MINUS, target, value);
+            case DIVIDE -> evaluateBinaryExpression(BinaryExpr.Operator.DIVIDE, target, value);
             default -> evaluateExpression(value);
         };
 
@@ -477,7 +478,7 @@ public class Evaluator {
     Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) throws AntikytheraException, ReflectiveOperationException {
         ObjectCreationExpr oce = expression.asObjectCreationExpr();
         ClassOrInterfaceType type = oce.getType();
-        Variable vx = null;
+        Variable vx;
 
         vx = createUsingReflection(type, oce);
 
@@ -740,32 +741,13 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        LinkedList<Expression> chain = new LinkedList<>();
         Expression expr = methodCall;
         Variable variable = null;
         Optional<Expression> scoped = methodCall.getScope();
         if (scoped.isPresent() && scoped.get().toString().equals("logger")) {
             return null;
         }
-        while (true) {
-            if (expr.isMethodCallExpr()) {
-                MethodCallExpr mce = expr.asMethodCallExpr();
-                Optional<Expression> scopeD = mce.getScope();
-                if (scopeD.isEmpty()) {
-                    break;
-                }
-                chain.addLast(scopeD.get());
-                expr = scopeD.get();
-            }
-            else if (expr.isFieldAccessExpr()) {
-                FieldAccessExpr mce = expr.asFieldAccessExpr();
-                chain.addLast(mce.getScope());
-                expr = mce.getScope();
-            }
-            else {
-                break;
-            }
-        }
+        LinkedList<Expression> chain = buildScopeChain(expr);
 
         while(!chain.isEmpty()) {
             expr = chain.pollLast();
@@ -798,6 +780,30 @@ public class Evaluator {
         }
         variable = evaluateMethodCall(variable, methodCall);
         return variable;
+    }
+
+    LinkedList<Expression> buildScopeChain(Expression expr) {
+        LinkedList<Expression> chain = new LinkedList<>();
+        while (true) {
+            if (expr.isMethodCallExpr()) {
+                MethodCallExpr mce = expr.asMethodCallExpr();
+                Optional<Expression> scopeD = mce.getScope();
+                if (scopeD.isEmpty()) {
+                    break;
+                }
+                chain.addLast(scopeD.get());
+                expr = scopeD.get();
+            }
+            else if (expr.isFieldAccessExpr()) {
+                FieldAccessExpr mce = expr.asFieldAccessExpr();
+                chain.addLast(mce.getScope());
+                expr = mce.getScope();
+            }
+            else {
+                break;
+            }
+        }
+        return chain;
     }
 
     private Variable resolveExpression(TypeExpr expr) {

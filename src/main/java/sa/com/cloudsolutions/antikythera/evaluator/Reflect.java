@@ -21,8 +21,8 @@ public class Reflect {
      * @param evaluator  the evaluator to use to evaluate the arguments if any
      * @return A ReflectionArguments object which contains all the information required to execute a method
      *          using reflection.
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @throws AntikytheraException if something goes wrong with the parser related code
+     * @throws ReflectiveOperationException if reflective oeprations fail
      */
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator)
             throws AntikytheraException, ReflectiveOperationException {
@@ -92,9 +92,7 @@ public class Reflect {
         };
     }
 
-
-
-    public static Object getDefault(String elementType) throws ClassNotFoundException {
+    public static Object getDefault(String elementType)  {
         return switch (elementType) {
             case "int" -> 0;
             case "double" -> 0.0;
