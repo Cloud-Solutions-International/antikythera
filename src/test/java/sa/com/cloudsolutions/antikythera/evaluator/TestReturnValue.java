@@ -51,7 +51,6 @@ class TestReturnValue extends TestHelper {
             cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
             evaluator = new Evaluator("");
             evaluator.setupFields(cu);
-            evaluator.setScope("returnValue");
         }
 
     }

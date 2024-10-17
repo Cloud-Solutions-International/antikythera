@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.CastExpr;
-import com.google.errorprone.annotations.Var;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -42,7 +41,6 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -75,10 +73,8 @@ public class SpringEvaluator extends Evaluator {
     @Override
     public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         md.getParentNode().ifPresent(p -> {
-            if (p instanceof ClassOrInterfaceDeclaration cdecl) {
-                if (cdecl.isAnnotationPresent("RestController")) {
-                    currentMethod = md;
-                }
+            if (p instanceof ClassOrInterfaceDeclaration cdecl && cdecl.isAnnotationPresent("RestController")) {
+                 currentMethod = md;
             }
         });
 
@@ -587,19 +583,19 @@ public class SpringEvaluator extends Evaluator {
         super.handleApplicationException(e);
     }
 
+    @Override
     boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
         if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
             return true;
         }
         Optional<Node> parent = variable.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd) {
-            if (fd.getAnnotationByName("Autowired").isPresent()) {
-                Evaluator eval = new Evaluator(resolvedClass);
-                Variable v = new Variable(eval);
-                fields.put(variable.getNameAsString(), v);
+        if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
+                && fd.getAnnotationByName("Autowired").isPresent()) {
+            Evaluator eval = new Evaluator(resolvedClass);
+            Variable v = new Variable(eval);
+            fields.put(variable.getNameAsString(), v);
 
-                return true;
-            }
+            return true;
         }
         return false;
     }

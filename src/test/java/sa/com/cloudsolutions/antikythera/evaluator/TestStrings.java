@@ -25,7 +25,6 @@ class TestStrings extends TestHelper{
         AntikytheraRunTime.push(u);
         MethodDeclaration helloUpper = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloUpper")).orElseThrow();
-        evaluator.setScope("helloUpper");
         evaluator.executeMethod(helloUpper);
 
         assertTrue(outContent.toString().contains("Hello, UPPER CASED"));
@@ -35,7 +34,6 @@ class TestStrings extends TestHelper{
     void testHello() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloWorld = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
-        evaluator.setScope("helloWorld");
         evaluator.executeMethod(helloWorld);
 
         assertTrue(outContent.toString().contains("Hello, Antikythera"));
@@ -45,7 +43,6 @@ class TestStrings extends TestHelper{
     void testLongChain() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloWorld = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("longChain")).orElseThrow();
-        evaluator.setScope("helloWorld");
         evaluator.executeMethod(helloWorld);
 
         assertTrue(outContent.toString().contains("his is a field"));
@@ -54,7 +51,6 @@ class TestStrings extends TestHelper{
     void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloName = compiler.getCompilationUnit()
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
-        evaluator.setScope("helloName");
         Variable v = new Variable("Cloud Solutions");
         AntikytheraRunTime.push(v);
         evaluator.executeMethod(helloName);

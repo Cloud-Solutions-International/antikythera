@@ -109,8 +109,6 @@ public class Evaluator {
 
     private Deque<TryStmt> catching = new LinkedList<>();
 
-    private String scope;
-
     static {
         try {
             Evaluator.finches = new HashMap<>();
@@ -385,7 +383,13 @@ public class Evaluator {
      * Will return the result of the variable declaration as well as saving it in the symbol table.
      *
      * @param expr the expression
-     * @return a Variable or null if the expression could not be evaluated or results in null
+     * @return a Variable or null if the expression could not be evaluated.
+     *    If the expression itself evaluates to null, the result will be a Variable instance
+     *    holding a null value.
+     *
+     *    in some cases multiple variables can be declared in a single line. In such a situation
+     *    the returned value will be the last variable declared. you will need to fetch the rest
+     *    using the local symbol table.
      * @throws EvaluatorException if there is an error evaluating the expression
      */
     Variable evaluateVariableDeclaration(Expression expr) throws AntikytheraException, ReflectiveOperationException {
@@ -417,8 +421,8 @@ public class Evaluator {
                         setLocal(expression, decl.getNameAsString(), v);
                     }
                 }
-
             }
+
         }
         return v;
     }
@@ -1301,10 +1305,6 @@ public class Evaluator {
 
     public Map<String, Object> getFinches() {
         return finches;
-    }
-
-    public void setScope(String scope) {
-        this.scope = scope;
     }
 
     public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
