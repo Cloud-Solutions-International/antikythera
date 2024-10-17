@@ -42,7 +42,6 @@ import java.util.Set;
 
 public class SpringTestGenerator implements  TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
-    // TODO this needs to be set properly
     private String commonPath;
     Set<String> testMethodNames = new HashSet<>();
     RepositoryQuery last;

@@ -186,6 +186,7 @@ public class SpringEvaluator extends Evaluator {
                     MethodCallExpr methodCall = expression.asMethodCallExpr();
                     Optional<Expression> scope = methodCall.getScope();
                     if(scope.isPresent() && scope.get().isNameExpr()) {
+                        // todo fix this
                         RepositoryQuery q = executeQuery(scope.get().asNameExpr().getNameAsString(), methodCall);
 
                         String qualifiedName = decl.getType().resolve().asReferenceType().getQualifiedName();
@@ -373,25 +374,6 @@ public class SpringEvaluator extends Evaluator {
         generators.add(generator);
     }
 
-    /**
-     * Extracts the type from a method call expression
-     *
-     * This is used when the controller directly returns the result of a method call.
-     * we iterate through the imports to find the class. Then we iterate through the
-     * methods in that class to identify what is being called. Finally when we find
-     * the match, we extract it's type.
-     *
-     * todo - need to improve the handling of overloaded methods.
-     *
-     * @param type
-     * @param methodCallExpr
-     * @throws IOException
-     */
-    private void extractTypeFromCall(Type type, MethodCallExpr methodCallExpr) throws IOException {
-
-    }
-
-
     private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         Expression expression = returnStmt.getExpression().orElse(null);
         if (expression != null) {
@@ -419,24 +401,16 @@ public class SpringEvaluator extends Evaluator {
 
     private void returnWithMethodCall(MethodDeclaration md, Expression expression) {
         MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-        try {
-            Optional<Expression> scope = methodCallExpr.getScope();
-            if (scope.isPresent()) {
-                Type type;
-                if (scope.get().isFieldAccessExpr()) {
-                    type = fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType();
-                } else {
-                    type = fields.get(scope.get().asNameExpr().getNameAsString()).getType();
-                }
-
-                if (type != null) {
-                    extractTypeFromCall(type, methodCallExpr);
-                } else {
-                    logger.debug("Type not found {}", scope.get());
-                }
+        Optional<Expression> scope = methodCallExpr.getScope();
+        if (scope.isPresent()) {
+            Type type;
+            if (scope.get().isFieldAccessExpr()) {
+                type = fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType();
+            } else {
+                type = fields.get(scope.get().asNameExpr().getNameAsString()).getType();
             }
-        } catch (IOException e) {
-            throw new GeneratorException("Exception while identifying dependencies", e);
+            logger.warn("Type not found {}", scope.get());
+
         }
     }
 
@@ -464,22 +438,18 @@ public class SpringEvaluator extends Evaluator {
                 response.setResponse(typeArg.asStringLiteralExpr().asString());
             } else if (typeArg.isMethodCallExpr()) {
                 MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                try {
-                    Optional<Expression> scope = methodCallExpr.getScope();
-                    if (scope.isPresent()) {
-                        Variable f = (scope.get().isFieldAccessExpr())
-                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                : fields.get(scope.get().asNameExpr().getNameAsString());
-                        if (f != null) {
+                Optional<Expression> scope = methodCallExpr.getScope();
+                if (scope.isPresent()) {
+                    Variable f = (scope.get().isFieldAccessExpr())
+                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
+                            : fields.get(scope.get().asNameExpr().getNameAsString());
+                    if (f != null) {
+                        // todo fix this
+                        System.out.println(f.getType() + "," + methodCallExpr);
 
-                            extractTypeFromCall(f.getType(), methodCallExpr);
-
-                        } else {
-                            logger.debug("Type not found {}", scope.get());
-                        }
+                    } else {
+                        logger.debug("Type not found {}", scope.get());
                     }
-                } catch (IOException e) {
-                    throw new GeneratorException("Exception while identifying dependencies", e);
                 }
             } else if (typeArg.isCastExpr()) {
                 CastExpr castExpr = typeArg.asCastExpr();
