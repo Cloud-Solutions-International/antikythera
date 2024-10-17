@@ -38,8 +38,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +85,11 @@ public class Evaluator {
      * The most recent return value that was encountered.
      */
     protected Variable returnValue;
+
+    /**
+     * The parent block of the last executed return statement.
+     */
+    protected Node returnFrom;
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
@@ -192,6 +195,8 @@ public class Evaluator {
              */
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
+        } else if (expr.isMethodReferenceExpr()) {
+            return evaluateMethodReference(expr.asMethodReferenceExpr());
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
@@ -203,6 +208,10 @@ public class Evaluator {
             return createArray(arrayInitializerExpr);
         }
         return null;
+    }
+
+    Variable evaluateMethodReference(MethodReferenceExpr expr) {
+        return resolveExpression(expr.getScope().asTypeExpr());
     }
 
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
@@ -785,6 +794,11 @@ public class Evaluator {
         return variable;
     }
 
+    private Variable resolveExpression(TypeExpr expr) {
+        Type t = expr.getType();
+        return null;
+    }
+
     private Variable resolveExpression(NameExpr expr) {
         if(expr.getNameAsString().equals("System")) {
             Variable variable = new Variable(System.class);
@@ -1034,55 +1048,6 @@ public class Evaluator {
             logger.info("Could not find class {}", className);
         }
         return null;
-    }
-
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Variable scopedVariable)
-            throws AntikytheraException, ReflectiveOperationException {
-        ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
-        ResolvedReferenceTypeDeclaration declaringType = resolvedMethod.declaringType();
-        ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
-
-        String methodName = reflectionArguments.getMethodName();
-        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
-        Object[] args = reflectionArguments.getArgs();
-        Class<?> clazz = scopedVariable  == null ?  getClass(declaringType.getQualifiedName()) : scopedVariable.getClazz();
-
-        if (clazz != null && declaringType.isClass() && declaringType.getPackageName().equals("java.lang")) {
-            Method method = findMethod(clazz, methodName, paramTypes);
-            if(method != null) {
-                if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                    return new Variable(method.invoke(null, args));
-
-                } else {
-                    /*
-                     * Some methods take an Object[] as the only argument and that will match against our
-                     * criteria. However that means further changes to the args are required.
-                     */
-                    Object[] finalArgs = args;
-                    if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Object[].class)) {
-                        finalArgs = new Object[]{args};
-                    }
-                    return  new Variable(method.invoke(scopedVariable.getValue(), finalArgs));
-                }
-            }
-            throw new EvaluatorException(String.format("Method %s not found ", methodName));
-        } else {
-
-                if (declaringType.getQualifiedName().equals("java.util.List") || declaringType.getQualifiedName().equals("java.util.Map")) {
-                    for (int i = 0; i < args.length; i++) {
-                        paramTypes[i] = Object.class;
-                    }
-                }
-                Method method = findMethod(scopedVariable.getValue().getClass(), methodName, paramTypes);
-                if(method != null) {
-                    Variable response = new Variable(method.invoke(scopedVariable.getValue(), args));
-                    response.setClazz(method.getReturnType());
-                    return response;
-                }
-                throw new EvaluatorException(String.format("Method %s not found ", methodName));
-
-        }
     }
 
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator,
@@ -1395,6 +1360,9 @@ public class Evaluator {
             for (Statement stmt : statements) {
                 if(loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
                     executeStatement(stmt);
+                    if (returnFrom != null) {
+                        break;
+                    }
                 }
             }
         } catch (EvaluatorException|ReflectiveOperationException ex) {
@@ -1444,7 +1412,7 @@ public class Evaluator {
             /*
              * When returning we need to know if a value has been returned.
              */
-            returnValue = evaluateReturnStatement(stmt);
+            returnValue = executeReturnStatement(stmt);
 
         } else if (stmt.isForStmt()) {
             /*
@@ -1620,7 +1588,7 @@ public class Evaluator {
         }
     }
 
-    Variable evaluateReturnStatement(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
+    Variable executeReturnStatement(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
         Optional<Expression> expr = stmt.asReturnStmt().getExpression();
         if(expr.isPresent()) {
             returnValue = evaluateExpression(expr.get());
@@ -1628,6 +1596,7 @@ public class Evaluator {
         else {
             returnValue = null;
         }
+        returnFrom = stmt.getParentNode().orElse(null);
         return returnValue;
     }
 

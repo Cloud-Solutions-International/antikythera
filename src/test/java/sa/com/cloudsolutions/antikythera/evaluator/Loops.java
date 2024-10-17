@@ -67,6 +67,17 @@ public class Loops {
         }
     }
 
+    private void forEachLoopWithBreak() {
+        int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10};
+        for (int number : numbers) {
+            if(number == 10) {
+                break;
+            }
+            System.out.println(number);
+        }
+    }
+
+
     private void forEach() {
         List<Integer> numbers = List.of(1, 2, 3, 4, 5);
         numbers.forEach(System.out::println);

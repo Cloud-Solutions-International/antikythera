@@ -303,7 +303,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    Variable evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
+    Variable executeReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
         /*
          * Leg work is done in the overloaded method.
          */
@@ -328,7 +328,7 @@ public class SpringEvaluator extends Evaluator {
                 return v;
             }
         }
-        super.evaluateReturnStatement(stmt);
+        super.executeReturnStatement(stmt);
         return null;
     }
 

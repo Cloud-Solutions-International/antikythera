@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestReturnValue extends TestHelper {
@@ -43,6 +44,14 @@ class TestReturnValue extends TestHelper {
         MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
         evaluator.executeMethod(printNumber);
         assertTrue(outContent.toString().contains("10"));
+    }
+
+    @Test
+    void testConditionally() throws  AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
+        evaluator.executeMethod(printNumber);
+        assertFalse(outContent.toString().contains("THIS SHOULD NOT BE PRINTED"));
     }
 
     class ReturnValueEval extends AbstractCompiler {

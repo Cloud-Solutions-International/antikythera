@@ -35,12 +35,17 @@ public class TestLoops extends  TestHelper {
 
 
     @ParameterizedTest
-    @ValueSource(strings = {"forLoop", "forLoopWithBreak", "whileLoop", "doWhileLoop", "whileLoopWithBreak","forEachLoop"})
+    @ValueSource(strings = {"forLoop", "forLoopWithBreak", "whileLoop", "doWhileLoop", "forEach",
+            "whileLoopWithBreak","forEachLoop","forEachLoopWithBreak", "forLoopWithReturn"})
     void testLoops(String methodName) throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodName)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
-        assertNull(v.getValue());
+        if(methodName.equals("forLoopWithReturn")) {
+            assertEquals("Hello world", v.getValue());
+        } else {
+            assertNull(v.getValue());
+        }
         assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString());
     }
 
@@ -48,7 +53,7 @@ public class TestLoops extends  TestHelper {
         protected TestLoopsCompiler() throws IOException, AntikytheraException {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Loops.java"));
             compileDependencies();
-            evaluator = new Evaluator("");
+            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Loops");
             evaluator.setupFields(cu);
         }
     }

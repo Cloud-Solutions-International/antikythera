@@ -19,6 +19,16 @@ public class ReturnValue {
         return number;
     }
 
+    public int returnConditionally() {
+        if (number == 10) {
+            return 10;
+        } else if (number == 20){
+            return 20;
+        }
+        System.out.println("THIS SHOULD NOT BE PRINTED");
+
+        return 11;
+    }
 }
 
 
