@@ -6,13 +6,45 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class Reflect {
+    /**
+     * Keeps a map of wrapper types to their primitive counter part
+     * for example Integer.class -> int.class
+     */
+    static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
+    /**
+     * The opposite of wrapperToPrimitive
+     * here int.class -> Integer.class
+     */
+    static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
+    static {
+        /*
+         * of course those maps are absolutely no use unless we can fill them up
+         */
+        wrapperToPrimitive.put(Integer.class, int.class);
+        wrapperToPrimitive.put(Double.class, double.class);
+        wrapperToPrimitive.put(Boolean.class, boolean.class);
+        wrapperToPrimitive.put(Long.class, long.class);
+        wrapperToPrimitive.put(Float.class, float.class);
+        wrapperToPrimitive.put(Short.class, short.class);
+        wrapperToPrimitive.put(Byte.class, byte.class);
+        wrapperToPrimitive.put(Character.class, char.class);
+
+        for(Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
+            primitiveToWrapper.put(entry.getValue(), entry.getKey());
+        }
+    }
+
+    private Reflect() {}
 
     /**
      * Build the suitable set of arguments for use with a reflective  method call
@@ -115,4 +147,94 @@ public class Reflect {
             default -> null;
         };
     }
+
+
+    /**
+     * Finds a matching method using parameters.
+     *
+     * This function has side effects. The paramTypes may end up being converted from a boxed to
+     * primitive or wise versa. This is because the Variable class that we use has an Object
+     * representing the value. Where as some of the methods have parameters that require a primitive
+     * type. Hence the conversion needs to happen.
+     *
+     * @param clazz the class on which we need to match the method name
+     * @param methodName the name of the method to find
+     * @param paramTypes and array or parameter types.
+     * @return a Method instance or null.
+     */
+    public static Method findMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+
+        Method[] methods = clazz.getMethods();
+        for (Method m : methods) {
+
+            if (m.getName().equals(methodName)) {
+                Class<?>[] types = m.getParameterTypes();
+                if(types.length == 1 && types[0].equals(Object[].class)) {
+                    return m;
+                }
+                if (types.length != paramTypes.length) {
+                    continue;
+                }
+                boolean found = true;
+                for(int i = 0 ; i < paramTypes.length ; i++) {
+                    if (findMatch(paramTypes, types, i)) continue;
+                    if(types[i].getName().equals("java.lang.Object")) {
+                        continue;
+                    }
+                    found = false;
+                }
+                if (found) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find a constructor matching the given parameters.
+     *
+     * This method has side effects. The paramTypes may end up being converted from a boxed to primitive
+     * or vice verce
+     *
+     * @param clazz the Class for which we need to find a constructor
+     * @param paramTypes the types of the parameters we are looking for.
+     * @return a Constructor instance or null.
+     */
+    public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] paramTypes) {
+        for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+            Class<?>[] types = c.getParameterTypes();
+            if (types.length != paramTypes.length) {
+                continue;
+            }
+            boolean found = true;
+            for(int i = 0 ; i < paramTypes.length ; i++) {
+                if (findMatch(paramTypes, types, i)) continue;
+                found = false;
+            }
+            if (found) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    private static boolean findMatch(Class<?>[] paramTypes, Class<?>[] types, int i) {
+        if (types[i].isAssignableFrom(paramTypes[i])) {
+            return true;
+        }
+        if (types[i].equals(paramTypes[i])) {
+            return true;
+        }
+        if (wrapperToPrimitive.get(types[i]) != null && wrapperToPrimitive.get(types[i]).equals(paramTypes[i])) {
+            paramTypes[i] = wrapperToPrimitive.get(types[i]);
+            return true;
+        }
+        if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
+            paramTypes[i] = primitiveToWrapper.get(types[i]);
+            return true;
+        }
+        return false;
+    }
+
 }

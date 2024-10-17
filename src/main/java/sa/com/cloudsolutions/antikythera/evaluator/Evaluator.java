@@ -92,23 +92,6 @@ public class Evaluator {
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
-    static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
-    static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
-    static {
-        wrapperToPrimitive.put(Integer.class, int.class);
-        wrapperToPrimitive.put(Double.class, double.class);
-        wrapperToPrimitive.put(Boolean.class, boolean.class);
-        wrapperToPrimitive.put(Long.class, long.class);
-        wrapperToPrimitive.put(Float.class, float.class);
-        wrapperToPrimitive.put(Short.class, short.class);
-        wrapperToPrimitive.put(Byte.class, byte.class);
-        wrapperToPrimitive.put(Character.class, char.class);
-
-        for(Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
-            primitiveToWrapper.put(entry.getValue(), entry.getKey());
-        }
-    }
-
     private Deque<TryStmt> catching = new LinkedList<>();
 
     static {
@@ -622,7 +605,7 @@ public class Evaluator {
                             args[i + 1] = vv.getValue();
                         }
 
-                        Constructor<?> cons = findConstructor(c, paramTypes);
+                        Constructor<?> cons = Reflect.findConstructor(c, paramTypes);
                         if(cons !=  null) {
                             Object instance = cons.newInstance(args);
                             return new Variable(type, instance);
@@ -635,7 +618,7 @@ public class Evaluator {
             } else {
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this);
 
-                Constructor<?> cons = findConstructor(clazz, reflectionArguments.getParamTypes());
+                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getParamTypes());
                 if(cons !=  null) {
                     Object instance = cons.newInstance(reflectionArguments.getArgs());
                     return new Variable(type, instance);
@@ -881,7 +864,7 @@ public class Evaluator {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
         Object[] args = reflectionArguments.getArgs();
-        Method method = findMethod(clazz, methodName, paramTypes);
+        Method method = Reflect.findMethod(clazz, methodName, paramTypes);
         if (method != null) {
             Object[] finalArgs = args;
             if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Object[].class)) {
@@ -956,102 +939,6 @@ public class Evaluator {
             Optional<Node> n = methodCall.resolve().toAst();
             if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
                 return executeMethod(md);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Finds a matching method using parameters.
-     *
-     * This function has side effects. The paramTypes may end up being converted from a boxed to
-     * primitive or wise versa. This is because the Variable class that we use has an Object
-     * representing the value. Where as some of the methods have parameters that require a primitive
-     * type. Hence the conversion needs to happen.
-     *
-     * @param clazz the class on which we need to match the method name
-     * @param methodName the name of the method to find
-     * @param paramTypes and array or parameter types.
-     * @return a Method instance or null.
-     */
-    private Method findMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
-
-        Method[] methods = clazz.getMethods();
-        for (Method m : methods) {
-
-            if (m.getName().equals(methodName)) {
-                Class<?>[] types = m.getParameterTypes();
-                if(types.length == 1 && types[0].equals(Object[].class)) {
-                    return m;
-                }
-                if (types.length != paramTypes.length) {
-                    continue;
-                }
-                boolean found = true;
-                for(int i = 0 ; i < paramTypes.length ; i++) {
-                    if (types[i].isAssignableFrom(paramTypes[i])) {
-                        continue;
-                    }
-                    if (types[i].equals(paramTypes[i])) {
-                        continue;
-                    }
-                    if (wrapperToPrimitive.get(types[i]) != null && wrapperToPrimitive.get(types[i]).equals(paramTypes[i])) {
-                        paramTypes[i] = wrapperToPrimitive.get(types[i]);
-                        continue;
-                    }
-                    if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
-                        paramTypes[i] = primitiveToWrapper.get(types[i]);
-                        continue;
-                    }
-                    if(types[i].getName().equals("java.lang.Object")) {
-                        continue;
-                    }
-                    found = false;
-                }
-                if (found) {
-                    return m;
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Find a constructor matching the given parameters.
-     *
-     * This method has side effects. The paramTypes may end up being converted from a boxed to primitive
-     * or vice verce
-     *
-     * @param clazz the Class for which we need to find a constructor
-     * @param paramTypes the types of the parameters we are looking for.
-     * @return a Constructor instance or null.
-     */
-    private Constructor<?> findConstructor(Class<?> clazz, Class<?>[] paramTypes) {
-        for (Constructor<?> c : clazz.getDeclaredConstructors()) {
-            Class<?>[] types = c.getParameterTypes();
-            if (types.length != paramTypes.length) {
-                continue;
-            }
-            boolean found = true;
-            for(int i = 0 ; i < paramTypes.length ; i++) {
-                if (types[i].isAssignableFrom(paramTypes[i])) {
-                    continue;
-                }
-                if (types[i].equals(paramTypes[i])) {
-                    continue;
-                }
-                if (wrapperToPrimitive.get(types[i]) != null && wrapperToPrimitive.get(types[i]).equals(paramTypes[i])) {
-                    paramTypes[i] = wrapperToPrimitive.get(types[i]);
-                    continue;
-                }
-                if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
-                    paramTypes[i] = primitiveToWrapper.get(types[i]);
-                    continue;
-                }
-                found = false;
-            }
-            if (found) {
-                return c;
             }
         }
         return null;
