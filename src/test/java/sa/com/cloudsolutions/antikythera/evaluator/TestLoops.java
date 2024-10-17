@@ -5,6 +5,8 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -15,6 +17,8 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TestLoops extends  TestHelper {
 
@@ -29,59 +33,15 @@ public class TestLoops extends  TestHelper {
         System.setOut(new PrintStream(outContent));
     }
 
-    @Test
-    void testForLoop() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
-        MethodDeclaration forLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("forLoop")).orElseThrow();
-        Variable v = evaluator.executeMethod(forLoop);
-        assertNull(v.getValue());
-        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
-    }
 
-    @Test
-    void testForLoopWithBreak() throws AntikytheraException, ReflectiveOperationException {
+    @ParameterizedTest
+    @ValueSource(strings = {"forLoop", "forLoopWithBreak", "whileLoop", "doWhileLoop", "whileLoopWithBreak","forEachLoop"})
+    void testLoops(String methodName) throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
-        MethodDeclaration forLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("forLoopWithBreak")).orElseThrow();
-        Variable v = evaluator.executeMethod(forLoop);
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodName)).orElseThrow();
+        Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
-        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
-    }
-
-    @Test
-    void testWhileLoop() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
-        MethodDeclaration whileLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("whileLoop")).orElseThrow();
-        Variable v = evaluator.executeMethod(whileLoop);
-        assertNull(v.getValue());
-        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
-    }
-
-    @Test
-    void testDoWhileLoop() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
-        MethodDeclaration whileLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doWhileLoop")).orElseThrow();
-        Variable v = evaluator.executeMethod(whileLoop);
-        assertNull(v.getValue());
-        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
-    }
-
-    @Test
-    void testWhileWithBreak() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
-        MethodDeclaration whileLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("whileLoopWithBreak")).orElseThrow();
-        Variable v = evaluator.executeMethod(whileLoop);
-        assertNull(v.getValue());
-        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
-    }
-
-    @Test
-    void testForEachLoop() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
-        MethodDeclaration forLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("forEachLoop")).orElseThrow();
-        Variable v = evaluator.executeMethod(forLoop);
-        assertNull(v.getValue());
-        assertEquals("1\n2\n3\n4\n5\n", outContent.toString() );
-
+        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString());
     }
 
     class TestLoopsCompiler extends ClassProcessor {

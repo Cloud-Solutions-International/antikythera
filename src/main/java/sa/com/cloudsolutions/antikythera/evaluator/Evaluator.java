@@ -693,11 +693,7 @@ public class Evaluator {
             BlockStmt block = findBlockStatement(node);
             int hash = (block != null) ? block.hashCode() : 0;
 
-            Map<String, Variable> localVars = this.locals.get(hash);
-            if (localVars == null) {
-                localVars = new HashMap<>();
-                this.locals.put(hash, localVars);
-            }
+            Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
             localVars.put(nameAsString, v);
         }
     }

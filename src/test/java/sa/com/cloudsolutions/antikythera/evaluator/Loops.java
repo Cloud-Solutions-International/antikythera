@@ -23,6 +23,16 @@ public class Loops {
         }
     }
 
+    private String forLoopWithReturn() {
+        for (int i = 0; i < 20; ++i) {
+            if (i == 10) {
+                return "Hello world";
+            }
+            System.out.println(i);
+        }
+        return null;
+    }
+
     private void whileLoop() {
         int i = 0;
         while (i < 10) {
@@ -51,7 +61,7 @@ public class Loops {
     }
 
     private void forEachLoop() {
-        int[] numbers = {1, 2, 3, 4, 5};
+        int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         for (int number : numbers) {
             System.out.println(number);
         }
