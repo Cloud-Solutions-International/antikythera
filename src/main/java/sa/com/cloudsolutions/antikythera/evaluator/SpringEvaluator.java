@@ -121,11 +121,7 @@ public class SpringEvaluator extends Evaluator {
                         }
                         else {
                             if (className.startsWith("java.util")) {
-                                Variable v = new Variable(switch(className){
-                                    case "java.util.List" -> new ArrayList<>();
-                                    case "java.util.Map" -> new HashMap<>();
-                                    default -> null;
-                                });
+                                Variable v = Reflect.variableFactory(className);
                                 /*
                                  * Pushed to be popped later in the callee
                                  */
@@ -200,13 +196,7 @@ public class SpringEvaluator extends Evaluator {
                         try {
                             Variable v = null;
                             if(qualifiedName.startsWith("java.")) {
-                                switch (qualifiedName) {
-                                    case "java.util.List" -> v = new Variable(new ArrayList<>());
-                                    case "java.util.Map" -> v = new Variable(new HashMap<>());
-                                    case "java.util.Set" -> v = new Variable(new HashSet<>());
-                                    case "java.util.Optional" -> v = new Variable(Optional.empty());
-                                    case "java.lang.Long" -> v = new Variable(0L);
-                                }
+                                v = Reflect.variableFactory(qualifiedName);
                             }
                             else {
                                 v = new Variable(DTOBuddy.createDynamicDTO(decl.getType().asClassOrInterfaceType()));

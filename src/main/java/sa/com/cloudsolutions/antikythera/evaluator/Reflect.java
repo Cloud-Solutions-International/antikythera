@@ -6,7 +6,11 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 
 public class Reflect {
 
@@ -72,5 +76,30 @@ public class Reflect {
         }
 
         return new ReflectionArguments(methodName, args, paramTypes);
+    }
+
+    public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
+        return switch (elementType) {
+            case "int" -> int.class;
+            case "double" -> double.class;
+            case "boolean" -> boolean.class;
+            case "long" -> long.class;
+            case "float" -> float.class;
+            case "short" -> short.class;
+            case "byte" -> byte.class;
+            case "char" -> char.class;
+            default -> Class.forName(elementType);
+        };
+    }
+
+    public static Variable variableFactory(String qualifiedName) {
+        return switch (qualifiedName) {
+            case "java.util.List" ->  new Variable(new ArrayList<>());
+            case "java.util.Map" ->  new Variable(new HashMap<>());
+            case "java.util.Set" ->  new Variable(new HashSet<>());
+            case "java.util.Optional" ->  new Variable(Optional.empty());
+            case "java.lang.Long" ->  new Variable(0L);
+            default -> null;
+        };
     }
 }

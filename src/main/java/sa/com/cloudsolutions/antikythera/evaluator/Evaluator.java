@@ -13,8 +13,6 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
-import com.github.javaparser.ast.type.ArrayType;
-import com.google.errorprone.annotations.Var;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -59,7 +57,6 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
-import java.util.Stack;
 
 
 /**
@@ -216,31 +213,15 @@ public class Evaluator {
             Type componentType = vdecl.getType();
             Class<?> componentClass;
 
-            // Handle primitive types explicitly using modern switch case
-            componentClass = switch (componentType.getElementType().toString()) {
-                case "int" -> int.class;
-                case "double" -> double.class;
-                case "boolean" -> boolean.class;
-                case "long" -> long.class;
-                case "float" -> float.class;
-                case "short" -> short.class;
-                case "byte" -> byte.class;
-                case "char" -> char.class;
-                default -> Class.forName(componentType.getElementType().toString());
-            };
+            String elementType = componentType.getElementType().toString();
+            componentClass = Reflect.getComponentClass(elementType);
 
-            // Extract the elements from the ArrayInitializerExpr
             List<Expression> values = arrayInitializerExpr.getValues();
-
-            // Create an array of the appropriate type
             Object array = Array.newInstance(componentClass, values.size());
 
-            // Populate the array with the extracted elements
             for (int i = 0; i < values.size(); i++) {
                 Object value = evaluateExpression(values.get(i)).getValue();
-
-                    Array.set(array, i, value);
-
+                Array.set(array, i, value);
             }
 
             return new Variable(array);
@@ -1418,59 +1399,99 @@ public class Evaluator {
      * @throws Exception if the execution fails.
      */
     private void executeStatement(Statement stmt) throws Exception {
-
         if (stmt.isExpressionStmt()) {
+            /*
+             * A line of code that is an expression. The expresion itself can fall into various different
+             * categories and we let the evaluateExpression method take care of all that
+             */
             evaluateExpression(stmt.asExpressionStmt().getExpression());
+
         } else if (stmt.isIfStmt()) {
+            /*
+             * If then Else are all treated together
+             */
             ifThenElseBlock(stmt);
+
         } else if (stmt.isTryStmt()) {
+            /*
+             * Try takes a bit of trying
+             */
             catching.addLast(stmt.asTryStmt());
             executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
         } else if (stmt.isThrowStmt()) {
-            ThrowStmt t = stmt.asThrowStmt();
-            if (t.getExpression().isObjectCreationExpr()) {
-                ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
-                Variable v = createObject(stmt, null, oce);
-                if (v.getValue() instanceof Exception ex) {
-                    throw ex;
-                } else {
-                    logger.error("Should have an exception");
-                }
-            }
+            /*
+             * Throw is tricky because we need to distinguish between what exceptions were raised by
+             * issues in Antikythera and what are exceptions that are part of the application
+             */
+            executeThrow(stmt);
         } else if (stmt.isReturnStmt()) {
-
+            /*
+             * When returning we need to know if a value has been returned.
+             */
             returnValue = evaluateReturnStatement(stmt);
 
         } else if (stmt.isForStmt()) {
-
+            /*
+             * Traditional for loop
+             */
             executeForLoop(stmt.asForStmt());
-
         } else if (stmt.isForEachStmt()) {
-            ForEachStmt forEachStmt = stmt.asForEachStmt();
-            Variable iter = evaluateExpression(forEachStmt.getIterable());
-            Array arr = (Array) iter.getValue();
-            Variable variable = evaluateExpression(forEachStmt.getVariable());
-
-            System.out.println(forEachStmt);
+            /*
+             * Python style for each
+             */
+            executeForEach(stmt);
         } else if (stmt.isDoStmt()) {
-
+            /*
+             * It may not be used all that much but we still have to support do while.
+             */
             executeDoWhile(stmt.asDoStmt());
 
         } else if(stmt.isSwitchStmt()) {
             SwitchStmt switchExpr = stmt.asSwitchStmt();
             System.out.println("bada");
         } else if(stmt.isWhileStmt()) {
+            /*
+             * Old fashioned while statement
+             */
             executeWhile(stmt.asWhileStmt());
 
         } else if (stmt.isBlockStmt()) {
-            // in C like languages it's possible to have a block that is not directly
-            // associated with a condtional, loop or method etc.
+            /*
+             * in C like languages it's possible to have a block that is not directly
+             * associated with a condtional, loop or method etc.
+             */
             executeBlock(stmt.asBlockStmt().getStatements());
         } else if (stmt.isBreakStmt()) {
+            /*
+             * Breaking means signalling that the loop has to be ended for that we keep a stack
+             * in with a flag for all the loops that are in our trace
+             */
             loops.pollLast();
             loops.addLast(Boolean.FALSE);
         } else {
             logger.info("Unhandled statement: {}", stmt);
+        }
+    }
+
+    private void executeForEach(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
+        ForEachStmt forEachStmt = stmt.asForEachStmt();
+        Variable iter = evaluateExpression(forEachStmt.getIterable());
+        Object arr = iter.getValue();
+        Variable variable = evaluateExpression(forEachStmt.getVariable());
+
+        System.out.println(forEachStmt);
+    }
+
+    private void executeThrow(Statement stmt) throws Exception {
+        ThrowStmt t = stmt.asThrowStmt();
+        if (t.getExpression().isObjectCreationExpr()) {
+            ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
+            Variable v = createObject(stmt, null, oce);
+            if (v.getValue() instanceof Exception ex) {
+                throw ex;
+            } else {
+                logger.error("Should have an exception");
+            }
         }
     }
 
@@ -1502,6 +1523,12 @@ public class Evaluator {
         loops.pollLast();
     }
 
+    /**
+     * Execute a while loop.
+     * @param whileStmt the while block to execute
+     * @throws AntikytheraException if there is an error in the execution
+     * @throws ReflectiveOperationException if the classes cannot be instantiated as needed with reflection
+     */
     private void executeWhile(WhileStmt whileStmt) throws AntikytheraException, ReflectiveOperationException {
         loops.push(true);
         while((boolean)evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
@@ -1512,7 +1539,7 @@ public class Evaluator {
 
     /**
      * Execute a statement that represents an If - Then or If - Then - Else
-     * @param stmt
+     * @param stmt If / Then statement
      * @throws Exception
      */
     private void ifThenElseBlock(Statement stmt) throws Exception {
