@@ -22,7 +22,17 @@ public class Arithmetic {
         System.out.println(c);
     }
 
+    public void assignments() {
+        int a = 1;
+        int b = 1;
 
+        a *= 2; // a = 2
+        if (a == b) {
+            b += 2;
+        }
+        a = 10; // a = 10 but b still is 1
+        System.out.println(100 + a * b);
+    }
     public void simpleAddition() {
         int a = 10;
         int b = 20;

@@ -29,6 +29,25 @@ public class ReturnValue {
 
         return 11;
     }
+
+    public int deepReturn() {
+        if (number == 10) {
+            number += 2;
+            if(number == 12) {
+                number--;
+                --number;
+                ++number;
+                number++;
+                if(number == 12) {
+                    return number;
+                }
+                System.out.println("A");
+            }
+            System.out.println("B");
+        }
+        System.out.println("C");
+        return 10;
+    }
 }
 
 

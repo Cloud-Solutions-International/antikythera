@@ -357,7 +357,13 @@ public class Evaluator {
         AssignExpr assignExpr = expr.asAssignExpr();
         Expression target = assignExpr.getTarget();
         Expression value = assignExpr.getValue();
-        Variable v = evaluateExpression(value);
+
+        Variable v = switch (assignExpr.getOperator()) {
+            case PLUS -> evaluateBinaryExpression(BinaryExpr.Operator.PLUS, target, value);
+            case MULTIPLY -> evaluateBinaryExpression(BinaryExpr.Operator.MULTIPLY, target, value);
+            case MINUS -> evaluateBinaryExpression(BinaryExpr.Operator.MINUS, target, value);
+            default -> evaluateExpression(value);
+        };
 
         if(target.isFieldAccessExpr()) {
             FieldAccessExpr fae = target.asFieldAccessExpr();
@@ -694,7 +700,7 @@ public class Evaluator {
      * @param v The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getValue(node, nameAsString);
+        Variable old = getLocal(node, nameAsString);
         if (old != null) {
             old.setValue(v.getValue());
         }
@@ -896,6 +902,7 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        returnFrom = null;
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {
             /*
@@ -1103,7 +1110,10 @@ public class Evaluator {
                 return null;
 
             case PLUS:
-                return addOperation(left, right);
+            case MINUS:
+            case MULTIPLY:
+            case DIVIDE:
+                return arithmeticOperation(left, right, operator);
 
             default:
                 return null;
@@ -1135,35 +1145,44 @@ public class Evaluator {
         return new Variable(left.getValue().equals(right.getValue()));
     }
 
+
+    private static Number performOperation(Number left, Number right, BinaryExpr.Operator operator) {
+        return switch (operator) {
+            case PLUS -> left.doubleValue() + right.doubleValue();
+            case MINUS -> left.doubleValue() - right.doubleValue();
+            case DIVIDE -> left.doubleValue() / right.doubleValue();
+            case MULTIPLY -> left.doubleValue() * right.doubleValue();
+            default ->
+                throw new IllegalArgumentException("Unsupported operator: " + operator);
+        };
+    }
+
     /**
-     * Simple addition.
+     * Simple arithmetic operations.
      * String can be added to anything but numbers are tricker.
      * @param left the left operand
      * @param right the right operand
      * @return the result of the add operation which may be arithmatic or string concatenation
      */
-    static Variable addOperation(Variable left, Variable right) {
+    static Variable arithmeticOperation(Variable left, Variable right, BinaryExpr.Operator operator) {
         if (left.getValue() instanceof String || right.getValue() instanceof String) {
             return new Variable(left.getValue().toString() + right.getValue().toString());
         }
-        if (left.getValue() instanceof  Number && right.getValue() instanceof Number) {
-            if (left.getValue() instanceof Double || right.getValue() instanceof Double) {
-                return new Variable((Double) left.getValue() + (Double) right.getValue());
-            }
-            if (left.getValue() instanceof Float || right.getValue() instanceof Float) {
-                return new Variable((Float) left.getValue() + (Float) right.getValue());
-            }
-            if (left.getValue() instanceof Long || right.getValue() instanceof Long) {
-                return new Variable((Long) left.getValue() + (Long) right.getValue());
-            }
-            if (left.getValue() instanceof Integer || right.getValue() instanceof Integer) {
-                return new Variable((Integer) left.getValue() + (Integer) right.getValue());
-            }
-            if (left.getValue() instanceof Short || right.getValue() instanceof Short) {
-                return new Variable((Short) left.getValue() + (Short) right.getValue());
-            }
-            if (left.getValue() instanceof Byte || right.getValue() instanceof Byte) {
-                return new Variable((Byte) left.getValue() + (Byte) right.getValue());
+        if (left.getValue() instanceof Number l && right.getValue() instanceof Number r) {
+            Number result = performOperation(l, r, operator);
+
+            if (l instanceof Double || r instanceof Double) {
+                return new Variable(result.doubleValue());
+            } else if (l instanceof Float || r instanceof Float) {
+                return new Variable(result.floatValue());
+            } else if (l instanceof Long || r instanceof Long) {
+                return new Variable(result.longValue());
+            } else if (l instanceof Integer || r instanceof Integer) {
+                return new Variable(result.intValue());
+            } else if (l instanceof Short || r instanceof Short) {
+                return new Variable(result.shortValue());
+            } else if (l instanceof Byte || r instanceof Byte) {
+                return new Variable(result.byteValue());
             }
         }
         return null;
@@ -1289,6 +1308,7 @@ public class Evaluator {
     }
 
     public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+        returnFrom = null;
         List<Statement> statements = md.getBody().orElseThrow().getStatements();
         NodeList<Parameter> parameters = md.getParameters();
 
