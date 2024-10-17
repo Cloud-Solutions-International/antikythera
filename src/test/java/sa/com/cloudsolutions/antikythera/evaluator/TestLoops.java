@@ -80,7 +80,7 @@ public class TestLoops extends  TestHelper {
         MethodDeclaration forLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("forEachLoop")).orElseThrow();
         Variable v = evaluator.executeMethod(forLoop);
         assertNull(v.getValue());
-        assertEquals("false\n", outContent.toString() );
+        assertEquals("1\n2\n3\n4\n5\n", outContent.toString() );
 
     }
 

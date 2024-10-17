@@ -92,6 +92,21 @@ public class Reflect {
         };
     }
 
+
+
+    public static Object getDefault(String elementType) throws ClassNotFoundException {
+        return switch (elementType) {
+            case "int" -> 0;
+            case "double" -> 0.0;
+            case "boolean" -> false;
+            case "long" -> 0L;
+            case "float" -> 0.0f;
+            case "short" -> Short.valueOf("0");
+            case "byte", "char" -> 0x0;
+            default -> null;
+        };
+    }
+
     public static Variable variableFactory(String qualifiedName) {
         return switch (qualifiedName) {
             case "java.util.List" ->  new Variable(new ArrayList<>());

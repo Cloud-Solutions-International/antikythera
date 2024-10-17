@@ -398,31 +398,51 @@ public class Evaluator {
         for (var decl : varDeclExpr.getVariables()) {
             Optional<Expression> init = decl.getInitializer();
             if (init.isPresent()) {
-                Expression expression = init.get();
-                if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCall = expression.asMethodCallExpr();
-                    v = evaluateMethodCall(methodCall);
-                    if (v != null) {
-                        v.setType(decl.getType());
-                        setLocal(methodCall, decl.getNameAsString(), v);
-                    }
-                }
-                else if(expression.isObjectCreationExpr()) {
-                    v = createObject(expr, decl, expression);
-                    if (v != null) {
-                        v.setType(decl.getType());
-                        setLocal(expression, decl.getNameAsString(), v);
-                    }
+                v = initializeVariable(decl, init.get());
+            }
+            else {
+                /*
+                 * No initializer. We need to create an entry in the symbol table. If the variable is
+                 * primitive we need to set the appropriate default value. Non primitives will be null
+                 */
+                if (decl.getType().isPrimitiveType()) {
+                    Object obj = Reflect.getDefault(decl.getType().asString());
+                    v = new Variable(decl.getType(), obj);
+                    v.setPrimitive(true);
                 }
                 else {
-                    v = evaluateExpression(expression);
-                    if (v != null) {
-                        v.setType(decl.getType());
-                        setLocal(expression, decl.getNameAsString(), v);
-                    }
-                }
-            }
+                    v = new Variable(decl.getType(),null);
 
+                }
+                setLocal(expr, decl.getNameAsString(), v);
+            }
+        }
+        return v;
+    }
+
+    private Variable initializeVariable(VariableDeclarator decl, Expression init) throws AntikytheraException, ReflectiveOperationException {
+        Variable v;
+        if (init.isMethodCallExpr()) {
+            MethodCallExpr methodCall = init.asMethodCallExpr();
+            v = evaluateMethodCall(methodCall);
+            if (v != null) {
+                v.setType(decl.getType());
+                setLocal(methodCall, decl.getNameAsString(), v);
+            }
+        }
+        else if(init.isObjectCreationExpr()) {
+            v = createObject(init, decl, init);
+            if (v != null) {
+                v.setType(decl.getType());
+                setLocal(init, decl.getNameAsString(), v);
+            }
+        }
+        else {
+            v = evaluateExpression(init);
+            if (v != null) {
+                v.setType(decl.getType());
+                setLocal(init, decl.getNameAsString(), v);
+            }
         }
         return v;
     }
@@ -1474,12 +1494,23 @@ public class Evaluator {
     }
 
     private void executeForEach(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
+        loops.addLast(true);
         ForEachStmt forEachStmt = stmt.asForEachStmt();
         Variable iter = evaluateExpression(forEachStmt.getIterable());
         Object arr = iter.getValue();
-        Variable variable = evaluateExpression(forEachStmt.getVariable());
+        evaluateExpression(forEachStmt.getVariable());
 
-        System.out.println(forEachStmt);
+        for(int i = 0 ; i < Array.getLength(arr) ; i++) {
+            Object value = Array.get(arr, i);
+            for(VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+                Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
+                v.setValue(value);
+            }
+
+            executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+        }
+
+        loops.pollLast();
     }
 
     private void executeThrow(Statement stmt) throws Exception {
