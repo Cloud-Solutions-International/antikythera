@@ -206,6 +206,10 @@ public class Evaluator {
         } else if(expr.isArrayInitializerExpr()) {
             ArrayInitializerExpr arrayInitializerExpr = expr.asArrayInitializerExpr();
             return createArray(arrayInitializerExpr);
+        } else if(expr.isEnclosedExpr()) {
+            return evaluateExpression(expr.asEnclosedExpr().getInner());
+        } else if(expr.isCastExpr()) {
+            return evaluateExpression(expr.asCastExpr().getExpression());
         }
         return null;
     }
@@ -876,7 +880,7 @@ public class Evaluator {
         }
     }
 
-    private Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException, EvaluatorException {
+    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException, EvaluatorException {
         Class<?> clazz = v.getClazz();
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
@@ -907,7 +911,7 @@ public class Evaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-    private Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+     Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {

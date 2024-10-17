@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.expr.CastExpr;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -10,7 +9,6 @@ import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -20,11 +18,8 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -169,62 +164,6 @@ public class SpringEvaluator extends Evaluator {
         });
     }
 
-    /**
-     * Evaluates a variable declaration expression.
-     * @param expr the expression
-     * @return a Variable or null if the expression could not be evaluated or results in null
-     * @throws EvaluatorException if there is an error evaluating the expression
-     */
-    @Override
-    Variable evaluateVariableDeclaration(Expression expr) throws AntikytheraException, ReflectiveOperationException {
-        VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-        for (var decl : varDeclExpr.getVariables()) {
-            Optional<Expression> init = decl.getInitializer();
-            if (init.isPresent()) {
-                Expression expression = init.get();
-                if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCall = expression.asMethodCallExpr();
-                    Optional<Expression> scope = methodCall.getScope();
-                    if(scope.isPresent() && scope.get().isNameExpr()) {
-                        // todo fix this
-                        RepositoryQuery q = executeQuery(scope.get().asNameExpr().getNameAsString(), methodCall);
-
-                        String qualifiedName = decl.getType().resolve().asReferenceType().getQualifiedName();
-                        try {
-                            Variable v = null;
-                            if(qualifiedName.startsWith("java.")) {
-                                v = Reflect.variableFactory(qualifiedName);
-                            }
-                            else {
-                                v = new Variable(DTOBuddy.createDynamicDTO(decl.getType().asClassOrInterfaceType()));
-                            }
-                            setLocal(methodCall, decl.getNameAsString(), v);
-                            return v;
-                        } catch (Exception e) {
-                            logger.error("Error while creating dynamic DTO {}", decl.getType().resolve().asReferenceType().getQualifiedName());
-                            throw  new EvaluatorException("in evaluateVariableDeclaration", e);
-                        }
-                    }
-                    else if(scope.isPresent() && scope.get().isFieldAccessExpr()) {
-                        System.out.println("bada");
-                    }
-                    else {
-                        Variable v = evaluateMethodCall(methodCall);
-                        if (v != null) {
-                            v.setType(decl.getType());
-                            setLocal(methodCall, decl.getNameAsString(), v);
-                        }
-                        return v;
-                    }
-                }
-                else if(expression.isObjectCreationExpr()) {
-                    return createObject(varDeclExpr, decl, expression.asObjectCreationExpr());
-                }
-            }
-        }
-        return null;
-    }
-
     private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = respositories.get(name);
         if(repository != null) {
@@ -310,6 +249,7 @@ public class SpringEvaluator extends Evaluator {
          */
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
+        super.executeReturnStatement(stmt);
         if (parent.isPresent() ) {
             // the return statement will have a parent no matter what but the optionals approach
             // requires the use of isPresent.
@@ -329,7 +269,7 @@ public class SpringEvaluator extends Evaluator {
                 return v;
             }
         }
-        super.executeReturnStatement(stmt);
+
         return null;
     }
 
@@ -338,7 +278,8 @@ public class SpringEvaluator extends Evaluator {
             if (parent instanceof IfStmt ifStmt) {
                 Expression condition = ifStmt.getCondition();
                 if (evaluateValidatorCondition(condition)) {
-                    ControllerResponse v = identifyReturnType(stmt, currentMethod);
+                    ControllerResponse v = new ControllerResponse(returnValue);
+
                     if (!flunk) {
                         buildPreconditions(currentMethod, condition);
                     }
@@ -352,14 +293,14 @@ public class SpringEvaluator extends Evaluator {
                         // we have found ourselves a conditional return statement.
                         Expression condition = ifStmt.getCondition();
                         if (evaluateValidatorCondition(condition)) {
-                            ControllerResponse response = identifyReturnType(stmt, currentMethod);
+                            ControllerResponse response = new ControllerResponse(returnValue);
                             if (!flunk) {
                                 buildPreconditions(currentMethod, condition);
                             }
                             return response;
                         }
                     } else if (gramps.get() instanceof MethodDeclaration) {
-                        return identifyReturnType(stmt, currentMethod);
+                        return new ControllerResponse(returnValue);
                     }
                 }
             }
@@ -374,91 +315,6 @@ public class SpringEvaluator extends Evaluator {
         generators.add(generator);
     }
 
-    private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        Expression expression = returnStmt.getExpression().orElse(null);
-        if (expression != null) {
-            ControllerResponse response = new ControllerResponse();
-            response.setStatusCode(200);
-            if (expression.isObjectCreationExpr()) {
-                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                    returnWithObjectCreation(returnStmt, objectCreationExpr, response);
-                }
-            } else if (expression.isMethodCallExpr()) {
-                returnWithMethodCall(md, expression);
-            } else if (expression.isNameExpr()) {
-                String nameAsString = expression.asNameExpr().getNameAsString();
-                if (nameAsString != null && getLocal(returnStmt, nameAsString) != null) {
-                    response.setType(getLocal(returnStmt, nameAsString).getType());
-                } else {
-                    logger.warn("NameExpr is null in identify return type");
-                }
-            }
-            return response;
-        }
-        return null;
-    }
-
-    private void returnWithMethodCall(MethodDeclaration md, Expression expression) {
-        MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-        Optional<Expression> scope = methodCallExpr.getScope();
-        if (scope.isPresent()) {
-            Type type;
-            if (scope.get().isFieldAccessExpr()) {
-                type = fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType();
-            } else {
-                type = fields.get(scope.get().asNameExpr().getNameAsString()).getType();
-            }
-            logger.warn("Type not found {}", scope.get());
-
-        }
-    }
-
-    private void returnWithObjectCreation(ReturnStmt returnStmt, ObjectCreationExpr objectCreationExpr, ControllerResponse response) throws AntikytheraException, ReflectiveOperationException {
-        for (Expression typeArg : objectCreationExpr.getArguments()) {
-            if (typeArg.isFieldAccessExpr()) {
-                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                    response.setStatusCode(fae.getNameAsString());
-                }
-            }
-            else if (typeArg.isObjectCreationExpr()) {
-                Variable v = createObject(returnStmt, null, typeArg.asObjectCreationExpr());
-                response.setType(v.getType());
-            }
-            else if (typeArg.isNameExpr()) {
-                String nameAsString = typeArg.asNameExpr().getNameAsString();
-                if (nameAsString != null && getLocal(returnStmt, nameAsString) != null) {
-                    response.setType(getLocal(returnStmt, nameAsString).getType());
-                } else {
-                    logger.warn("NameExpr is null in identify return type");
-                }
-            } else if (typeArg.isStringLiteralExpr()) {
-                response.setType(StaticJavaParser.parseType("java.lang.String"));
-                response.setResponse(typeArg.asStringLiteralExpr().asString());
-            } else if (typeArg.isMethodCallExpr()) {
-                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                Optional<Expression> scope = methodCallExpr.getScope();
-                if (scope.isPresent()) {
-                    Variable f = (scope.get().isFieldAccessExpr())
-                            ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                            : fields.get(scope.get().asNameExpr().getNameAsString());
-                    if (f != null) {
-                        // todo fix this
-                        System.out.println(f.getType() + "," + methodCallExpr);
-
-                    } else {
-                        logger.debug("Type not found {}", scope.get());
-                    }
-                }
-            } else if (typeArg.isCastExpr()) {
-                CastExpr castExpr = typeArg.asCastExpr();
-                //Variable v = evaluateExpression(castExpr.getExpression());
-                response.setType(castExpr.getType());
-            }
-
-        }
-    }
 
     public boolean evaluateValidatorCondition(Expression condition) throws AntikytheraException, ReflectiveOperationException {
         if (condition.isBinaryExpr()) {
@@ -549,11 +405,6 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
-        super.handleApplicationException(e);
-    }
-
-    @Override
     boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
         if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
             return true;
@@ -561,12 +412,41 @@ public class SpringEvaluator extends Evaluator {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
+
+
             Evaluator eval = new Evaluator(resolvedClass);
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+            eval.setupFields(cu);
             Variable v = new Variable(eval);
             fields.put(variable.getNameAsString(), v);
 
             return true;
         }
         return false;
+    }
+
+    @Override
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException {
+        try {
+            if (v != null) {
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+
+                if (v.getValue() instanceof Evaluator eval) {
+                    for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
+                        /*
+                         * Push method arguments
+                         */
+                        AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
+                    }
+                    return eval.executeMethod(methodCall);
+                }
+
+                return reflectiveMethodCall(v, reflectionArguments);
+            } else {
+                return executeMethod(methodCall);
+            }
+        } catch (ReflectiveOperationException ex) {
+            throw new EvaluatorException("Error evaluating method call", ex);
+        }
     }
 }

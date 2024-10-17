@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,6 +23,15 @@ public class ControllerResponse {
         statusCodes.put("NOT_ACCEPTABLE", 406);
         statusCodes.put("CONFLICT", 409);
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
+    }
+
+    public ControllerResponse() {
+
+    }
+
+    public ControllerResponse(Variable v) {
+        this.response = v.getValue();
+        this.type = v.getType();
     }
 
     public void setType(Type type) {
