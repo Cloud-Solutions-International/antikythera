@@ -47,11 +47,19 @@ public class TestLoops extends  TestHelper {
         assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
     }
 
-
     @Test
     void testWhileLoop() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration whileLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("whileLoop")).orElseThrow();
+        Variable v = evaluator.executeMethod(whileLoop);
+        assertNull(v.getValue());
+        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );
+    }
+
+    @Test
+    void testDoWhileLoop() throws AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration whileLoop = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doWhileLoop")).orElseThrow();
         Variable v = evaluator.executeMethod(whileLoop);
         assertNull(v.getValue());
         assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString() );

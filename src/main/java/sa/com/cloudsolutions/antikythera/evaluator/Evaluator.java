@@ -211,12 +211,23 @@ public class Evaluator {
     }
 
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
-
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof ArrayType arrayType) {
-            // Get the component type of the array
-            Type componentType = arrayType.getComponentType();
-            Class<?> componentClass = Class.forName(componentType.asString());
+        if (parent.isPresent() && parent.get() instanceof VariableDeclarator vdecl) {
+            Type componentType = vdecl.getType();
+            Class<?> componentClass;
+
+            // Handle primitive types explicitly using modern switch case
+            componentClass = switch (componentType.getElementType().toString()) {
+                case "int" -> int.class;
+                case "double" -> double.class;
+                case "boolean" -> boolean.class;
+                case "long" -> long.class;
+                case "float" -> float.class;
+                case "short" -> short.class;
+                case "byte" -> byte.class;
+                case "char" -> char.class;
+                default -> Class.forName(componentType.getElementType().toString());
+            };
 
             // Extract the elements from the ArrayInitializerExpr
             List<Expression> values = arrayInitializerExpr.getValues();
@@ -226,9 +237,10 @@ public class Evaluator {
 
             // Populate the array with the extracted elements
             for (int i = 0; i < values.size(); i++) {
-                // Assuming the elements are literals for simplicity
-                // You may need to handle different types of expressions here
-                Array.set(array, i, evaluateExpression(values.get(i)).getValue());
+                Object value = evaluateExpression(values.get(i)).getValue();
+
+                    Array.set(array, i, value);
+
             }
 
             return new Variable(array);
@@ -1435,11 +1447,15 @@ public class Evaluator {
 
         } else if (stmt.isForEachStmt()) {
             ForEachStmt forEachStmt = stmt.asForEachStmt();
-            Variable v = evaluateExpression(forEachStmt.getIterable());
+            Variable iter = evaluateExpression(forEachStmt.getIterable());
+            Array arr = (Array) iter.getValue();
+            Variable variable = evaluateExpression(forEachStmt.getVariable());
+
             System.out.println(forEachStmt);
         } else if (stmt.isDoStmt()) {
-            DoStmt doStmt = stmt.asDoStmt();
-            System.out.println();
+
+            executeDoWhile(stmt.asDoStmt());
+
         } else if(stmt.isSwitchStmt()) {
             SwitchStmt switchExpr = stmt.asSwitchStmt();
             System.out.println("bada");
@@ -1475,6 +1491,14 @@ public class Evaluator {
                 }
             }
         }
+        loops.pollLast();
+    }
+
+    private void executeDoWhile(DoStmt whileStmt) throws AntikytheraException, ReflectiveOperationException {
+        loops.push(true);
+        do {
+            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+        } while((boolean)evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
         loops.pollLast();
     }
 
