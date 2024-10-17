@@ -281,6 +281,14 @@ public class ClassProcessor extends AbstractCompiler {
         return classToInstanceName(cdecl.getNameAsString());
     }
 
+    public static String fullyQualifiedToShortName(String name) {
+        int index = name.lastIndexOf(".");
+        if (index > 0) {
+            return name.substring(index + 1);
+        }
+        return name;
+    }
+
     /**
      * Converts a class name to an instance name.
      * @param className as a string

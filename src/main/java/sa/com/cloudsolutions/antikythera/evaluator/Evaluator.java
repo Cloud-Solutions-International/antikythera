@@ -1,5 +1,4 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
-
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -945,7 +944,7 @@ public class Evaluator {
                      */
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
                     TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
-                            ClassProcessor.instanceToClassName(methodCall.getScope().get().toString()));
+                            ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
                     mdecl = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
                     if (mdecl.isPresent()) {
                         return executeMethod(mdecl.get());
@@ -1035,6 +1034,9 @@ public class Evaluator {
             }
             boolean found = true;
             for(int i = 0 ; i < paramTypes.length ; i++) {
+                if (types[i].isAssignableFrom(paramTypes[i])) {
+                    continue;
+                }
                 if (types[i].equals(paramTypes[i])) {
                     continue;
                 }
