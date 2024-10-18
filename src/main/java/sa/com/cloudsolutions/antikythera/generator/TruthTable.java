@@ -99,6 +99,7 @@ public class TruthTable {
         }
         System.out.println("No combination of values makes the condition true.");
     }
+
     /**
      * Evaluates the given condition with the provided truth values.
      *
@@ -160,6 +161,7 @@ public class TruthTable {
         }
         throw new UnsupportedOperationException("Unsupported expression: " + expr);
     }
+
     /**
      * Collects variable names from the condition expression.
      */
@@ -183,6 +185,7 @@ public class TruthTable {
             "a > b && c == d",
             "a && b || !c",
             "x || y && !z",
+                "a > b" , " a > b && b < c"
         };
 
         for (String condition : conditions) {

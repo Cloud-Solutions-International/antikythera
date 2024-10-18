@@ -51,8 +51,8 @@ class TestTruthTable {
         Expression expr = StaticJavaParser.parseExpression(condition);
 
         List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
-//        assertTrue(truthTable.get(0).get("Result"));
-//        assertTrue(truthTable.get(7).get("Result"));
+        assertTrue((Boolean) truthTable.get(0).get("Result"));
+        assertTrue((Boolean) truthTable.get(7).get("Result"));
 
         generator.printTruthTable(condition, truthTable);
         assertTrue(outContent.toString().startsWith("Truth Table for condition: a && b || !c\n"));
@@ -68,10 +68,12 @@ class TestTruthTable {
         List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
         generator.printTruthTable(condition, truthTable);
 
-//        for(int i =0 ; i < 3 ; i++) {
-//            assertFalse(truthTable.get(i).get("Result"));
-//        }
-//        assertTrue(truthTable.get(3).get("Result"));
+        for(int i =0 ; i < 3 ; i++) {
+            Object r = truthTable.get(i).get("Result");
+            assertInstanceOf(Boolean.class, r);
+            assertFalse( (Boolean)truthTable.get(i).get("Result"));
+        }
+        assertTrue((Boolean) truthTable.get(3).get("Result"));
         assertTrue(outContent.toString().contains("Truth Table for condition: " + condition));
     }
 
