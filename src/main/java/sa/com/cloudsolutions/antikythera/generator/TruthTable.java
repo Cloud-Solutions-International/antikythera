@@ -8,11 +8,18 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.util.*;
 
+/**
+ * Generates and print truth tables for given conditionals
+ */
 public class TruthTable {
 
-    public void generateTruthTable(String conditionCode) {
-        IfStmt ifStmt = StaticJavaParser.parseStatement("if (" + conditionCode + ") {}").asIfStmt();
-        Expression condition = ifStmt.getCondition();
+    /**
+     * Generates a truth table for the given condition.
+     *
+     * @param condition The logical condition attached to an if statement (or any other block).
+     * @return A list of maps representing the truth table. Each map contains variable values and the result.
+     */
+    public List<Map<String, Boolean>> generateTruthTable(Expression condition) {
 
         Set<String> variables = new HashSet<>();
         condition.accept(new VariableCollector(), variables);
@@ -21,39 +28,80 @@ public class TruthTable {
         int numVariables = variableList.size();
         int numRows = (int) Math.pow(2, numVariables);
 
-        System.out.println("Truth Table for condition: " + conditionCode);
-        for (String var : variableList) {
-            System.out.print(var + "\t");
-        }
-        System.out.println("Result");
-
-        Map<String, Boolean> trueValues = null;
+        List<Map<String, Boolean>> truthTable = new ArrayList<>();
 
         for (int i = 0; i < numRows; i++) {
             Map<String, Boolean> truthValues = new HashMap<>();
             for (int j = 0; j < numVariables; j++) {
                 boolean value = (i & (1 << j)) != 0;
                 truthValues.put(variableList.get(j), value);
-                System.out.print(value + "\t");
             }
             boolean result = evaluateCondition(condition, truthValues);
-            System.out.println(result);
-
-            if (result && trueValues == null) {
-                trueValues = new HashMap<>(truthValues);
-            }
+            truthValues.put("Result", result);
+            truthTable.add(truthValues);
         }
 
-        if (trueValues != null) {
-            System.out.println("Values to make the condition true:");
-            for (Map.Entry<String, Boolean> entry : trueValues.entrySet()) {
-                System.out.println(entry.getKey() + " = " + entry.getValue());
+        return truthTable;
+    }
+
+    /**
+     * Prints the truth table for the given condition.
+     *
+     * @param conditionCode The logical condition as a string.
+     * @param truthTable    The truth table to print.
+     */
+    public void printTruthTable(String conditionCode, List<Map<String, Boolean>> truthTable) {
+        System.out.println("Truth Table for condition: " + conditionCode);
+
+        if (!truthTable.isEmpty()) {
+            // Print header
+            Map<String, Boolean> firstRow = truthTable.get(0);
+            for (String var : firstRow.keySet()) {
+                System.out.print(var + "\t");
+            }
+            System.out.println();
+
+            // Print rows
+            for (Map<String, Boolean> row : truthTable) {
+                for (Boolean value : row.values()) {
+                    System.out.print(value + "\t");
+                }
+                System.out.println();
             }
         } else {
-            System.out.println("No combination of values makes the condition true.");
+            System.out.println("No data to display.");
         }
     }
 
+    /**
+     * Prints the values that make the condition true.
+     *
+     * @param conditionCode The logical condition as a string.
+     * @param truthTable    The truth table to search for true values.
+     */
+    public void printTrueValues(String conditionCode, List<Map<String, Boolean>> truthTable) {
+        System.out.println("Values to make the condition true for: " + conditionCode);
+
+        for (Map<String, Boolean> row : truthTable) {
+            if (row.get("Result")) {
+                for (Map.Entry<String, Boolean> entry : row.entrySet()) {
+                    if (!entry.getKey().equals("Result")) {
+                        System.out.println(entry.getKey() + " = " + entry.getValue());
+                    }
+                }
+                return;
+            }
+        }
+        System.out.println("No combination of values makes the condition true.");
+    }
+
+    /**
+     * Evaluates the given condition with the provided truth values.
+     *
+     * @param condition   The condition to evaluate.
+     * @param truthValues The truth values for the variables.
+     * @return The result of the evaluation.
+     */
     private boolean evaluateCondition(Expression condition, Map<String, Boolean> truthValues) {
         if (condition.isBinaryExpr()) {
             var binaryExpr = condition.asBinaryExpr();
@@ -81,6 +129,9 @@ public class TruthTable {
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
     }
 
+    /**
+     * Collects variable names from the condition expression.
+     */
     private static class VariableCollector extends VoidVisitorAdapter<Set<String>> {
         @Override
         public void visit(NameExpr n, Set<String> collector) {
@@ -88,6 +139,12 @@ public class TruthTable {
             super.visit(n, collector);
         }
     }
+
+    /**
+     * Main method to test the truth table generation and printing with different conditions.
+     *
+     * @param args Command line arguments.
+     */
     public static void main(String[] args) {
         TruthTable generator = new TruthTable();
 
@@ -98,9 +155,13 @@ public class TruthTable {
         };
 
         for (String condition : conditions) {
-            generator.generateTruthTable(condition);
+            IfStmt ifStmt = StaticJavaParser.parseStatement("if (" + condition + ") {}").asIfStmt();
+            Expression expr = ifStmt.getCondition();
+
+            List<Map<String, Boolean>> truthTable = generator.generateTruthTable(expr);
+            generator.printTruthTable(condition, truthTable);
+            generator.printTrueValues(condition, truthTable);
             System.out.println();
         }
     }
-
 }
