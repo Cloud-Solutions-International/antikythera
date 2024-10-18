@@ -20,8 +20,11 @@ public class TruthTable {
      * @param condition The logical condition attached to an if statement (or any other block).
      * @return A list of maps representing the truth table. Each map contains variable values and the result.
      */
-
     public List<Map<String, Object>> generateTruthTable(Expression condition) {
+        /*
+         * We use a set here because the same variable may appear multiple times in the
+         * expression.
+         */
         Set<String> variables = new HashSet<>();
         condition.accept(new VariableCollector(), variables);
 
@@ -58,14 +61,14 @@ public class TruthTable {
             // Print header
             Map<String, Object> firstRow = truthTable.get(0);
             for (String var : firstRow.keySet()) {
-                System.out.print(var + "\t");
+                System.out.print(String.format("%-10s", var));
             }
             System.out.println();
 
             // Print rows
             for (Map<String, Object> row : truthTable) {
                 for (Object value : row.values()) {
-                    System.out.print(value + "\t");
+                    System.out.print(String.format("%-10s", value));
                 }
                 System.out.println();
             }
@@ -112,11 +115,16 @@ public class TruthTable {
             if (binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER) {
                 int left = getValue(leftExpr, truthValues);
                 int right = getValue(rightExpr, truthValues);
+
+                truthValues.put(leftExpr.toString(), left);
+                truthValues.put(rightExpr.toString(), right);
+
                 return switch (binaryExpr.getOperator()) {
                     case LESS -> left < right;
                     case GREATER -> left > right;
                     default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
                 };
+
             } else {
                 boolean left = evaluateCondition(leftExpr, truthValues);
                 boolean right = evaluateCondition(rightExpr, truthValues);
@@ -172,10 +180,9 @@ public class TruthTable {
         TruthTable generator = new TruthTable();
 
         String[] conditions = {
+            "a > b && c == d",
             "a && b || !c",
             "x || y && !z",
-            "p && q || r && !s",
-            "a > b && c == d"
         };
 
         for (String condition : conditions) {
