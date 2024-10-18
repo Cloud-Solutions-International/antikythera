@@ -47,10 +47,23 @@ public class SpringEvaluator extends Evaluator {
      */
     private static final Map<String, RepositoryParser> respositories = new HashMap<>();
 
+    /**
+     * List of generators that we have.
+     *
+     * Generators ought to be seperated from the parsers/evaluators because different kinds of
+     * tests can be created. They can be unit tests, integration tests, api tests and end to
+     * end tests.
+     */
     private final List<TestGenerator> generators  = new ArrayList<>();
 
+    /**
+     * The method currently being analyzed
+     */
     private MethodDeclaration currentMethod;
 
+    /**
+     * The lines of code already looked at in the method.
+     */
     private Set<LineOfCode> lines = new HashSet<>();
 
     public SpringEvaluator(String className) {
@@ -62,6 +75,13 @@ public class SpringEvaluator extends Evaluator {
     }
 
 
+    /**
+     * Called by the java parser method visitor.
+     * This is where the code evaluation begins.
+     * @param md The MethodDeclaration being worked on
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
     @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
 
@@ -425,6 +445,27 @@ public class SpringEvaluator extends Evaluator {
     @Override
     protected Variable checkEquality(Variable left, Variable right) {
         Variable v = super.checkEquality(left, right);
+        if (left.getInitializer() != null && right.getInitializer() != null) {
+            Node n = left.getInitializer();
+            while(n != null) {
+                if(n instanceof IfStmt ifStmt) {
+                    if (v.getValue() instanceof Boolean b && b) {
+                        System.out.println("Condition was true");
+                    } else {
+                        System.out.println("Condition was false");
+                    }
+                    break;
+                }
+                n = n.getParentNode().orElse(null);
+            }
+
+        }
         return v;
+
+    }
+
+    @Override
+    public Evaluator createEvaluator(String name) {
+        return new SpringEvaluator(name);
     }
 }

@@ -113,7 +113,8 @@ public class TruthTable {
             var leftExpr = binaryExpr.getLeft();
             var rightExpr = binaryExpr.getRight();
 
-            if (binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER) {
+            if (binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER ||
+                binaryExpr.getOperator() == BinaryExpr.Operator.LESS_EQUALS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS) {
                 int left = getValue(leftExpr, truthValues);
                 int right = getValue(rightExpr, truthValues);
 
@@ -123,6 +124,8 @@ public class TruthTable {
                 return switch (binaryExpr.getOperator()) {
                     case LESS -> left < right;
                     case GREATER -> left > right;
+                    case LESS_EQUALS -> left <= right;
+                    case GREATER_EQUALS -> left >= right;
                     default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
                 };
 
@@ -155,13 +158,17 @@ public class TruthTable {
     private int getValue(Expression expr, Map<String, Object> truthValues) {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
-            return (boolean) truthValues.get(name) ? 1 : 0;
+            Object value = truthValues.get(name);
+            if (value instanceof Boolean) {
+                return (boolean) value ? 1 : 0;
+            } else if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
         } else if (expr.isIntegerLiteralExpr()) {
             return expr.asIntegerLiteralExpr().asInt();
         }
         throw new UnsupportedOperationException("Unsupported expression: " + expr);
     }
-
     /**
      * Collects variable names from the condition expression.
      */

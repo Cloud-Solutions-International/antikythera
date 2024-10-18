@@ -171,12 +171,14 @@ public class Evaluator {
         } else if (expr.isUnaryExpr()) {
             return  evaluateUnaryExpression(expr);
         } else if (expr.isMethodCallExpr()) {
+
             /*
              * Method calls are the toughest nuts to crack. Some method calls will be from the Java api
              * or from other libraries. Or from classes that have not been compiled.
              */
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
+
         } else if (expr.isMethodReferenceExpr()) {
             return evaluateMethodReference(expr.asMethodReferenceExpr());
         } else if (expr.isAssignExpr()) {
@@ -186,9 +188,17 @@ public class Evaluator {
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
+
+            /*
+             * Array Initializersions are tricky
+             */
             ArrayInitializerExpr arrayInitializerExpr = expr.asArrayInitializerExpr();
             return createArray(arrayInitializerExpr);
+
         } else if(expr.isEnclosedExpr()) {
+            /*
+             * Enclosed expressions are just brackets around stuff.
+             */
             return evaluateExpression(expr.asEnclosedExpr().getInner());
         } else if(expr.isCastExpr()) {
             return evaluateExpression(expr.asCastExpr().getExpression());
@@ -200,6 +210,13 @@ public class Evaluator {
         return resolveExpression(expr.getScope().asTypeExpr());
     }
 
+    /**
+     * Create an array using reflection
+     * @param arrayInitializerExpr the ArrayInitializerExpr which describes how the array will be build
+     * @return a Variable which holds the generated array as a value
+     * @throws ReflectiveOperationException
+     * @throws AntikytheraException
+     */
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
         if (parent.isPresent() && parent.get() instanceof VariableDeclarator vdecl) {
@@ -527,7 +544,7 @@ public class Evaluator {
         if (cu != null) {
             TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(cu, type.getNameAsString());
             if (match != null) {
-                Evaluator eval = new Evaluator(match.getFullyQualifiedName().get());
+                Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
 
                 List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
                 if (constructors.isEmpty()) {
@@ -825,7 +842,7 @@ public class Evaluator {
                     v.setClazz(clazz);
                 }
                 else {
-                    Evaluator eval = new Evaluator(fullyQualifiedName);
+                    Evaluator eval = createEvaluator(fullyQualifiedName);
                     eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
                     v = new Variable(eval);
                 }
@@ -957,12 +974,14 @@ public class Evaluator {
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator,
                                       Expression leftExpression, Expression rightExpression) throws AntikytheraException, ReflectiveOperationException {
         Variable left = evaluateExpression(leftExpression);
+        left.setInitializer(leftExpression);
 
         if(operator.equals(BinaryExpr.Operator.OR) && (boolean)left.getValue()) {
              return new Variable(Boolean.TRUE);
         }
 
         Variable right = evaluateExpression(rightExpression);
+        right.setInitializer(rightExpression);
 
         switch (operator) {
             case EQUALS:
@@ -1131,7 +1150,7 @@ public class Evaluator {
                     String[] parts = importedName.toString().split("\\.");
 
                     if (importedName.toString().equals(name)) {
-                        Evaluator eval = new Evaluator(importedName.toString());
+                        Evaluator eval = createEvaluator(importedName.toString());
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1139,7 +1158,7 @@ public class Evaluator {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
-                        Evaluator eval = new Evaluator(cname);
+                        Evaluator eval = createEvaluator(cname);
                         eval.setupFields(dep);
                         v = eval.getFields().get(name);
                         break;
@@ -1172,7 +1191,7 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else {
-                Evaluator eval = new Evaluator(resolvedClass);
+                Evaluator eval = createEvaluator(resolvedClass);
                 Variable v = new Variable(eval);
                 fields.put(variable.getNameAsString(), v);
             }
@@ -1553,7 +1572,6 @@ public class Evaluator {
 
                     logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
 
-
                 } catch (AntikytheraException|ReflectiveOperationException e) {
                     throw new GeneratorException(e);
                 }
@@ -1563,6 +1581,10 @@ public class Evaluator {
 
     public void reset() {
         locals.clear();
+    }
+
+    public Evaluator createEvaluator(String className) {
+        return new Evaluator(className);
     }
 }
 
