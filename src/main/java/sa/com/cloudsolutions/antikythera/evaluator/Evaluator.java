@@ -1477,7 +1477,7 @@ public class Evaluator {
      * @param stmt If / Then statement
      * @throws Exception
      */
-    private void ifThenElseBlock(Statement stmt) throws Exception {
+    void ifThenElseBlock(Statement stmt) throws Exception {
         IfStmt ifst = stmt.asIfStmt();
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {

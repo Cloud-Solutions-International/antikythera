@@ -24,7 +24,24 @@ public class LineOfCode {
      */
     List<Expression> preConditions = new ArrayList<>();
 
-    boolean visited;
+    /**
+     * Represents the state where the node has not been visited at all.
+     * This is the default value for color for all nodes.
+     */
+    public static final int WHITE = 0;
+    /**
+     * Represents the stage where we have encountered a node but not traversed all edges.
+     */
+    public static final int GREY = 1;
+    /**
+     * Represents the stage where we have traversed all edges of a node.
+     */
+    public static final int BLACK = 2;
+    /**
+     * Shows the current state of the node.
+     * Can be one of WHITE, GREY or BLACK.
+     */
+    int color;
     Statement statement;
 
     public LineOfCode(Statement statement) {
@@ -42,5 +59,13 @@ public class LineOfCode {
     @Override
     public int hashCode() {
         return statement.hashCode();
+    }
+
+    public int getColor() {
+        return color;
+    }
+
+    public void setColor(int color) {
+        this.color = color;
     }
 }

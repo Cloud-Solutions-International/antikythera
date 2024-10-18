@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
@@ -64,8 +65,12 @@ public class SpringEvaluator extends Evaluator {
     /**
      * The lines of code already looked at in the method.
      */
-    private Set<LineOfCode> lines = new HashSet<>();
+    private HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
+    /**
+     * It is better to use create evaluator
+     * @param className
+     */
     public SpringEvaluator(String className) {
         super(className);
     }
@@ -98,9 +103,7 @@ public class SpringEvaluator extends Evaluator {
         }
 
         for(Statement st : md.getBody().get().getStatements()) {
-            LineOfCode b = new LineOfCode(st);
-
-            if(!lines.contains(b)) {
+            if(!lines.containsKey(st.hashCode())) {
                 super.executeMethod(md);
             }
         }
@@ -120,10 +123,20 @@ public class SpringEvaluator extends Evaluator {
     protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
         try {
             for (Statement stmt : statements) {
-                LineOfCode b = new LineOfCode(stmt);
-                if(!lines.contains(b)) {
-                    lines.add(b);
-                    if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                    LineOfCode l = lines.get(stmt.hashCode());
+
+                    if (l == null) {
+                        l = new LineOfCode(stmt);
+                        lines.put(stmt.hashCode(), l);
+
+                        executeStatement(stmt);
+                        if (returnFrom != null) {
+                            break;
+                        }
+                    }
+                    else if(l.getColor() == LineOfCode.GREY || l.getColor() == LineOfCode.WHITE) {
+                        l.setColor(LineOfCode.BLACK);
                         executeStatement(stmt);
                         if (returnFrom != null) {
                             break;
@@ -131,6 +144,7 @@ public class SpringEvaluator extends Evaluator {
                     }
                 }
             }
+
         } catch (EvaluatorException|ReflectiveOperationException ex) {
             throw ex;
         } catch (Exception e) {
@@ -468,4 +482,13 @@ public class SpringEvaluator extends Evaluator {
     public Evaluator createEvaluator(String name) {
         return new SpringEvaluator(name);
     }
+
+    @Override
+    void ifThenElseBlock(Statement stmt) throws Exception {
+        TruthTable tt = new TruthTable();
+        List<Map<String, Object>> table = tt.generateTruthTable(stmt.asIfStmt().getCondition());
+
+        super.ifThenElseBlock(stmt);
+    }
 }
+
