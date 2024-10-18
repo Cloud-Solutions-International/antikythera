@@ -1023,7 +1023,7 @@ public class Evaluator {
      * @param right the other Variable
      * @return a Variable holding either Boolean.TRUE or Boolean.FALSE
      */
-    private static Variable checkEquality(Variable left, Variable right) {
+    protected Variable checkEquality(Variable left, Variable right) {
         if (left == null) {
             if (right == null || right.getValue() == null) {
                 return new Variable(Boolean.TRUE);
@@ -1204,6 +1204,10 @@ public class Evaluator {
         return finches;
     }
 
+    public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+        executeMethod(md);
+    }
+
     public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
         List<Statement> statements = md.getBody().orElseThrow().getStatements();
@@ -1299,7 +1303,7 @@ public class Evaluator {
      * @param stmt the statement to execute
      * @throws Exception if the execution fails.
      */
-    private void executeStatement(Statement stmt) throws Exception {
+    void executeStatement(Statement stmt) throws Exception {
         if (stmt.isExpressionStmt()) {
             /*
              * A line of code that is an expression. The expresion itself can fall into various different

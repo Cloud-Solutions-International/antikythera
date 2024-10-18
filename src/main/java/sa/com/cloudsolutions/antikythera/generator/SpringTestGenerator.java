@@ -47,11 +47,8 @@ public class SpringTestGenerator implements  TestGenerator {
     RepositoryQuery last;
     CompilationUnit gen = new CompilationUnit();
     File current;
+    private List<Expression> preConditions;
 
-    /**
-     * Store the conditions that a controller may expect the input to meet.
-     */
-    List<Expression> preConditions = new ArrayList<>();
 
     /**
      * Create tests based on the method declarion and return type
@@ -522,8 +519,8 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
     @Override
-    public void addPrecondition(Expression expr) {
-        preConditions.add(expr);
+    public void setPreconditions(List<Expression> preconditions) {
+        this.preConditions = preconditions;
     }
 }
 

@@ -1,13 +1,10 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
-import sa.com.cloudsolutions.antikythera.parser.DTOHandler;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import com.github.javaparser.ast.CompilationUnit;
@@ -15,7 +12,6 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -26,20 +22,19 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
@@ -56,6 +51,8 @@ public class SpringEvaluator extends Evaluator {
 
     private MethodDeclaration currentMethod;
 
+    private Set<LineOfCode> lines = new HashSet<>();
+
     public SpringEvaluator(String className) {
         super(className);
     }
@@ -64,10 +61,10 @@ public class SpringEvaluator extends Evaluator {
         return respositories;
     }
 
-    private boolean flunk = true;
 
     @Override
-    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+    public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration cdecl && cdecl.isAnnotationPresent("RestController")) {
                  currentMethod = md;
@@ -79,7 +76,46 @@ public class SpringEvaluator extends Evaluator {
         } catch (Exception e) {
             throw new EvaluatorException("Error while mocking controller arguments", e);
         }
-        return super.executeMethod(md);
+
+        for(Statement st : md.getBody().get().getStatements()) {
+            LineOfCode b = new LineOfCode(st);
+
+            if(!lines.contains(b)) {
+                super.executeMethod(md);
+            }
+        }
+    }
+
+    /**
+     * Execute a block of statements.
+     *
+     * We may end up executing the same block of statements repeatedly until all the branches
+     * have been covered.
+     *
+     * @param statements the collection of statements that make up the block
+     * @throws AntikytheraException if there are situations where we cannot process the block
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
+    @Override
+    protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
+        try {
+            for (Statement stmt : statements) {
+                LineOfCode b = new LineOfCode(stmt);
+                if(!lines.contains(b)) {
+                    lines.add(b);
+                    if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                        executeStatement(stmt);
+                        if (returnFrom != null) {
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (EvaluatorException|ReflectiveOperationException ex) {
+            throw ex;
+        } catch (Exception e) {
+            handleApplicationException(e);
+        }
     }
 
     /**
@@ -263,12 +299,6 @@ public class SpringEvaluator extends Evaluator {
 
     private Variable createTests(ControllerResponse response) {
         if (response != null) {
-            if (flunk) {
-                for (TestGenerator generator : generators) {
-                    generator.createTests(currentMethod, response);
-                }
-                flunk = false;
-            }
             for (TestGenerator generator : generators) {
                 generator.createTests(currentMethod, response);
             }
@@ -285,10 +315,6 @@ public class SpringEvaluator extends Evaluator {
                 Expression condition = ifStmt.getCondition();
                 if (evaluateValidatorCondition(condition)) {
                     ControllerResponse v = new ControllerResponse(returnValue);
-
-                    if (!flunk) {
-                        buildPreconditions(currentMethod, condition);
-                    }
                     return v;
                 }
             } else {
@@ -300,9 +326,6 @@ public class SpringEvaluator extends Evaluator {
                         Expression condition = ifStmt.getCondition();
                         if (evaluateValidatorCondition(condition)) {
                             ControllerResponse response = new ControllerResponse(returnValue);
-                            if (!flunk) {
-                                buildPreconditions(currentMethod, condition);
-                            }
                             return response;
                         }
                     } else if (gramps.get() instanceof MethodDeclaration) {
@@ -354,60 +377,6 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
-    /**
-     * Identifies the preconditions to be fulfilled by a check point in the controller.
-     *
-     * A controller may have multiple validations represented by various if conditions, we need to setup
-     * parameters so that these conditions will pass and move forward to the next state.
-     * @param md the MethodDeclaration for the method being tested.
-     * @param expr the expression currently being evaluated
-     */
-    private void buildPreconditions(MethodDeclaration md, Expression expr) {
-        if(expr instanceof BinaryExpr) {
-            BinaryExpr binaryExpr = expr.asBinaryExpr();
-            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND) || binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                buildPreconditions(md, binaryExpr.getLeft());
-                buildPreconditions(md, binaryExpr.getRight());
-            }
-            else {
-                buildPreconditions(md, binaryExpr.getLeft());
-                buildPreconditions(md, binaryExpr.getRight());
-            }
-        }
-        if(expr instanceof MethodCallExpr) {
-            MethodCallExpr mce = expr.asMethodCallExpr();
-            Parameter reqBody = SpringTestGenerator.findRequestBody(md);
-            if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
-                try {
-                    if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
-
-                        String fullClassName = reqBody.resolve().describeType();
-                        String fieldName = ClassProcessor.classToInstanceName(mce.getName().asString().replace("get", ""));
-
-                        DTOHandler handler = new DTOHandler();
-                        handler.compile(AbstractCompiler.classToPath(fullClassName));
-                        Map<String, FieldDeclaration> fields = AbstractCompiler.getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
-
-                        FieldDeclaration fieldDeclaration = fields.get(fieldName);
-                        if (fieldDeclaration != null) {
-                            MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
-                            for(var gen : generators) {
-                                gen.addPrecondition(methodCall);
-                            }
-                        }
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    logger.warn("Unsolved symbol exception");
-                } catch (IOException e) {
-                    logger.error("Current controller: {}", md.getParentNode());
-                    if(Settings.getProperty("dependencies.on_error").toString().equals("exit")) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
-                    }
-                    logger.error(e.getMessage());
-                }
-            }
-        }
-    }
 
     /**
      * Resolves fields while taking into consideration the AutoWired annotation of srping
@@ -451,5 +420,11 @@ public class SpringEvaluator extends Evaluator {
 
         }
         return null;
+    }
+
+    @Override
+    protected Variable checkEquality(Variable left, Variable right) {
+        Variable v = super.checkEquality(left, right);
+        return v;
     }
 }
