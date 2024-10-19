@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -317,7 +318,10 @@ public class SpringEvaluator extends Evaluator {
     private void buildPreconditions() {
         List<Expression> expressions = new ArrayList<>();
         for (LineOfCode l : lines.values()) {
-
+            Optional<Node> parentNode = l.getStatement().getParentNode();
+            if(parentNode.isPresent()) {
+                expressions.addAll(l.getPrecondition(true));
+            }
         }
         for(TestGenerator gen : generators) {
             gen.setPreconditions(expressions);
@@ -484,23 +488,16 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     void ifThenElseBlock(IfStmt ifst) throws Exception {
-        TruthTable tt = new TruthTable(ifst.getCondition());
-
         LineOfCode l = lines.get(ifst.getThenStmt().hashCode());
         if (l == null) {
             /*
              * This if condition has never been executed before. Now let's determine the set of
              * values that will result in it being true
              */
-            List<Map<Expression, Object>> values = tt.findValuesForCondition(true);
+            l = new LineOfCode(ifst);
+            lines.put(ifst.hashCode(), l);
+            setupIfCondition(ifst, true);
 
-            l = new LineOfCode(ifst.getThenStmt());
-            lines.put(ifst.getThenStmt().hashCode(), l);
-
-            if (!values.isEmpty()) {
-                Map<Expression, Object> value = values.getFirst();
-                System.out.println("aaa");
-            }
             super.ifThenElseBlock(ifst);
         }
         else if (l.getColor() != LineOfCode.BLACK) {
@@ -511,8 +508,36 @@ public class SpringEvaluator extends Evaluator {
             l = lines.get(ifst.getElseStmt().get());
             if (l == null || l.getColor() != LineOfCode.BLACK) {
                 l.setColor(LineOfCode.GREY);
-                List<Map<Expression, Object>> values = tt.findValuesForCondition(false);
                 super.ifThenElseBlock(ifst);
+            }
+        }
+    }
+
+    private void setupIfCondition(IfStmt ifst, boolean state) {
+        TruthTable tt = new TruthTable(ifst.getCondition());
+
+        LineOfCode l;
+        List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
+        l = new LineOfCode(ifst.getThenStmt());
+        lines.put(ifst.getThenStmt().hashCode(), l);
+
+        if (!values.isEmpty()) {
+            Map<Expression, Object> value = values.getFirst();
+            for (var entry : value.entrySet()) {
+                if(entry.getKey().isMethodCallExpr()) {
+                    LinkedList<Expression> chain = findScopeChain(entry.getKey());
+                    if (!chain.isEmpty()) {
+                        Expression expr = chain.getFirst();
+                        Variable v = getValue(ifst, expr.toString());
+                        if (v != null) {
+                            MethodCallExpr setter = new MethodCallExpr();
+                            setter.setName("set" + entry.getKey().asMethodCallExpr().getNameAsString().substring(3));
+                            setter.setScope(expr);
+                            setter.addArgument("1L");
+                            l.addPrecondition(setter, state);
+                        }
+                    }
+                }
             }
         }
     }

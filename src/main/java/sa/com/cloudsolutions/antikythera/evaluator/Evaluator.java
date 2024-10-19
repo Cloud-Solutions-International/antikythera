@@ -669,28 +669,38 @@ public class Evaluator {
         while (true) {
             BlockStmt block = findBlockStatement(n);
             int hash = (block != null) ? block.hashCode() : 0;
-
-            Map<String, Variable> localsVars = this.locals.get(hash);
-
-            if (localsVars != null) {
-                v = localsVars.get(name);
-                if (v != null )
-                    return v;
-            }
-            if(n instanceof MethodDeclaration) {
-                localsVars = this.locals.get(hash);
-                if (localsVars != null) {
-                    v = localsVars.get(name);
-                    return v;
+            if (hash == 0) {
+                for(Map.Entry<Integer, Map<String, Variable>> entry : locals.entrySet()) {
+                    v = entry.getValue().get(name);
+                    if (v != null) {
+                        return v;
+                    }
                 }
                 break;
             }
-            if(block == null) {
-                break;
-            }
-            n = block.getParentNode().orElse(null);
-            if(n == null) {
-                break;
+            else {
+                Map<String, Variable> localsVars = this.locals.get(hash);
+
+                if (localsVars != null) {
+                    v = localsVars.get(name);
+                    if (v != null)
+                        return v;
+                }
+                if (n instanceof MethodDeclaration) {
+                    localsVars = this.locals.get(hash);
+                    if (localsVars != null) {
+                        v = localsVars.get(name);
+                        return v;
+                    }
+                    break;
+                }
+                if (block == null) {
+                    break;
+                }
+                n = block.getParentNode().orElse(null);
+                if (n == null) {
+                    break;
+                }
             }
         }
         return null;
@@ -729,6 +739,9 @@ public class Evaluator {
             if (currentNode instanceof BlockStmt blockStmt) {
                 return blockStmt;
             }
+            if (currentNode instanceof MethodDeclaration md) {
+                return md.getBody().orElse(null);
+            }
             currentNode = currentNode.getParentNode().orElse(null);
         }
         return null; // No block statement found
@@ -745,13 +758,51 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        LinkedList<Expression> chain = new LinkedList<>();
-        Expression expr = methodCall;
-        Variable variable = null;
         Optional<Expression> scoped = methodCall.getScope();
         if (scoped.isPresent() && scoped.get().toString().equals("logger")) {
             return null;
         }
+
+        Expression expr = methodCall;
+        Variable variable = null;
+        LinkedList<Expression> chain = findScopeChain(expr);
+
+        while(!chain.isEmpty()) {
+            Expression expr2 = chain.pollLast();
+            if (expr2.isNameExpr()) {
+                variable = resolveExpression(expr2.asNameExpr());
+            }
+            else if(expr2.isFieldAccessExpr()) {
+                /*
+                 * When we get here the getValue should have returned to us a valid field. That means
+                 * we will have an evaluator instance as the 'value' in the variable v
+                 */
+                if (variable.getClazz().equals(System.class)) {
+                    Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
+                    variable = new Variable(field.get(null));
+                }
+                else if (variable.getValue() instanceof Evaluator eval) {
+                    variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
+                }
+                else {
+                    variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
+
+                }
+            }
+            else if(expr2.isMethodCallExpr()) {
+                variable = evaluateMethodCall(variable, expr2.asMethodCallExpr());
+            }
+            else if (expr2.isLiteralExpr()) {
+                variable = evaluateLiteral(expr2);
+            }
+        }
+
+        variable = evaluateMethodCall(variable, methodCall);
+        return variable;
+    }
+
+    protected LinkedList<Expression> findScopeChain(Expression expr) {
+        LinkedList<Expression> chain = new LinkedList<>();
         while (true) {
             if (expr.isMethodCallExpr()) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
@@ -771,39 +822,7 @@ public class Evaluator {
                 break;
             }
         }
-
-        while(!chain.isEmpty()) {
-            expr = chain.pollLast();
-            if (expr.isNameExpr()) {
-                variable = resolveExpression(expr.asNameExpr());
-            }
-            else if(expr.isFieldAccessExpr()) {
-                /*
-                 * When we get here the getValue should have returned to us a valid field. That means
-                 * we will have an evaluator instance as the 'value' in the variable v
-                 */
-                if (variable.getClazz().equals(System.class)) {
-                    Field field = System.class.getField(expr.asFieldAccessExpr().getNameAsString());
-                    variable = new Variable(field.get(null));
-                }
-                else if (variable.getValue() instanceof Evaluator eval) {
-                    variable = eval.getValue(expr, expr.asFieldAccessExpr().getNameAsString());
-                }
-                else {
-                    variable = evaluateFieldAccessExpression(expr.asFieldAccessExpr());
-
-                }
-            }
-            else if(expr.isMethodCallExpr()) {
-                variable = evaluateMethodCall(variable, expr.asMethodCallExpr());
-            }
-            else if (expr.isLiteralExpr()) {
-                variable = evaluateLiteral(expr);
-            }
-        }
-
-        variable = evaluateMethodCall(variable, methodCall);
-        return variable;
+        return chain;
     }
 
     private Variable resolveExpression(TypeExpr expr) {

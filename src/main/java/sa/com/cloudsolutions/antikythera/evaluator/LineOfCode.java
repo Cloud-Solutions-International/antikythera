@@ -11,18 +11,18 @@ import java.util.List;
  * The term is used rather loosely, a line of code may span several lines on paper.
  */
 public class LineOfCode {
-    /*
-     * If the LOC is a conditional statement will hold a condition
-     * when the loc is not a conditional statement it will be null
-     */
-    Expression condition;
 
     /**
-     * The conditions that need to be met to reach this line of code.
-     * For each if/then/else statement there will be two of these. Neither will be directly attached
-     * to the if statement. However one will be attached to the then statement and the other to the else statement.
+     * The state of the variables required such that an if condition evaluates to true.
+     * This will be applicable only for IF statement expressions.
      */
-    List<Expression> preConditions = new ArrayList<>();
+    List<Expression> trueState = new ArrayList<>();
+
+    /**
+     * The state of the variables required such that an if condition evaluates to false.
+     * This will be applicable only for IF statement expressions.
+     */
+    List<Expression> falseState = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -67,5 +67,27 @@ public class LineOfCode {
 
     public void setColor(int color) {
         this.color = color;
+    }
+
+    public void addPrecondition(Expression precondition, boolean state) {
+        if(state) {
+            trueState.add(precondition);
+        }
+        else {
+            falseState.add(precondition);
+        }
+    }
+
+    public List<Expression> getPrecondition(boolean state) {
+        return state ? trueState : falseState;
+    }
+
+    public Statement getStatement() {
+        return statement;
+    }
+
+    @Override
+    public String toString() {
+        return statement.toString();
     }
 }
