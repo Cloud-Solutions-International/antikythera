@@ -262,15 +262,9 @@ public class TruthTable {
                 case NullLiteralExpr nullLiteralExpr -> null;
                 default -> throw new UnsupportedOperationException("Unsupported literal expression: " + expr);
             };
-        } else if (expr.isMethodCallExpr()) {
-            var methodCall = expr.asMethodCallExpr();
-            return truthValues.get(methodCall.toString());
-        } else if (expr.isFieldAccessExpr()) {
-            var fieldAccess = expr.asFieldAccessExpr();
-            String scope = fieldAccess.getScope().toString();
-            return truthValues.get(scope + "." + fieldAccess.getNameAsString());
         }
-        throw new UnsupportedOperationException("Unsupported expression: " + expr);
+
+        return truthValues.get(expr);
     }
 
 
