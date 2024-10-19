@@ -320,6 +320,7 @@ public class SpringEvaluator extends Evaluator {
          */
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
+        buildPreconditions();
         super.executeReturnStatement(stmt);
         if (parent.isPresent() ) {
             // the return statement will have a parent no matter what but the optionals approach
@@ -331,14 +332,22 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
+    private void buildPreconditions() {
+        List<Expression> expressions = new ArrayList<>();
+        for (LineOfCode l : lines.values()) {
+
+        }
+        for(TestGenerator gen : generators) {
+            gen.setPreconditions(expressions);
+        }
+    }
+
     private Variable createTests(ControllerResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
                 generator.createTests(currentMethod, response);
             }
-            Variable v = new Variable(response);
-            AntikytheraRunTime.push(v);
-            return v;
+            return new Variable(response);
         }
         return null;
     }

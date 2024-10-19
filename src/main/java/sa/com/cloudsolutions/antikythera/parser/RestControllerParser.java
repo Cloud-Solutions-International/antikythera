@@ -50,11 +50,6 @@ public class RestControllerParser extends ClassProcessor {
     private SpringEvaluator evaluator;
 
     /**
-     * Store the conditions that a controller may expect the input to meet.
-     */
-    List<Expression> preConditions;
-
-    /**
      * Creates a new RestControllerParser
      *
      * @param controllers either a folder containing many controllers or a single controller
@@ -208,7 +203,6 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
-                preConditions = new ArrayList<>();
                 evaluator.reset();
                 AntikytheraRunTime.reset();
                 try {

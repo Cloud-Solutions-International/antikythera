@@ -12,7 +12,7 @@ public interface TestGenerator {
     /**
      * The common path represents the path declared in the RestController.
      * Every method in the end point will be relative to this.
-     * @param commonPath
+     * @param commonPath the url param for the controller.
      */
     void setCommonPath(String commonPath);
 
