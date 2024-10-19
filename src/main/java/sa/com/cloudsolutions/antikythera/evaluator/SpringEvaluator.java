@@ -496,11 +496,12 @@ public class SpringEvaluator extends Evaluator {
              */
             l = new LineOfCode(ifst);
             lines.put(ifst.hashCode(), l);
+            l.setColor(LineOfCode.GREY);
             setupIfCondition(ifst, true);
 
             super.ifThenElseBlock(ifst);
         }
-        else if (l.getColor() != LineOfCode.BLACK) {
+        else if (l.getColor() == LineOfCode.GREY) {
             l.setColor(LineOfCode.GREY);
 
             super.ifThenElseBlock(ifst);
