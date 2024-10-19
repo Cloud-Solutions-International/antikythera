@@ -485,8 +485,7 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     void ifThenElseBlock(Statement stmt) throws Exception {
-        TruthTable tt = new TruthTable();
-        List<Map<String, Object>> table = tt.generateTruthTable(stmt.asIfStmt().getCondition());
+        TruthTable tt = new TruthTable(stmt.asIfStmt().getCondition());
 
         super.ifThenElseBlock(stmt);
     }

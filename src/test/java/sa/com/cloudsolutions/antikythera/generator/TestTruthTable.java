@@ -33,59 +33,52 @@ class TestTruthTable {
 
     @Test
     void testGenerateTruthTable() {
-        TruthTable generator = new TruthTable();
-        String condition = "a && b || !c";
-        Expression expr = StaticJavaParser.parseExpression(condition);
+        String condition = "a == null";
+        TruthTable generator = new TruthTable(condition);
 
-        List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
+        List<Map<String, Object>> truthTable = generator.getTruthTable();
 
         assertNotNull(truthTable);
         assertFalse(truthTable.isEmpty());
-        assertEquals(8, truthTable.size()); // 2^3 = 8 rows for 3 variables
+        assertEquals(2, truthTable.size()); // 2^3 = 8 rows for 3 variables
+        assertNull(truthTable.getFirst().get("a"));
     }
+
+
+    @Test
+    void testGenerateTruthTableNumbers() {
+        String condition = "a > b && b < c";
+        /* Using just 0 and 1 there is exactly one situation where this is always true
+         * that is when a = 1, b = 0 and c = 1;
+         */
+        TruthTable generator = new TruthTable(condition);
+        List<Map<String, Object>> values = generator.findValuesForCondition(true);
+        assertEquals(1, values.size());
+        assertEquals(1, values.getFirst().get("a"));
+        assertEquals(0, values.getFirst().get("b"));
+        assertEquals(1, values.getFirst().get("c"));
+
+    }
+
 
     @Test
     void testPrintTruthTable() {
-        TruthTable generator = new TruthTable();
         String condition = "a && b || !c";
-        Expression expr = StaticJavaParser.parseExpression(condition);
+        TruthTable generator = new TruthTable(condition);
 
-        List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
-        assertTrue((Boolean) truthTable.get(0).get("Result"));
-        assertTrue((Boolean) truthTable.get(7).get("Result"));
-
-        generator.printTruthTable(condition, truthTable);
+        generator.printTruthTable();
         assertTrue(outContent.toString().startsWith("Truth Table for condition: a && b || !c\n"));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"a && b || c && d", "p && q || r && !s"})
-    void testPrintTrueValues() {
-        TruthTable generator = new TruthTable();
-        String condition = "a && b || c && d";
-        Expression expr = StaticJavaParser.parseExpression(condition);
+    void testPrintValues(String condition) {
+        TruthTable generator = new TruthTable(condition);
 
-        List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
-        generator.printTruthTable(condition, truthTable);
+        generator.printValues(true);
+        assertTrue(outContent.toString().contains("Values to make the condition true for: " + condition));
 
-        for(int i =0 ; i < 3 ; i++) {
-            Object r = truthTable.get(i).get("Result");
-            assertInstanceOf(Boolean.class, r);
-            assertFalse( (Boolean)truthTable.get(i).get("Result"));
-        }
-        assertTrue((Boolean) truthTable.get(3).get("Result"));
-        assertTrue(outContent.toString().contains("Truth Table for condition: " + condition));
-    }
-
-    @Test
-    void testEvaluateCondition() {
-        TruthTable generator = new TruthTable();
-        String condition = "a && b || !c";
-        Expression expr = StaticJavaParser.parseExpression(condition);
-
-        Map<String, Object> truthValues = Map.of("a", true, "b", false, "c", true);
-        boolean result = generator.evaluateCondition(expr, truthValues);
-
-        assertFalse(result);
+        generator.printValues(false);
+        assertTrue(outContent.toString().contains("Values to make the condition false for: " + condition));
     }
 }
