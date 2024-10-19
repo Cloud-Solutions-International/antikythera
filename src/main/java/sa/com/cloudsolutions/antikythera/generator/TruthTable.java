@@ -3,19 +3,64 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Generates and print truth tables for given conditionals
  */
 public class TruthTable {
+
+    private static boolean isInequality(BinaryExpr binaryExpr) {
+        return binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER ||
+                binaryExpr.getOperator() == BinaryExpr.Operator.LESS_EQUALS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
+    }
+
+    /**
+     * Main method to test the truth table generation and printing with different conditions.
+     *
+     * @param args Command line arguments.
+     */
+    public static void main(String[] args) {
+        TruthTable generator = new TruthTable();
+
+        String[] conditions = {
+                " a == null",
+                "a == null || b == null",
+                "a != null && b != null",
+                "a > b && c == d",
+                "a && b || !c",
+                "x || y && !z",
+                "a > b",
+                " a > b && b < c"
+
+        };
+
+        for (String condition : conditions) {
+            IfStmt ifStmt = StaticJavaParser.parseStatement("if (" + condition + ") {}").asIfStmt();
+            Expression expr = ifStmt.getCondition();
+
+            List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
+            generator.printTruthTable(condition, truthTable);
+            generator.printTrueValues(condition, truthTable);
+            System.out.println();
+        }
+    }
 
     /**
      * Generates a truth table for the given condition.
@@ -41,7 +86,13 @@ public class TruthTable {
             Map<String, Object> truthValues = new HashMap<>();
             for (int j = 0; j < numVariables; j++) {
                 boolean value = (i & (1 << j)) != 0;
-                truthValues.put(variableList.get(j), value);
+                if (!value && condition.toString().contains("null")) {
+                    truthValues.put(variableList.get(j), null);
+                }
+                else {
+                    truthValues.put(variableList.get(j), value);
+                }
+
             }
             boolean result = evaluateCondition(condition, truthValues);
             truthValues.put("Result", result);
@@ -64,14 +115,14 @@ public class TruthTable {
             // Print header
             Map<String, Object> firstRow = truthTable.get(0);
             for (String var : firstRow.keySet()) {
-                System.out.print(String.format("%-10s", var));
+                System.out.printf("%-10s", var);
             }
             System.out.println();
 
             // Print rows
             for (Map<String, Object> row : truthTable) {
                 for (Object value : row.values()) {
-                    System.out.print(String.format("%-10s", value));
+                    System.out.printf("%-10s", value);
                 }
                 System.out.println();
             }
@@ -110,7 +161,7 @@ public class TruthTable {
      * @param truthValues The truth values for the variables.
      * @return The result of the evaluation.
      */
-    boolean evaluateCondition(Expression condition, Map<String, Object> truthValues) {
+    Boolean evaluateCondition(Expression condition, Map<String, Object> truthValues) {
         if (condition.isBinaryExpr()) {
             var binaryExpr = condition.asBinaryExpr();
             var leftExpr = binaryExpr.getLeft();
@@ -128,19 +179,21 @@ public class TruthTable {
                     case GREATER -> left > right;
                     case LESS_EQUALS -> left <= right;
                     case GREATER_EQUALS -> left >= right;
-                    default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+                    default ->
+                            throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
                 };
 
 
             } else {
-                boolean left = evaluateCondition(leftExpr, truthValues);
-                boolean right = evaluateCondition(rightExpr, truthValues);
+                Boolean left = evaluateCondition(leftExpr, truthValues);
+                Boolean right = evaluateCondition(rightExpr, truthValues);
                 return switch (binaryExpr.getOperator()) {
                     case AND -> left && right;
                     case OR -> left || right;
-                    case EQUALS -> left == right;
-                    case NOT_EQUALS -> left != right;
-                    default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+                    case EQUALS -> (left == null || right == null ) ? left == right : left.equals(right);
+                    case NOT_EQUALS -> (left == null || right == null ) ? left != right : !left.equals(right);
+                    default ->
+                            throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
                 };
             }
         } else if (condition.isUnaryExpr()) {
@@ -151,18 +204,15 @@ public class TruthTable {
                 default -> throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
             };
         } else if (condition.isNameExpr()) {
-            return (boolean) truthValues.get(condition.asNameExpr().getNameAsString());
+            return (Boolean) truthValues.get(condition.asNameExpr().getNameAsString());
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isMethodCallExpr() || condition.isFieldAccessExpr()) {
-            return (boolean) getValue(condition, truthValues);
+            return (Boolean) getValue(condition, truthValues);
+        } else if (condition.isNullLiteralExpr()) {
+            return null;
         }
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
-    }
-
-    private static boolean isInequality(BinaryExpr binaryExpr) {
-        return binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER ||
-                binaryExpr.getOperator() == BinaryExpr.Operator.LESS_EQUALS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
     }
 
     private Object getValue(Expression expr, Map<String, Object> truthValues) {
@@ -171,11 +221,17 @@ public class TruthTable {
             Object value = truthValues.get(name);
             if (value instanceof Boolean) {
                 return (boolean) value ? 1 : 0;
-            } else if (value instanceof Number) {
-                return ((Number) value).intValue();
+            } else if (value instanceof Number n) {
+                return n.intValue();
             }
-        } else if (expr.isIntegerLiteralExpr()) {
-            return expr.asIntegerLiteralExpr().asInt();
+        } else if (expr.isLiteralExpr()) {
+            return switch (expr) {
+                case IntegerLiteralExpr integerLiteralExpr -> Integer.valueOf(integerLiteralExpr.getValue());
+                case DoubleLiteralExpr doubleLiteralExpr -> Double.valueOf(doubleLiteralExpr.getValue());
+                case StringLiteralExpr stringLiteralExpr -> stringLiteralExpr.getValue();
+                case NullLiteralExpr nullLiteralExpr -> null;
+                default -> throw new UnsupportedOperationException("Unsupported literal expression: " + expr);
+            };
         } else if (expr.isMethodCallExpr()) {
             var methodCall = expr.asMethodCallExpr();
             return truthValues.get(methodCall.toString());
@@ -186,18 +242,18 @@ public class TruthTable {
         }
         throw new UnsupportedOperationException("Unsupported expression: " + expr);
     }
+
     /**
      * Collects variable names from the condition expression.
      */
     private static class VariableCollector extends VoidVisitorAdapter<Set<String>> {
         @Override
         public void visit(NameExpr n, Set<String> collector) {
-            if(n.getParentNode().isEmpty()) {
+            if (n.getParentNode().isEmpty()) {
                 collector.add(n.getNameAsString());
-            }
-            else {
+            } else {
                 Node parent = n.getParentNode().get();
-                if (! (parent instanceof MethodCallExpr || parent instanceof FieldAccessExpr)) {
+                if (!(parent instanceof MethodCallExpr || parent instanceof FieldAccessExpr)) {
                     collector.add(n.getNameAsString());
                 }
             }
@@ -214,32 +270,6 @@ public class TruthTable {
         public void visit(FieldAccessExpr f, Set<String> collector) {
             collector.add(f.toString());
             super.visit(f, collector);
-        }
-    }
-
-    /**
-     * Main method to test the truth table generation and printing with different conditions.
-     *
-     * @param args Command line arguments.
-     */
-    public static void main(String[] args) {
-        TruthTable generator = new TruthTable();
-
-        String[] conditions = {
-            "a > b && c == d",
-            "a && b || !c",
-            "x || y && !z",
-                "a > b" , " a > b && b < c"
-        };
-
-        for (String condition : conditions) {
-            IfStmt ifStmt = StaticJavaParser.parseStatement("if (" + condition + ") {}").asIfStmt();
-            Expression expr = ifStmt.getCondition();
-
-            List<Map<String, Object>> truthTable = generator.generateTruthTable(expr);
-            generator.printTruthTable(condition, truthTable);
-            generator.printTrueValues(condition, truthTable);
-            System.out.println();
         }
     }
 }
