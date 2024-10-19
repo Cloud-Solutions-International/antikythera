@@ -511,15 +511,17 @@ public class SpringEvaluator extends Evaluator {
                 l.setColor(LineOfCode.GREY);
                 super.ifThenElseBlock(ifst);
             }
+        } else {
+            l.setColor(LineOfCode.BLACK);
         }
     }
 
     private void setupIfCondition(IfStmt ifst, boolean state) {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
-        LineOfCode l;
+        LineOfCode l = new LineOfCode(ifst.getThenStmt());
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
-        l = new LineOfCode(ifst.getThenStmt());
+
         lines.put(ifst.getThenStmt().hashCode(), l);
 
         if (!values.isEmpty()) {
