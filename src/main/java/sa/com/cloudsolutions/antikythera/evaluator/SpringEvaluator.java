@@ -492,13 +492,13 @@ public class SpringEvaluator extends Evaluator {
              * This if condition has never been executed before. Now let's determine the set of
              * values that will result in it being true
              */
-            List<Map<String, Object>> values = tt.findValuesForCondition(true);
+            List<Map<Expression, Object>> values = tt.findValuesForCondition(true);
 
             l = new LineOfCode(ifst.getThenStmt());
             lines.put(ifst.getThenStmt().hashCode(), l);
 
             if (!values.isEmpty()) {
-                Map<String, Object> value = values.getFirst();
+                Map<Expression, Object> value = values.getFirst();
                 System.out.println("aaa");
             }
             super.ifThenElseBlock(ifst);
@@ -511,7 +511,7 @@ public class SpringEvaluator extends Evaluator {
             l = lines.get(ifst.getElseStmt().get());
             if (l == null || l.getColor() != LineOfCode.BLACK) {
                 l.setColor(LineOfCode.GREY);
-                List<Map<String, Object>> values = tt.findValuesForCondition(false);
+                List<Map<Expression, Object>> values = tt.findValuesForCondition(false);
                 super.ifThenElseBlock(ifst);
             }
         }

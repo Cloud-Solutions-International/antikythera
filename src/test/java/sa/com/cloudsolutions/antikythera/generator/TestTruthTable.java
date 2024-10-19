@@ -1,7 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NameExpr;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class TestTruthTable {
         String condition = "a == null";
         TruthTable generator = new TruthTable(condition);
 
-        List<Map<String, Object>> truthTable = generator.getTruthTable();
+        List<Map<Expression, Object>> truthTable = generator.getTable();
 
         assertNotNull(truthTable);
         assertFalse(truthTable.isEmpty());
@@ -52,11 +52,11 @@ class TestTruthTable {
          * that is when a = 1, b = 0 and c = 1;
          */
         TruthTable generator = new TruthTable(condition);
-        List<Map<String, Object>> values = generator.findValuesForCondition(true);
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
         assertEquals(1, values.size());
-        assertEquals(1, values.getFirst().get("a"));
-        assertEquals(0, values.getFirst().get("b"));
-        assertEquals(1, values.getFirst().get("c"));
+        assertEquals(1, values.getFirst().get(new NameExpr("a")));
+        assertEquals(0, values.getFirst().get(new NameExpr("b")));
+        assertEquals(1, values.getFirst().get(new NameExpr("c")));
 
     }
 

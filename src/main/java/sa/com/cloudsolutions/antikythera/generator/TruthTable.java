@@ -31,11 +31,11 @@ public class TruthTable {
     /**
      * The set of variables involved in the condition
      */
-    private final Set<String> variables;
+    private final Set<Expression> variables;
     /**
      * The matrix of values for the variables and the result of the condition
      */
-    private List<Map<String, Object>> truthTable;
+    private List<Map<Expression, Object>> table;
 
     /**
      * Create a new truth table for the given condition represented as a string
@@ -69,13 +69,13 @@ public class TruthTable {
      */
     public static void main(String[] args) {
         String[] conditions = {
+                "a > b",
+                "a > b && c == d",
+                "a != null && b != null",
                 "a == null",
                 "a == null || b == null",
-                "a != null && b != null",
-                "a > b && c == d",
                 "a && b || !c",
                 "x || y && !z",
-                "a > b",
                 "a > b && b < c",
                 "a > b && b > c"
         };
@@ -93,14 +93,14 @@ public class TruthTable {
      * Generates a truth table for the given condition.
      */
     private void generateTruthTable() {
-        List<String> variableList = new ArrayList<>(variables);
+        List<Expression> variableList = new ArrayList<>(variables);
         int numVariables = variableList.size();
         int numRows = (int) Math.pow(2, numVariables);
 
-        truthTable = new ArrayList<>();
+        table = new ArrayList<>();
 
         for (int i = 0; i < numRows; i++) {
-            Map<String, Object> truthValues = new HashMap<>();
+            Map<Expression, Object> truthValues = new HashMap<>();
             for (int j = 0; j < numVariables; j++) {
                 boolean value = (i & (1 << j)) != 0;
                 if (!value && condition.toString().contains("null")) {
@@ -110,8 +110,8 @@ public class TruthTable {
                 }
             }
             boolean result = evaluateCondition(condition, truthValues);
-            truthValues.put("Result", result);
-            truthTable.add(truthValues);
+            truthValues.put(new NameExpr("Result"), result);
+            table.add(truthValues);
         }
     }
 
@@ -122,14 +122,14 @@ public class TruthTable {
     public void printTruthTable() {
         System.out.println("Truth Table for condition: " + condition);
 
-        if (!truthTable.isEmpty()) {
-            Map<String, Object> firstRow = truthTable.get(0);
-            for (String var : firstRow.keySet()) {
-                System.out.printf("%-10s", var);
+        if (!table.isEmpty()) {
+            Map<Expression, Object> firstRow = table.get(0);
+            for (Expression var : firstRow.keySet()) {
+                System.out.printf("%-10s", var.toString());
             }
             System.out.println();
 
-            for (Map<String, Object> row : truthTable) {
+            for (Map<Expression, Object> row : table) {
                 for (Object value : row.values()) {
                     System.out.printf("%-10s", value);
                 }
@@ -147,7 +147,7 @@ public class TruthTable {
         String state = desiredState ? "true" : "false";
         System.out.println("\nValues to make the condition " + state + " for: " + condition);
 
-        List<Map<String, Object>> values = findValuesForCondition(desiredState);
+        List<Map<Expression, Object>> values = findValuesForCondition(desiredState);
 
         values.stream().findFirst().ifPresentOrElse(
                 row -> {
@@ -164,14 +164,14 @@ public class TruthTable {
      * @param desiredState either true or false
      * @return a list of maps containing the values that make the condition true or false
      */
-    public List<Map<String, Object>> findValuesForCondition(boolean desiredState) {
-        List<Map<String, Object>> result = new ArrayList<>();
+    public List<Map<Expression, Object>> findValuesForCondition(boolean desiredState) {
+        List<Map<Expression, Object>> result = new ArrayList<>();
 
-        for (Map<String, Object> row : truthTable) {
-            if ((boolean) row.get("Result") == desiredState) {
-                Map<String, Object> copy = new HashMap<>();
-                for (Map.Entry<String, Object> entry : row.entrySet()) {
-                    if (!entry.getKey().equals("Result")) {
+        for (Map<Expression, Object> row : table) {
+            if ((boolean) row.get(new NameExpr("Result")) == desiredState) {
+                Map<Expression, Object> copy = new HashMap<>();
+                for (Map.Entry<Expression, Object> entry : row.entrySet()) {
+                    if (!entry.getKey().toString().equals("Result")) {
                         copy.put(entry.getKey(), entry.getValue());
                     }
                 }
@@ -189,7 +189,7 @@ public class TruthTable {
      * @param truthValues The truth values for the variables.
      * @return The result of the evaluation.
      */
-    private Boolean evaluateCondition(Expression condition, Map<String, Object> truthValues) {
+    private Boolean evaluateCondition(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isBinaryExpr()) {
             var binaryExpr = condition.asBinaryExpr();
             var leftExpr = binaryExpr.getLeft();
@@ -199,8 +199,8 @@ public class TruthTable {
                 int left = (int) getValue(leftExpr, truthValues);
                 int right = (int) getValue(rightExpr, truthValues);
 
-                truthValues.put(leftExpr.toString(), left);
-                truthValues.put(rightExpr.toString(), right);
+                truthValues.put(leftExpr, left);
+                truthValues.put(rightExpr, right);
 
                 return switch (binaryExpr.getOperator()) {
                     case LESS -> left < right;
@@ -228,7 +228,7 @@ public class TruthTable {
                 default -> throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
             };
         } else if (condition.isNameExpr()) {
-            return (Boolean) truthValues.get(condition.asNameExpr().getNameAsString());
+            return (Boolean) truthValues.get(condition);
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isMethodCallExpr() || condition.isFieldAccessExpr()) {
@@ -246,10 +246,9 @@ public class TruthTable {
      * @return the value will typically be true/false in some cases it maybe 0/1 and when the
      *      condition has a null in it, we may return null
      */
-    private Object getValue(Expression expr, Map<String, Object> truthValues) {
+    private Object getValue(Expression expr, Map<Expression, Object> truthValues) {
         if (expr.isNameExpr()) {
-            String name = expr.asNameExpr().getNameAsString();
-            Object value = truthValues.get(name);
+            Object value = truthValues.get(expr);
             if (value instanceof Boolean) {
                 return (boolean) value ? 1 : 0;
             } else if (value instanceof Number n) {
@@ -278,34 +277,34 @@ public class TruthTable {
     /**
      * Collects variable names from the condition expression.
      */
-    private static class VariableCollector extends VoidVisitorAdapter<Set<String>> {
+    private static class VariableCollector extends VoidVisitorAdapter<Set<Expression>> {
         @Override
-        public void visit(NameExpr n, Set<String> collector) {
+        public void visit(NameExpr n, Set<Expression> collector) {
             if (n.getParentNode().isEmpty()) {
-                collector.add(n.getNameAsString());
+                collector.add(n);
             } else {
                 Node parent = n.getParentNode().get();
                 if (!(parent instanceof MethodCallExpr || parent instanceof FieldAccessExpr)) {
-                    collector.add(n.getNameAsString());
+                    collector.add(n);
                 }
             }
             super.visit(n, collector);
         }
 
         @Override
-        public void visit(MethodCallExpr m, Set<String> collector) {
-            collector.add(m.toString());
+        public void visit(MethodCallExpr m, Set<Expression> collector) {
+            collector.add(m);
             super.visit(m, collector);
         }
 
         @Override
-        public void visit(FieldAccessExpr f, Set<String> collector) {
-            collector.add(f.toString());
+        public void visit(FieldAccessExpr f, Set<Expression> collector) {
+            collector.add(f);
             super.visit(f, collector);
         }
     }
 
-    public List<Map<String, Object>> getTruthTable() {
-        return truthTable;
+    public List<Map<Expression, Object>> getTable() {
+        return table;
     }
 }
