@@ -1,8 +1,11 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -113,10 +116,9 @@ public class TruthTable {
             var leftExpr = binaryExpr.getLeft();
             var rightExpr = binaryExpr.getRight();
 
-            if (binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER ||
-                binaryExpr.getOperator() == BinaryExpr.Operator.LESS_EQUALS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS) {
-                int left = getValue(leftExpr, truthValues);
-                int right = getValue(rightExpr, truthValues);
+            if (isInequality(binaryExpr)) {
+                int left = (int) getValue(leftExpr, truthValues);
+                int right = (int) getValue(rightExpr, truthValues);
 
                 truthValues.put(leftExpr.toString(), left);
                 truthValues.put(rightExpr.toString(), right);
@@ -128,6 +130,7 @@ public class TruthTable {
                     case GREATER_EQUALS -> left >= right;
                     default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
                 };
+
 
             } else {
                 boolean left = evaluateCondition(leftExpr, truthValues);
@@ -151,11 +154,18 @@ public class TruthTable {
             return (boolean) truthValues.get(condition.asNameExpr().getNameAsString());
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
+        } else if (condition.isMethodCallExpr() || condition.isFieldAccessExpr()) {
+            return (boolean) getValue(condition, truthValues);
         }
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
     }
 
-    private int getValue(Expression expr, Map<String, Object> truthValues) {
+    private static boolean isInequality(BinaryExpr binaryExpr) {
+        return binaryExpr.getOperator() == BinaryExpr.Operator.LESS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER ||
+                binaryExpr.getOperator() == BinaryExpr.Operator.LESS_EQUALS || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
+    }
+
+    private Object getValue(Expression expr, Map<String, Object> truthValues) {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             Object value = truthValues.get(name);
@@ -166,6 +176,13 @@ public class TruthTable {
             }
         } else if (expr.isIntegerLiteralExpr()) {
             return expr.asIntegerLiteralExpr().asInt();
+        } else if (expr.isMethodCallExpr()) {
+            var methodCall = expr.asMethodCallExpr();
+            return truthValues.get(methodCall.toString());
+        } else if (expr.isFieldAccessExpr()) {
+            var fieldAccess = expr.asFieldAccessExpr();
+            String scope = fieldAccess.getScope().toString();
+            return truthValues.get(scope + "." + fieldAccess.getNameAsString());
         }
         throw new UnsupportedOperationException("Unsupported expression: " + expr);
     }
@@ -175,8 +192,28 @@ public class TruthTable {
     private static class VariableCollector extends VoidVisitorAdapter<Set<String>> {
         @Override
         public void visit(NameExpr n, Set<String> collector) {
-            collector.add(n.getNameAsString());
+            if(n.getParentNode().isEmpty()) {
+                collector.add(n.getNameAsString());
+            }
+            else {
+                Node parent = n.getParentNode().get();
+                if (! (parent instanceof MethodCallExpr || parent instanceof FieldAccessExpr)) {
+                    collector.add(n.getNameAsString());
+                }
+            }
             super.visit(n, collector);
+        }
+
+        @Override
+        public void visit(MethodCallExpr m, Set<String> collector) {
+            collector.add(m.toString());
+            super.visit(m, collector);
+        }
+
+        @Override
+        public void visit(FieldAccessExpr f, Set<String> collector) {
+            collector.add(f.toString());
+            super.visit(f, collector);
         }
     }
 
