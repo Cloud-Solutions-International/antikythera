@@ -24,15 +24,32 @@ import java.util.Set;
  * Generates and print truth tables for given conditionals
  */
 public class TruthTable {
-    private Expression condition;
-    private Set<String> variables;
+    /**
+     * The condition that this truth table is for
+     */
+    private final Expression condition;
+    /**
+     * The set of variables involved in the condition
+     */
+    private final Set<String> variables;
+    /**
+     * The matrix of values for the variables and the result of the condition
+     */
     private List<Map<String, Object>> truthTable;
 
+    /**
+     * Create a new truth table for the given condition represented as a string
+     * @param conditionCode the condition as string
+     */
     public TruthTable(String conditionCode) {
         this(StaticJavaParser.parseExpression(conditionCode));
 
     }
 
+    /**
+     * Create a new truth table for the given condition.
+     * @param condition Expression
+     */
     public TruthTable(Expression condition) {
         this.condition = condition;
         this.variables = new HashSet<>();
@@ -152,7 +169,13 @@ public class TruthTable {
 
         for (Map<String, Object> row : truthTable) {
             if ((boolean) row.get("Result") == desiredState) {
-                result.add(row);
+                Map<String, Object> copy = new HashMap<>();
+                for (Map.Entry<String, Object> entry : row.entrySet()) {
+                    if (!entry.getKey().equals("Result")) {
+                        copy.put(entry.getKey(), entry.getValue());
+                    }
+                }
+                result.add(copy);
             }
         }
 

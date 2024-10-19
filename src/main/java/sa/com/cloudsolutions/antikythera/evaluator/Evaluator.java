@@ -1334,7 +1334,7 @@ public class Evaluator {
             /*
              * If then Else are all treated together
              */
-            ifThenElseBlock(stmt);
+            ifThenElseBlock(stmt.asIfStmt());
 
         } else if (stmt.isTryStmt()) {
             /*
@@ -1474,11 +1474,11 @@ public class Evaluator {
 
     /**
      * Execute a statement that represents an If - Then or If - Then - Else
-     * @param stmt If / Then statement
+     * @param ifst If / Then statement
      * @throws Exception
      */
-    void ifThenElseBlock(Statement stmt) throws Exception {
-        IfStmt ifst = stmt.asIfStmt();
+    void ifThenElseBlock(IfStmt ifst) throws Exception {
+
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {
             Statement then = ifst.getThenStmt();

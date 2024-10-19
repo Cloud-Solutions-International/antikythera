@@ -31,11 +31,9 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
@@ -65,7 +63,7 @@ public class SpringEvaluator extends Evaluator {
     /**
      * The lines of code already looked at in the method.
      */
-    private HashMap<Integer, LineOfCode> lines = new HashMap<>();
+    private static HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
     /**
      * It is better to use create evaluator
@@ -97,16 +95,17 @@ public class SpringEvaluator extends Evaluator {
         });
 
         try {
-            mockURIVariables(md);
+            for(Statement st : md.getBody().get().getStatements()) {
+                if(!lines.containsKey(st.hashCode())) {
+                    mockURIVariables(md);
+                    super.executeMethod(md);
+                }
+            }
         } catch (Exception e) {
             throw new EvaluatorException("Error while mocking controller arguments", e);
         }
 
-        for(Statement st : md.getBody().get().getStatements()) {
-            if(!lines.containsKey(st.hashCode())) {
-                super.executeMethod(md);
-            }
-        }
+
     }
 
     /**
@@ -123,28 +122,11 @@ public class SpringEvaluator extends Evaluator {
     protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
         try {
             for (Statement stmt : statements) {
-                if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
-                    LineOfCode l = lines.get(stmt.hashCode());
-
-                    if (l == null) {
-                        l = new LineOfCode(stmt);
-                        lines.put(stmt.hashCode(), l);
-
-                        executeStatement(stmt);
-                        if (returnFrom != null) {
-                            break;
-                        }
-                    }
-                    else if(l.getColor() == LineOfCode.GREY || l.getColor() == LineOfCode.WHITE) {
-                        l.setColor(LineOfCode.BLACK);
-                        executeStatement(stmt);
-                        if (returnFrom != null) {
-                            break;
-                        }
-                    }
+                executeStatement(stmt);
+                if (returnFrom != null) {
+                    break;
                 }
             }
-
         } catch (EvaluatorException|ReflectiveOperationException ex) {
             throw ex;
         } catch (Exception e) {
@@ -157,7 +139,7 @@ public class SpringEvaluator extends Evaluator {
      * @param md The method declaration representing an HTTP API end point
      * @throws Exception if the variables cannot be mocked.
      */
-    private void mockURIVariables(MethodDeclaration md) throws Exception {
+    private void mockURIVariables(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
             String paramString = String.valueOf(param);
@@ -492,11 +474,51 @@ public class SpringEvaluator extends Evaluator {
         return new SpringEvaluator(name);
     }
 
+    /**
+     * Handle if then else statements.
+     *
+     * We use truth tables to analyze the condition and to set values on the DTOs accordingly.
+     *
+     * @param ifst If / Then statement
+     * @throws Exception
+     */
     @Override
-    void ifThenElseBlock(Statement stmt) throws Exception {
-        TruthTable tt = new TruthTable(stmt.asIfStmt().getCondition());
+    void ifThenElseBlock(IfStmt ifst) throws Exception {
+        TruthTable tt = new TruthTable(ifst.getCondition());
 
-        super.ifThenElseBlock(stmt);
+        LineOfCode l = lines.get(ifst.getThenStmt().hashCode());
+        if (l == null) {
+            /*
+             * This if condition has never been executed before. Now let's determine the set of
+             * values that will result in it being true
+             */
+            List<Map<String, Object>> values = tt.findValuesForCondition(true);
+
+            l = new LineOfCode(ifst.getThenStmt());
+            lines.put(ifst.getThenStmt().hashCode(), l);
+
+            if (!values.isEmpty()) {
+                Map<String, Object> value = values.getFirst();
+                System.out.println("aaa");
+            }
+            super.ifThenElseBlock(ifst);
+        }
+        else if (l.getColor() != LineOfCode.BLACK) {
+            l.setColor(LineOfCode.GREY);
+
+            super.ifThenElseBlock(ifst);
+        } else if (ifst.getElseStmt().isPresent()) {
+            l = lines.get(ifst.getElseStmt().get());
+            if (l == null || l.getColor() != LineOfCode.BLACK) {
+                l.setColor(LineOfCode.GREY);
+                List<Map<String, Object>> values = tt.findValuesForCondition(false);
+                super.ifThenElseBlock(ifst);
+            }
+        }
+    }
+
+    public void resetColors() {
+        lines.clear();
     }
 }
 

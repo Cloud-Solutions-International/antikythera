@@ -204,6 +204,7 @@ public class RestControllerParser extends ClassProcessor {
 
             if (checkEligible(md)) {
                 evaluator.reset();
+                evaluator.resetColors();
                 AntikytheraRunTime.reset();
                 try {
                     evaluator.visit(md);
