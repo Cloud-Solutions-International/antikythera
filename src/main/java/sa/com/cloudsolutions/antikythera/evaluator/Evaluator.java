@@ -1133,7 +1133,7 @@ public class Evaluator {
         return null;
     }
 
-    void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
+    void identifyFieldDeclarations(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
         if (variable.getType().isClassOrInterfaceType()) {
             Type t = variable.getType().asClassOrInterfaceType();
             String resolvedClass = t.resolve().describe();
@@ -1591,7 +1591,7 @@ public class Evaluator {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 try {
-                    identifyFieldVariables(variable);
+                    identifyFieldDeclarations(variable);
                 } catch (UnsolvedSymbolException e) {
                     logger.debug("ignore {}", variable);
                 } catch (IOException e) {

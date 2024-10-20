@@ -66,6 +66,9 @@ public class SpringEvaluator extends Evaluator {
      */
     private static HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
+    /**
+     * Sort of a stack that keeps track of the variables that are being passed to the method.
+     */
     private final Set<IfStmt> branching = new HashSet<>();
 
     /**
@@ -83,30 +86,34 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Called by the java parser method visitor.
-     * This is where the code evaluation begins.
+     *
+     * This is where the code evaluation begins. Note that we may run the same code repeatedly
+     * so that we can excercise all the paths in the code. This is done by setting the values
+     * of variables so that different branches in conditional statements are taken.
+     *
      * @param md The MethodDeclaration being worked on
      * @throws AntikytheraException
      * @throws ReflectiveOperationException
      */
     @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-
+        branching.clear();
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration cdecl && cdecl.isAnnotationPresent("RestController")) {
-                 currentMethod = md;
+                currentMethod = md;
             }
         });
 
         try {
             NodeList<Statement> statements = md.getBody().get().getStatements();
-            for (int i =0 ; i < statements.size() ; i++) {
+            for (int i = 0; i < statements.size(); i++) {
                 Statement st = statements.get(i);
-                if(!lines.containsKey(st.hashCode())) {
+                if (!lines.containsKey(st.hashCode())) {
                     mockURIVariables(md);
                     super.executeMethod(md);
-                    if(returnFrom != null) {
+                    if (returnFrom != null) {
                         // rewind!
-                        //branching.clear();
+
                         i = 0;
                     }
                 }
@@ -114,8 +121,6 @@ public class SpringEvaluator extends Evaluator {
         } catch (Exception e) {
             throw new EvaluatorException("Error while mocking controller arguments", e);
         }
-
-
     }
 
     /**
@@ -144,6 +149,14 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    /**
+     * Executes a single statement
+     * OVerrides the superclass method to keep track of the lines of code that have been
+     * executed. While the basic Evaluator class does not run the same code over and over again,
+     * this class does!
+     * @param stmt the statement to execute
+     * @throws Exception
+     */
     @Override
     void executeStatement(Statement stmt) throws Exception {
         if(!stmt.isIfStmt()) {
@@ -163,7 +176,7 @@ public class SpringEvaluator extends Evaluator {
     /**
      * The URL contains Path variables, Query string parameters and post bodies. We mock them here
      * @param md The method declaration representing an HTTP API end point
-     * @throws Exception if the variables cannot be mocked.
+     * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
     private void mockURIVariables(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
@@ -243,6 +256,12 @@ public class SpringEvaluator extends Evaluator {
         });
     }
 
+    /**
+     * Execute a query on a repository.
+     * @param name the name of the repository
+     * @param methodCall the method call expression
+     * @return the result set
+     */
     private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
@@ -276,15 +295,28 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
+    /**
+     * Identify fields in the class.
+     * This process needs to be carried out before executing any code.
+     * @param field the field declaration
+     * @throws IOException if the file cannot be read
+     * @throws AntikytheraException if there is an error in the code
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
     @Override
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
-        super.identifyFieldVariables(variable);
+    public void identifyFieldDeclarations(VariableDeclarator field) throws IOException, AntikytheraException, ReflectiveOperationException {
+        super.identifyFieldDeclarations(field);
 
-        if (variable.getType().isClassOrInterfaceType()) {
-            detectRepository(variable);
+        if (field.getType().isClassOrInterfaceType()) {
+            detectRepository(field);
         }
     }
 
+    /**
+     * Detect a JPA repository.
+     * @param variable the variable declaration
+     * @throws IOException if the file cannot be read
+     */
     private static void detectRepository(VariableDeclarator variable) throws IOException {
         String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
         if (SpringEvaluator.getRepositories().containsKey(shortName)) {
@@ -321,6 +353,15 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    /**
+     * Execute a return statement.
+     * Over rides the super class method to create tests.
+     *
+     * @param statement the statement to execute
+     * @return the variable that is returned
+     * @throws AntikytheraException if there is an error in the code
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
     @Override
     Variable executeReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
         /*
@@ -340,6 +381,11 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
+    /**
+     * Build the list of expressions that will be the precondition for the test.
+     * This is done by looking at the branching statements in the code. The list of expressions
+     * become a part of the test setup.
+     */
     private void buildPreconditions() {
         List<Expression> expressions = new ArrayList<>();
         for (LineOfCode l : lines.values()) {
@@ -352,6 +398,12 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    /**
+     * Finally create the tests by calling each of the test generators.
+     * There maybe multiple test generators, one of unit tests, one of API tests aec.
+     * @param response
+     * @return
+     */
     private Variable createTests(ControllerResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
@@ -400,6 +452,7 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
+
     @Override
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException {
         try {
@@ -411,28 +464,6 @@ public class SpringEvaluator extends Evaluator {
             ControllerResponse response = new ControllerResponse();
         }
         return null;
-    }
-
-    @Override
-    protected Variable checkEquality(Variable left, Variable right) {
-        Variable v = super.checkEquality(left, right);
-        if (left.getInitializer() != null && right.getInitializer() != null) {
-            Node n = left.getInitializer();
-            while(n != null) {
-                if(n instanceof IfStmt ifStmt) {
-                    if (v.getValue() instanceof Boolean b && b) {
-                        System.out.println("Condition was true");
-                    } else {
-                        System.out.println("Condition was false");
-                    }
-                    break;
-                }
-                n = n.getParentNode().orElse(null);
-            }
-
-        }
-        return v;
-
     }
 
     @Override
@@ -495,6 +526,11 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
+    /**
+     * Setup an if condition so that it will evaluate to true or false in future executions.
+     * @param ifst the if statement to mess with
+     * @param state the desired state.
+     */
     private void setupIfCondition(IfStmt ifst, boolean state) {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
@@ -522,6 +558,11 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    /**
+     * Check if a collection of statements have been previously executed or not.
+     * @param statements
+     * @return
+     */
     private boolean checkStatements(List<Statement> statements) {
         for (Statement line : statements) {
             if (line.isIfStmt()) {
@@ -535,6 +576,11 @@ public class SpringEvaluator extends Evaluator {
         return true;
     }
 
+    /**
+     * Check if all the code in the then branch as well as the else branch have been executed.
+     * @param stmt
+     * @return
+     */
     public boolean allVisited(IfStmt stmt) {
         LineOfCode l = lines.get(stmt.hashCode());
         if (l == null) {
@@ -568,6 +614,11 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
+    /**
+     * Has thsi line of code being executed before
+     * @param stmt statement representing a line of code (except that a multiline statments are not supported)
+     * @return
+     */
     private boolean isLineVisited(Statement stmt) {
         LineOfCode l = lines.get(stmt.hashCode());
         if (l == null) {
@@ -580,6 +631,13 @@ public class SpringEvaluator extends Evaluator {
         lines.clear();
     }
 
+    /**
+     * Execute a method that's only available to us in source code format.
+     * @param methodCall
+     * @return
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
     @Override
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         Expression expression = methodCall.getScope().orElseGet(null);
