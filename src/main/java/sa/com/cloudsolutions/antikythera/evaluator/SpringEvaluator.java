@@ -45,7 +45,7 @@ public class SpringEvaluator extends Evaluator {
     /**
      * Maintains a list of repositories that we have already encountered.
      */
-    private static final Map<String, RepositoryParser> respositories = new HashMap<>();
+    private static final Map<String, RepositoryParser> repositories = new HashMap<>();
 
     /**
      * List of generators that we have.
@@ -77,7 +77,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     public static Map<String, RepositoryParser> getRepositories() {
-        return respositories;
+        return repositories;
     }
 
 
@@ -209,7 +209,7 @@ public class SpringEvaluator extends Evaluator {
                     }
                     else {
 
-                        Evaluator o = new Evaluator(className);
+                        Evaluator o = new SpringEvaluator(className);
                         o.setupFields(AntikytheraRunTime.getCompilationUnit(className));
                         Variable v = new Variable(o);
                         /*
@@ -244,7 +244,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
-        RepositoryParser repository = respositories.get(name);
+        RepositoryParser repository = repositories.get(name);
         if(repository != null) {
             RepositoryQuery q = repository.getQueries().get(methodCall.getNameAsString());
             try {
@@ -311,7 +311,7 @@ public class SpringEvaluator extends Evaluator {
                                 RepositoryParser parser = new RepositoryParser();
                                 parser.compile(AbstractCompiler.classToPath(className));
                                 parser.process();
-                                respositories.put(variable.getNameAsString(), parser);
+                                repositories.put(variable.getNameAsString(), parser);
                                 break;
                             }
                         }
@@ -389,7 +389,7 @@ public class SpringEvaluator extends Evaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
 
 
-            Evaluator eval = new Evaluator(resolvedClass);
+            Evaluator eval = new SpringEvaluator(resolvedClass);
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
             eval.setupFields(cu);
             Variable v = new Variable(eval);
@@ -578,6 +578,21 @@ public class SpringEvaluator extends Evaluator {
 
     public void resetColors() {
         lines.clear();
+    }
+
+    @Override
+    Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        Expression expression = methodCall.getScope().orElseGet(null);
+        if (expression != null && expression.isNameExpr()) {
+            RepositoryParser rp = repositories.get(expression.asNameExpr().getNameAsString());
+            if (rp != null) {
+                RepositoryQuery q = executeQuery(expression.asNameExpr().getNameAsString(), methodCall);
+                if (q != null) {
+                    return new Variable(q);
+                }
+            }
+        }
+        return super.executeSource(methodCall);
     }
 }
 

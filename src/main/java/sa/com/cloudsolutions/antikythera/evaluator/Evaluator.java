@@ -978,7 +978,8 @@ public class Evaluator {
         return null;
     }
 
-    private Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
