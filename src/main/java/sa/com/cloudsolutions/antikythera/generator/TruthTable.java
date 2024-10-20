@@ -12,6 +12,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.utils.Pair;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -32,15 +33,17 @@ import java.util.Set;
  * implementation will only consider Numeric, Boolean and String expressions.
  */
 public class TruthTable {
-    public static final ConditionalVariable RESULT = new ConditionalVariable(new NameExpr("Result"));
+    public static final NameExpr RESULT = new NameExpr("Result");
     /**
      * The condition that this truth table is for
      */
     private final Expression condition;
     /**
-     * The set of variables involved in the condition
+     * Collection of variables involved in the condition.
+     * the key will be the expression representing the variable and the value will be a Pair
+     * representing the lower and upper bounds for the expresion
      */
-    private final Set<ConditionalVariable> variables;
+    private final HashMap<Expression, Pair<Object, Object>> variables;
 
     /**
      * All the sub conditions that make up the condition.
@@ -50,7 +53,7 @@ public class TruthTable {
     /**
      * The matrix of values for the variables and the result of the condition
      */
-    private List<Map<ConditionalVariable, Object>> table;
+    private List<Map<Expression, Object>> table;
 
     /**
      * Create a new truth table for the given condition represented as a string
@@ -67,7 +70,7 @@ public class TruthTable {
      */
     public TruthTable(Expression condition) {
         this.condition = condition;
-        this.variables = new HashSet<>();
+        this.variables = new HashMap<>();
         this.conditions = new HashSet<>();
 
         /*
@@ -122,27 +125,28 @@ public class TruthTable {
      * Generates a truth table for the given condition.
      */
     private void generateTruthTable() {
-        List<ConditionalVariable> variableList = new ArrayList<>(variables);
-        int numVariables = variableList.size();
-        int numRows = (int) Math.pow(2, numVariables);
+        Expression[] variableList = variables.keySet().toArray(new Expression[0]);
+        int numRows = (int) Math.pow(2, variableList.length);
 
         table = new ArrayList<>();
 
         for (int i = 0; i < numRows; i++) {
-            Map<ConditionalVariable, Object> truthValues = new HashMap<>();
-            for (int j = 0; j < numVariables; j++) {
-                ConditionalVariable variable = variableList.get(j);
+            Map<Expression, Object> truthValues = new HashMap<>();
+            for (int j = 0; j < variableList.length; j++) {
+                Expression variable = variableList[j];
+                Pair<Object, Object> bounds = variables.get(variable);
+
                 boolean value = (i & (1 << j)) != 0;
                 if (value) {
-                    if (variable.getLower() != null) {
-                        truthValues.put(variable, variable.getLower());
+                    if (bounds.a != null) {
+                        truthValues.put(variable, bounds.a);
                     } else {
                         truthValues.put(variable, true);
                     }
                 }
                 else {
-                    if (variable.getUpper() != null) {
-                        truthValues.put(variable, variable.getUpper());
+                    if (bounds.a != null) {
+                        truthValues.put(variable, bounds.b);
                     } else {
                         truthValues.put(variable, false);
                     }
@@ -167,9 +171,9 @@ public class TruthTable {
         out.println("Truth Table for condition: " + condition);
 
         if (!table.isEmpty()) {
-            Map<ConditionalVariable, Object> firstRow = table.get(0);
+            Map<Expression, Object> firstRow = table.get(0);
             final String FORMAT = "%-11s";
-            for (ConditionalVariable key : firstRow.keySet()) {
+            for (Expression key : firstRow.keySet()) {
                 if (!key.equals(RESULT)) {
                     out.printf(FORMAT, key.toString());
                 }
@@ -177,7 +181,7 @@ public class TruthTable {
             out.printf(FORMAT, RESULT);
             out.println();
 
-            for (Map<ConditionalVariable, Object> row : table) {
+            for (Map<Expression, Object> row : table) {
                 for (var entry : row.entrySet()) {
                     if (!entry.getKey().equals(RESULT)) {
                         out.printf(FORMAT, entry.getValue());
@@ -198,7 +202,7 @@ public class TruthTable {
         String state = desiredState ? "true" : "false";
         System.out.println("\nValues to make the condition " + state + " for: " + condition);
 
-        List<Map<ConditionalVariable, Object>> values = findValuesForCondition(desiredState);
+        List<Map<Expression, Object>> values = findValuesForCondition(desiredState);
 
         values.stream().findFirst().ifPresentOrElse(
                 row -> {
@@ -215,13 +219,13 @@ public class TruthTable {
      * @param desiredState either true or false
      * @return a list of maps containing the values that make the condition true or false
      */
-    public List<Map<ConditionalVariable, Object>> findValuesForCondition(boolean desiredState) {
-        List<Map<ConditionalVariable, Object>> result = new ArrayList<>();
+    public List<Map<Expression, Object>> findValuesForCondition(boolean desiredState) {
+        List<Map<Expression, Object>> result = new ArrayList<>();
 
-        for (Map<ConditionalVariable, Object> row : table) {
+        for (Map<Expression, Object> row : table) {
             if ((boolean) row.get(RESULT) == desiredState) {
-                Map<ConditionalVariable, Object> copy = new HashMap<>();
-                for (Map.Entry<ConditionalVariable, Object> entry : row.entrySet()) {
+                Map<Expression, Object> copy = new HashMap<>();
+                for (Map.Entry<Expression, Object> entry : row.entrySet()) {
                     if (!entry.getKey().equals(RESULT)) {
                         copy.put(entry.getKey(), entry.getValue());
                     }
@@ -240,7 +244,7 @@ public class TruthTable {
      * @param truthValues The truth values for the variables.
      * @return The result of the evaluation.
      */
-    private Boolean evaluateCondition(Expression condition, Map<ConditionalVariable, Object> truthValues) {
+    private Boolean evaluateCondition(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isBinaryExpr()) {
             var binaryExpr = condition.asBinaryExpr();
             var leftExpr = binaryExpr.getLeft();
@@ -250,8 +254,8 @@ public class TruthTable {
                 int left = (int) getValue(leftExpr, truthValues);
                 int right = (int) getValue(rightExpr, truthValues);
 
-                truthValues.put(new ConditionalVariable(leftExpr), left);
-                truthValues.put(new ConditionalVariable(rightExpr), right);
+                truthValues.put(leftExpr, left);
+                truthValues.put(rightExpr, right);
 
                 return switch (binaryExpr.getOperator()) {
                     case LESS -> left < right;
@@ -299,15 +303,14 @@ public class TruthTable {
 
     /**
      * FInd the appropriate value for the given expression
-     * @param cv the conditional variable to find the value for
+     * @param expr the conditional expression to find the value for
      * @param truthValues the table containing the values to use
      * @return the value will typically be true/false in some cases it maybe 0/1 and when the
      *      condition has a null in it, we may return null
      */
-    private Object getValue(ConditionalVariable cv, Map<ConditionalVariable, Object> truthValues) {
-        Expression expr = cv.getExpression();
+    private Object getValue(Expression expr, Map<Expression, Object> truthValues) {
         if (expr.isNameExpr()) {
-            Object value = truthValues.get(cv);
+            Object value = truthValues.get(expr);
             if (value instanceof Boolean) {
                 return (boolean) value ? 1 : 0;
             } else if (value instanceof Number n) {
@@ -323,14 +326,14 @@ public class TruthTable {
             };
         }
 
-        return truthValues.get(cv);
+        return truthValues.get(expr);
     }
 
 
     /**
      * Collects variable names from the condition expression.
      */
-    private class VariableCollector extends VoidVisitorAdapter<Set<ConditionalVariable>> {
+    private class VariableCollector extends VoidVisitorAdapter<HashMap<Expression, Pair<Object, Object>>> {
         /**
          * Identify name expressions.
          * We will get a lot of false positives here where the name expression is part of a component
@@ -340,42 +343,42 @@ public class TruthTable {
          * @param collector
          */
         @Override
-        public void visit(NameExpr n, Set<ConditionalVariable> collector) {
-            ConditionalVariable cv = new ConditionalVariable(n);
+        public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
             if (n.getParentNode().isEmpty()) {
-                collector.add(cv);
+                collector.put(n, new Pair<>(true, false));
             } else {
                 Node parent = n.getParentNode().get();
                 if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
                     Expression arg = mce.getArgument(0);
                     if (arg.equals(n)) {
-                        collector.add(cv);
+                        collector.put(n, new Pair<>(true, false));
                     }
                 } else if (!(parent instanceof FieldAccessExpr)) {
                     if(isInequalityPresent()) {
-                        cv.setLower(0);
-                        cv.setUpper(1);
+                        collector.put(n, new Pair<>(0, 1));
                     }
-                    collector.add(cv);
+                    else {
+                        collector.put(n, new Pair<>(true, false));
+                    }
                 }
             }
             super.visit(n, collector);
         }
 
         @Override
-        public void visit(MethodCallExpr m, Set<ConditionalVariable> collector) {
-            collector.add(new ConditionalVariable(m));
+        public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
+            collector.put(m, new Pair<>(true, false));
             super.visit(m, collector);
         }
 
         @Override
-        public void visit(FieldAccessExpr f, Set<ConditionalVariable> collector) {
-            ConditionalVariable cv = new ConditionalVariable(f);
+        public void visit(FieldAccessExpr f, HashMap<Expression, Pair<Object, Object>> collector) {
             if(isInequalityPresent()) {
-                cv.setLower(0);
-                cv.setUpper(1);
+                collector.put(f, new Pair<>(0, 1));
             }
-            collector.add(cv);
+            else {
+                collector.put(f, new Pair<>(true, false));
+            }
             super.visit(f, collector);
         }
 
@@ -414,9 +417,5 @@ public class TruthTable {
             collector.add(m);
             super.visit(m, collector);
         }
-    }
-
-    public List<Map<ConditionalVariable, Object>> getTable() {
-        return table;
     }
 }
