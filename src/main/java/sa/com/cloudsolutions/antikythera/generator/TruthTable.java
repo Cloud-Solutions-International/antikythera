@@ -20,16 +20,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * Generates and print truth tables for given conditionals
  *
  * Comparisions involving Object.equals() are tricky. The range of values to assign to the variable
- * depends on the argument to the equals method. Using null may not be possible because it will
- * lead to Null Pointer Exceptions.
+ * depends on the argument to the equals method. Obviously when the scope is null null.equals leads
+ * to Null Pointer Exceptions, so work arounds will have to be used.
  *
- * The values assigned may have it's domain in Strings, Boolean or any other objects. This
+ * The values assigned may have its domain in Strings, Boolean or any other objects. This
  * implementation will only consider Numeric, Boolean and String expressions.
  */
 public class TruthTable {
@@ -219,8 +220,12 @@ public class TruthTable {
      * Prints the values that make the condition true.
      */
     public void printValues(boolean desiredState) {
+        writeValues(desiredState, System.out);
+    }
+
+    public void writeValues(boolean desiredState, PrintStream out) {
         String state = desiredState ? "true" : "false";
-        System.out.println("\nValues to make the condition " + state + " for: " + condition);
+        out.println("\nValues to make the condition " + state + " for: " + condition);
 
         List<Map<Expression, Object>> values = findValuesForCondition(desiredState);
 
@@ -233,11 +238,11 @@ public class TruthTable {
                             .toList();
 
                     for (String key : sortedKeys) {
-                        System.out.printf("%-10s", key + "=" + row.get(new NameExpr(key)));
+                        out.printf("%-10s", key + "=" + row.get(new NameExpr(key)));
                     }
-                    System.out.println();
+                    out.println();
                 },
-                () -> System.out.println("No combination of values makes the condition " + state + ".")
+                () -> out.println("No combination of values makes the condition " + state + ".")
         );
     }
 
@@ -385,8 +390,8 @@ public class TruthTable {
          * We will get a lot of false positives here where the name expression is part of a component
          * that is being captured else where. So we have to carefully filter them out.
          *
-         * @param n
-         * @param collector
+         * @param n NameExpr
+         * @param collector HashMap<Expression, Pair<Object, Object>>
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
@@ -404,7 +409,7 @@ public class TruthTable {
                     else {
                         findDomain(n, collector, b.getLeft());
                     }
-                } else if (!(parent instanceof FieldAccessExpr)) {
+                } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
                     if(isInequalityPresent()) {
                         collector.put(n, new Pair<>(0, 1));
                     }
@@ -416,16 +421,22 @@ public class TruthTable {
             super.visit(n, collector);
         }
 
-        private void findDomain(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector, Expression lit) {
-            if (lit.isNullLiteralExpr()) {
+        /**
+         * Find the domain for the given name expression
+         * @param n
+         * @param collector
+         * @param compareWith
+         */
+        private void findDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector, Expression compareWith) {
+            if (compareWith.isNullLiteralExpr()) {
                 collector.put(n, new Pair<>(null, "T"));
             }
-            else if (lit.isIntegerLiteralExpr()) {
-                int lower = Integer.valueOf(lit.asIntegerLiteralExpr().getValue());
+            else if (compareWith.isIntegerLiteralExpr()) {
+                int lower = Integer.valueOf(compareWith.asIntegerLiteralExpr().getValue());
                 collector.put(n, new Pair<>(lower, lower + 1));
             }
-            else if (lit.isStringLiteralExpr()) {
-                collector.put(n, new Pair<>(null, lit.asStringLiteralExpr().getValue()));
+            else if (compareWith.isStringLiteralExpr()) {
+                collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
             }
             else {
                 if (isInequalityPresent()) {
@@ -440,7 +451,19 @@ public class TruthTable {
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
             if (!m.getNameAsString().equals("equals")) {
-                collector.put(m, new Pair<>(true, false));
+                Optional<Node> parent = m.getParentNode();
+
+                 if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
+                    if (b.getLeft().equals(m)) {
+                        findDomain(m, collector, b.getRight());
+                    }
+                    else {
+                        findDomain(m, collector, b.getLeft());
+                    }
+                 }
+                 else {
+                     collector.put(m, new Pair<>(true, false));
+                 }
             }
             super.visit(m, collector);
         }
@@ -490,7 +513,9 @@ public class TruthTable {
          */
         @Override
         public void visit(MethodCallExpr m, Set<Expression> collector) {
-            collector.add(m);
+            if(m.toString().contains("equals")) {
+                collector.add(m);
+            }
             super.visit(m, collector);
         }
     }

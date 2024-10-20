@@ -14,10 +14,8 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -338,74 +336,14 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
-    private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) throws AntikytheraException, ReflectiveOperationException {
-        try {
-            if (parent instanceof IfStmt ifStmt) {
-                Expression condition = ifStmt.getCondition();
-                if (evaluateValidatorCondition(condition)) {
-                    ControllerResponse v = new ControllerResponse(returnValue);
-                    return v;
-                }
-            } else {
-                BlockStmt blockStmt = (BlockStmt) parent;
-                Optional<Node> gramps = blockStmt.getParentNode();
-                if (gramps.isPresent()) {
-                    if (gramps.get() instanceof IfStmt ifStmt) {
-                        // we have found ourselves a conditional return statement.
-                        Expression condition = ifStmt.getCondition();
-                        if (evaluateValidatorCondition(condition)) {
-                            ControllerResponse response = new ControllerResponse(returnValue);
-                            return response;
-                        }
-                    } else if (gramps.get() instanceof MethodDeclaration) {
-                        return new ControllerResponse(returnValue);
-                    }
-                }
-            }
-        } catch (EvaluatorException e) {
-            logger.error("Evaluator exception");
-            logger.error("\t{}", e.getMessage());
-        }
-        return null;
+    private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) {
+        return new ControllerResponse(returnValue);
+
     }
 
     public void addGenerator(TestGenerator generator) {
         generators.add(generator);
     }
-
-
-    public boolean evaluateValidatorCondition(Expression condition) throws AntikytheraException, ReflectiveOperationException {
-        if (condition.isBinaryExpr()) {
-            BinaryExpr binaryExpr = condition.asBinaryExpr();
-            Expression left = binaryExpr.getLeft();
-            Expression right = binaryExpr.getRight();
-
-            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
-                return evaluateValidatorCondition(left) && evaluateValidatorCondition(right);
-            } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                return evaluateValidatorCondition(left) || evaluateValidatorCondition(right);
-            }
-            else {
-                return (boolean) evaluateBinaryExpression(binaryExpr.getOperator(), left, right).getValue();
-            }
-        } else if (condition.isBooleanLiteralExpr()) {
-            return condition.asBooleanLiteralExpr().getValue();
-        } else if (condition.isNameExpr()) {
-            Boolean value = (Boolean) evaluateExpression(condition.asNameExpr()).getValue();
-            return value != null ? value : false;
-        }
-        else if(condition.isUnaryExpr()) {
-            UnaryExpr unaryExpr = condition.asUnaryExpr();
-            Expression expr = unaryExpr.getExpression();
-            if(expr.isNameExpr() && getValue(expr, expr.asNameExpr().getNameAsString()) != null) {
-                return false;
-            }
-            logger.warn("Unary expression not supported yet");
-        }
-
-        return false;
-    }
-
 
     /**
      * Resolves fields while taking into consideration the AutoWired annotation of srping
@@ -445,8 +383,6 @@ public class SpringEvaluator extends Evaluator {
                 throw eex;
             }
             ControllerResponse response = new ControllerResponse();
-            response.setStatusCode(500);
-
         }
         return null;
     }
@@ -537,7 +473,7 @@ public class SpringEvaluator extends Evaluator {
                             setter.setName("set" + entry.getKey().asMethodCallExpr().getNameAsString().substring(3));
                             setter.setScope(expr);
                             setter.addArgument("1L");
-                            l.addPrecondition(setter, state);
+                            l.addPrecondition(setter, !state);
                         }
                     }
                 }

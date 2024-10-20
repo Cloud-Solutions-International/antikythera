@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -160,5 +161,17 @@ class TestTruthTable {
         assertEquals(1, v.size());
         assertTrue(TruthTable.isTrue(v.getFirst().get(new NameExpr("a"))));
 
+    }
+
+    @Test
+    void testMethodCall() {
+        String condition = "person.getName() != null";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+        Expression first = v.getFirst().keySet().stream().findFirst().orElse(null);
+        assertNotNull(first);
+        assertTrue(TruthTable.isTrue(v.getFirst().get(first)));
     }
 }
