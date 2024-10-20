@@ -141,14 +141,14 @@ public class TruthTable {
                     if (bounds.a != null) {
                         truthValues.put(variable, bounds.a);
                     } else {
-                        truthValues.put(variable, true);
+                        truthValues.put(variable, bounds.b);
                     }
                 }
                 else {
                     if (bounds.a != null) {
                         truthValues.put(variable, bounds.b);
                     } else {
-                        truthValues.put(variable, false);
+                        truthValues.put(variable, null);
                     }
                 }
 
@@ -160,7 +160,7 @@ public class TruthTable {
         }
     }
 
-    private boolean isTrue(Object o) {
+    public static boolean isTrue(Object o) {
         if (o instanceof Boolean b) {
             return b;
         }
@@ -317,7 +317,24 @@ public class TruthTable {
         else if (condition.isMethodCallExpr() ) {
             if (condition.toString().contains("equals")) {
                 MethodCallExpr mce = condition.asMethodCallExpr();
-                return truthValues.get(condition).equals(truthValues.get(mce.getArgument(0)));
+                Expression scope = mce.getScope().orElse(null);
+                Object scopeValue = truthValues.get(scope);
+                Expression argument = mce.getArgument(0);
+                if (argument.isLiteralExpr()) {
+                    if (scopeValue == null) {
+                        return argument.isNullLiteralExpr();
+                    }
+                    return scopeValue.equals(getValue(argument, truthValues));
+                }
+                else {
+                    Object arg = truthValues.get(argument);
+
+
+                    if (scopeValue == null) {
+                        return arg == null;
+                    }
+                    return scopeValue.equals(arg);
+                }
             }
             return getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
@@ -354,6 +371,10 @@ public class TruthTable {
         return truthValues.get(expr);
     }
 
+    public List<Map<Expression, Object>> getTable() {
+        return table;
+    }
+
 
     /**
      * Collects variable names from the condition expression.
@@ -375,8 +396,13 @@ public class TruthTable {
                 Node parent = n.getParentNode().get();
                 if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
                     Expression arg = mce.getArgument(0);
-                    if (arg.equals(n)) {
-                        collector.put(n, new Pair<>(true, false));
+                    findDomain(n, collector, arg);
+                } else if (parent instanceof BinaryExpr b) {
+                    if (b.getLeft().equals(n)) {
+                        findDomain(n, collector, b.getRight());
+                    }
+                    else {
+                        findDomain(n, collector, b.getLeft());
                     }
                 } else if (!(parent instanceof FieldAccessExpr)) {
                     if(isInequalityPresent()) {
@@ -390,9 +416,32 @@ public class TruthTable {
             super.visit(n, collector);
         }
 
+        private void findDomain(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector, Expression lit) {
+            if (lit.isNullLiteralExpr()) {
+                collector.put(n, new Pair<>(null, "T"));
+            }
+            else if (lit.isIntegerLiteralExpr()) {
+                int lower = Integer.valueOf(lit.asIntegerLiteralExpr().getValue());
+                collector.put(n, new Pair<>(lower, lower + 1));
+            }
+            else if (lit.isStringLiteralExpr()) {
+                collector.put(n, new Pair<>(null, lit.asStringLiteralExpr().getValue()));
+            }
+            else {
+                if (isInequalityPresent()) {
+                    collector.put(n, new Pair<>(0, 1));
+                }
+                else {
+                    collector.put(n, new Pair<>(true, false));
+                }
+            }
+        }
+
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            collector.put(m, new Pair<>(true, false));
+            if (!m.getNameAsString().equals("equals")) {
+                collector.put(m, new Pair<>(true, false));
+            }
             super.visit(m, collector);
         }
 
@@ -412,12 +461,14 @@ public class TruthTable {
          */
         private boolean isInequalityPresent() {
             for(Expression expr : conditions) {
-                BinaryExpr bin = expr.asBinaryExpr();
-                if (bin.getOperator().equals(BinaryExpr.Operator.LESS) ||
-                        bin.getOperator().equals(BinaryExpr.Operator.GREATER) ||
-                        bin.getOperator().equals(BinaryExpr.Operator.LESS_EQUALS) ||
-                        bin.getOperator().equals(BinaryExpr.Operator.GREATER_EQUALS)) {
-                    return true;
+                if (expr.isBinaryExpr()) {
+                    BinaryExpr bin = expr.asBinaryExpr();
+                    if (bin.getOperator().equals(BinaryExpr.Operator.LESS) ||
+                            bin.getOperator().equals(BinaryExpr.Operator.GREATER) ||
+                            bin.getOperator().equals(BinaryExpr.Operator.LESS_EQUALS) ||
+                            bin.getOperator().equals(BinaryExpr.Operator.GREATER_EQUALS)) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -432,7 +483,7 @@ public class TruthTable {
         }
 
         /**
-         * In this scenario a method call expression will always be a .equals call or a method returning boolean
+         * In this scenario a method call expression will always be Object.equals call or a method returning boolean
          * @param m the method call expression
          * @param collector for all the conditional expressions encountered.
          *

@@ -81,4 +81,84 @@ class TestTruthTable {
         generator.printValues(false);
         assertTrue(outContent.toString().contains("Values to make the condition false for: " + condition));
     }
+
+    @Test
+    void testInequality() {
+        String condition = "a > b && c == d";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(2, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertEquals(1, first.get(new NameExpr("a")));
+        assertEquals(0, first.get(new NameExpr("b")));
+        assertEquals(1, first.get(new NameExpr("c")));
+        assertEquals(1, first.get(new NameExpr("d")));
+
+        v = tt.findValuesForCondition(false);
+        assertEquals(14, v.size());
+    }
+
+    @Test
+    void testSimpleNull() {
+        String condition = "a == null";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertNull(first.get(new NameExpr("a")));
+
+        v = tt.findValuesForCondition(false);
+        assertEquals(1, v.size());
+        first = v.getFirst();
+        assertNotNull(first.get(new NameExpr("a")));
+    }
+
+    @Test
+    void testNotNull() {
+        String condition = "a != null && b != null";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertTrue(TruthTable.isTrue(first.get(new NameExpr("a"))));
+
+        v = tt.findValuesForCondition(false);
+        assertEquals(3, v.size());
+        first = v.getFirst();
+        assertNull(first.get(new NameExpr("a")));
+    }
+
+    @Test
+    void testStringLiteral() {
+        String condition = "a.equals(\"b\")";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+    }
+
+    @Test
+    void testEquals() {
+        String condition = "a.equals(b)";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(2, v.size());
+        assertFalse(TruthTable.isTrue(v.getFirst().get(new NameExpr("a"))));
+        assertFalse(TruthTable.isTrue(v.getFirst().get(new NameExpr("b"))));
+    }
+
+    @Test
+    void testEqualsLiteral() {
+        String condition = "a.equals(1)";
+        TruthTable tt = new TruthTable(condition);
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+        assertTrue(TruthTable.isTrue(v.getFirst().get(new NameExpr("a"))));
+
+    }
 }
