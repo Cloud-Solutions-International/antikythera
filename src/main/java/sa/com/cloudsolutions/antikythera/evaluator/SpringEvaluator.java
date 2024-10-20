@@ -669,7 +669,7 @@ public class SpringEvaluator extends Evaluator {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
                         ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        processResult(stmt, q.getResultSet());
+                        Variable v = processResult(stmt, q.getResultSet());
                         if (l.getRepositoryQuery() == null) {
                             l.setRepositoryQuery(q);
                             l.setColor(LineOfCode.GREY);
@@ -677,15 +677,16 @@ public class SpringEvaluator extends Evaluator {
                         else {
                             l.setColor(LineOfCode.BLACK);
                         }
+                        return v;
                     }
-                    return new Variable(q);
+                    return null;
                 }
             }
         }
         return super.executeSource(methodCall);
     }
 
-    private void processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
+    private Variable processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
         if (stmt.getExpression().isVariableDeclarationExpr()) {
             VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
             VariableDeclarator v = vdecl.getVariable(0);
@@ -693,25 +694,43 @@ public class SpringEvaluator extends Evaluator {
             if (vdecl.getElementType().isClassOrInterfaceType()) {
                 ClassOrInterfaceType classType = new ClassOrInterfaceType(null, vdecl.getElementType().asString());
                 ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
+                try {
+                    if (rs.next()) {
+                        return resultToEntity(stmt, rs, v, objectCreationExpr);
+                    }
+                    else {
+                        return new Variable(null);
+                    }
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
+            }
+        }
+        return null;
+    }
 
-                Variable variable = createObject(stmt, v, objectCreationExpr);
-                if (variable.getValue() instanceof Evaluator evaluator) {
-                    Map<String, Variable> fields = evaluator.getFields();
-                    for (Map.Entry<String, Variable> entry : fields.entrySet()) {
-                        String fieldName = entry.getKey();
-                        Variable fieldVariable = entry.getValue();
-                        try {
-                            if (rs.findColumn(fieldName) > 0) {
-                                Object value = rs.getObject(fieldName);
-                                fieldVariable.setValue(value);
-                            }
-                        } catch (SQLException e) {
-                            logger.warn("Column {} not found in ResultSet", fieldName);
+    private Variable resultToEntity(ExpressionStmt stmt, ResultSet rs, VariableDeclarator v, ObjectCreationExpr objectCreationExpr)
+            throws AntikytheraException, ReflectiveOperationException {
+        Variable variable = createObject(stmt, v, objectCreationExpr);
+        if (variable.getValue() instanceof Evaluator evaluator) {
+            Map<String, Variable> fields = evaluator.getFields();
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
+
+            for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+                for (VariableDeclarator var : field.getVariables()) {
+                    String fieldName = var.getNameAsString();
+                    try {
+                        if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
+                            Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
+                            fields.put(fieldName, new Variable(value));
                         }
+                    } catch (SQLException e) {
+                        logger.warn(e.getMessage());
                     }
                 }
             }
         }
+        return variable;
     }
 
     private boolean isRepositoryMethod(ExpressionStmt stmt) {

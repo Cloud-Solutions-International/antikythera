@@ -1574,6 +1574,10 @@ public class Evaluator {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
+    protected String getClassName() {
+        return className;
+    }
+
     /**
      * Java parser visitor used to setup the fields in the class.
      *
