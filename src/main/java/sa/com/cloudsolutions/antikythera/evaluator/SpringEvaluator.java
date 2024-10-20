@@ -1,6 +1,10 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -27,6 +31,7 @@ import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
 import java.io.IOException;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,7 +72,19 @@ public class SpringEvaluator extends Evaluator {
     private static HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
     /**
-     * Sort of a stack that keeps track of the variables that are being passed to the method.
+     * Sort of a stack that keeps track of the conditional code blocks.
+     * We consider IF THEN ELSE statements as branching statements. However we also consider JPA
+     * queries to be branching statements as well. There are two branches with the 'A" branch being
+     * executing the query with the default parameters that were passed in and the 'B' branch will
+     * be executing the query with parameters that will have a valid result set being returned
+     *
+     * Of course there will be situations where no parameters exist to give a valid resultset
+     * and these will just be ignored.
+     *
+     * The values that are used in the A branch for the query will just be arbitary non null values
+     * integers like 0 will usually not have matching entries in the datbaase and will result in
+     * empty responses. If due to some reason there are valid resultsets of integers like 0 for
+     * primary keys there's nothing we can do about it, we just move onto the next test.
      */
     private final Set<IfStmt> branching = new HashSet<>();
 
@@ -160,16 +177,19 @@ public class SpringEvaluator extends Evaluator {
     @Override
     void executeStatement(Statement stmt) throws Exception {
         if(!stmt.isIfStmt()) {
+            boolean repo =  (stmt.isExpressionStmt() && isRepositoryMethod(stmt.asExpressionStmt()));
+
             LineOfCode l = lines.get(stmt.hashCode());
             if (l == null) {
                 l = new LineOfCode(stmt);
-                l.setColor(LineOfCode.BLACK);
+                l.setColor(repo ? LineOfCode.GREY : LineOfCode.BLACK);
                 lines.put(stmt.hashCode(), l);
             }
             else {
                 l.setColor(LineOfCode.BLACK);
             }
         }
+
         super.executeStatement(stmt);
     }
 
@@ -560,7 +580,7 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Check if a collection of statements have been previously executed or not.
-     * @param statements
+     * @param statements The collection of statements to check.
      * @return
      */
     private boolean checkStatements(List<Statement> statements) {
@@ -646,11 +666,84 @@ public class SpringEvaluator extends Evaluator {
             if (rp != null) {
                 RepositoryQuery q = executeQuery(expression.asNameExpr().getNameAsString(), methodCall);
                 if (q != null) {
+                    LineOfCode l = findExpressionStatement(methodCall);
+                    if (l != null) {
+                        ExpressionStmt stmt = l.getStatement().asExpressionStmt();
+                        processResult(stmt, q.getResultSet());
+                        if (l.getRepositoryQuery() == null) {
+                            l.setRepositoryQuery(q);
+                            l.setColor(LineOfCode.GREY);
+                        }
+                        else {
+                            l.setColor(LineOfCode.BLACK);
+                        }
+                    }
                     return new Variable(q);
                 }
             }
         }
         return super.executeSource(methodCall);
+    }
+
+    private void processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
+        if (stmt.getExpression().isVariableDeclarationExpr()) {
+            VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
+            VariableDeclarator v = vdecl.getVariable(0);
+
+            if (vdecl.getElementType().isClassOrInterfaceType()) {
+                ClassOrInterfaceType classType = new ClassOrInterfaceType(null, vdecl.getElementType().asString());
+                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
+
+                Variable variable = createObject(stmt, v, objectCreationExpr);
+                if (variable.getValue() instanceof Evaluator evaluator) {
+                    Map<String, Variable> fields = evaluator.getFields();
+                    for (Map.Entry<String, Variable> entry : fields.entrySet()) {
+                        String fieldName = entry.getKey();
+                        Variable fieldVariable = entry.getValue();
+                        try {
+                            if (rs.findColumn(fieldName) > 0) {
+                                Object value = rs.getObject(fieldName);
+                                fieldVariable.setValue(value);
+                            }
+                        } catch (SQLException e) {
+                            logger.warn("Column {} not found in ResultSet", fieldName);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean isRepositoryMethod(ExpressionStmt stmt) {
+        Expression expr = stmt.getExpression();
+        if (expr.isVariableDeclarationExpr()) {
+            VariableDeclarationExpr vdecl = expr.asVariableDeclarationExpr();
+            VariableDeclarator v = vdecl.getVariable(0);
+            Optional<Expression> init = v.getInitializer();
+            if (init.isPresent() && init.get().isMethodCallExpr()) {
+                MethodCallExpr methodCall = init.get().asMethodCallExpr();
+                Expression scope = methodCall.getScope().orElse(null);
+                if (scope != null && scope.isNameExpr()) {
+                    return repositories.containsKey(scope.asNameExpr().getNameAsString());
+                }
+
+            }
+        }
+        return false;
+    }
+
+    private LineOfCode findExpressionStatement(MethodCallExpr methodCall) {
+        Node n = methodCall;
+        while (n != null && !(n instanceof MethodDeclaration)) {
+            if (n instanceof ExpressionStmt stmt) {
+                /*
+                 * We have found the expression statement correspoing to this query
+                 */
+                return lines.get(stmt.hashCode());
+                            }
+            n = n.getParentNode().orElse(null);
+        }
+        return null;
     }
 }
 

@@ -6,6 +6,8 @@ import com.github.javaparser.ast.stmt.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
+import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
+
 /**
  * Represents a line of code in a method.
  * The term is used rather loosely, a line of code may span several lines on paper.
@@ -16,13 +18,13 @@ public class LineOfCode {
      * The state of the variables required such that an if condition evaluates to true.
      * This will be applicable only for IF statement expressions.
      */
-    List<Expression> trueState = new ArrayList<>();
+    private List<Expression> trueState = new ArrayList<>();
 
     /**
      * The state of the variables required such that an if condition evaluates to false.
      * This will be applicable only for IF statement expressions.
      */
-    List<Expression> falseState = new ArrayList<>();
+    private List<Expression> falseState = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -41,8 +43,17 @@ public class LineOfCode {
      * Shows the current state of the node.
      * Can be one of WHITE, GREY or BLACK.
      */
-    int color;
-    Statement statement;
+    private int color;
+
+    /**
+     * The statement that this line of code represents.
+     */
+    private Statement statement;
+
+    /**
+     * A non null value if this statement represents a JPA Query
+     */
+    private RepositoryQuery repositoryQuery;
 
     public LineOfCode(Statement statement) {
         this.statement = statement;
@@ -84,6 +95,14 @@ public class LineOfCode {
 
     public Statement getStatement() {
         return statement;
+    }
+
+    public RepositoryQuery getRepositoryQuery() {
+        return repositoryQuery;
+    }
+
+    public void setRepositoryQuery(RepositoryQuery repositoryQuery) {
+        this.repositoryQuery = repositoryQuery;
     }
 
     @Override
