@@ -28,7 +28,6 @@ import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -450,7 +449,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws Exception
      */
     @Override
-    void ifThenElseBlock(IfStmt ifst) throws Exception {
+    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
         LineOfCode l = lines.get(ifst.hashCode());
         if (l == null) {
             /*
@@ -461,14 +460,15 @@ public class SpringEvaluator extends Evaluator {
             l = new LineOfCode(ifst);
             lines.put(ifst.hashCode(), l);
             l.setColor(LineOfCode.GREY);
-            Variable v = evaluateExpression(ifst.getCondition());
+
+            branching.add(ifst);
+            Variable v = super.ifThenElseBlock(ifst);
             if ((Boolean)v.getValue()) {
                 setupIfCondition(ifst, false);
             } else {
                 setupIfCondition(ifst, true);
             }
-            branching.add(ifst);
-            super.ifThenElseBlock(ifst);
+            return v;
         }
         else if (l.getColor() == LineOfCode.GREY) {
             /*
@@ -481,17 +481,18 @@ public class SpringEvaluator extends Evaluator {
                 l.setColor(LineOfCode.BLACK);
             }
             else {
-                super.ifThenElseBlock(ifst);
+                return super.ifThenElseBlock(ifst);
             }
         } else if (ifst.getElseStmt().isPresent()) {
             l = lines.get(ifst.getElseStmt().get());
             if (l == null || l.getColor() != LineOfCode.BLACK) {
                 l.setColor(LineOfCode.GREY);
-                super.ifThenElseBlock(ifst);
+                return super.ifThenElseBlock(ifst);
             }
         } else {
             l.setColor(LineOfCode.BLACK);
         }
+        return null;
     }
 
     private void setupIfCondition(IfStmt ifst, boolean state) {

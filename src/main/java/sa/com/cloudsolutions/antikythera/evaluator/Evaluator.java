@@ -1505,7 +1505,7 @@ public class Evaluator {
      * @param ifst If / Then statement
      * @throws Exception
      */
-    void ifThenElseBlock(IfStmt ifst) throws Exception {
+    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
 
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {
@@ -1529,6 +1529,7 @@ public class Evaluator {
                 }
             }
         }
+        return v;
     }
 
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
