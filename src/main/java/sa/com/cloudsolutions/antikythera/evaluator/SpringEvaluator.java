@@ -16,7 +16,6 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -98,6 +97,9 @@ public class SpringEvaluator extends Evaluator {
                 if(!lines.containsKey(st.hashCode())) {
                     mockURIVariables(md);
                     super.executeMethod(md);
+                    if(returnFrom != null) {
+                        break;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -131,6 +133,22 @@ public class SpringEvaluator extends Evaluator {
         } catch (Exception e) {
             handleApplicationException(e);
         }
+    }
+
+    @Override
+    void executeStatement(Statement stmt) throws Exception {
+        if(!stmt.isIfStmt()) {
+            LineOfCode l = lines.get(stmt.hashCode());
+            if (l == null) {
+                l = new LineOfCode(stmt);
+                l.setColor(LineOfCode.BLACK);
+                lines.put(stmt.hashCode(), l);
+            }
+            else {
+                l.setColor(LineOfCode.BLACK);
+            }
+        }
+        super.executeStatement(stmt);
     }
 
     /**
@@ -318,7 +336,7 @@ public class SpringEvaluator extends Evaluator {
         for (LineOfCode l : lines.values()) {
             Optional<Node> parentNode = l.getStatement().getParentNode();
             if(parentNode.isPresent()) {
-                expressions.addAll(l.getPrecondition(true));
+                expressions.addAll(l.getPrecondition(false));
             }
         }
         for(TestGenerator gen : generators) {
@@ -424,7 +442,7 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     void ifThenElseBlock(IfStmt ifst) throws Exception {
-        LineOfCode l = lines.get(ifst.getThenStmt().hashCode());
+        LineOfCode l = lines.get(ifst.hashCode());
         if (l == null) {
             /*
              * This if condition has never been executed before. Now let's determine the set of
@@ -434,13 +452,23 @@ public class SpringEvaluator extends Evaluator {
             lines.put(ifst.hashCode(), l);
             l.setColor(LineOfCode.GREY);
             setupIfCondition(ifst, true);
+            setupIfCondition(ifst, false);
 
             super.ifThenElseBlock(ifst);
         }
         else if (l.getColor() == LineOfCode.GREY) {
-            l.setColor(LineOfCode.GREY);
-
-            super.ifThenElseBlock(ifst);
+            /*
+             * We have been here before but only traversed the then part of the if statement.
+             */
+            for (Expression st : l.getPrecondition(false)) {
+                evaluateExpression(st);
+            }
+            if (allVisited(ifst)) {
+                l.setColor(LineOfCode.BLACK);
+            }
+            else {
+                super.ifThenElseBlock(ifst);
+            }
         } else if (ifst.getElseStmt().isPresent()) {
             l = lines.get(ifst.getElseStmt().get());
             if (l == null || l.getColor() != LineOfCode.BLACK) {
@@ -455,10 +483,8 @@ public class SpringEvaluator extends Evaluator {
     private void setupIfCondition(IfStmt ifst, boolean state) {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
-        LineOfCode l = new LineOfCode(ifst.getThenStmt());
+        LineOfCode l = lines.get(ifst.hashCode());
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
-
-        lines.put(ifst.getThenStmt().hashCode(), l);
 
         if (!values.isEmpty()) {
             Map<Expression, Object> value = values.getFirst();
@@ -479,6 +505,60 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
         }
+    }
+
+    private boolean checkStatements(List<Statement> statements) {
+        for (Statement line : statements) {
+            if (line.isIfStmt()) {
+                if (!allVisited(line.asIfStmt())) {
+                    return false;
+                }
+            } else if (!isLineVisited(line)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean allVisited(IfStmt stmt) {
+        LineOfCode l = lines.get(stmt.hashCode());
+        if (l == null) {
+            return false;
+        }
+        if (l.getColor() == LineOfCode.BLACK) {
+            return true;
+        }
+        Statement then = stmt.getThenStmt();
+        if (then.isBlockStmt()) {
+            if (!checkStatements(then.asBlockStmt().getStatements())) {
+                return false;
+            }
+        } else {
+            if (!isLineVisited(then)) {
+                return false;
+            }
+        }
+        if (stmt.getElseStmt().isPresent()) {
+            Statement elseStmt = stmt.getElseStmt().get();
+            if (elseStmt.isBlockStmt()) {
+                if (!checkStatements(elseStmt.asBlockStmt().getStatements())) {
+                    return false;
+                }
+            } else {
+                if (!isLineVisited(elseStmt)) {
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isLineVisited(Statement stmt) {
+        LineOfCode l = lines.get(stmt.hashCode());
+        if (l == null) {
+            return false;
+        }
+        return l.getColor() == LineOfCode.BLACK;
     }
 
     public void resetColors() {
