@@ -71,8 +71,8 @@ public class TruthTable {
      */
     public static void main(String[] args) {
         String[] conditions = {
-                "a.equals(b)",
                 "a.equals(\"null\")",
+                "a.equals(b)",
                 "a.equals(\"b\")",
                 "a > b",
                 "a > b && c == d",
@@ -108,16 +108,32 @@ public class TruthTable {
             Map<Expression, Object> truthValues = new HashMap<>();
             for (int j = 0; j < numVariables; j++) {
                 boolean value = (i & (1 << j)) != 0;
-//                if (condition.toString().contains("equals")) {
-//                    if (value) {
-//                        truthValues.put(variableList.get(j), "T");
-//                    }
-//                    else {
-//                        truthValues.put(variableList.get(j), "F");
-//                    }
-//                }
-                if (!value && condition.toString().contains("null")) {
-                    truthValues.put(variableList.get(j), null);
+                if (condition.toString().contains("equals")) {
+                    if (value) {
+                        truthValues.put(variableList.get(j), "T");
+                    }
+                    else {
+                        truthValues.put(variableList.get(j), "F");
+                    }
+                }
+                else if (!value && condition.toString().contains("null")) {
+                    boolean found = false;
+                    if (condition.isMethodCallExpr()) {
+                        MethodCallExpr mce = condition.asMethodCallExpr();
+                        for(Expression arg : mce.getArguments()) {
+                            if(arg.isNullLiteralExpr()) {
+                                truthValues.put(variableList.get(j), null);
+                                found = true;
+                            }
+                            else if(arg.isStringLiteralExpr()) {
+                                truthValues.put(variableList.get(j), arg.asStringLiteralExpr().getValue());
+                                found = true;
+                            }
+                        }
+                    }
+                    if (!found) {
+                        truthValues.put(variableList.get(j), null);
+                    }
                 } else {
                     truthValues.put(variableList.get(j), value);
                 }
@@ -259,20 +275,9 @@ public class TruthTable {
             return (Boolean) getValue(condition, truthValues);
         }
         else if (condition.isMethodCallExpr() ) {
-             if (condition.toString().contains("equals")) {
-//                MethodCallExpr mce = condition.asMethodCallExpr();
-//                Expression arg = mce.getArgument(0);
-//                Expression scope = mce.getScope().orElse(null);
-//                if (scope == null) {
-//                    return false;
-//                }
-//                Object argValue = switch(arg) {
-//                    case StringLiteralExpr stringLiteralExpr -> stringLiteralExpr.getValue();
-//                    case IntegerLiteralExpr integerLiteralExpr -> integerLiteralExpr.getValue();
-//                    case NameExpr nameExpr -> truthValues.get(condition);
-//                    default -> throw new UnsupportedOperationException("Unsupported argument: " + arg);
-//                };
-//                return argValue.equals(getValue(condition, truthValues));
+            if (condition.toString().contains("equals")) {
+                MethodCallExpr mce = condition.asMethodCallExpr();
+                return truthValues.get(condition).equals(truthValues.get(mce.getArgument(0)));
             }
             return (Boolean) getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
