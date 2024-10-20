@@ -763,9 +763,9 @@ public class Evaluator {
             return null;
         }
 
-        Expression expr = methodCall;
+
         Variable variable = null;
-        LinkedList<Expression> chain = findScopeChain(expr);
+        LinkedList<Expression> chain = findScopeChain(methodCall);
 
         while(!chain.isEmpty()) {
             Expression expr2 = chain.pollLast();
@@ -961,21 +961,30 @@ public class Evaluator {
                     /*
                      * At this point we switch to searching for the method call in other classes in the AUT
                      */
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
-                    TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
-                            ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
-                    mdecl = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
-                    if (mdecl.isPresent()) {
-                        return executeMethod(mdecl.get());
-                    }
+                    return executeSource(methodCall);
                 }
             }
         }
         else {
-            Optional<Node> n = methodCall.resolve().toAst();
-            if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
-                return executeMethod(md);
+            try {
+                Optional<Node> n = methodCall.resolve().toAst();
+                if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
+                    return executeMethod(md);
+                }
+            } catch (IllegalStateException ise) {
+                return executeSource(methodCall);
             }
+        }
+        return null;
+    }
+
+    private Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
+        TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
+                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
+        Optional<MethodDeclaration> md = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
+        if (md.isPresent()) {
+            return executeMethod(md.get());
         }
         return null;
     }

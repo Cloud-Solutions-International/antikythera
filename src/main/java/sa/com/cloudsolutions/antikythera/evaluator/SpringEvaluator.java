@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.NodeList;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -27,11 +28,14 @@ import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
@@ -63,9 +67,11 @@ public class SpringEvaluator extends Evaluator {
      */
     private static HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
+    private final Set<IfStmt> branching = new HashSet<>();
+
     /**
      * It is better to use create evaluator
-     * @param className
+     * @param className the name of the class associated with this evaluator
      */
     public SpringEvaluator(String className) {
         super(className);
@@ -93,12 +99,16 @@ public class SpringEvaluator extends Evaluator {
         });
 
         try {
-            for(Statement st : md.getBody().get().getStatements()) {
+            NodeList<Statement> statements = md.getBody().get().getStatements();
+            for (int i =0 ; i < statements.size() ; i++) {
+                Statement st = statements.get(i);
                 if(!lines.containsKey(st.hashCode())) {
                     mockURIVariables(md);
                     super.executeMethod(md);
                     if(returnFrom != null) {
-                        break;
+                        // rewind!
+                        //branching.clear();
+                        i = 0;
                     }
                 }
             }
@@ -334,8 +344,7 @@ public class SpringEvaluator extends Evaluator {
     private void buildPreconditions() {
         List<Expression> expressions = new ArrayList<>();
         for (LineOfCode l : lines.values()) {
-            Optional<Node> parentNode = l.getStatement().getParentNode();
-            if(parentNode.isPresent()) {
+            if(branching.contains(l.getStatement())) {
                 expressions.addAll(l.getPrecondition(false));
             }
         }
@@ -445,15 +454,20 @@ public class SpringEvaluator extends Evaluator {
         LineOfCode l = lines.get(ifst.hashCode());
         if (l == null) {
             /*
-             * This if condition has never been executed before. Now let's determine the set of
-             * values that will result in it being true
+             * This if condition has never been executed before. First we will determine if the condition
+             * evaluates to true or false. Then we will use the truth table to find out what values will
+             * result in it going from true to false or false to true.
              */
             l = new LineOfCode(ifst);
             lines.put(ifst.hashCode(), l);
             l.setColor(LineOfCode.GREY);
-            setupIfCondition(ifst, true);
-            setupIfCondition(ifst, false);
-
+            Variable v = evaluateExpression(ifst.getCondition());
+            if ((Boolean)v.getValue()) {
+                setupIfCondition(ifst, false);
+            } else {
+                setupIfCondition(ifst, true);
+            }
+            branching.add(ifst);
             super.ifThenElseBlock(ifst);
         }
         else if (l.getColor() == LineOfCode.GREY) {
@@ -499,7 +513,7 @@ public class SpringEvaluator extends Evaluator {
                             setter.setName("set" + entry.getKey().asMethodCallExpr().getNameAsString().substring(3));
                             setter.setScope(expr);
                             setter.addArgument("1L");
-                            l.addPrecondition(setter, !state);
+                            l.addPrecondition(setter, state);
                         }
                     }
                 }
