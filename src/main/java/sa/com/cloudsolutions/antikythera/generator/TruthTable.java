@@ -13,6 +13,7 @@ import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,6 +25,7 @@ import java.util.Set;
  * Generates and print truth tables for given conditionals
  */
 public class TruthTable {
+    public static final NameExpr RESULT = new NameExpr("Result");
     /**
      * The condition that this truth table is for
      */
@@ -69,6 +71,9 @@ public class TruthTable {
      */
     public static void main(String[] args) {
         String[] conditions = {
+                "a.equals(b)",
+                "a.equals(\"null\")",
+                "a.equals(\"b\")",
                 "a > b",
                 "a > b && c == d",
                 "a != null && b != null",
@@ -103,6 +108,14 @@ public class TruthTable {
             Map<Expression, Object> truthValues = new HashMap<>();
             for (int j = 0; j < numVariables; j++) {
                 boolean value = (i & (1 << j)) != 0;
+//                if (condition.toString().contains("equals")) {
+//                    if (value) {
+//                        truthValues.put(variableList.get(j), "T");
+//                    }
+//                    else {
+//                        truthValues.put(variableList.get(j), "F");
+//                    }
+//                }
                 if (!value && condition.toString().contains("null")) {
                     truthValues.put(variableList.get(j), null);
                 } else {
@@ -110,7 +123,7 @@ public class TruthTable {
                 }
             }
             boolean result = evaluateCondition(condition, truthValues);
-            truthValues.put(new NameExpr("Result"), result);
+            truthValues.put(RESULT, result);
             table.add(truthValues);
         }
     }
@@ -120,23 +133,34 @@ public class TruthTable {
      *
      */
     public void printTruthTable() {
-        System.out.println("Truth Table for condition: " + condition);
+        writeTruthTable(System.out);
+    }
+
+    public void writeTruthTable(PrintStream out) {
+        out.println("Truth Table for condition: " + condition);
 
         if (!table.isEmpty()) {
             Map<Expression, Object> firstRow = table.get(0);
-            for (Expression var : firstRow.keySet()) {
-                System.out.printf("%-10s", var.toString());
+            final String FORMAT = "%-11s";
+            for (Expression key : firstRow.keySet()) {
+                if (!key.equals(RESULT)) {
+                    out.printf(FORMAT, key.toString());
+                }
             }
-            System.out.println();
+            out.printf(FORMAT, RESULT);
+            out.println();
 
             for (Map<Expression, Object> row : table) {
-                for (Object value : row.values()) {
-                    System.out.printf("%-10s", value);
+                for (var entry : row.entrySet()) {
+                    if (!entry.getKey().equals(RESULT)) {
+                        out.printf(FORMAT, entry.getValue());
+                    }
                 }
-                System.out.println();
+                out.printf(FORMAT, row.get(RESULT));
+                out.println();
             }
         } else {
-            System.out.println("No data to display.");
+            out.println("No data to display.");
         }
     }
 
@@ -168,10 +192,10 @@ public class TruthTable {
         List<Map<Expression, Object>> result = new ArrayList<>();
 
         for (Map<Expression, Object> row : table) {
-            if ((boolean) row.get(new NameExpr("Result")) == desiredState) {
+            if ((boolean) row.get(RESULT) == desiredState) {
                 Map<Expression, Object> copy = new HashMap<>();
                 for (Map.Entry<Expression, Object> entry : row.entrySet()) {
-                    if (!entry.getKey().toString().equals("Result")) {
+                    if (!entry.getKey().equals(RESULT)) {
                         copy.put(entry.getKey(), entry.getValue());
                     }
                 }
@@ -231,7 +255,25 @@ public class TruthTable {
             return (Boolean) truthValues.get(condition);
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
-        } else if (condition.isMethodCallExpr() || condition.isFieldAccessExpr()) {
+        } else if (condition.isStringLiteralExpr() || condition.isFieldAccessExpr()) {
+            return (Boolean) getValue(condition, truthValues);
+        }
+        else if (condition.isMethodCallExpr() ) {
+             if (condition.toString().contains("equals")) {
+//                MethodCallExpr mce = condition.asMethodCallExpr();
+//                Expression arg = mce.getArgument(0);
+//                Expression scope = mce.getScope().orElse(null);
+//                if (scope == null) {
+//                    return false;
+//                }
+//                Object argValue = switch(arg) {
+//                    case StringLiteralExpr stringLiteralExpr -> stringLiteralExpr.getValue();
+//                    case IntegerLiteralExpr integerLiteralExpr -> integerLiteralExpr.getValue();
+//                    case NameExpr nameExpr -> truthValues.get(condition);
+//                    default -> throw new UnsupportedOperationException("Unsupported argument: " + arg);
+//                };
+//                return argValue.equals(getValue(condition, truthValues));
+            }
             return (Boolean) getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
             return null;
@@ -272,13 +314,26 @@ public class TruthTable {
      * Collects variable names from the condition expression.
      */
     private static class VariableCollector extends VoidVisitorAdapter<Set<Expression>> {
+        /**
+         * Identify name expressions.
+         * We will get a lot of false positives here where the name expression is part of a component
+         * that is being captured else where. So we have to carefully filter them out.
+         * @param n
+         * @param collector
+         */
         @Override
         public void visit(NameExpr n, Set<Expression> collector) {
             if (n.getParentNode().isEmpty()) {
                 collector.add(n);
             } else {
                 Node parent = n.getParentNode().get();
-                if (!(parent instanceof MethodCallExpr || parent instanceof FieldAccessExpr)) {
+                if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
+                    Expression arg = mce.getArgument(0);
+                    if (arg.equals(n)) {
+                        collector.add(n);
+                    }
+                }
+                else if (! (parent instanceof FieldAccessExpr)) {
                     collector.add(n);
                 }
             }
