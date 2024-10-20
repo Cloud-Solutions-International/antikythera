@@ -97,12 +97,12 @@ public class TruthTable {
      */
     public static void main(String[] args) {
         String[] conditions = {
+                "a.equals(\"null\")", // this is a string literal so we have to handle it carefully
+                "a > b && c == d",
                 "a > b",
                 "a == b",
-                "a.equals(\"null\")",
                 "a.equals(b)",
                 "a.equals(\"b\")",
-                "a > b && c == d",
                 "a != null && b != null",
                 "a == null",
                 "a == null || b == null",
@@ -153,12 +153,25 @@ public class TruthTable {
                 }
 
             }
-            boolean result = evaluateCondition(condition, truthValues);
-            truthValues.put(RESULT, result);
+            Object result = evaluateCondition(condition, truthValues);
+
+            truthValues.put(RESULT, isTrue(result));
             table.add(truthValues);
         }
     }
 
+    private boolean isTrue(Object o) {
+        if (o instanceof Boolean b) {
+            return b;
+        }
+        if (o instanceof Number n) {
+            return !n.equals(0);
+        }
+        if (o instanceof String s) {
+            return !s.isEmpty();
+        }
+        return false;
+    }
     /**
      * Prints the truth table for the given condition.
      *
@@ -167,24 +180,31 @@ public class TruthTable {
         writeTruthTable(System.out);
     }
 
-    public void writeTruthTable(PrintStream out) {
+    private void writeTruthTable(PrintStream out) {
         out.println("Truth Table for condition: " + condition);
 
         if (!table.isEmpty()) {
             Map<Expression, Object> firstRow = table.get(0);
             final String FORMAT = "%-11s";
-            for (Expression key : firstRow.keySet()) {
-                if (!key.equals(RESULT)) {
-                    out.printf(FORMAT, key.toString());
+
+            // Sort the keys alphabetically
+            List<String> sortedKeys = firstRow.keySet().stream()
+                    .map(Expression::toString)
+                    .sorted()
+                    .toList();
+
+            for (String key : sortedKeys) {
+                if (!key.equals(RESULT.toString())) {
+                    out.printf(FORMAT, key);
                 }
             }
             out.printf(FORMAT, RESULT);
             out.println();
 
             for (Map<Expression, Object> row : table) {
-                for (var entry : row.entrySet()) {
-                    if (!entry.getKey().equals(RESULT)) {
-                        out.printf(FORMAT, entry.getValue());
+                for (String key : sortedKeys) {
+                    if (!key.equals(RESULT.toString())) {
+                        out.printf(FORMAT, row.get(new NameExpr(key)));
                     }
                 }
                 out.printf(FORMAT, row.get(RESULT));
@@ -206,7 +226,15 @@ public class TruthTable {
 
         values.stream().findFirst().ifPresentOrElse(
                 row -> {
-                    row.entrySet().forEach(var ->System.out.printf("%-10s", var));
+                    // Sort the keys alphabetically
+                    List<String> sortedKeys = row.keySet().stream()
+                            .map(Expression::toString)
+                            .sorted()
+                            .toList();
+
+                    for (String key : sortedKeys) {
+                        System.out.printf("%-10s", key + "=" + row.get(new NameExpr(key)));
+                    }
                     System.out.println();
                 },
                 () -> System.out.println("No combination of values makes the condition " + state + ".")
@@ -244,7 +272,7 @@ public class TruthTable {
      * @param truthValues The truth values for the variables.
      * @return The result of the evaluation.
      */
-    private Boolean evaluateCondition(Expression condition, Map<Expression, Object> truthValues) {
+    private Object evaluateCondition(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isBinaryExpr()) {
             var binaryExpr = condition.asBinaryExpr();
             var leftExpr = binaryExpr.getLeft();
@@ -254,9 +282,6 @@ public class TruthTable {
                 int left = (int) getValue(leftExpr, truthValues);
                 int right = (int) getValue(rightExpr, truthValues);
 
-                truthValues.put(leftExpr, left);
-                truthValues.put(rightExpr, right);
-
                 return switch (binaryExpr.getOperator()) {
                     case LESS -> left < right;
                     case GREATER -> left > right;
@@ -265,11 +290,11 @@ public class TruthTable {
                     default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
                 };
             } else {
-                Boolean left = evaluateCondition(leftExpr, truthValues);
-                Boolean right = evaluateCondition(rightExpr, truthValues);
+                Object left = evaluateCondition(leftExpr, truthValues);
+                Object right = evaluateCondition(rightExpr, truthValues);
                 return switch (binaryExpr.getOperator()) {
-                    case AND -> left && right;
-                    case OR -> left || right;
+                    case AND -> ((Boolean) left) && (Boolean) right;
+                    case OR -> ((Boolean) left) || (Boolean) right;
                     case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
                     case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
                     default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
@@ -277,24 +302,24 @@ public class TruthTable {
             }
         } else if (condition.isUnaryExpr()) {
             var unaryExpr = condition.asUnaryExpr();
-            boolean value = evaluateCondition(unaryExpr.getExpression(), truthValues);
+            Object value = evaluateCondition(unaryExpr.getExpression(), truthValues);
             return switch (unaryExpr.getOperator()) {
-                case LOGICAL_COMPLEMENT -> !value;
+                case LOGICAL_COMPLEMENT -> ! (Boolean)value;
                 default -> throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
             };
         } else if (condition.isNameExpr()) {
-            return (Boolean) truthValues.get(condition);
+            return truthValues.get(condition);
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isStringLiteralExpr() || condition.isFieldAccessExpr()) {
-            return (Boolean) getValue(condition, truthValues);
+            return getValue(condition, truthValues);
         }
         else if (condition.isMethodCallExpr() ) {
             if (condition.toString().contains("equals")) {
                 MethodCallExpr mce = condition.asMethodCallExpr();
                 return truthValues.get(condition).equals(truthValues.get(mce.getArgument(0)));
             }
-            return (Boolean) getValue(condition, truthValues);
+            return getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
             return null;
         }
