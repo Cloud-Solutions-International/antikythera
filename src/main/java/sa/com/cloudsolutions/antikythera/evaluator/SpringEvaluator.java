@@ -390,15 +390,20 @@ public class SpringEvaluator extends Evaluator {
         /*
          * Leg work is done in the overloaded method.
          */
-        ReturnStmt stmt = statement.asReturnStmt();
-        Optional<Node> parent = stmt.getParentNode();
-        buildPreconditions();
-        super.executeReturnStatement(stmt);
-        if (parent.isPresent() ) {
-            // the return statement will have a parent no matter what but the optionals approach
-            // requires the use of isPresent.
-            ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
-            return createTests(response);
+        if (AntikytheraRunTime.isControllerClass(getClassName())) {
+            ReturnStmt stmt = statement.asReturnStmt();
+            Optional<Node> parent = stmt.getParentNode();
+            buildPreconditions();
+            super.executeReturnStatement(stmt);
+            if (parent.isPresent()) {
+                // the return statement will have a parent no matter what but the optionals approach
+                // requires the use of isPresent.
+                ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
+                return createTests(response);
+            }
+        }
+        else {
+            return super.executeReturnStatement(statement);
         }
 
         return null;
@@ -809,5 +814,6 @@ public class SpringEvaluator extends Evaluator {
         }
         return null;
     }
+
 }
 

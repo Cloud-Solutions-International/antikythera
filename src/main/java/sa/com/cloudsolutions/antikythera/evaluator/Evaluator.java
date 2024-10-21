@@ -1620,6 +1620,12 @@ public class Evaluator {
     public Evaluator createEvaluator(String className) {
         return new Evaluator(className);
     }
+
+
+    @Override
+    public String toString() {
+        return hashCode() + " : " + getClassName();
+    }
 }
 
 class NumericComparator {
