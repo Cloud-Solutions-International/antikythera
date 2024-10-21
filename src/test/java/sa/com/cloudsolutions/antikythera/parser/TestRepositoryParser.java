@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
@@ -60,19 +61,19 @@ class TestRepositoryParser {
         entityCuField.setAccessible(true);
         entityCuField.set(parser, cu);
 
-        parser.parseNonAnnotatedMethod("findAll");
-        Map<String, RepositoryQuery> queries = parser.getQueries();
+        parser.parseNonAnnotatedMethod(new MethodDeclaration().setName("findAll"));
+        Map<MethodDeclaration, RepositoryQuery> queries = parser.getQueries();
         assertTrue(queries.containsKey("findAll"));
         assertEquals("SELECT * FROM table_name", queries.get("findAll").getQuery());
 
         // Test findById method
-        parser.parseNonAnnotatedMethod("findById");
+        parser.parseNonAnnotatedMethod(new MethodDeclaration().setName("findById"));
         queries = parser.getQueries();
         assertTrue(queries.containsKey("findById"));
         assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findById").getQuery().strip());
 
         // Test findAllById method
-        parser.parseNonAnnotatedMethod("findAllById");
+        parser.parseNonAnnotatedMethod(new MethodDeclaration().setName("findAllById"));
         queries = parser.getQueries();
         assertTrue(queries.containsKey("findAllById"));
         assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findAllById").getQuery());

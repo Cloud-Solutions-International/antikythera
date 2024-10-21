@@ -69,7 +69,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * The queries that were identified in this repository
      */
-    private final Map<String, RepositoryQuery> queries;
+    private final Map<MethodDeclaration, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -266,7 +266,7 @@ public class RepositoryParser extends ClassProcessor {
      * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(String method, RepositoryQuery rql) throws IOException {
+    public ResultSet executeQuery(MethodDeclaration method, RepositoryQuery rql) throws IOException {
         try {
             current = rql;
 
@@ -739,14 +739,15 @@ public class RepositoryParser extends ClassProcessor {
             }
 
             if (query != null) {
-                queries.put(n.getNameAsString(), new RepositoryQuery(cleanUp(query), nt));
+                queries.put(n, new RepositoryQuery(cleanUp(query), nt));
             } else {
-                parseNonAnnotatedMethod(methodName);
+                parseNonAnnotatedMethod(n);
             }
         }
     }
 
-    void parseNonAnnotatedMethod(String methodName) {
+    void parseNonAnnotatedMethod(MethodDeclaration md) {
+        String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
         StringBuilder sql = new StringBuilder();
         boolean top = false;
@@ -823,7 +824,7 @@ public class RepositoryParser extends ClassProcessor {
                 sql.append(" LIMIT 1");
             }
         }
-        queries.put(methodName, new RepositoryQuery(sql.toString(), true));
+        queries.put(md, new RepositoryQuery(sql.toString(), true));
     }
 
     /**
@@ -891,7 +892,7 @@ public class RepositoryParser extends ClassProcessor {
         return sql;
     }
 
-    public Map<String, RepositoryQuery> getQueries() {
+    public Map<MethodDeclaration, RepositoryQuery> getQueries() {
         return queries;
     }
 

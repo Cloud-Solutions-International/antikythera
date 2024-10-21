@@ -563,6 +563,10 @@ public class Evaluator {
                     eval.executeConstructor(constructor);
                     return new Variable(eval);
                 }
+                /*
+                 * No matching constructor found but in evals the default does not show up. So let's roll
+                 */
+                return new Variable(eval);
             }
         }
         return null;

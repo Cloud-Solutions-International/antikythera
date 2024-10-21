@@ -291,14 +291,15 @@ public class SpringEvaluator extends Evaluator {
     private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            RepositoryQuery q = repository.getQueries().get(methodCall.getNameAsString());
+            MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
+            RepositoryQuery q = repository.getQueries().get(repoMethod);
             try {
                 /*
                  * We have one more challenge; to find the parameters that are being used in the repository
                  * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                  * to the arguments that are passed in when the method is actually being called.
                  */
-                MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
+
                 String nameAsString = repoMethod.getNameAsString();
                 if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
@@ -306,7 +307,7 @@ public class SpringEvaluator extends Evaluator {
                         q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
                     }
 
-                    ResultSet rs = repository.executeQuery(methodCall.getNameAsString(), q);
+                    ResultSet rs = repository.executeQuery(repoMethod, q);
                     q.setResultSet(rs);
                 }
                 else {
@@ -393,7 +394,7 @@ public class SpringEvaluator extends Evaluator {
         /*
          * Leg work is done in the overloaded method.
          */
-        if (AntikytheraRunTime.isControllerClass(getClassName())) {
+        if (AntikytheraRunTime.isControllerClass(getClassName()) || onTest) {
             ReturnStmt stmt = statement.asReturnStmt();
             Optional<Node> parent = stmt.getParentNode();
             buildPreconditions();
