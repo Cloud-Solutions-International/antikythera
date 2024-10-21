@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 
+import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import com.github.javaparser.ast.CompilationUnit;
@@ -292,25 +293,25 @@ public class SpringTestGenerator implements  TestGenerator {
         addHttpStatusCheck(body, resp.getStatusCode());
         Type returnType = resp.getType();
         if (returnType != null) {
-            // There maybe controllers that do not return a body. In that case the
-            // return type will be null
+            /*
+             * There maybe controllers that do not return a body. In that case the
+             * return type will be null. But we are not bothering with them for now.
+             */
             if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                System.out.println("bada 2");
-            } else
-            {
+                NodeList<Type> a = returnType.asClassOrInterfaceType().getTypeArguments().get();
+                if (!a.isEmpty() && a.getFirst().isPresent() && a.getFirst().get().toString().equals("String")) {
+                    testForResponseBodyAsString(md, resp, body);
+                }
+                else {
+                    logger.warn("THIS testing parth is not completed");
+                }
+            } else {
                 List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
                 if (! IncompatibleReturnTypes.contains(returnType.toString()))
                 {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                     if (respType.toString().equals("String")) {
-                        body.addStatement("String resp = response.getBody().asString();");
-                        if(resp.getResponse() != null) {
-                            body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", resp.getResponse().toString()));
-                        }
-                        else {
-                            body.addStatement("Assert.assertNotNull(resp);");
-                            logger.warn("Reponse body is empty for {}", md.getName());
-                        }
+                        testForResponseBodyAsString(md, resp, body);
                     } else {
                         System.out.println("bada 1");
                         // todo get thsi back on line
@@ -324,6 +325,18 @@ public class SpringTestGenerator implements  TestGenerator {
                     }
                 }
             }
+        }
+    }
+
+    private static void testForResponseBodyAsString(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
+        body.addStatement("String resp = response.getBody().asString();");
+        Object response = resp.getResponse();
+        if(response instanceof ResponseEntity<?> re) {
+            body.addStatement(String.format("Assert.assertEquals(resp,\"%s\");", re.getBody()));
+        }
+        else {
+            body.addStatement("Assert.assertNotNull(resp);");
+            logger.warn("Reponse body is empty for {}", md.getName());
         }
     }
 
