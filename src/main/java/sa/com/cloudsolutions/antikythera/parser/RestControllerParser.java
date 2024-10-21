@@ -22,8 +22,8 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,11 +47,6 @@ public class RestControllerParser extends ClassProcessor {
     private boolean evaluatorUnsupported = false;
     File current;
     private SpringEvaluator evaluator;
-
-    /**
-     * Store the conditions that a controller may expect the input to meet.
-     */
-    List<Expression> preConditions;
 
     /**
      * Creates a new RestControllerParser
@@ -205,23 +200,43 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
             evaluatorUnsupported = false;
-            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
-                return;
-            }
 
-            if (md.isPublic()) {
-                preConditions = new ArrayList<>();
+            if (checkEligible(md)) {
                 evaluator.reset();
+                evaluator.resetColors();
+                AntikytheraRunTime.reset();
                 try {
-                    evaluator.executeMethod(md);
+                    evaluator.visit(md);
                 } catch (AntikytheraException | ReflectiveOperationException e) {
                     if (Settings.getProperty("dependencies.on_error").equals("log")) {
                         logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
                     } else {
                         throw new GeneratorException(e);
                     }
+                } finally {
+                    logger.info(md.getNameAsString());
                 }
             }
+        }
+
+        private boolean checkEligible(MethodDeclaration md) {
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                return false;
+            }
+            if (md.isPublic()) {
+                Optional<String> ctrl  = Settings.getProperty("controllers", String.class);
+                if(ctrl.isPresent()) {
+                    String[] controllers = ctrl.get().split("#");
+                    if (controllers.length > 1) {
+                        if (md.getNameAsString().equals(controllers[controllers.length - 1])) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
         }
     }
 
@@ -285,7 +300,10 @@ public class RestControllerParser extends ClassProcessor {
 
         /**
          * Nested inner class to handle return statements.
-         *
+         * To generate tests, points of exit from a controller function are crucial. It maybe that the exit
+         * happens due to a validation failure or because the method has completed successfully.
+         * We will investigate the return to find that out and then based on the condition will taylor the
+         * inputs accordingly.
          */
         class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
             /**
@@ -301,11 +319,21 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
+        /**
+         * Visit each statement in a method to identify the types used.
+         * This is used to build a dependency graph so that classes that are part of the AUT can be processed
+         * as needed. There is no need to process all classes. Only those in the dependency graph.
+         */
         class StatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+            /**
+             * This method will be called for each statement in a method.
+             * @param statement the statment being processed
+             * @param md the method declaration
+             */
             @Override
-            public void visit(ExpressionStmt n, MethodDeclaration md) {
-                super.visit(n, md);
-                Expression expr = n.getExpression();
+            public void visit(ExpressionStmt statement, MethodDeclaration md) {
+                super.visit(statement, md);
+                Expression expr = statement.getExpression();
                 if(expr.isVariableDeclarationExpr()) {
                     Type t = expr.asVariableDeclarationExpr().getElementType();
                     if (!t.isPrimitiveType()) {

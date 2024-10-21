@@ -121,12 +121,17 @@ public class DTOHandler extends ClassProcessor {
                     || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
                 ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
             }
+
             /*
              * We roll back the changes that we made to the compilation unit here. But theres' one modification
-             * that we do keep. And that is the resolved imports. It makes things easier for the evaluator
+             * that we do keep. And that is the resolved imports. It makes things easier for the evaluator.
+             * However things like services and components are not being copied so we don't mind about import
+             * pollution in those classes.
              */
-            tmp.setImports(cu.getImports());
-            cu = tmp;
+            if (!AntikytheraRunTime.isComponentClass(className) && !AntikytheraRunTime.isServiceClass(className)) {
+                tmp.setImports(cu.getImports());
+                cu = tmp;
+            }
         }
     }
 

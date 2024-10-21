@@ -30,29 +30,65 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
-import java.io.File;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Test generator for spring applications.
+ *
+ * We traverse the code in the method line by line until we encounter an if/else statement. At that
+ * point we generate a truth table to determine what values will lead to the condition being true.
+ *
+ * The first eligble candidate set of values will be chosen for the true state which will result
+ * in the THEN branch being executed. We proceed until a return statement is encountered. At that
+ * point we generate the tests based on the values that were applied to the condition. These values
+ * may have percolated downward from method arguments. So we need to trace the values back to the
+ * arguments, locals or fields to set them appropriately.
+ *
+ * If further branching is encountered the strategy will be repeated.
+ *
+ * When we encounter an IF statement, it's state will change to GREY, we will then traverse the
+ * THEN branch until we reach a return statement. At that point we have to start all over again
+ * and take the ELSE branch (if it exists).
+ *
+ * That means a function will have to be executed multiple times until we have covered all
+ * possible branches. Therefor we need to keep track of the last line that has been executed.
+ */
 public class SpringTestGenerator implements  TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
-    // TODO this needs to be set properly
+    /**
+     * The URL path component common to all functions in a controller.
+     */
     private String commonPath;
+    /**
+     * The names thave have already been assigned to various tests.
+     * Because of overloaded methods and the need to write multiple tests for a single end point
+     * we may end up with duplicate method names. To avoid that we add a suffix of the query
+     * string arguments to distinguish overloaded and a alphabetic suffix to identify multiple
+     * tests for the same method.
+     */
     Set<String> testMethodNames = new HashSet<>();
+    /**
+     * The last executed database query.
+     */
     RepositoryQuery last;
+    /**
+     * The compilation unit that represents the tests being generated.
+     * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
+     *
+     */
     CompilationUnit gen = new CompilationUnit();
-    File current;
 
     /**
-     * Store the conditions that a controller may expect the input to meet.
+     * The preconditions that need to be met before the test can be executed.
      */
-    List<Expression> preConditions = new ArrayList<>();
+    private List<Expression> preConditions;
+
 
     /**
      * Create tests based on the method declarion and return type
@@ -523,8 +559,8 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
     @Override
-    public void addPrecondition(Expression expr) {
-        preConditions.add(expr);
+    public void setPreconditions(List<Expression> preconditions) {
+        this.preConditions = preconditions;
     }
 }
 

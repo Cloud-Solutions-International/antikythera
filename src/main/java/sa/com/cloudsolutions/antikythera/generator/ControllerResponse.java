@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.type.Type;
+import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -8,7 +10,7 @@ import java.util.Map;
 public class ControllerResponse {
     Type type;
     Object response;
-    int statusCode;
+
     private static Map<String, Integer> statusCodes = new HashMap<>();
     static {
         statusCodes.put("OK", 200);
@@ -24,20 +26,17 @@ public class ControllerResponse {
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
     }
 
+    public ControllerResponse() {
+
+    }
+
+    public ControllerResponse(Variable v) {
+        this.response = v.getValue();
+        this.type = v.getType();
+    }
+
     public void setType(Type type) {
         this.type = type;
-    }
-
-    public void setResponse(Object response) {
-        this.response = response;
-    }
-
-    public void setStatusCode(int statusCode) {
-        this.statusCode = statusCode;
-    }
-
-    public void setStatusCode(String code) {
-        this.statusCode = statusCodes.get(code);
     }
 
     public Type getType() {
@@ -49,14 +48,13 @@ public class ControllerResponse {
     }
 
     public int getStatusCode() {
-        return statusCode;
+        if (response instanceof ResponseEntity<?> re) {
+            return re.getStatusCodeValue();
+        }
+        return 0;
     }
 
     public static Map<String, Integer> getStatusCodes() {
         return statusCodes;
-    }
-
-    public static void setStatusCodes(Map<String, Integer> statusCodes) {
-        ControllerResponse.statusCodes = statusCodes;
     }
 }

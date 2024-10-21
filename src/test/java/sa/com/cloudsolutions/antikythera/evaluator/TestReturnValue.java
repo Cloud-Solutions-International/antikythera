@@ -16,6 +16,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestReturnValue extends TestHelper {
@@ -45,13 +47,30 @@ class TestReturnValue extends TestHelper {
         assertTrue(outContent.toString().contains("10"));
     }
 
+    @Test
+    void testConditionally() throws  AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
+        evaluator.executeMethod(printNumber);
+        assertFalse(outContent.toString().contains("THIS SHOULD NOT BE PRINTED"));
+    }
+
+
+    @Test
+    void testDeepReturn() throws  AntikytheraException, ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("deepReturn")).orElseThrow();
+        evaluator.executeMethod(printNumber);
+        assertEquals("", outContent.toString());
+    }
+
+
     class ReturnValueEval extends AbstractCompiler {
 
         protected ReturnValueEval() throws IOException, AntikytheraException {
             cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
             evaluator = new Evaluator("");
             evaluator.setupFields(cu);
-            evaluator.setScope("returnValue");
         }
 
     }

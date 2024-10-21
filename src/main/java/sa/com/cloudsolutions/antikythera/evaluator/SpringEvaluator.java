@@ -1,51 +1,45 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.expr.CastExpr;
-import com.google.errorprone.annotations.Var;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
-import sa.com.cloudsolutions.antikythera.parser.DTOHandler;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.UnaryExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
 import java.io.IOException;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
@@ -56,46 +50,155 @@ public class SpringEvaluator extends Evaluator {
     /**
      * Maintains a list of repositories that we have already encountered.
      */
-    private static final Map<String, RepositoryParser> respositories = new HashMap<>();
+    private static final Map<String, RepositoryParser> repositories = new HashMap<>();
 
+    /**
+     * List of generators that we have.
+     *
+     * Generators ought to be seperated from the parsers/evaluators because different kinds of
+     * tests can be created. They can be unit tests, integration tests, api tests and end to
+     * end tests.
+     */
     private final List<TestGenerator> generators  = new ArrayList<>();
 
+    /**
+     * The method currently being analyzed
+     */
     private MethodDeclaration currentMethod;
 
+    /**
+     * The lines of code already looked at in the method.
+     */
+    private static HashMap<Integer, LineOfCode> lines = new HashMap<>();
+
+    /**
+     * Sort of a stack that keeps track of the conditional code blocks.
+     * We consider IF THEN ELSE statements as branching statements. However we also consider JPA
+     * queries to be branching statements as well. There are two branches with the 'A" branch being
+     * executing the query with the default parameters that were passed in and the 'B' branch will
+     * be executing the query with parameters that will have a valid result set being returned
+     *
+     * Of course there will be situations where no parameters exist to give a valid resultset
+     * and these will just be ignored.
+     *
+     * The values that are used in the A branch for the query will just be arbitary non null values
+     * integers like 0 will usually not have matching entries in the datbaase and will result in
+     * empty responses. If due to some reason there are valid resultsets of integers like 0 for
+     * primary keys there's nothing we can do about it, we just move onto the next test.
+     */
+    private final Set<IfStmt> branching = new HashSet<>();
+
+    /**
+     * It is better to use create evaluator
+     * @param className the name of the class associated with this evaluator
+     */
     public SpringEvaluator(String className) {
         super(className);
     }
 
     public static Map<String, RepositoryParser> getRepositories() {
-        return respositories;
+        return repositories;
     }
 
-    private boolean flunk = true;
 
+    /**
+     * Called by the java parser method visitor.
+     *
+     * This is where the code evaluation begins. Note that we may run the same code repeatedly
+     * so that we can excercise all the paths in the code. This is done by setting the values
+     * of variables so that different branches in conditional statements are taken.
+     *
+     * @param md The MethodDeclaration being worked on
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
     @Override
-    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+    public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+        branching.clear();
         md.getParentNode().ifPresent(p -> {
-            if (p instanceof ClassOrInterfaceDeclaration cdecl) {
-                if (cdecl.isAnnotationPresent("RestController")) {
-                    currentMethod = md;
-                }
+            if (p instanceof ClassOrInterfaceDeclaration cdecl && cdecl.isAnnotationPresent("RestController")) {
+                currentMethod = md;
             }
         });
 
         try {
-            mockURIVariables(md);
+            NodeList<Statement> statements = md.getBody().get().getStatements();
+            for (int i = 0; i < statements.size(); i++) {
+                Statement st = statements.get(i);
+                if (!lines.containsKey(st.hashCode())) {
+                    mockURIVariables(md);
+                    super.executeMethod(md);
+                    if (returnFrom != null) {
+                        // rewind!
+
+                        i = 0;
+                    }
+                }
+            }
         } catch (Exception e) {
             throw new EvaluatorException("Error while mocking controller arguments", e);
         }
-        return super.executeMethod(md);
+    }
+
+    /**
+     * Execute a block of statements.
+     *
+     * We may end up executing the same block of statements repeatedly until all the branches
+     * have been covered.
+     *
+     * @param statements the collection of statements that make up the block
+     * @throws AntikytheraException if there are situations where we cannot process the block
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
+    @Override
+    protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
+        try {
+            for (Statement stmt : statements) {
+                executeStatement(stmt);
+                if (returnFrom != null) {
+                    break;
+                }
+            }
+        } catch (EvaluatorException|ReflectiveOperationException ex) {
+            throw ex;
+        } catch (Exception e) {
+            handleApplicationException(e);
+        }
+    }
+
+    /**
+     * Executes a single statement
+     * OVerrides the superclass method to keep track of the lines of code that have been
+     * executed. While the basic Evaluator class does not run the same code over and over again,
+     * this class does!
+     * @param stmt the statement to execute
+     * @throws Exception
+     */
+    @Override
+    void executeStatement(Statement stmt) throws Exception {
+        if(!stmt.isIfStmt()) {
+            boolean repo =  (stmt.isExpressionStmt() && isRepositoryMethod(stmt.asExpressionStmt()));
+
+            LineOfCode l = lines.get(stmt.hashCode());
+            if (l == null) {
+                l = new LineOfCode(stmt);
+                l.setColor(repo ? LineOfCode.GREY : LineOfCode.BLACK);
+                lines.put(stmt.hashCode(), l);
+            }
+            else {
+                l.setColor(LineOfCode.BLACK);
+            }
+        }
+
+        super.executeStatement(stmt);
     }
 
     /**
      * The URL contains Path variables, Query string parameters and post bodies. We mock them here
      * @param md The method declaration representing an HTTP API end point
-     * @throws Exception if the variables cannot be mocked.
+     * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
-    private void mockURIVariables(MethodDeclaration md) throws Exception {
+    private void mockURIVariables(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
             String paramString = String.valueOf(param);
@@ -121,11 +224,7 @@ public class SpringEvaluator extends Evaluator {
                         }
                         else {
                             if (className.startsWith("java.util")) {
-                                Variable v = new Variable(switch(className){
-                                    case "java.util.List" -> new ArrayList<>();
-                                    case "java.util.Map" -> new HashMap<>();
-                                    default -> null;
-                                });
+                                Variable v = Reflect.variableFactory(className);
                                 /*
                                  * Pushed to be popped later in the callee
                                  */
@@ -143,7 +242,7 @@ public class SpringEvaluator extends Evaluator {
                     }
                     else {
 
-                        Evaluator o = new Evaluator(className);
+                        Evaluator o = new SpringEvaluator(className);
                         o.setupFields(AntikytheraRunTime.getCompilationUnit(className));
                         Variable v = new Variable(o);
                         /*
@@ -178,67 +277,13 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Evaluates a variable declaration expression.
-     * @param expr the expression
-     * @return a Variable or null if the expression could not be evaluated or results in null
-     * @throws EvaluatorException if there is an error evaluating the expression
+     * Execute a query on a repository.
+     * @param name the name of the repository
+     * @param methodCall the method call expression
+     * @return the result set
      */
-    @Override
-    Variable evaluateVariableDeclaration(Expression expr) throws AntikytheraException, ReflectiveOperationException {
-        VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
-        for (var decl : varDeclExpr.getVariables()) {
-            Optional<Expression> init = decl.getInitializer();
-            if (init.isPresent()) {
-                Expression expression = init.get();
-                if (expression.isMethodCallExpr()) {
-                    MethodCallExpr methodCall = expression.asMethodCallExpr();
-                    Optional<Expression> scope = methodCall.getScope();
-                    if(scope.isPresent() && scope.get().isNameExpr()) {
-                        RepositoryQuery q = executeQuery(scope.get().asNameExpr().getNameAsString(), methodCall);
-
-                        String qualifiedName = decl.getType().resolve().asReferenceType().getQualifiedName();
-                        try {
-                            Variable v = null;
-                            if(qualifiedName.startsWith("java.util")) {
-                                switch (qualifiedName) {
-                                    case "java.util.List" -> v = new Variable(new ArrayList<>());
-                                    case "java.util.Map" -> v = new Variable(new HashMap<>());
-                                    case "java.util.Set" -> v = new Variable(new HashSet<>());
-                                    case "java.util.Optional" -> v = new Variable(Optional.empty());
-                                }
-                            }
-                            else {
-                                v = new Variable(DTOBuddy.createDynamicDTO(decl.getType().asClassOrInterfaceType()));
-                            }
-                            setLocal(methodCall, decl.getNameAsString(), v);
-                            return v;
-                        } catch (Exception e) {
-                            logger.error("Error while creating dynamic DTO {}", decl.getType().resolve().asReferenceType().getQualifiedName());
-                            throw  new EvaluatorException("in evaluateVariableDeclaration", e);
-                        }
-                    }
-                    else if(scope.isPresent() && scope.get().isFieldAccessExpr()) {
-                        System.out.println("bada");
-                    }
-                    else {
-                        Variable v = evaluateMethodCall(methodCall);
-                        if (v != null) {
-                            v.setType(decl.getType());
-                            setLocal(methodCall, decl.getNameAsString(), v);
-                        }
-                        return v;
-                    }
-                }
-                else if(expression.isObjectCreationExpr()) {
-                    return createObject(varDeclExpr, decl, expression.asObjectCreationExpr());
-                }
-            }
-        }
-        return null;
-    }
-
     private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
-        RepositoryParser repository = respositories.get(name);
+        RepositoryParser repository = repositories.get(name);
         if(repository != null) {
             RepositoryQuery q = repository.getQueries().get(methodCall.getNameAsString());
             try {
@@ -270,15 +315,28 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
+    /**
+     * Identify fields in the class.
+     * This process needs to be carried out before executing any code.
+     * @param field the field declaration
+     * @throws IOException if the file cannot be read
+     * @throws AntikytheraException if there is an error in the code
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
     @Override
-    public void identifyFieldVariables(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
-        super.identifyFieldVariables(variable);
+    public void identifyFieldDeclarations(VariableDeclarator field) throws IOException, AntikytheraException, ReflectiveOperationException {
+        super.identifyFieldDeclarations(field);
 
-        if (variable.getType().isClassOrInterfaceType()) {
-            detectRepository(variable);
+        if (field.getType().isClassOrInterfaceType()) {
+            detectRepository(field);
         }
     }
 
+    /**
+     * Detect a JPA repository.
+     * @param variable the variable declaration
+     * @throws IOException if the file cannot be read
+     */
     private static void detectRepository(VariableDeclarator variable) throws IOException {
         String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
         if (SpringEvaluator.getRepositories().containsKey(shortName)) {
@@ -305,7 +363,7 @@ public class SpringEvaluator extends Evaluator {
                                 RepositoryParser parser = new RepositoryParser();
                                 parser.compile(AbstractCompiler.classToPath(className));
                                 parser.process();
-                                respositories.put(variable.getNameAsString(), parser);
+                                repositories.put(variable.getNameAsString(), parser);
                                 break;
                             }
                         }
@@ -315,71 +373,70 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    /**
+     * Execute a return statement.
+     * Over rides the super class method to create tests.
+     *
+     * @param statement the statement to execute
+     * @return the variable that is returned
+     * @throws AntikytheraException if there is an error in the code
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
     @Override
-    Variable evaluateReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
+    Variable executeReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
         /*
          * Leg work is done in the overloaded method.
          */
         ReturnStmt stmt = statement.asReturnStmt();
         Optional<Node> parent = stmt.getParentNode();
+        buildPreconditions();
+        super.executeReturnStatement(stmt);
         if (parent.isPresent() ) {
             // the return statement will have a parent no matter what but the optionals approach
             // requires the use of isPresent.
             ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
-            if (response != null) {
-                if (flunk) {
-                    for (TestGenerator generator : generators) {
-                        generator.createTests(currentMethod, response);
-                    }
-                    flunk = false;
-                }
-                for (TestGenerator generator : generators) {
-                    generator.createTests(currentMethod, response);
-                }
-                Variable v = new Variable(response);
-                AntikytheraRunTime.push(v);
-                return v;
-            }
+            return createTests(response);
         }
-        super.evaluateReturnStatement(stmt);
+
         return null;
     }
 
-    private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) throws AntikytheraException, ReflectiveOperationException {
-        try {
-            if (parent instanceof IfStmt ifStmt) {
-                Expression condition = ifStmt.getCondition();
-                if (evaluateValidatorCondition(condition)) {
-                    ControllerResponse v = identifyReturnType(stmt, currentMethod);
-                    if (!flunk) {
-                        buildPreconditions(currentMethod, condition);
-                    }
-                    return v;
-                }
-            } else {
-                BlockStmt blockStmt = (BlockStmt) parent;
-                Optional<Node> gramps = blockStmt.getParentNode();
-                if (gramps.isPresent()) {
-                    if (gramps.get() instanceof IfStmt ifStmt) {
-                        // we have found ourselves a conditional return statement.
-                        Expression condition = ifStmt.getCondition();
-                        if (evaluateValidatorCondition(condition)) {
-                            ControllerResponse response = identifyReturnType(stmt, currentMethod);
-                            if (!flunk) {
-                                buildPreconditions(currentMethod, condition);
-                            }
-                            return response;
-                        }
-                    } else if (gramps.get() instanceof MethodDeclaration) {
-                        return identifyReturnType(stmt, currentMethod);
-                    }
-                }
+    /**
+     * Build the list of expressions that will be the precondition for the test.
+     * This is done by looking at the branching statements in the code. The list of expressions
+     * become a part of the test setup.
+     */
+    private void buildPreconditions() {
+        List<Expression> expressions = new ArrayList<>();
+        for (LineOfCode l : lines.values()) {
+            if(branching.contains(l.getStatement())) {
+                expressions.addAll(l.getPrecondition(false));
             }
-        } catch (EvaluatorException e) {
-            logger.error("Evaluator exception");
-            logger.error("\t{}", e.getMessage());
+        }
+        for(TestGenerator gen : generators) {
+            gen.setPreconditions(expressions);
+        }
+    }
+
+    /**
+     * Finally create the tests by calling each of the test generators.
+     * There maybe multiple test generators, one of unit tests, one of API tests aec.
+     * @param response
+     * @return
+     */
+    private Variable createTests(ControllerResponse response) {
+        if (response != null) {
+            for (TestGenerator generator : generators) {
+                generator.createTests(currentMethod, response);
+            }
+            return new Variable(response);
         }
         return null;
+    }
+
+    private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) {
+        return new ControllerResponse(returnValue);
+
     }
 
     public void addGenerator(TestGenerator generator) {
@@ -387,243 +444,325 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Extracts the type from a method call expression
-     *
-     * This is used when the controller directly returns the result of a method call.
-     * we iterate through the imports to find the class. Then we iterate through the
-     * methods in that class to identify what is being called. Finally when we find
-     * the match, we extract it's type.
-     *
-     * todo - need to improve the handling of overloaded methods.
-     *
-     * @param type
-     * @param methodCallExpr
-     * @throws IOException
+     * Resolves fields while taking into consideration the AutoWired annotation of srping
+     * @param variable a variable declaration statement
+     * @param resolvedClass the name of the class that the field is of
+     * @return true if the resolution was successfull
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
      */
-    private void extractTypeFromCall(Type type, MethodCallExpr methodCallExpr) throws IOException {
-
-    }
-
-
-    private ControllerResponse identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        Expression expression = returnStmt.getExpression().orElse(null);
-        if (expression != null) {
-            ControllerResponse response = new ControllerResponse();
-            response.setStatusCode(200);
-            if (expression.isObjectCreationExpr()) {
-                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                    returnWithObjectCreation(returnStmt, objectCreationExpr, response);
-                }
-            } else if (expression.isMethodCallExpr()) {
-                returnWithMethodCall(md, expression);
-            } else if (expression.isNameExpr()) {
-                String nameAsString = expression.asNameExpr().getNameAsString();
-                if (nameAsString != null && getLocal(returnStmt, nameAsString) != null) {
-                    response.setType(getLocal(returnStmt, nameAsString).getType());
-                } else {
-                    logger.warn("NameExpr is null in identify return type");
-                }
-            }
-            return response;
-        }
-        return null;
-    }
-
-    private void returnWithMethodCall(MethodDeclaration md, Expression expression) {
-        MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-        try {
-            Optional<Expression> scope = methodCallExpr.getScope();
-            if (scope.isPresent()) {
-                Type type;
-                if (scope.get().isFieldAccessExpr()) {
-                    type = fields.get(scope.get().asFieldAccessExpr().getNameAsString()).getType();
-                } else {
-                    type = fields.get(scope.get().asNameExpr().getNameAsString()).getType();
-                }
-
-                if (type != null) {
-                    extractTypeFromCall(type, methodCallExpr);
-                } else {
-                    logger.debug("Type not found {}", scope.get());
-                }
-            }
-        } catch (IOException e) {
-            throw new GeneratorException("Exception while identifying dependencies", e);
-        }
-    }
-
-    private void returnWithObjectCreation(ReturnStmt returnStmt, ObjectCreationExpr objectCreationExpr, ControllerResponse response) throws AntikytheraException, ReflectiveOperationException {
-        for (Expression typeArg : objectCreationExpr.getArguments()) {
-            if (typeArg.isFieldAccessExpr()) {
-                FieldAccessExpr fae = typeArg.asFieldAccessExpr();
-                if (fae.getScope().isNameExpr() && fae.getScope().toString().equals("HttpStatus")) {
-                    response.setStatusCode(fae.getNameAsString());
-                }
-            }
-            else if (typeArg.isObjectCreationExpr()) {
-                Variable v = createObject(returnStmt, null, typeArg.asObjectCreationExpr());
-                response.setType(v.getType());
-            }
-            else if (typeArg.isNameExpr()) {
-                String nameAsString = typeArg.asNameExpr().getNameAsString();
-                if (nameAsString != null && getLocal(returnStmt, nameAsString) != null) {
-                    response.setType(getLocal(returnStmt, nameAsString).getType());
-                } else {
-                    logger.warn("NameExpr is null in identify return type");
-                }
-            } else if (typeArg.isStringLiteralExpr()) {
-                response.setType(StaticJavaParser.parseType("java.lang.String"));
-                response.setResponse(typeArg.asStringLiteralExpr().asString());
-            } else if (typeArg.isMethodCallExpr()) {
-                MethodCallExpr methodCallExpr = typeArg.asMethodCallExpr();
-                try {
-                    Optional<Expression> scope = methodCallExpr.getScope();
-                    if (scope.isPresent()) {
-                        Variable f = (scope.get().isFieldAccessExpr())
-                                ? fields.get(scope.get().asFieldAccessExpr().getNameAsString())
-                                : fields.get(scope.get().asNameExpr().getNameAsString());
-                        if (f != null) {
-
-                            extractTypeFromCall(f.getType(), methodCallExpr);
-
-                        } else {
-                            logger.debug("Type not found {}", scope.get());
-                        }
-                    }
-                } catch (IOException e) {
-                    throw new GeneratorException("Exception while identifying dependencies", e);
-                }
-            } else if (typeArg.isCastExpr()) {
-                CastExpr castExpr = typeArg.asCastExpr();
-                //Variable v = evaluateExpression(castExpr.getExpression());
-                response.setType(castExpr.getType());
-            }
-
-        }
-    }
-
     @Override
-    Variable handleRegularMethodCall(MethodCallExpr methodCall, Variable scopedExpression)
-            throws AntikytheraException, ReflectiveOperationException {
-//        if(ref.getMethodName().equals("save") && scopeExpr.isNameExpr()
-//                && respositories.get(scopeExpr.asNameExpr().getNameAsString()) != null) {
-//            return null;
-//        }
-//        else{
-//            return super.handleRegularMethodCall(methodCall, null);
-//        }
-        return null;
-    }
-
-
-    public boolean evaluateValidatorCondition(Expression condition) throws AntikytheraException, ReflectiveOperationException {
-        if (condition.isBinaryExpr()) {
-            BinaryExpr binaryExpr = condition.asBinaryExpr();
-            Expression left = binaryExpr.getLeft();
-            Expression right = binaryExpr.getRight();
-
-            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND)) {
-                return evaluateValidatorCondition(left) && evaluateValidatorCondition(right);
-            } else if(binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                return evaluateValidatorCondition(left) || evaluateValidatorCondition(right);
-            }
-            else {
-                return (boolean) evaluateBinaryExpression(binaryExpr.getOperator(), left, right).getValue();
-            }
-        } else if (condition.isBooleanLiteralExpr()) {
-            return condition.asBooleanLiteralExpr().getValue();
-        } else if (condition.isNameExpr()) {
-            Boolean value = (Boolean) evaluateExpression(condition.asNameExpr()).getValue();
-            return value != null ? value : false;
-        }
-        else if(condition.isUnaryExpr()) {
-            UnaryExpr unaryExpr = condition.asUnaryExpr();
-            Expression expr = unaryExpr.getExpression();
-            if(expr.isNameExpr() && getValue(expr, expr.asNameExpr().getNameAsString()) != null) {
-                return false;
-            }
-            logger.warn("Unary expression not supported yet");
-        }
-
-        return false;
-    }
-
-
-    /**
-     * Identifies the preconditions to be fulfilled by a check point in the controller.
-     *
-     * A controller may have multiple validations represented by various if conditions, we need to setup
-     * parameters so that these conditions will pass and move forward to the next state.
-     * @param md the MethodDeclaration for the method being tested.
-     * @param expr the expression currently being evaluated
-     */
-    private void buildPreconditions(MethodDeclaration md, Expression expr) {
-        if(expr instanceof BinaryExpr) {
-            BinaryExpr binaryExpr = expr.asBinaryExpr();
-            if(binaryExpr.getOperator().equals(BinaryExpr.Operator.AND) || binaryExpr.getOperator().equals(BinaryExpr.Operator.OR)) {
-                buildPreconditions(md, binaryExpr.getLeft());
-                buildPreconditions(md, binaryExpr.getRight());
-            }
-            else {
-                buildPreconditions(md, binaryExpr.getLeft());
-                buildPreconditions(md, binaryExpr.getRight());
-            }
-        }
-        if(expr instanceof MethodCallExpr) {
-            MethodCallExpr mce = expr.asMethodCallExpr();
-            Parameter reqBody = SpringTestGenerator.findRequestBody(md);
-            if(reqBody != null && reqBody.getNameAsString().equals(mce.getScope().get().toString())) {
-                try {
-                    if(!reqBody.getType().asClassOrInterfaceType().getTypeArguments().isPresent()) {
-
-                        String fullClassName = reqBody.resolve().describeType();
-                        String fieldName = ClassProcessor.classToInstanceName(mce.getName().asString().replace("get", ""));
-
-                        DTOHandler handler = new DTOHandler();
-                        handler.compile(AbstractCompiler.classToPath(fullClassName));
-                        Map<String, FieldDeclaration> fields = AbstractCompiler.getFields(handler.getCompilationUnit(), reqBody.getTypeAsString());
-
-                        FieldDeclaration fieldDeclaration = fields.get(fieldName);
-                        if (fieldDeclaration != null) {
-                            MethodCallExpr methodCall = DTOHandler.generateRandomValue(fieldDeclaration, handler.getCompilationUnit());
-                            for(var gen : generators) {
-                                gen.addPrecondition(methodCall);
-                            }
-                        }
-                    }
-                } catch (UnsolvedSymbolException e) {
-                    logger.warn("Unsolved symbol exception");
-                } catch (IOException e) {
-                    logger.error("Current controller: {}", md.getParentNode());
-                    if(Settings.getProperty("dependencies.on_error").toString().equals("exit")) {
-                        throw new GeneratorException("Exception while identifying dependencies", e);
-                    }
-                    logger.error(e.getMessage());
-                }
-            }
-        }
-    }
-
-    @Override
-    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
-        super.handleApplicationException(e);
-    }
-
     boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
         if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
             return true;
         }
         Optional<Node> parent = variable.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd) {
-            if (fd.getAnnotationByName("Autowired").isPresent()) {
-                Evaluator eval = new Evaluator(resolvedClass);
-                Variable v = new Variable(eval);
-                fields.put(variable.getNameAsString(), v);
+        if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
+                && fd.getAnnotationByName("Autowired").isPresent()) {
 
-                return true;
+
+            Evaluator eval = new SpringEvaluator(resolvedClass);
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+            eval.setupFields(cu);
+            Variable v = new Variable(eval);
+            fields.put(variable.getNameAsString(), v);
+
+            return true;
+        }
+        return false;
+    }
+
+
+    @Override
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException {
+        try {
+            return super.evaluateMethodCall(v, methodCall);
+        } catch (AntikytheraException aex) {
+            if (aex instanceof EvaluatorException eex) {
+                throw eex;
+            }
+            ControllerResponse response = new ControllerResponse();
+        }
+        return null;
+    }
+
+    @Override
+    public Evaluator createEvaluator(String name) {
+        return new SpringEvaluator(name);
+    }
+
+    /**
+     * Handle if then else statements.
+     *
+     * We use truth tables to analyze the condition and to set values on the DTOs accordingly.
+     *
+     * @param ifst If / Then statement
+     * @throws Exception
+     */
+    @Override
+    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
+        LineOfCode l = lines.get(ifst.hashCode());
+        if (l == null) {
+            /*
+             * This if condition has never been executed before. First we will determine if the condition
+             * evaluates to true or false. Then we will use the truth table to find out what values will
+             * result in it going from true to false or false to true.
+             */
+            l = new LineOfCode(ifst);
+            lines.put(ifst.hashCode(), l);
+            l.setColor(LineOfCode.GREY);
+
+            branching.add(ifst);
+            Variable v = super.ifThenElseBlock(ifst);
+            if ((Boolean)v.getValue()) {
+                setupIfCondition(ifst, false);
+            } else {
+                setupIfCondition(ifst, true);
+            }
+            return v;
+        }
+        else if (l.getColor() == LineOfCode.GREY) {
+            /*
+             * We have been here before but only traversed the then part of the if statement.
+             */
+            for (Expression st : l.getPrecondition(false)) {
+                evaluateExpression(st);
+            }
+            if (allVisited(ifst)) {
+                l.setColor(LineOfCode.BLACK);
+            }
+            else {
+                return super.ifThenElseBlock(ifst);
+            }
+        } else if (ifst.getElseStmt().isPresent()) {
+            l = lines.get(ifst.getElseStmt().get());
+            if (l == null || l.getColor() != LineOfCode.BLACK) {
+                l.setColor(LineOfCode.GREY);
+                return super.ifThenElseBlock(ifst);
+            }
+        } else {
+            l.setColor(LineOfCode.BLACK);
+        }
+        return null;
+    }
+
+    /**
+     * Setup an if condition so that it will evaluate to true or false in future executions.
+     * @param ifst the if statement to mess with
+     * @param state the desired state.
+     */
+    private void setupIfCondition(IfStmt ifst, boolean state) {
+        TruthTable tt = new TruthTable(ifst.getCondition());
+
+        LineOfCode l = lines.get(ifst.hashCode());
+        List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
+
+        if (!values.isEmpty()) {
+            Map<Expression, Object> value = values.getFirst();
+            for (var entry : value.entrySet()) {
+                if(entry.getKey().isMethodCallExpr()) {
+                    LinkedList<Expression> chain = findScopeChain(entry.getKey());
+                    if (!chain.isEmpty()) {
+                        Expression expr = chain.getFirst();
+                        Variable v = getValue(ifst, expr.toString());
+                        if (v != null) {
+                            MethodCallExpr setter = new MethodCallExpr();
+                            setter.setName("set" + entry.getKey().asMethodCallExpr().getNameAsString().substring(3));
+                            setter.setScope(expr);
+                            setter.addArgument("1L");
+                            l.addPrecondition(setter, state);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if a collection of statements have been previously executed or not.
+     * @param statements The collection of statements to check.
+     * @return
+     */
+    private boolean checkStatements(List<Statement> statements) {
+        for (Statement line : statements) {
+            if (line.isIfStmt()) {
+                if (!allVisited(line.asIfStmt())) {
+                    return false;
+                }
+            } else if (!isLineVisited(line)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Check if all the code in the then branch as well as the else branch have been executed.
+     * @param stmt
+     * @return
+     */
+    public boolean allVisited(IfStmt stmt) {
+        LineOfCode l = lines.get(stmt.hashCode());
+        if (l == null) {
+            return false;
+        }
+        if (l.getColor() == LineOfCode.BLACK) {
+            return true;
+        }
+        Statement then = stmt.getThenStmt();
+        if (then.isBlockStmt()) {
+            if (!checkStatements(then.asBlockStmt().getStatements())) {
+                return false;
+            }
+        } else {
+            if (!isLineVisited(then)) {
+                return false;
+            }
+        }
+        if (stmt.getElseStmt().isPresent()) {
+            Statement elseStmt = stmt.getElseStmt().get();
+            if (elseStmt.isBlockStmt()) {
+                if (!checkStatements(elseStmt.asBlockStmt().getStatements())) {
+                    return false;
+                }
+            } else {
+                if (!isLineVisited(elseStmt)) {
+                    return false;
+                }
             }
         }
         return false;
     }
+
+    /**
+     * Has thsi line of code being executed before
+     * @param stmt statement representing a line of code (except that a multiline statments are not supported)
+     * @return
+     */
+    private boolean isLineVisited(Statement stmt) {
+        LineOfCode l = lines.get(stmt.hashCode());
+        if (l == null) {
+            return false;
+        }
+        return l.getColor() == LineOfCode.BLACK;
+    }
+
+    public void resetColors() {
+        lines.clear();
+    }
+
+    /**
+     * Execute a method that's only available to us in source code format.
+     * @param methodCall
+     * @return
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
+    @Override
+    Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        Expression expression = methodCall.getScope().orElseGet(null);
+        if (expression != null && expression.isNameExpr()) {
+            RepositoryParser rp = repositories.get(expression.asNameExpr().getNameAsString());
+            if (rp != null) {
+                RepositoryQuery q = executeQuery(expression.asNameExpr().getNameAsString(), methodCall);
+                if (q != null) {
+                    LineOfCode l = findExpressionStatement(methodCall);
+                    if (l != null) {
+                        ExpressionStmt stmt = l.getStatement().asExpressionStmt();
+                        Variable v = processResult(stmt, q.getResultSet());
+                        if (l.getRepositoryQuery() == null) {
+                            l.setRepositoryQuery(q);
+                            l.setColor(LineOfCode.GREY);
+                        }
+                        else {
+                            l.setColor(LineOfCode.BLACK);
+                        }
+                        return v;
+                    }
+                    return null;
+                }
+            }
+        }
+        return super.executeSource(methodCall);
+    }
+
+    private Variable processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
+        if (stmt.getExpression().isVariableDeclarationExpr()) {
+            VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
+            VariableDeclarator v = vdecl.getVariable(0);
+
+            if (vdecl.getElementType().isClassOrInterfaceType()) {
+                ClassOrInterfaceType classType = new ClassOrInterfaceType(null, vdecl.getElementType().asString());
+                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
+                try {
+                    if (rs.next()) {
+                        return resultToEntity(stmt, rs, v, objectCreationExpr);
+                    }
+                    else {
+                        return new Variable(null);
+                    }
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
+            }
+        }
+        return null;
+    }
+
+    private Variable resultToEntity(ExpressionStmt stmt, ResultSet rs, VariableDeclarator v, ObjectCreationExpr objectCreationExpr)
+            throws AntikytheraException, ReflectiveOperationException {
+        Variable variable = createObject(stmt, v, objectCreationExpr);
+        if (variable.getValue() instanceof Evaluator evaluator) {
+            Map<String, Variable> fields = evaluator.getFields();
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
+
+            for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+                for (VariableDeclarator var : field.getVariables()) {
+                    String fieldName = var.getNameAsString();
+                    try {
+                        if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
+                            Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
+                            fields.put(fieldName, new Variable(value));
+                        }
+                    } catch (SQLException e) {
+                        logger.warn(e.getMessage());
+                    }
+                }
+            }
+        }
+        return variable;
+    }
+
+    private boolean isRepositoryMethod(ExpressionStmt stmt) {
+        Expression expr = stmt.getExpression();
+        if (expr.isVariableDeclarationExpr()) {
+            VariableDeclarationExpr vdecl = expr.asVariableDeclarationExpr();
+            VariableDeclarator v = vdecl.getVariable(0);
+            Optional<Expression> init = v.getInitializer();
+            if (init.isPresent() && init.get().isMethodCallExpr()) {
+                MethodCallExpr methodCall = init.get().asMethodCallExpr();
+                Expression scope = methodCall.getScope().orElse(null);
+                if (scope != null && scope.isNameExpr()) {
+                    return repositories.containsKey(scope.asNameExpr().getNameAsString());
+                }
+
+            }
+        }
+        return false;
+    }
+
+    private LineOfCode findExpressionStatement(MethodCallExpr methodCall) {
+        Node n = methodCall;
+        while (n != null && !(n instanceof MethodDeclaration)) {
+            if (n instanceof ExpressionStmt stmt) {
+                /*
+                 * We have found the expression statement correspoing to this query
+                 */
+                return lines.get(stmt.hashCode());
+                            }
+            n = n.getParentNode().orElse(null);
+        }
+        return null;
+    }
 }
+

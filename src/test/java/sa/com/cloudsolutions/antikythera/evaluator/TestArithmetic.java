@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -45,6 +46,21 @@ class TestArithmetic extends  TestHelper {
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Arithmetic");
             evaluator.setupFields(cu);
         }
+    }
+
+
+    @Test
+    void testAssignments() throws Exception {
+        MethodDeclaration doStuff = compiler.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("assignments")).orElseThrow();
+
+        Arithmetic arithmetic = new Arithmetic();
+        AntikytheraRunTime.push(new Variable(arithmetic));
+
+        evaluator.executeMethod(doStuff);
+
+        String output = outContent.toString();
+        assertEquals("110\n", output);
     }
 
     @Test

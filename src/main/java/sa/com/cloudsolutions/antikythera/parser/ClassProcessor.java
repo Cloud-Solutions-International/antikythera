@@ -96,6 +96,10 @@ public class ClassProcessor extends AbstractCompiler {
         super();
     }
 
+    public static String instanceToClassName(String string) {
+        return string.substring(0, 1).toUpperCase() + string.substring(1);
+    }
+
     /**
      * Copy a dependency from the application under test.
      *
@@ -275,6 +279,14 @@ public class ClassProcessor extends AbstractCompiler {
      */
     public static String classToInstanceName(TypeDeclaration<?> cdecl) {
         return classToInstanceName(cdecl.getNameAsString());
+    }
+
+    public static String fullyQualifiedToShortName(String name) {
+        int index = name.lastIndexOf(".");
+        if (index > 0) {
+            return name.substring(index + 1);
+        }
+        return name;
     }
 
     /**
@@ -532,9 +544,11 @@ public class ClassProcessor extends AbstractCompiler {
         Optional<String> fullyQualifiedName = getPublicClass(cu).getFullyQualifiedName();
         if (fullyQualifiedName.isPresent()) {
             Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
-            for (Dependency dep : deps) {
-                ClassProcessor cp = new ClassProcessor();
-                cp.compile(AbstractCompiler.classToPath(dep.getTo()));
+            if (deps != null) {
+                for (Dependency dep : deps) {
+                    ClassProcessor cp = new ClassProcessor();
+                    cp.compile(AbstractCompiler.classToPath(dep.getTo()));
+                }
             }
         }
     }

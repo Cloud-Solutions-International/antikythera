@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -70,7 +69,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * The queries that were identified in this repository
      */
-    private Map<String, RepositoryQuery> queries;
+    private final Map<String, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -310,7 +309,7 @@ public class RepositoryParser extends ClassProcessor {
             }
 
         } catch (JSQLParserException | SQLException e) {
-            logger.error("\tUnparsable: {}", rql.getQuery());
+            logger.error("\tUnparsable JPA Repository query: {}", rql.getQuery());
         }
         return null;
     }
@@ -679,14 +678,14 @@ public class RepositoryParser extends ClassProcessor {
             params.getPlaceHolderId().add(pos);
             params.setColumnName(name);
 
-            System.out.println("Mapping " + name + " to " + params.getParameter().getName());
+            logger.debug("Mapping " + name + " to " + params.getParameter().getName());
         }
         else {
             String placeHolder = ((JdbcNamedParameter) right).getName();
             for(RepositoryQuery.QueryMethodParameter p : current.getMethodParameters()) {
                 if(p.getPlaceHolderName().equals(placeHolder)) {
                     p.setColumnName(name);
-                    System.out.println("Mapping " + name + " to " + p.getParameter().getName());
+                    logger.debug("Mapping " + name + " to " + p.getParameter().getName());
                     break;
                 }
             }
