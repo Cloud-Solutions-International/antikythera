@@ -914,6 +914,9 @@ public class Evaluator {
             return returnValue;
         }
 
+        if(v.getValue() == null) {
+            throw new EvaluatorException("Application NPE: " + methodName, EvaluatorException.NPE);
+        }
         throw new EvaluatorException("Error evaluating method call: " + methodName);
     }
 

@@ -393,16 +393,16 @@ public class SpringTestGenerator implements  TestGenerator {
                 VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
                 body.addStatement(variableDeclarationExpr);
         }
-
-        for (Expression expr : preConditions) {
-            if (expr.isMethodCallExpr()) {
-                String s = expr.toString();
-                if (s.contains("set")) {
-                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
+        if (preConditions != null) {
+            for (Expression expr : preConditions) {
+                if (expr.isMethodCallExpr()) {
+                    String s = expr.toString();
+                    if (s.contains("set")) {
+                        body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
+                    }
                 }
             }
         }
-
         if (cdecl.getNameAsString().equals("MultipartFile")) {
             makePost.addArgument(new NameExpr("req"));
             testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));

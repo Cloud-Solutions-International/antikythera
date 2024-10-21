@@ -2,17 +2,12 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.BooleanLiteralExpr;
-import com.github.javaparser.ast.expr.DoubleLiteralExpr;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
-import com.github.javaparser.ast.expr.LongLiteralExpr;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -96,6 +91,8 @@ public class SpringEvaluator extends Evaluator {
      * primary keys there's nothing we can do about it, we just move onto the next test.
      */
     private final Set<IfStmt> branching = new HashSet<>();
+
+    private boolean onTest;
 
     /**
      * It is better to use create evaluator
@@ -493,9 +490,16 @@ public class SpringEvaluator extends Evaluator {
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
-                throw eex;
+                ControllerResponse controllerResponse = new ControllerResponse();
+                if (eex.getError() != 0 && onTest) {
+                    controllerResponse.setResponse( new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
+                    createTests(controllerResponse);
+                    returnFrom = methodCall;
+                }
+                else {
+                    throw eex;
+                }
             }
-            ControllerResponse response = new ControllerResponse();
         }
         return null;
     }
@@ -834,5 +838,8 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
+    public void setOnTest(boolean b) {
+        onTest = b;
+    }
 }
 

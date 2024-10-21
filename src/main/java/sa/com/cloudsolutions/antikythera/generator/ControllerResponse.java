@@ -47,6 +47,10 @@ public class ControllerResponse {
         return response;
     }
 
+    public void setResponse(Object response) {
+        this.response = response;
+    }
+
     public int getStatusCode() {
         if (response instanceof ResponseEntity<?> re) {
             return re.getStatusCodeValue();
