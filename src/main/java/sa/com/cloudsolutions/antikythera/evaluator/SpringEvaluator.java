@@ -3,7 +3,13 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
+import com.github.javaparser.ast.expr.DoubleLiteralExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -573,11 +579,24 @@ public class SpringEvaluator extends Evaluator {
                     if (!chain.isEmpty()) {
                         Expression expr = chain.getFirst();
                         Variable v = getValue(ifst, expr.toString());
-                        if (v != null) {
+                        if (v != null && v.getValue() instanceof Evaluator eval) {
                             MethodCallExpr setter = new MethodCallExpr();
-                            setter.setName("set" + entry.getKey().asMethodCallExpr().getNameAsString().substring(3));
+                            String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
+                            setter.setName("set" + name);
                             setter.setScope(expr);
-                            setter.addArgument("1L");
+                            Variable field = eval.getFields().get(ClassProcessor.classToInstanceName(name));
+
+                            setter.addArgument(
+                                    switch(field.getType().asString()) {
+                                        case "String" -> "\"Hello\"";
+                                        case "int", "Integer" -> "0";
+                                        case "long", "Long" -> "0L";
+                                        case "float", "Float" -> "0.0f";
+                                        case "double", "Double" -> "0.0";
+                                        case "boolean", "Boolean" -> "false";
+                                        default -> "null";
+                                    }
+                            );
                             l.addPrecondition(setter, state);
                         }
                     }
