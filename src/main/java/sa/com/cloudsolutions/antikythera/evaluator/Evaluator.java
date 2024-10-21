@@ -767,9 +767,11 @@ public class Evaluator {
             return null;
         }
 
-
         Variable variable = null;
         LinkedList<Expression> chain = findScopeChain(methodCall);
+        if (chain.isEmpty()) {
+            return executeLocalMethod(methodCall);
+        }
 
         while(!chain.isEmpty()) {
             Expression expr2 = chain.pollLast();
@@ -805,6 +807,16 @@ public class Evaluator {
         return variable;
     }
 
+    /**
+     * People have a nasty habit of chaining a sequence of method calls.
+     *
+     * If you are a D3.js programmer, this is the probably the only way you do things. Even
+     * Byte Buddy seems to behave the same. But at the end of the day how so you handle this?
+     * You need to place them in a stack and pop them off one by one!
+     *
+     * @param expr
+     * @return
+     */
     protected LinkedList<Expression> findScopeChain(Expression expr) {
         LinkedList<Expression> chain = new LinkedList<>();
         while (true) {
@@ -936,6 +948,28 @@ public class Evaluator {
      */
      Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
+        try {
+            Optional<Node> n = methodCall.resolve().toAst();
+            if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
+                return executeMethod(md);
+            }
+        } catch (IllegalStateException ise) {
+            return executeSource(methodCall);
+        }
+
+        return null;
+    }
+
+    /**
+     * Execute a method that has not been prefixed by a scope.
+     * That means the method being called is a member of the current class or a parent of the current class.
+     * @param methodCall
+     * @return
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
+    Variable executeLocalMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        returnFrom = null;
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {
             /*
@@ -972,20 +1006,17 @@ public class Evaluator {
                 }
             }
         }
-        else {
-            try {
-                Optional<Node> n = methodCall.resolve().toAst();
-                if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
-                    return executeMethod(md);
-                }
-            } catch (IllegalStateException ise) {
-                return executeSource(methodCall);
-            }
-        }
         return null;
     }
 
-     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+    /**
+     * Execute a method that is available only in source code format.
+     * @param methodCall
+     * @return
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
+    Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
@@ -1159,7 +1190,7 @@ public class Evaluator {
                     resolveFieldRepresentedByCode(variable, resolvedClass);
                 }
                 else {
-                    System.out.println("Unsolved " + resolvedClass);
+                    logger.debug("Unsolved " + resolvedClass);
                 }
             }
         }
@@ -1293,6 +1324,12 @@ public class Evaluator {
         return returnValue;
     }
 
+    /**
+     * Execute - or rather interpret the code within a constructor found in source code
+     * @param md ConstructorDeclaration
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
     public void executeConstructor(ConstructorDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         List<Statement> statements = md.getBody().getStatements();
         NodeList<Parameter> parameters = md.getParameters();

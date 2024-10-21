@@ -61,22 +61,25 @@ class TestRepositoryParser {
         entityCuField.setAccessible(true);
         entityCuField.set(parser, cu);
 
-        parser.parseNonAnnotatedMethod(new MethodDeclaration().setName("findAll"));
+        MethodDeclaration md1 = new MethodDeclaration().setName("findAll");
+        parser.parseNonAnnotatedMethod(md1);
         Map<MethodDeclaration, RepositoryQuery> queries = parser.getQueries();
-        assertTrue(queries.containsKey("findAll"));
-        assertEquals("SELECT * FROM table_name", queries.get("findAll").getQuery());
+        assertTrue(queries.containsKey(md1));
+        assertEquals("SELECT * FROM table_name", queries.get(md1).getQuery());
 
         // Test findById method
-        parser.parseNonAnnotatedMethod(new MethodDeclaration().setName("findById"));
+        MethodDeclaration md2 = new MethodDeclaration().setName("findById");
+        parser.parseNonAnnotatedMethod(md2);
         queries = parser.getQueries();
-        assertTrue(queries.containsKey("findById"));
-        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findById").getQuery().strip());
+        assertTrue(queries.containsKey(md2));
+        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get(md2).getQuery().strip());
 
         // Test findAllById method
-        parser.parseNonAnnotatedMethod(new MethodDeclaration().setName("findAllById"));
+        MethodDeclaration md3 = new MethodDeclaration().setName("findAllById");
+        parser.parseNonAnnotatedMethod(md3);
         queries = parser.getQueries();
-        assertTrue(queries.containsKey("findAllById"));
-        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findAllById").getQuery());
+        assertTrue(queries.containsKey(md3));
+        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get(md3).getQuery());
     }
 
     @Test
