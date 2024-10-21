@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -33,6 +35,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -691,24 +694,66 @@ public class SpringEvaluator extends Evaluator {
             VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
             VariableDeclarator v = vdecl.getVariable(0);
 
-            if (vdecl.getElementType().isClassOrInterfaceType()) {
-                ClassOrInterfaceType classType = new ClassOrInterfaceType(null, vdecl.getElementType().asString());
-                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
-                try {
-                    if (rs.next()) {
-                        return resultToEntity(stmt, rs, v, objectCreationExpr);
+            Type elementType = vdecl.getElementType();
+            if (elementType.isClassOrInterfaceType()) {
+                ClassOrInterfaceType classType = elementType.asClassOrInterfaceType();
+                NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
+
+                if (secondaryType != null) {
+                    String mainType = classType.getNameAsString();
+                    ImportDeclaration importDeclaration = AbstractCompiler.findImport(
+                            AntikytheraRunTime.getCompilationUnit(getClassName()), mainType);
+                    if (importDeclaration != null) {
+                        ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null,
+                                secondaryType.get(0).asClassOrInterfaceType(), new NodeList<>());
+
+                        Variable variable = Reflect.variableFactory(importDeclaration.getNameAsString());
+                        if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
+                            int i = 0 ;
+                            try {
+                                while (rs.next()) {
+                                    Variable row = resultToEntity(stmt, rs, v, objectCreationExpr);
+                                    ((Collection)variable.getValue()).add(row);
+                                    if (++i == 10) {
+                                        break;
+                                    }
+                                }
+                            } catch (SQLException e) {
+                                logger.warn(e.getMessage());
+                            }
+                        }
+                        return variable;
                     }
-                    else {
-                        return new Variable(null);
+                }
+                else {
+                    ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
+
+                    try {
+                        if (rs.next()) {
+                            return resultToEntity(stmt, rs, v, objectCreationExpr);
+                        } else {
+                            return new Variable(null);
+                        }
+                    } catch (SQLException e) {
+                        logger.warn(e.getMessage());
                     }
-                } catch (SQLException e) {
-                    logger.warn(e.getMessage());
                 }
             }
         }
         return null;
     }
 
+    /**
+     * Convers an SQL row to an Entity.
+     * @param stmt the expression statement representing the current line of execution. It will be used to set the
+     *             local.
+     * @param rs the sql resultset
+     * @param v a variable declrator
+     * @param objectCreationExpr and ObjectCreateionExpr which corresponds to how a constructor will be invoked
+     * @return a variable that holds the generated entity.
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
     private Variable resultToEntity(ExpressionStmt stmt, ResultSet rs, VariableDeclarator v, ObjectCreationExpr objectCreationExpr)
             throws AntikytheraException, ReflectiveOperationException {
         Variable variable = createObject(stmt, v, objectCreationExpr);

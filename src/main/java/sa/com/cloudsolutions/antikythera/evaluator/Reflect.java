@@ -14,6 +14,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class Reflect {
     /**
@@ -139,9 +141,11 @@ public class Reflect {
 
     public static Variable variableFactory(String qualifiedName) {
         return switch (qualifiedName) {
-            case "java.util.List" ->  new Variable(new ArrayList<>());
-            case "java.util.Map" ->  new Variable(new HashMap<>());
-            case "java.util.Set" ->  new Variable(new HashSet<>());
+            case "java.util.List", "java.util.ArrayList" ->  new Variable(new ArrayList<>());
+            case "java.util.Map", "java.util.HashMap" ->  new Variable(new HashMap<>());
+            case "java.util.TreeMap" -> new Variable(new TreeMap<>());
+            case "java.util.Set", "java.util.HashSet" ->  new Variable(new HashSet<>());
+            case "java.util.TreeSet" -> new Variable(new TreeSet<>());
             case "java.util.Optional" ->  new Variable(Optional.empty());
             case "java.lang.Long" ->  new Variable(0L);
             default -> null;
@@ -153,8 +157,8 @@ public class Reflect {
      * Finds a matching method using parameters.
      *
      * This function has side effects. The paramTypes may end up being converted from a boxed to
-     * primitive or wise versa. This is because the Variable class that we use has an Object
-     * representing the value. Where as some of the methods have parameters that require a primitive
+     * primitive or vice versa. This is because the Variable class that we use has an Object
+     * representing the value. Whereas some of the methods have parameters that require a primitive
      * type. Hence the conversion needs to happen.
      *
      * @param clazz the class on which we need to match the method name

@@ -271,77 +271,7 @@ public class SpringTestGenerator implements  TestGenerator {
                 String paramClassName = requestBody.getTypeAsString();
 
                 if (requestBody.getType().isClassOrInterfaceType()) {
-                    var cdecl = requestBody.getType().asClassOrInterfaceType();
-                    switch (cdecl.getNameAsString()) {
-                        case "List": {
-                            prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
-                            break;
-                        }
-
-                        case "Set": {
-                            prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
-                            break;
-                        }
-
-                        case "Map": {
-                            prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
-                            break;
-                        }
-                        case "Integer":
-                        case "Long": {
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
-                            variableDeclarator.setInitializer("0");
-                            body.addStatement(new VariableDeclarationExpr(variableDeclarator));
-
-                            break;
-                        }
-
-                        case "MultipartFile": {
-                            // todo solve this one
-                            // dependencies.add("org.springframework.web.multipart.MultipartFile");
-                            ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
-                            MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
-                            methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
-                            variableDeclarator.setInitializer(methodCallExpr);
-                            testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
-                            break;
-                        }
-
-                        case "Object": {
-                            // SOme methods incorrectly have their DTO listed as of type Object. We will treat
-                            // as a String
-                            prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
-                            break;
-                        }
-
-                        default:
-                            ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
-                            VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
-                            ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
-                            variableDeclarator.setInitializer(objectCreationExpr);
-                            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                            body.addStatement(variableDeclarationExpr);
-                    }
-
-                    for (Expression expr : preConditions) {
-                        if (expr.isMethodCallExpr()) {
-                            String s = expr.toString();
-                            if (s.contains("set")) {
-                                body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
-                            }
-                        }
-                    }
-
-                    if (cdecl.getNameAsString().equals("MultipartFile")) {
-                        makePost.addArgument(new NameExpr("req"));
-                        testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
-                    } else {
-                        MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
-                        writeValueAsStringCall.addArgument(new NameExpr("req"));
-                        makePost.addArgument(writeValueAsStringCall);
-                        testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
-                    }
+                    setupRequestBody(requestBody, paramClassName, testMethod, body, makePost);
                 }
             }
             else {
@@ -394,6 +324,80 @@ public class SpringTestGenerator implements  TestGenerator {
                     }
                 }
             }
+        }
+    }
+
+    private void setupRequestBody(Parameter requestBody, String paramClassName, MethodDeclaration testMethod, BlockStmt body, MethodCallExpr makePost) {
+        var cdecl = requestBody.getType().asClassOrInterfaceType();
+        switch (cdecl.getNameAsString()) {
+            case "List": {
+                prepareBody("java.util.List", new ClassOrInterfaceType(null, paramClassName), "List.of", testMethod);
+                break;
+            }
+
+            case "Set": {
+                prepareBody("java.util.Set", new ClassOrInterfaceType(null, paramClassName), "Set.of", testMethod);
+                break;
+            }
+
+            case "Map": {
+                prepareBody("java.util.Map", new ClassOrInterfaceType(null, paramClassName), "Map.of", testMethod);
+                break;
+            }
+            case "Integer":
+            case "Long": {
+                VariableDeclarator variableDeclarator = new VariableDeclarator(new ClassOrInterfaceType(null, "long"), "req");
+                variableDeclarator.setInitializer("0");
+                body.addStatement(new VariableDeclarationExpr(variableDeclarator));
+
+                break;
+            }
+
+            case "MultipartFile": {
+                // todo solve this one
+                // dependencies.add("org.springframework.web.multipart.MultipartFile");
+                ClassOrInterfaceType multipartFile = new ClassOrInterfaceType(null, "MultipartFile");
+                VariableDeclarator variableDeclarator = new VariableDeclarator(multipartFile, "req");
+                MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
+                methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
+                variableDeclarator.setInitializer(methodCallExpr);
+                testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                break;
+            }
+
+            case "Object": {
+                // SOme methods incorrectly have their DTO listed as of type Object. We will treat
+                // as a String
+                prepareBody("java.lang.String", new ClassOrInterfaceType(null, "String"), "new String", testMethod);
+                break;
+            }
+
+            default:
+                ClassOrInterfaceType csiGridDtoType = new ClassOrInterfaceType(null, paramClassName);
+                VariableDeclarator variableDeclarator = new VariableDeclarator(csiGridDtoType, "req");
+                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, csiGridDtoType, new NodeList<>());
+                variableDeclarator.setInitializer(objectCreationExpr);
+                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                body.addStatement(variableDeclarationExpr);
+        }
+
+        for (Expression expr : preConditions) {
+            if (expr.isMethodCallExpr()) {
+                String s = expr.toString();
+                if (s.contains("set")) {
+                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
+                }
+            }
+        }
+
+        if (cdecl.getNameAsString().equals("MultipartFile")) {
+            makePost.addArgument(new NameExpr("req"));
+            testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
+        } else {
+            MethodCallExpr writeValueAsStringCall = new MethodCallExpr(new NameExpr("objectMapper"), "writeValueAsString");
+            writeValueAsStringCall.addArgument(new NameExpr("req"));
+            makePost.addArgument(writeValueAsStringCall);
+            testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
         }
     }
 
