@@ -61,14 +61,20 @@ public class AbstractCompiler {
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
     public static final String SUFFIX = ".java";
 
-    private final JavaParser javaParser;
-    protected JavaSymbolSolver symbolResolver;
-    protected CombinedTypeSolver combinedTypeSolver;
-    protected ArrayList<JarTypeSolver> jarSolvers;
+    private static JavaParser javaParser;
+    protected static JavaSymbolSolver symbolResolver;
+    protected static CombinedTypeSolver combinedTypeSolver;
+    protected static ArrayList<JarTypeSolver> jarSolvers;
 
     protected CompilationUnit cu;
 
     protected AbstractCompiler() throws IOException {
+        if (combinedTypeSolver == null) {
+            setupParser();
+        }
+    }
+
+    protected static void setupParser() throws IOException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
@@ -89,7 +95,7 @@ public class AbstractCompiler {
         }
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
+        javaParser = new JavaParser(parserConfiguration);
     }
 
     /**
