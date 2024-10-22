@@ -28,6 +28,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -65,26 +68,36 @@ public class AbstractCompiler {
     protected static JavaSymbolSolver symbolResolver;
     protected static CombinedTypeSolver combinedTypeSolver;
     protected static ArrayList<JarTypeSolver> jarSolvers;
-
+    protected static ClassLoader loader;
     protected CompilationUnit cu;
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
-            setupParser();
+
+            try {
+                setupParser();
+            } catch (ReflectiveOperationException e) {
+                logger.error("Could not load custom jar files");
+            }
         }
     }
 
-    protected static void setupParser() throws IOException {
+    protected static void setupParser() throws IOException, ReflectiveOperationException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
-
         jarSolvers = new ArrayList<>();
-        for(String jarFile : Settings.getJarFiles()) {
+
+        URL[] urls = new URL[Settings.getJarFiles().length];
+
+        for(int i = 0 ; i < Settings.getJarFiles().length ; i++) {
+            String jarFile = Settings.getJarFiles()[i];
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
+            urls[i] = new URL("file:///" + jarFile);
         }
+        loader = new URLClassLoader(urls);
 
         Object f = Settings.getProperty("finch");
         if(f != null) {
@@ -123,6 +136,10 @@ public class AbstractCompiler {
             path = path.replace(SUFFIX, "");
         }
         return  path.replace("/", ".");
+    }
+
+    public static Class<?> loadClass(String resolvedClass) throws ClassNotFoundException {
+        return loader.loadClass(resolvedClass);
     }
 
 

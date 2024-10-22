@@ -604,7 +604,12 @@ public class Evaluator {
                 }
             }
 
-            Class<?> clazz = Class.forName(resolvedClass);
+            Class<?> clazz;
+            try {
+                clazz = Class.forName(resolvedClass);
+            } catch (ClassNotFoundException cnf) {
+                clazz = AbstractCompiler.loadClass(resolvedClass); // Replace with your class name
+            }
 
             Class<?> outer = clazz.getEnclosingClass();
             if (outer != null) {
