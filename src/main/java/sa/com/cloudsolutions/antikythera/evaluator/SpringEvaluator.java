@@ -456,18 +456,43 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Resolves fields while taking into consideration the AutoWired annotation of srping
+     * Resolves fields while taking into consideration the AutoWired annotation of spring.
+     * When the field declaration is an interface, will try to find a suitable implementation.
+     *
      * @param variable a variable declaration statement
      * @param resolvedClass the name of the class that the field is of
-     * @return true if the resolution was successfull
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @return true if the resolution was successfully
+     * @throws AntikytheraException when the field cannot be resolved
+     * @throws ReflectiveOperationException if a reflective operation goes wrong
      */
     @Override
     boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+        /*
+         * Try to substitute an implementation for the interface.
+         */
+        String name = AbstractCompiler.findFullyQualifiedName(
+                AntikytheraRunTime.getCompilationUnit(resolvedClass),
+                variable.getType().asString());
+
+        Set<String> implementations = AntikytheraRunTime.findImplementations(name);
+        if (implementations != null) {
+            for (String impl : implementations) {
+                if (super.resolveFieldRepresentedByCode(variable, impl)) {
+                    return true;
+                }
+                else {
+                    if (autoWire(variable, impl)) return true;
+                }
+            }
+        }
+
         if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
             return true;
         }
+        return autoWire(variable, resolvedClass);
+    }
+
+    private boolean autoWire(VariableDeclarator variable, String resolvedClass) {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
