@@ -497,11 +497,14 @@ public class SpringEvaluator extends Evaluator {
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
 
-
-            Evaluator eval = new SpringEvaluator(resolvedClass);
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-            eval.setupFields(cu);
-            Variable v = new Variable(eval);
+            Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
+            if (v == null) {
+                Evaluator eval = new SpringEvaluator(resolvedClass);
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                v = new Variable(eval);
+                AntikytheraRunTime.autoWire(resolvedClass, v);
+                eval.setupFields(cu);
+            }
             fields.put(variable.getNameAsString(), v);
 
             return true;
