@@ -5,8 +5,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A very basic Runtime for Antikythera.
@@ -28,6 +30,8 @@ public class AntikytheraRunTime {
      * stack, we are not doing so in here.
      */
     protected static final Deque<Variable> stack = new LinkedList<>();
+
+    protected static final Map<String, Set<String>> interfaces = new HashMap<>();
 
     public static CompilationUnit getCompilationUnit(String cls) {
         ClassInfo info = resolved.get(cls);
@@ -91,7 +95,6 @@ public class AntikytheraRunTime {
         private boolean componentClass;
         private boolean isInterface;
         private boolean abstractClass;
-
         protected ClassInfo() {}
 
         public static ClassInfo factory(String className, CompilationUnit cu) {
@@ -130,5 +133,20 @@ public class AntikytheraRunTime {
         public CompilationUnit getCu() {
             return cu;
         }
+    }
+
+    public static void resetAll() {
+        stack.clear();
+        resolved.clear();
+        interfaces.clear();
+    }
+
+    public static void addImplementation(String iface, String impl) {
+        Set<String> s = interfaces.computeIfAbsent(iface, k -> new HashSet<>());
+        s.add(impl);
+    }
+
+    public static Set<String> findImplementations(String iface) {
+        return interfaces.getOrDefault(iface, new HashSet<>());
     }
 }

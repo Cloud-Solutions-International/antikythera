@@ -1,6 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-public class Hello {
+/**
+ * Note Cloneable to help test the InterfaceSolver
+ */
+public class Hello implements  Cloneable{
     Integer field = 10;
 
     public void helloWorld() {
@@ -28,5 +31,10 @@ public class Hello {
     public static void main(String[] args) {
         Hello hello = new Hello();
         hello.longChain();
+    }
+
+    @Override
+    public Hello clone() throws CloneNotSupportedException {
+        return (Hello) super.clone();
     }
 }

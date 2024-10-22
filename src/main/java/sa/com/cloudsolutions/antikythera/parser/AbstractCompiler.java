@@ -312,6 +312,34 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    public static String findFullyQualifiedName(CompilationUnit cu, String className) {
+        ImportDeclaration imp = findImport(cu, className);
+        if (imp != null) {
+            return imp.getNameAsString();
+        }
+
+        String packageName = cu.getPackageDeclaration().map(p -> p.getNameAsString()).orElse("");
+        String fileName = packageName + "." + className + SUFFIX;
+        if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
+            return packageName + "." + className;
+        }
+        if(className.startsWith("java.lang")) {
+            try {
+                Class.forName(className);
+                return className;
+            } catch (ClassNotFoundException e) {
+                return null;
+            }
+        }
+
+        try {
+            Class.forName("java.lang." + className);
+            return "java.lang." + className;
+        } catch (ClassNotFoundException ex) {
+            return null;
+        }
+    }
+
     public static ImportDeclaration findImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
