@@ -892,7 +892,7 @@ public class Evaluator {
         }
     }
 
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException {
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         try {
             if (v != null) {
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);

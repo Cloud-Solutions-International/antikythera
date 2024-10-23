@@ -514,8 +514,14 @@ public class SpringEvaluator extends Evaluator {
 
 
     @Override
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException {
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException, ReflectiveOperationException {
         try {
+            if(methodCall.getScope().isPresent()) {
+                Expression scope = methodCall.getScope().get();
+                if(repositories.get(scope.toString()) != null) {
+                    return executeSource(methodCall);
+                }
+            }
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
@@ -722,9 +728,10 @@ public class SpringEvaluator extends Evaluator {
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         Expression expression = methodCall.getScope().orElseGet(null);
         if (expression != null && expression.isNameExpr()) {
-            RepositoryParser rp = repositories.get(expression.asNameExpr().getNameAsString());
+            String fieldName = expression.asNameExpr().getNameAsString();
+            RepositoryParser rp = repositories.get(fieldName);
             if (rp != null) {
-                RepositoryQuery q = executeQuery(expression.asNameExpr().getNameAsString(), methodCall);
+                RepositoryQuery q = executeQuery(fieldName, methodCall);
                 if (q != null) {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
