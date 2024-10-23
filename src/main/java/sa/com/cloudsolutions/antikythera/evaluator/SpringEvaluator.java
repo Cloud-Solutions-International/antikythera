@@ -765,13 +765,15 @@ public class SpringEvaluator extends Evaluator {
 
                 if (secondaryType != null) {
                     String mainType = classType.getNameAsString();
-                    ImportDeclaration importDeclaration = AbstractCompiler.findImport(
-                            AntikytheraRunTime.getCompilationUnit(getClassName()), mainType);
-                    if (importDeclaration != null) {
+                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(
+                            AntikytheraRunTime.getCompilationUnit(getClassName()),mainType
+                    );
+
+                    if (fullyQualifiedName != null) {
                         ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null,
                                 secondaryType.get(0).asClassOrInterfaceType(), new NodeList<>());
 
-                        Variable variable = Reflect.variableFactory(importDeclaration.getNameAsString());
+                        Variable variable = Reflect.variableFactory(fullyQualifiedName);
                         if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
                             int i = 0 ;
                             try {

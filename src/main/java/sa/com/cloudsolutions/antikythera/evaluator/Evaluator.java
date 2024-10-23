@@ -484,10 +484,10 @@ public class Evaluator {
         ClassOrInterfaceType type = oce.getType();
         Variable vx;
 
-        vx = createUsingReflection(type, oce);
+        vx = createUsingEvaluator(type, oce);
 
         if (vx == null) {
-            vx = createUsingEvaluator(type, oce);
+            vx = createUsingReflection(type, oce);
             if(vx == null) {
                 vx = createUsingByteBuddy(oce, type);
             }
@@ -796,8 +796,12 @@ public class Evaluator {
                     variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
                 }
                 else {
-                    variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
-
+                    if (variable != null && variable.getValue() instanceof Evaluator eval) {
+                        variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
+                    }
+                    else {
+                        variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
+                    }
                 }
             }
             else if(expr2.isMethodCallExpr()) {

@@ -142,6 +142,10 @@ public class AbstractCompiler {
         return loader.loadClass(resolvedClass);
     }
 
+    public static void reset() throws ReflectiveOperationException, IOException {
+        setupParser();
+    }
+
 
     /**
      * Creates a compilation unit from the source code at the relative path.

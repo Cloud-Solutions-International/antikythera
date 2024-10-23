@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
 
 import java.io.File;
@@ -20,8 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestFields extends TestHelper {
 
     @BeforeAll
-    public static void setup() throws IOException {
+    public static void setup() throws IOException, ReflectiveOperationException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
     }
 
     @BeforeEach
@@ -59,7 +61,7 @@ class TestFields extends TestHelper {
         protected TestFieldsCompiler() throws IOException, AntikytheraException {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
             compileDependencies();
-            evaluator = new Evaluator("");
+            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Employee");
             evaluator.setupFields(cu);
         }
     }
