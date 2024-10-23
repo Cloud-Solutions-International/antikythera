@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
@@ -215,8 +214,8 @@ public class SpringEvaluator extends Evaluator {
                  */
                 Type t = param.getType();
                 if (t.isClassOrInterfaceType()) {
-                    String className = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
-                    if (className.startsWith("java")) {
+                    String fullClassName = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
+                    if (fullClassName.startsWith("java")) {
                         /*
                          * However you can't rule out the possibility that this is a Map or a List or even a
                          * boxed type.
@@ -229,15 +228,15 @@ public class SpringEvaluator extends Evaluator {
                             AntikytheraRunTime.push(v);
                         }
                         else {
-                            if (className.startsWith("java.util")) {
-                                Variable v = Reflect.variableFactory(className);
+                            if (fullClassName.startsWith("java.util")) {
+                                Variable v = Reflect.variableFactory(fullClassName);
                                 /*
                                  * Pushed to be popped later in the callee
                                  */
                                 AntikytheraRunTime.push(v);
                             }
                             else {
-                                Class<?> clazz = Class.forName(className);
+                                Class<?> clazz = Class.forName(fullClassName);
                                 Variable v = new Variable(clazz.newInstance());
                                 /*
                                  * PUsh arguments
@@ -248,8 +247,8 @@ public class SpringEvaluator extends Evaluator {
                     }
                     else {
 
-                        Evaluator o = new SpringEvaluator(className);
-                        o.setupFields(AntikytheraRunTime.getCompilationUnit(className));
+                        Evaluator o = new SpringEvaluator(fullClassName);
+                        o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
                         Variable v = new Variable(o);
                         /*
                          * Args to be popped by the callee
@@ -309,6 +308,8 @@ public class SpringEvaluator extends Evaluator {
 
                     ResultSet rs = repository.executeQuery(repoMethod, q);
                     q.setResultSet(rs);
+
+
                 }
                 else {
                     // todo do some fake work here
@@ -500,10 +501,10 @@ public class SpringEvaluator extends Evaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 Evaluator eval = new SpringEvaluator(resolvedClass);
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 v = new Variable(eval);
                 AntikytheraRunTime.autoWire(resolvedClass, v);
-                eval.setupFields(cu);
+                eval.setupFields(dependant);
             }
             fields.put(variable.getNameAsString(), v);
 
@@ -765,9 +766,7 @@ public class SpringEvaluator extends Evaluator {
 
                 if (secondaryType != null) {
                     String mainType = classType.getNameAsString();
-                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(
-                            AntikytheraRunTime.getCompilationUnit(getClassName()),mainType
-                    );
+                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu,mainType);
 
                     if (fullyQualifiedName != null) {
                         ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null,
@@ -825,7 +824,6 @@ public class SpringEvaluator extends Evaluator {
         Variable variable = createObject(stmt, v, objectCreationExpr);
         if (variable.getValue() instanceof Evaluator evaluator) {
             Map<String, Variable> fields = evaluator.getFields();
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
 
             for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
                 for (VariableDeclarator var : field.getVariables()) {

@@ -79,6 +79,7 @@ public class Evaluator {
      * The fully qualified name of the class for which we created this evaluator.
      */
     private final String className;
+    protected final CompilationUnit cu;
 
     /**
      * The most recent return value that was encountered.
@@ -109,8 +110,9 @@ public class Evaluator {
         }
     }
 
-    public Evaluator (String className){
+    public Evaluator (String className) {
         this.className = className;
+        cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
     }
@@ -291,7 +293,6 @@ public class Evaluator {
     private Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
 
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             ImportDeclaration imp = ClassProcessor.findImport(cu, fae.getScope().toString());
             if (imp != null) {
@@ -528,30 +529,29 @@ public class Evaluator {
      */
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
         Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
-        CompilationUnit cu = null;
+        CompilationUnit dependant = null;
         if (res.isPresent()) {
             ResolvedType resolved = type.resolve();
             String resolvedClass = resolved.describe();
-            cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+            dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
         }
         else {
-            ImportDeclaration importDeclaration = AbstractCompiler.findImport(
-                    AntikytheraRunTime.getCompilationUnit(this.className), type.getNameAsString());
+            ImportDeclaration importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
             if (importDeclaration != null) {
-                cu = AntikytheraRunTime.getCompilationUnit(importDeclaration.getNameAsString());
+                dependant = AntikytheraRunTime.getCompilationUnit(importDeclaration.getNameAsString());
             }
         }
-        if (cu != null) {
-            TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(cu, type.getNameAsString());
+        if (dependant != null) {
+            TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(dependant, type.getNameAsString());
             if (match != null) {
                 Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
 
-                List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
+                List<ConstructorDeclaration> constructors = dependant.findAll(ConstructorDeclaration.class);
                 if (constructors.isEmpty()) {
                     return new Variable(eval);
                 }
 
-                Optional<ConstructorDeclaration> matchingConstructor = AbstractCompiler.findMatchingConstructor(cu, oce);
+                Optional<ConstructorDeclaration> matchingConstructor = AbstractCompiler.findMatchingConstructor(dependant, oce);
                 if (matchingConstructor.isPresent()) {
                     ConstructorDeclaration constructor = matchingConstructor.get();
                     for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
@@ -597,8 +597,7 @@ public class Evaluator {
                 }
             }
             else {
-                ImportDeclaration importDeclaration = AbstractCompiler.findImport(
-                    AntikytheraRunTime.getCompilationUnit(this.className), type.getNameAsString());
+                ImportDeclaration importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
                 if (importDeclaration != null) {
                     resolvedClass = importDeclaration.getNameAsString();
                 }
@@ -868,7 +867,6 @@ public class Evaluator {
                  * We know that we don't have a matching local variable or field. That indicates the
                  * presence of an import, or this is part of java.lang package
                  */
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
                 ImportDeclaration imp = AbstractCompiler.findImport(cu, expr.getNameAsString());
                 String fullyQualifiedName;
                 if (imp == null) {
@@ -1027,7 +1025,6 @@ public class Evaluator {
      */
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
 
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(this.className);
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
         Optional<MethodDeclaration> md = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
@@ -1220,7 +1217,7 @@ public class Evaluator {
 
                 NameExpr nameExpr = init.get().asNameExpr();
                 String name = nameExpr.getNameAsString();
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
+
                 for (ImportDeclaration importDeclaration : cu.getImports()) {
                     Name importedName = importDeclaration.getName();
                     String[] parts = importedName.toString().split("\\.");

@@ -103,6 +103,14 @@ public class RepositoryParser extends ClassProcessor {
     private Type entityType;
     private RepositoryQuery current;
 
+    /**
+     * A query cache.
+     * Since we execute the same lines of code repeatedly in order to generate testss to cover
+     * different branches, we will end up executing the same query over and over again. This is
+     * wasteful in terms of both time and money! So we will cache the result sets here.
+     */
+    private Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
+
     private static final String JPA = """
             public interface JpaRepository<T, ID> extends PagingAndSortingRepository<T, ID>, QueryByExampleExecutor<T> {
                     List<T> findAll();
@@ -267,6 +275,11 @@ public class RepositoryParser extends ClassProcessor {
      * @return the result set if the query was executed successfully
      */
     public ResultSet executeQuery(MethodDeclaration method, RepositoryQuery rql) throws IOException {
+        ResultSet cached = cache.get(method);
+        if (cached != null) {
+            return cached;
+        }
+
         try {
             current = rql;
 
@@ -304,6 +317,7 @@ public class RepositoryParser extends ClassProcessor {
 
                 if (prep.execute()) {
                     ResultSet rs = prep.getResultSet();
+                    cache.put(method, rs);
                     return rs;
                 }
             }
