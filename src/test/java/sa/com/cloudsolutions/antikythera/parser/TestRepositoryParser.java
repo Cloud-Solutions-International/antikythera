@@ -24,6 +24,7 @@ import java.lang.reflect.Field;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRepositoryParser {
@@ -63,23 +64,25 @@ class TestRepositoryParser {
 
         MethodDeclaration md1 = new MethodDeclaration().setName("findAll");
         parser.parseNonAnnotatedMethod(md1);
-        Map<MethodDeclaration, RepositoryQuery> queries = parser.getQueries();
-        assertTrue(queries.containsKey(md1));
-        assertEquals("SELECT * FROM table_name", queries.get(md1).getQuery());
+        RepositoryQuery q = parser.get(md1);
+        assertNotNull(q);
+        assertEquals("SELECT * FROM table_name", q.getQuery());
 
         // Test findById method
         MethodDeclaration md2 = new MethodDeclaration().setName("findById");
         parser.parseNonAnnotatedMethod(md2);
-        queries = parser.getQueries();
-        assertTrue(queries.containsKey(md2));
-        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get(md2).getQuery().strip());
+        RepositoryQuery q2 = parser.get(md2);
+        assertNotNull(q);
+
+        assertEquals("SELECT * FROM table_name WHERE id = ?", q2.getQuery().strip());
 
         // Test findAllById method
         MethodDeclaration md3 = new MethodDeclaration().setName("findAllById");
         parser.parseNonAnnotatedMethod(md3);
-        queries = parser.getQueries();
-        assertTrue(queries.containsKey(md3));
-        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get(md3).getQuery());
+        RepositoryQuery q3 = parser.get(md3);
+        assertNotNull(q);
+
+        assertEquals("SELECT * FROM table_name WHERE id = ?", q3.getQuery());
     }
 
     @Test

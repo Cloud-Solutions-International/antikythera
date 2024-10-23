@@ -291,7 +291,8 @@ public class SpringEvaluator extends Evaluator {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
             MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
-            RepositoryQuery q = repository.getQueries().get(repoMethod);
+            RepositoryQuery q = repository.get(repoMethod);
+            q.setMethodDeclaration(repoMethod);
             try {
                 /*
                  * We have one more challenge; to find the parameters that are being used in the repository
@@ -308,8 +309,6 @@ public class SpringEvaluator extends Evaluator {
 
                     ResultSet rs = repository.executeQuery(repoMethod, q);
                     q.setResultSet(rs);
-
-
                 }
                 else {
                     // todo do some fake work here
@@ -737,7 +736,10 @@ public class SpringEvaluator extends Evaluator {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
                         ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        Variable v = processResult(stmt, q.getResultSet());
+                        Variable v = (q.getCachedResult() == null)
+                                ? processResult(stmt, q.getResultSet())
+                                : q.getCachedResult();
+
                         if (l.getRepositoryQuery() == null) {
                             l.setRepositoryQuery(q);
                             l.setColor(LineOfCode.GREY);

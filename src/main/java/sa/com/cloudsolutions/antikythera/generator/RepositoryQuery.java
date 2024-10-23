@@ -1,8 +1,10 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
 import net.sf.jsqlparser.schema.Table;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -12,6 +14,96 @@ import java.util.List;
  * Represents a query from a JPARepository
  */
 public class RepositoryQuery {
+
+    /**
+     * Whether the query is native or not.
+     * This is the value of the native flag to the @Query annotation.
+     */
+    boolean isNative;
+
+    /**
+     * The string representation of the query.
+     */
+    String query;
+
+    /**
+     * The result set from the last execution of this query if any
+     */
+    private ResultSet resultSet;
+
+    /**
+     * This is the list of parameters that are defined in the function signature
+     */
+    private List<QueryMethodParameter> methodParameters;
+    /**
+     * This is the list of arguments that are passed to the function when being called.
+     */
+    private List<QueryMethodArgument> methodArguments;
+
+    /**
+     * The method declaration that represents the query on the JPARepository
+     */
+    MethodDeclaration methodDeclaration;
+
+    Variable cachedResult;
+
+    public RepositoryQuery(String query, boolean isNative) {
+        this.isNative = isNative;
+        this.query = query;
+        methodParameters = new ArrayList<>();
+        methodArguments = new ArrayList<>();
+    }
+
+    public boolean isNative() {
+        return isNative;
+    }
+
+    public String getQuery() {
+        return query;
+    }
+
+    public MethodDeclaration getMethodDeclaration() {
+        return methodDeclaration;
+    }
+
+    public void setMethodDeclaration(MethodDeclaration methodDeclaration) {
+        this.methodDeclaration = methodDeclaration;
+    }
+
+    public Variable getCachedResult() {
+        return cachedResult;
+    }
+
+    public void setCachedResult(Variable cachedResult) {
+        this.cachedResult = cachedResult;
+    }
+
+    /**
+     * Mark that the column was actually not used in the query filters.
+     * @param column
+     */
+    public void remove(String column) {
+        for (QueryMethodParameter p : methodParameters) {
+            if (p != null && p.columnName != null && p.columnName.equals(column)) {
+                p.removed = true;
+            }
+        }
+    }
+
+    public ResultSet getResultSet() {
+        return resultSet;
+    }
+
+    public void setResultSet(ResultSet resultSet) {
+        this.resultSet = resultSet;
+    }
+
+    public List<QueryMethodParameter> getMethodParameters() {
+        return methodParameters;
+    }
+    public List<QueryMethodArgument> getMethodArguments() {
+        return methodArguments;
+    }
 
     /**
      * Represents a parameter in the query method.
@@ -122,70 +214,4 @@ public class RepositoryQuery {
         }
     }
 
-    /**
-     * Whether the query is native or not.
-     * This is the value of the native flag to the @Query annotation.
-     */
-    boolean isNative;
-
-    /**
-     * The string representation of the query.
-     */
-    String query;
-
-    /**
-     * The result set from the last execution of this query if any
-     */
-    private ResultSet resultSet;
-
-    /**
-     * This is the list of parameters that are defined in the function signature
-     */
-    private List<QueryMethodParameter> methodParameters;
-    /**
-     * This is the list of arguments that are passed to the function when being called.
-     */
-    private List<QueryMethodArgument> methodArguments;
-
-    public RepositoryQuery(String query, boolean isNative) {
-        this.isNative = isNative;
-        this.query = query;
-        methodParameters = new ArrayList<>();
-        methodArguments = new ArrayList<>();
-    }
-
-    public boolean isNative() {
-        return isNative;
-    }
-
-    public String getQuery() {
-        return query;
-    }
-
-    /**
-     * Mark that the column was actually not used in the query filters.
-     * @param column
-     */
-    public void remove(String column) {
-        for (QueryMethodParameter p : methodParameters) {
-            if (p != null && p.columnName != null && p.columnName.equals(column)) {
-                p.removed = true;
-            }
-        }
-    }
-
-    public ResultSet getResultSet() {
-        return resultSet;
-    }
-
-    public void setResultSet(ResultSet resultSet) {
-        this.resultSet = resultSet;
-    }
-
-    public List<QueryMethodParameter> getMethodParameters() {
-        return methodParameters;
-    }
-    public List<QueryMethodArgument> getMethodArguments() {
-        return methodArguments;
-    }
 }

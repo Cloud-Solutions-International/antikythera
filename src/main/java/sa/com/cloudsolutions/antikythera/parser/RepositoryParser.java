@@ -718,6 +718,10 @@ public class RepositoryParser extends ClassProcessor {
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
+    public RepositoryQuery get(MethodDeclaration repoMethod) {
+        return queries.get(repoMethod);
+    }
+
     /**
      * Visitor to iterate through the methods in the repository
      */
@@ -904,10 +908,6 @@ public class RepositoryParser extends ClassProcessor {
         }
 
         return sql;
-    }
-
-    public Map<MethodDeclaration, RepositoryQuery> getQueries() {
-        return queries;
     }
 
     public MethodDeclaration getMethodDeclaration(MethodCallExpr methodCall) {
