@@ -774,17 +774,11 @@ public class SpringEvaluator extends Evaluator {
 
                         Variable variable = Reflect.variableFactory(fullyQualifiedName);
                         if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
-                            int i = 0 ;
-                            try {
-                                while (rs.next()) {
-                                    Variable row = resultToEntity(stmt, rs, v, objectCreationExpr);
-                                    ((Collection)variable.getValue()).add(row);
-                                    if (++i == 10) {
-                                        break;
-                                    }
+                            for(int i = 0 ; i < 10 ; i++) {
+                                Variable row = createObject(stmt, v, objectCreationExpr);
+                                if(resultToEntity(row, rs)) {
+                                    ((Collection) variable.getValue()).add(row);
                                 }
-                            } catch (SQLException e) {
-                                logger.warn(e.getMessage());
                             }
                         }
                         return variable;
@@ -792,16 +786,13 @@ public class SpringEvaluator extends Evaluator {
                 }
                 else {
                     ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
-
-                    try {
-                        if (rs.next()) {
-                            return resultToEntity(stmt, rs, v, objectCreationExpr);
-                        } else {
-                            return new Variable(null);
-                        }
-                    } catch (SQLException e) {
-                        logger.warn(e.getMessage());
+                    Variable row = createObject(stmt, v, objectCreationExpr);
+                    if(resultToEntity(row, rs)) {
+                        return row;
+                    } else {
+                        return new Variable(null);
                     }
+
                 }
             }
         }
@@ -810,36 +801,37 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Convers an SQL row to an Entity.
-     * @param stmt the expression statement representing the current line of execution. It will be used to set the
-     *             local.
+     * @param variable copy the data from the record into this variable.
      * @param rs the sql resultset
-     * @param v a variable declrator
-     * @param objectCreationExpr and ObjectCreateionExpr which corresponds to how a constructor will be invoked
-     * @return a variable that holds the generated entity.
+     *
      * @throws AntikytheraException
      * @throws ReflectiveOperationException
      */
-    private Variable resultToEntity(ExpressionStmt stmt, ResultSet rs, VariableDeclarator v, ObjectCreationExpr objectCreationExpr)
-            throws AntikytheraException, ReflectiveOperationException {
-        Variable variable = createObject(stmt, v, objectCreationExpr);
-        if (variable.getValue() instanceof Evaluator evaluator) {
-            Map<String, Variable> fields = evaluator.getFields();
+    private boolean resultToEntity(Variable variable, ResultSet rs) {
 
-            for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-                for (VariableDeclarator var : field.getVariables()) {
-                    String fieldName = var.getNameAsString();
-                    try {
-                        if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
-                            Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
-                            fields.put(fieldName, new Variable(value));
+        try {
+            if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
+                Map<String, Variable> fields = evaluator.getFields();
+
+                for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+                    for (VariableDeclarator var : field.getVariables()) {
+                        String fieldName = var.getNameAsString();
+                        try {
+                            if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
+                                Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
+                                fields.put(fieldName, new Variable(value));
+                            }
+                        } catch (SQLException e) {
+                            logger.warn(e.getMessage());
                         }
-                    } catch (SQLException e) {
-                        logger.warn(e.getMessage());
                     }
                 }
             }
+            return true;
+        } catch (SQLException e) {
+            logger.warn(e.getMessage());
         }
-        return variable;
+        return false;
     }
 
     private boolean isRepositoryMethod(ExpressionStmt stmt) {

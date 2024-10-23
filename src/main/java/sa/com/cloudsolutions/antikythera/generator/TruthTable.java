@@ -98,6 +98,7 @@ public class TruthTable {
      */
     public static void main(String[] args) {
         String[] conditions = {
+                "!a",
                 "a.equals(\"null\")", // this is a string literal so we have to handle it carefully
                 "a > b && c == d",
                 "a > b",
