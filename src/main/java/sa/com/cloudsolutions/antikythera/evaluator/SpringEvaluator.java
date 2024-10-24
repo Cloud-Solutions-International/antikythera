@@ -299,7 +299,6 @@ public class SpringEvaluator extends Evaluator {
                  * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                  * to the arguments that are passed in when the method is actually being called.
                  */
-
                 String nameAsString = repoMethod.getNameAsString();
                 if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
@@ -604,7 +603,7 @@ public class SpringEvaluator extends Evaluator {
      * @param ifst the if statement to mess with
      * @param state the desired state.
      */
-    private void setupIfCondition(IfStmt ifst, boolean state) {
+    private void setupIfCondition(IfStmt ifst, boolean state) throws AntikytheraException, ReflectiveOperationException {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
         LineOfCode l = lines.get(ifst.hashCode());
@@ -614,10 +613,33 @@ public class SpringEvaluator extends Evaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if(entry.getKey().isMethodCallExpr()) {
+                    MethodCallExpr mce = entry.getKey().asMethodCallExpr();
                     LinkedList<Expression> chain = findScopeChain(entry.getKey());
                     if (!chain.isEmpty()) {
                         Expression expr = chain.getFirst();
                         Variable v = getValue(ifst, expr.toString());
+                        if (v == null && expr.isNameExpr()) {
+                            /*
+                             * This is likely to be a static method.
+                             */
+                            String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
+                            if(fullname != null) {
+                                /*
+                                 * The only other possibility is static access on a class
+                                 */
+                                try {
+                                    Class<?> clazz = Class.forName(fullname);
+
+                                } catch (ReflectiveOperationException e) {
+                                    /*
+                                     * Can probably be ignroed
+                                     */
+                                    logger.info("Could not create class for {}", fullname);
+                                }
+                            }
+
+                        }
+
                         if (v != null && v.getValue() instanceof Evaluator eval) {
                             MethodCallExpr setter = new MethodCallExpr();
                             String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
@@ -626,7 +648,7 @@ public class SpringEvaluator extends Evaluator {
                             Variable field = eval.getFields().get(ClassProcessor.classToInstanceName(name));
 
                             setter.addArgument(
-                                    switch(field.getType().asString()) {
+                                    switch (field.getType().asString()) {
                                         case "String" -> "\"Hello\"";
                                         case "int", "Integer" -> "0";
                                         case "long", "Long" -> "0L";

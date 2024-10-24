@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
@@ -339,30 +340,62 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    /**
+     * Finds the fully qualified classname given the short name of a class.
+     * @param cu
+     * @param className
+     * @return
+     */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
+        /*
+         * The strategy is three fold. First check if there exists an import that ends with the
+         * short class name as it's last component. Our preprocessing would have already replaced
+         * all the wild card imports with individual imports.
+         * If we are unable to find a match, we will check for the existence of a file in the same
+         * package locally.
+         * Lastly, if we will try to invoke Class.forName to see if the class can be located in
+         * any jar file that we have loaded.
+         */
         ImportDeclaration imp = findImport(cu, className);
         if (imp != null) {
             return imp.getNameAsString();
         }
 
-        String packageName = cu.getPackageDeclaration().map(p -> p.getNameAsString()).orElse("");
+        String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String fileName = packageName + "." + className + SUFFIX;
         if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
             return packageName + "." + className;
         }
-        if(className.startsWith("java.lang")) {
-            try {
-                Class.forName(className);
-                return className;
-            } catch (ClassNotFoundException e) {
-                return null;
-            }
+
+        try {
+            Class.forName(className);
+            return className;
+        } catch (ClassNotFoundException e) {
+            /*
+             * It's ok to silently ignore this one. It just means that the class cannot be
+             * located in a jar. That maybe because we don't still have a fully qualified name.
+             */
         }
 
         try {
             Class.forName("java.lang." + className);
             return "java.lang." + className;
         } catch (ClassNotFoundException ex) {
+            /*
+             * Once again ignore the exception. We don't have the class in the lang package
+             * but it can probably still be found in the same package as the current CU
+             */
+
+        }
+
+        try {
+            Class.forName(packageName + className);
+            return packageName + className;
+        } catch (ClassNotFoundException ex) {
+            /*
+             * Once again ignore the exception. We don't have the class in the lang package
+             * but it can probably still be found in the same package as the current CU
+             */
             return null;
         }
     }

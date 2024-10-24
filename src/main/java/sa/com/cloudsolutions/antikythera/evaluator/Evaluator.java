@@ -130,7 +130,9 @@ public class Evaluator {
     public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
         if (value == null) {
-            return fields.get(name);
+            if(fields.get(name) != null) {
+                return fields.get(name);
+            }
         }
         return value;
     }
@@ -294,14 +296,14 @@ public class Evaluator {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
 
         if (cu != null) {
-            ImportDeclaration imp = ClassProcessor.findImport(cu, fae.getScope().toString());
-            if (imp != null) {
-                CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+            String fullName = AbstractCompiler.findFullyQualifiedName(cu, fae.getScope().toString());
+            if (fullName != null) {
+                CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(fullName);
                 if (dep == null) {
                     /*
                      * Use class loader
                      */
-                    Class<?> clazz = Class.forName(imp.getNameAsString());
+                    Class<?> clazz = Class.forName(fullName);
                     Field field = clazz.getDeclaredField(fae.getNameAsString());
                     field.setAccessible(true);
                     return new Variable(field.get(null));
@@ -318,6 +320,9 @@ public class Evaluator {
                         }
                     }
                 }
+            }
+            else {
+                logger.warn("Could not resolve {} for field access", fae.getScope().toString());
             }
         }
         else {
@@ -865,19 +870,9 @@ public class Evaluator {
             if (v == null) {
                 /*
                  * We know that we don't have a matching local variable or field. That indicates the
-                 * presence of an import, or this is part of java.lang package
+                 * presence of an import, a class from same package or this is part of java.lang package
                  */
-                ImportDeclaration imp = AbstractCompiler.findImport(cu, expr.getNameAsString());
-                String fullyQualifiedName;
-                if (imp == null) {
-                    /*
-                     * Guessing this to be java.lang
-                     */
-                    fullyQualifiedName = "java.lang." + expr.getNameAsString();
-                }
-                else {
-                    fullyQualifiedName = imp.getNameAsString();
-                }
+                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, expr.getNameAsString());
                 Class<?> clazz = getClass(fullyQualifiedName);
                 if (clazz != null) {
                     v = new Variable(clazz);
