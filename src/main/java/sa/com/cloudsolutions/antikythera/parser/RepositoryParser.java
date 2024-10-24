@@ -244,7 +244,7 @@ public class RepositoryParser extends ClassProcessor {
      */
     public void executeAllQueries() throws IOException, SQLException {
         for (var entry : queries.entrySet()) {
-            ResultSet rs = executeQuery(entry.getKey(), entry.getValue());
+            ResultSet rs = executeQuery(entry.getKey());
             if (rs != null) {
                 ResultSetMetaData metaData = rs.getMetaData();
                 int columnCount = metaData.getColumnCount();
@@ -270,16 +270,20 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Execute the query given in entry.value
      * @param method the name of the method that represents the query in the JPARepository interface
-     * @param rql the actual query
-     * @throws FileNotFoundException rasied by covertFieldsToSnakeCase
+     * @throws FileNotFoundException raised by covertFieldsToSnakeCase
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(MethodDeclaration method, RepositoryQuery rql) throws IOException {
+    public ResultSet executeQuery(MethodDeclaration method) throws IOException {
         ResultSet cached = cache.get(method);
         if (cached != null) {
             return cached;
         }
+        ResultSet rs = executeQuery(queries.get(method));
+        cache.put(method, rs);
+        return rs;
+    }
 
+    public ResultSet executeQuery(RepositoryQuery rql) throws IOException {
         try {
             current = rql;
 
@@ -306,7 +310,6 @@ public class RepositoryParser extends ClassProcessor {
                     break;
                 }
             }
-            logger.debug("{} : {}",method , sql);
 
             if(runQueries) {
                 PreparedStatement prep = conn.prepareStatement(sql);
@@ -316,9 +319,7 @@ public class RepositoryParser extends ClassProcessor {
                 }
 
                 if (prep.execute()) {
-                    ResultSet rs = prep.getResultSet();
-                    cache.put(method, rs);
-                    return rs;
+                    return prep.getResultSet();
                 }
             }
 
@@ -910,26 +911,17 @@ public class RepositoryParser extends ClassProcessor {
         return sql;
     }
 
-    public MethodDeclaration getMethodDeclaration(MethodCallExpr methodCall) {
+    public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
 
         List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
-        MethodDeclaration md = getMethodDeclaration(methodCall, methods);
+        MethodDeclaration md = findMethodDeclaration(methodCall, methods).orElse(null);
         if (md == null) {
             methods = repoCu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
-            md = getMethodDeclaration(methodCall, methods);
+            md = findMethodDeclaration(methodCall, methods).orElse(null);
             return md;
         }
         return md;
     }
 
-    private static MethodDeclaration getMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
-        for (MethodDeclaration method : methods) {
-            if (method.getParameters().size() == methodCall.getArguments().size()) {
-                // todo proper handling of types
-                return method;
-            }
-        }
-        return null;
-    }
 }
 

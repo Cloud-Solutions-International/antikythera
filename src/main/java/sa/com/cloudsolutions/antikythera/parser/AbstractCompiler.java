@@ -2,8 +2,10 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -41,6 +43,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+
+import javax.swing.text.html.Option;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -411,5 +415,25 @@ public class AbstractCompiler {
             }
         }
         return null;
+    }
+
+    protected static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+        for (MethodDeclaration method : methods) {
+            if (method.getParameters().size() == methodCall.getArguments().size()) {
+                boolean matched = true;
+                for (int i =0 ; i < method.getParameters().size(); i++) {
+                    ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
+                    ResolvedType paramType = method.getParameter(i).getType().resolve();
+                    if (!argType.describe().equals(paramType.describe())) {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched) {
+                    return Optional.of(method);
+                }
+            }
+        }
+        return Optional.empty();
     }
 }

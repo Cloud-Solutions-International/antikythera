@@ -290,7 +290,7 @@ public class SpringEvaluator extends Evaluator {
     private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
+            MethodDeclaration repoMethod = repository.findMethodDeclaration(methodCall);
             RepositoryQuery q = repository.get(repoMethod);
             q.setMethodDeclaration(repoMethod);
             try {
@@ -306,7 +306,7 @@ public class SpringEvaluator extends Evaluator {
                         q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
                     }
 
-                    ResultSet rs = repository.executeQuery(repoMethod, q);
+                    ResultSet rs = repository.executeQuery(repoMethod);
                     q.setResultSet(rs);
                 }
                 else {

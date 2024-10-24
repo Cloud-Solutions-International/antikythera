@@ -105,6 +105,7 @@ public class RepositoryQuery {
         return methodArguments;
     }
 
+
     /**
      * Represents a parameter in the query method.
      *
