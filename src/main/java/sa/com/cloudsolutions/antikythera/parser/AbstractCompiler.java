@@ -417,7 +417,7 @@ public class AbstractCompiler {
         return null;
     }
 
-    protected static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
         for (MethodDeclaration method : methods) {
             if (method.getParameters().size() == methodCall.getArguments().size()) {
                 boolean matched = true;
@@ -436,4 +436,5 @@ public class AbstractCompiler {
         }
         return Optional.empty();
     }
+
 }

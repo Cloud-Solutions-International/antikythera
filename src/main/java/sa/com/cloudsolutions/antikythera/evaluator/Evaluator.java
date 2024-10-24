@@ -1022,9 +1022,11 @@ public class Evaluator {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
-        Optional<MethodDeclaration> md = decl.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
-        if (md.isPresent()) {
-            return executeMethod(md.get());
+        if (decl != null) {
+            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCall, decl.getMethods());
+            if (md.isPresent()) {
+                return executeMethod(md.get());
+            }
         }
         return null;
     }

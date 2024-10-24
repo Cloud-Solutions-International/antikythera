@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.PackageDeclaration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
@@ -13,6 +15,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,6 +25,7 @@ import java.util.Map;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 
 import java.io.FileNotFoundException;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mockStatic;
@@ -31,8 +35,9 @@ class AbstractCompilerTest {
     private final String BASE_PATH = (String) Settings.getProperty(Constants.BASE_PATH);
 
     @BeforeAll
-    static void setUp() throws IOException {
-        Settings.loadConfigMap();
+    static void setUp() throws IOException, ReflectiveOperationException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
     }
 
     @Test
@@ -192,4 +197,25 @@ class AbstractCompilerTest {
         }
     }
 
+    @Test
+    void testFindFullyQualifiedName() {
+        CompilationUnit cu = new CompilationUnit();
+        cu.setPackageDeclaration(new PackageDeclaration().setName("sa.com.cloudsolutions.antikythera.parser"));
+        cu.addImport(new ImportDeclaration("java.util.List", false, false));
+        cu.addImport(new ImportDeclaration("sa.com.cloudsolutions.antikythera.SomeClass", false, false));
+        cu.addType(new ClassOrInterfaceDeclaration().setName("TestClass"));
+
+        String result = AbstractCompiler.findFullyQualifiedName(cu, "SomeClass");
+        assertEquals("sa.com.cloudsolutions.antikythera.SomeClass", result);
+
+        result = AbstractCompiler.findFullyQualifiedName(cu, "List");
+        assertEquals("java.util.List", result);
+
+        result = AbstractCompiler.findFullyQualifiedName(cu, "Integer");
+        assertEquals("java.lang.Integer", result);
+
+        result = AbstractCompiler.findFullyQualifiedName(cu, "DTOHandlerTest");
+        assertEquals("sa.com.cloudsolutions.antikythera.parser.DTOHandlerTest", result);
+
+    }
 }
