@@ -583,8 +583,7 @@ public class RepositoryParser extends ClassProcessor {
             andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), where));
             andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), where));
         }
-        else if (expr instanceof Between) {
-            Between between = (Between) expr;
+        else if (expr instanceof Between between) {
             between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression(), where));
             Expression start = between.getBetweenExpressionStart();
             Expression end = between.getBetweenExpressionEnd();
@@ -745,7 +744,6 @@ public class RepositoryParser extends ClassProcessor {
         public void visit(MethodDeclaration n, Void arg) {
             super.visit(n, arg);
             String query = null;
-            String methodName = n.getNameAsString();
             boolean nt = false;
 
             for (var ann : n.getAnnotations()) {
@@ -785,10 +783,17 @@ public class RepositoryParser extends ClassProcessor {
         StringBuilder sql = new StringBuilder();
         boolean top = false;
         boolean ordering = false;
+        String previous = "";
+        String next = "";
+
         for(int i= 0 ; i < components.size() ; i++) {
             String component = components.get(i);
             String tableName = findTableName(entityCu);
             if(tableName != null){
+                if (i < components.size() - 1) {
+                    next = components.get(i + 1);
+                }
+
                 switch (component) {
                     case "findAll":
                         sql.append("SELECT * FROM ").append(tableName.replace("\"", ""));
@@ -814,6 +819,25 @@ public class RepositoryParser extends ClassProcessor {
                                 .append(tableName.replace("\"", ""))
                                 .append(" WHERE ");
                         break;
+                    case "Between":
+                        sql.append(" BETWEEN ? AND ? ");
+                        break;
+
+                    case "GreaterThan":
+                        sql.append(" > ? ");
+                        break;
+
+                    case "LessThan":
+                        sql.append(" < ? ");
+                        break;
+
+                    case "GreaterThanEqual":
+                        sql.append(" >= ? ");
+                        break;
+
+                    case "LessThanEqual":
+                        sql.append(" <= ? ");
+                        break;
 
                     case "And":
                     case "Or":
@@ -833,17 +857,25 @@ public class RepositoryParser extends ClassProcessor {
                     default:
                         sql.append(camelToSnake(component));
                         if (!ordering) {
-                            if (i < components.size() - 1 && components.get(i + 1).equals("In")) {
+                            if (next.equals("In")) {
                                 sql.append(" In  (?) ");
                                 i++;
+                            } else if (next.equals("NotIn")) {
+                                sql.append(" NOT In (?) ");
+                                i++;
                             } else {
-                                sql.append(" = ? ");
+                                if (!next.isEmpty() && !next.equals("Between") && !next.equals("GreaterThan")
+                                        && !next.equals("LessThan") != next.equals("LessThanEqual")
+                                        && !next.equals("GreaterThanEqual")) {
+                                    sql.append(" = ? ");
+                                }
                             }
                         } else {
                             sql.append(" ");
                         }
 
                 }
+                previous = component;
             }
             else {
                 logger.warn("Table name cannot be null");
@@ -867,7 +899,7 @@ public class RepositoryParser extends ClassProcessor {
      */
     private  List<String> extractComponents(String methodName) {
         List<String> components = new ArrayList<>();
-        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|In|Desc|Not|Containing|Like|Or";
+        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan";
         Pattern pattern = Pattern.compile(keywords);
         Matcher matcher = pattern.matcher(methodName);
 

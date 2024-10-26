@@ -16,6 +16,7 @@ public class Person {
     private String address;
     private String phone;
     private String email;
+    private int age;
 
     // Default constructor
     public Person() {}
@@ -67,5 +68,13 @@ public class Person {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
     }
 }
