@@ -838,7 +838,12 @@ public class RepositoryParser extends ClassProcessor {
                     case "LessThanEqual":
                         sql.append(" <= ? ");
                         break;
-
+                    case "IsNull":
+                        sql.append(" IS NULL ");
+                        break;
+                    case "IsNotNull":
+                        sql.append(" IS NOT NULL ");
+                        break;
                     case "And":
                     case "Or":
                     case "Not":
@@ -846,7 +851,7 @@ public class RepositoryParser extends ClassProcessor {
                         break;
                     case "Containing":
                     case "Like":
-                        sql.append(" LIKE '%?%'");
+                        sql.append(" LIKE ? ");
                         break;
                     case "OrderBy":
                         ordering = true;
@@ -866,7 +871,8 @@ public class RepositoryParser extends ClassProcessor {
                             } else {
                                 if (!next.isEmpty() && !next.equals("Between") && !next.equals("GreaterThan")
                                         && !next.equals("LessThan") != next.equals("LessThanEqual")
-                                        && !next.equals("GreaterThanEqual")) {
+                                        && !next.equals("IsNotNull") && !next.equals("Like")
+                                        && !next.equals("GreaterThanEqual") && !next.equals("IsNull")) {
                                     sql.append(" = ? ");
                                 }
                             }
@@ -897,9 +903,9 @@ public class RepositoryParser extends ClassProcessor {
      * @param methodName name of the method
      * @return a list of components
      */
-    private  List<String> extractComponents(String methodName) {
+    private List<String> extractComponents(String methodName) {
         List<String> components = new ArrayList<>();
-        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan";
+        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|Like";
         Pattern pattern = Pattern.compile(keywords);
         Matcher matcher = pattern.matcher(methodName);
 

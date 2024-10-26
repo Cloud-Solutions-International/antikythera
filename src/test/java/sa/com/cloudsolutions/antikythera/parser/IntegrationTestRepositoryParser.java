@@ -93,6 +93,8 @@ public class IntegrationTestRepositoryParser {
                 }
                 else if(n.getNameAsString().equals("findByAgeLike")) {
                     RepositoryQuery rql = tp.get(md);
+                    assertNotNull(rql);
+                    assertEquals("SELECT * FROM person WHERE age LIKE ?it  ", rql.getQuery());
                 }
             }
         }, null);
