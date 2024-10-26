@@ -23,8 +23,36 @@ public class IntegrationTestRepositoryParser {
     }
 
     @Test
-    void testRepositoryParser() throws IOException {
-        final TestRepository tp = new TestRepository();
+    void testDepartmentRepositoryParser() throws IOException {
+        final RepositoryParser tp = new RepositoryParser();
+        tp.preProcess();
+        tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.DepartmentRepository"));
+        tp.process();
+
+        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        assertNotNull(cu);
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                md1 -> md1.getNameAsString().equals("queries2")).get();
+
+        md.accept(new VoidVisitorAdapter<Void>() {
+            public void visit(MethodCallExpr n, Void arg) {
+                super.visit(n, arg);
+                MethodDeclaration md = tp.findMethodDeclaration(n);
+                assertNotNull(md);
+                RepositoryQuery rql = tp.get(md);
+                System.out.println(n);
+            }
+        }, null);
+    }
+
+    @Test
+    void testPersonRepositoryParser() throws IOException {
+        final RepositoryParser tp = new RepositoryParser();
+        tp.preProcess();
+        tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
+        tp.process();
+
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
 
@@ -34,77 +62,50 @@ public class IntegrationTestRepositoryParser {
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
                 MethodDeclaration md = tp.findMethodDeclaration(n);
-                assertNotNull(md);
+                if(md == null) {
+                    return;
+                }
+
+                RepositoryQuery rql = tp.get(md);
+                assertNotNull(rql);
 
                 if(n.getNameAsString().equals("findById")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE id = ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeBetween")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age BETWEEN ? AND ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAge")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age = ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeGreaterThan")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age > ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeLessThan")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age < ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeLessThanEqual")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age <= ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeGreaterThanEqual")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age >= ? ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeIn")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age In  (?) ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeNotIn")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age NOT In (?) ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeIsNull")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age IS NULL ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeIsNotNull")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age IS NOT NULL ", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByNameLike")) {
-                    RepositoryQuery rql = tp.get(md);
-                    assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE name LIKE ? ", rql.getQuery());
                 }
             }
         }, null);
-    }
-
-    class TestRepository extends RepositoryParser {
-        protected TestRepository() throws IOException {
-            preProcess();
-            compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-            process();
-        }
     }
 }

@@ -18,4 +18,6 @@ public interface PersonRepository extends JpaRepository<Person, Long> {
     List<Person> findByAgeIsNull();
     List<Person> findByAgeIsNotNull();
     List<Person> findByNameLike(String a);
+
+
 }

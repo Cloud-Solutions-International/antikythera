@@ -93,15 +93,7 @@ public class Reflect {
             } else {
                 try {
                     String className = arguments.get(0).calculateResolvedType().describe();
-                    className = switch (className) {
-                        case "boolean" -> "java.lang.Boolean";
-                        case "int" -> "java.lang.Integer";
-                        case "long" -> "java.lang.Long";
-                        case "float" -> "java.lang.Float";
-                        case "double" -> "java.lang.Double";
-                        case "char" -> "java.lang.Character";
-                        default -> className;
-                    };
+                    className = primitiveToWrapper(className);
                     paramTypes[i] = Class.forName(className);
                 } catch (UnsolvedSymbolException us) {
                     paramTypes[i] = Object.class;
@@ -110,6 +102,18 @@ public class Reflect {
         }
 
         return new ReflectionArguments(methodName, args, paramTypes);
+    }
+
+    public static String primitiveToWrapper(String className) {
+        return switch (className) {
+            case "boolean" -> "java.lang.Boolean";
+            case "int" -> "java.lang.Integer";
+            case "long" -> "java.lang.Long";
+            case "float" -> "java.lang.Float";
+            case "double" -> "java.lang.Double";
+            case "char" -> "java.lang.Character";
+            default -> className;
+        };
     }
 
     public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
@@ -222,6 +226,15 @@ public class Reflect {
         }
         return null;
     }
+
+    public static Class<?> wrapperToPrimitive(Class<?> clazz) {
+        return wrapperToPrimitive.getOrDefault(clazz, null);
+    }
+
+    public static Class<?> primitiveToWrapper(Class<?> clazz) {
+        return primitiveToWrapper.getOrDefault(clazz, null);
+    }
+
 
     private static boolean findMatch(Class<?>[] paramTypes, Class<?>[] types, int i) {
         if (types[i].isAssignableFrom(paramTypes[i])) {

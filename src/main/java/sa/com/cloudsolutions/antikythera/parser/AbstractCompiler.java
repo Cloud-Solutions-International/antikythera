@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 
 import javax.swing.text.html.Option;
 
@@ -438,17 +439,17 @@ public class AbstractCompiler {
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
         for (MethodDeclaration method : methods) {
             if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
-                boolean matched = true;
                 for (int i =0 ; i < method.getParameters().size(); i++) {
                     ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
                     ResolvedType paramType = method.getParameter(i).getType().resolve();
-                    if (!argType.describe().equals(paramType.describe()) && !paramType.describe().equals("java.lang.Object")) {
-                        matched = false;
-                        break;
+                    if (argType.describe().equals(paramType.describe())
+                            || paramType.describe().equals("java.lang.Object")
+                            || paramType.describe().equals(Reflect.primitiveToWrapper(argType.describe()))
+                            || argType.describe().equals(Reflect.primitiveToWrapper(paramType.describe()))
+                    )
+                    {
+                        return Optional.of(method);
                     }
-                }
-                if (matched) {
-                    return Optional.of(method);
                 }
             }
         }

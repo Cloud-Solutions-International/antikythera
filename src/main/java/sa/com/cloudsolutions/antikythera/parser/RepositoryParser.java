@@ -69,6 +69,7 @@ import java.util.regex.Pattern;
 public class RepositoryParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     public static final String JPA_REPOSITORY = "JpaRepository";
+    public static final String SELECT_STAR = "SELECT * FROM ";
 
     /**
      * The queries that were identified in this repository
@@ -251,7 +252,7 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Execute all the queries that were identified.
-     * This is usuefull only for visualization purposes.
+     * This is usefull only for visualization purposes.
      * @throws IOException
      * @throws SQLException
      */
@@ -577,8 +578,7 @@ public class RepositoryParser extends ClassProcessor {
      * @return the converted expression
      */
     Expression convertExpressionToSnakeCase(Expression expr, boolean where) {
-        if (expr instanceof AndExpression) {
-            AndExpression andExpr = (AndExpression) expr;
+        if (expr instanceof AndExpression andExpr) {
             andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), where));
             andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), where));
         }
@@ -594,8 +594,7 @@ public class RepositoryParser extends ClassProcessor {
             between.setBetweenExpressionEnd(new LongValue("4"));
             between.setLeftExpression(new LongValue("3"));
         }
-        else if (expr instanceof  InExpression) {
-            InExpression ine = (InExpression) expr;
+        else if (expr instanceof  InExpression ine) {
             Column col = (Column) ine.getLeftExpression();
             if(where &&
                     !("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
@@ -611,12 +610,10 @@ public class RepositoryParser extends ClassProcessor {
                 ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression(), where));
             }
         }
-        else if (expr instanceof IsNullExpression) {
-            IsNullExpression isNull = (IsNullExpression) expr;
+        else if (expr instanceof IsNullExpression isNull) {
             isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression(), where));
         }
-        else if (expr instanceof ParenthesedExpressionList) {
-            ParenthesedExpressionList pel = (ParenthesedExpressionList) expr;
+        else if (expr instanceof ParenthesedExpressionList pel) {
             for(int i = 0 ; i < pel.size() ; i++) {
                 pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i), where));
             }
@@ -630,12 +627,10 @@ public class RepositoryParser extends ClassProcessor {
             }
 
         }
-        else if (expr instanceof WhenClause) {
-            WhenClause wh = (WhenClause) expr;
+        else if (expr instanceof WhenClause wh) {
             wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression(), where));
         }
-        else if (expr instanceof Function) {
-            Function function = (Function) expr;
+        else if (expr instanceof Function function) {
             ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
             if(params != null) {
                 for (int i = 0; i < params.size(); i++) {
@@ -643,10 +638,8 @@ public class RepositoryParser extends ClassProcessor {
                 }
             }
         }
-        else if (expr instanceof ComparisonOperator) {
+        else if (expr instanceof ComparisonOperator compare) {
             // this will be the leaf for Most WHERE clauses and HAVING clauses
-            ComparisonOperator compare = (ComparisonOperator) expr;
-
             Expression left = compare.getLeftExpression();
             Expression right = compare.getRightExpression();
 
@@ -683,12 +676,10 @@ public class RepositoryParser extends ClassProcessor {
             compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
 
         }
-        else if (expr instanceof BinaryExpression) {
-            BinaryExpression binaryExpr = (BinaryExpression) expr;
+        else if (expr instanceof BinaryExpression binaryExpr) {
             binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression(), where));
             binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression(), where));
-        } else if (expr instanceof Column) {
-            Column column = (Column) expr;
+        } else if (expr instanceof Column column) {
             String columnName = column.getColumnName();
 
             String snakeCaseField = camelToSnake(columnName);
@@ -793,12 +784,12 @@ public class RepositoryParser extends ClassProcessor {
                 }
 
                 switch (component) {
-                    case "findAll" -> sql.append("SELECT * FROM ").append(tableName.replace("\"", ""));
-                    case "findAllById" -> sql.append("SELECT * FROM ").append(tableName.replace("\"", "")).append(" WHERE id = ?");
-                    case "findBy", "get" -> sql.append("SELECT * FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                    case "findAll" -> sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                    case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
+                    case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
                     case "findFirstBy", "findTopBy" -> {
                         top = true;
-                        sql.append("SELECT * FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                        sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
                     }
                     case "Between" -> sql.append(" BETWEEN ? AND ? ");
                     case "GreaterThan" -> sql.append(" > ? ");
@@ -881,7 +872,7 @@ public class RepositoryParser extends ClassProcessor {
 
 
     /**
-     * CLean up method to be called before handing over to JSQL
+     * Clean up method to be called before handing over to JSQL
      * @param sql
      * @return the cleaned up sql as a string
      */

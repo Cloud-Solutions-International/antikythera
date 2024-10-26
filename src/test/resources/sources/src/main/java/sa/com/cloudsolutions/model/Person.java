@@ -4,6 +4,8 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
 
 @Entity
 public class Person {
@@ -17,6 +19,10 @@ public class Person {
     private String phone;
     private String email;
     private int age;
+
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     // Default constructor
     public Person() {}
