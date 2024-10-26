@@ -439,6 +439,9 @@ public class AbstractCompiler {
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
         for (MethodDeclaration method : methods) {
             if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
+                if(method.getParameters().isEmpty()) {
+                    return Optional.of(method);
+                }
                 for (int i =0 ; i < method.getParameters().size(); i++) {
                     ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
                     ResolvedType paramType = method.getParameter(i).getType().resolve();
