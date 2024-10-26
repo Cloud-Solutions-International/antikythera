@@ -91,10 +91,10 @@ public class IntegrationTestRepositoryParser {
                     assertNotNull(rql);
                     assertEquals("SELECT * FROM person WHERE age IS NOT NULL ", rql.getQuery());
                 }
-                else if(n.getNameAsString().equals("findByAgeLike")) {
+                else if(n.getNameAsString().equals("findByNameLike")) {
                     RepositoryQuery rql = tp.get(md);
                     assertNotNull(rql);
-                    assertEquals("SELECT * FROM person WHERE age LIKE ?it  ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE name LIKE ? ", rql.getQuery());
                 }
             }
         }, null);

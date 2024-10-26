@@ -26,7 +26,7 @@ public class Service {
         List<Person> ageNotIn = personRepository.findByAgeNotIn(new int[]{10, 20, 30});
         List<Person> ageIsNull = personRepository.findByAgeIsNull();
         List<Person> ageIsNotNull = personRepository.findByAgeIsNotNull();
-        List<Person> ageLike = personRepository.findByAgeLike("10");
+        List<Person> ageLike = personRepository.findByNameLike("10");
 
     }
 }

@@ -181,7 +181,6 @@ public class RepositoryParser extends ClassProcessor {
         return count;
     }
 
-
     /**
      * Process the CompilationUnit to identify the queries.
      * @throws IOException
@@ -783,83 +782,39 @@ public class RepositoryParser extends ClassProcessor {
         StringBuilder sql = new StringBuilder();
         boolean top = false;
         boolean ordering = false;
-        String previous = "";
         String next = "";
 
-        for(int i= 0 ; i < components.size() ; i++) {
+        for (int i = 0; i < components.size(); i++) {
             String component = components.get(i);
             String tableName = findTableName(entityCu);
-            if(tableName != null){
+            if (tableName != null) {
                 if (i < components.size() - 1) {
                     next = components.get(i + 1);
                 }
 
                 switch (component) {
-                    case "findAll":
-                        sql.append("SELECT * FROM ").append(tableName.replace("\"", ""));
-                        break;
-
-                    case "findAllById":
-                        sql.append("SELECT * FROM ")
-                                .append(tableName.replace("\"", ""))
-                                .append(" WHERE id = ?");
-                        break;
-
-                    case "findBy":
-                    case "get":
-                        sql.append("SELECT * FROM ")
-                                .append(tableName.replace("\"", ""))
-                                .append(" WHERE ");
-
-                        break;
-                    case "findFirstBy":
-                    case "findTopBy":
+                    case "findAll" -> sql.append("SELECT * FROM ").append(tableName.replace("\"", ""));
+                    case "findAllById" -> sql.append("SELECT * FROM ").append(tableName.replace("\"", "")).append(" WHERE id = ?");
+                    case "findBy", "get" -> sql.append("SELECT * FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                    case "findFirstBy", "findTopBy" -> {
                         top = true;
-                        sql.append("SELECT * FROM ")
-                                .append(tableName.replace("\"", ""))
-                                .append(" WHERE ");
-                        break;
-                    case "Between":
-                        sql.append(" BETWEEN ? AND ? ");
-                        break;
-
-                    case "GreaterThan":
-                        sql.append(" > ? ");
-                        break;
-
-                    case "LessThan":
-                        sql.append(" < ? ");
-                        break;
-
-                    case "GreaterThanEqual":
-                        sql.append(" >= ? ");
-                        break;
-
-                    case "LessThanEqual":
-                        sql.append(" <= ? ");
-                        break;
-                    case "IsNull":
-                        sql.append(" IS NULL ");
-                        break;
-                    case "IsNotNull":
-                        sql.append(" IS NOT NULL ");
-                        break;
-                    case "And":
-                    case "Or":
-                    case "Not":
-                        sql.append(component).append(" ");
-                        break;
-                    case "Containing":
-                    case "Like":
-                        sql.append(" LIKE ? ");
-                        break;
-                    case "OrderBy":
+                        sql.append("SELECT * FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                    }
+                    case "Between" -> sql.append(" BETWEEN ? AND ? ");
+                    case "GreaterThan" -> sql.append(" > ? ");
+                    case "LessThan" -> sql.append(" < ? ");
+                    case "GreaterThanEqual" -> sql.append(" >= ? ");
+                    case "LessThanEqual" -> sql.append(" <= ? ");
+                    case "IsNull" -> sql.append(" IS NULL ");
+                    case "IsNotNull" -> sql.append(" IS NOT NULL ");
+                    case "And", "Or", "Not" -> sql.append(component).append(" ");
+                    case "Containing", "Like" -> sql.append(" LIKE ? ");
+                    case "OrderBy" -> {
                         ordering = true;
                         sql.append(" ORDER BY ");
-                        break;
-                    case "":
-                        break;
-                    default:
+                    }
+                    case "" -> {}
+                    default -> {
                         sql.append(camelToSnake(component));
                         if (!ordering) {
                             if (next.equals("In")) {
@@ -870,7 +825,7 @@ public class RepositoryParser extends ClassProcessor {
                                 i++;
                             } else {
                                 if (!next.isEmpty() && !next.equals("Between") && !next.equals("GreaterThan")
-                                        && !next.equals("LessThan") != next.equals("LessThanEqual")
+                                        && !next.equals("LessThan") && !next.equals("LessThanEqual")
                                         && !next.equals("IsNotNull") && !next.equals("Like")
                                         && !next.equals("GreaterThanEqual") && !next.equals("IsNull")) {
                                     sql.append(" = ? ");
@@ -879,19 +834,16 @@ public class RepositoryParser extends ClassProcessor {
                         } else {
                             sql.append(" ");
                         }
-
+                    }
                 }
-                previous = component;
-            }
-            else {
+            } else {
                 logger.warn("Table name cannot be null");
             }
         }
-        if(top) {
-            if(dialect.equals(ORACLE)) {
-                sql.append(" FETCH FIRST 1 ROWS ONLY");
-            }
-            else {
+        if (top) {
+            if (dialect.equals(ORACLE)) {
+                sql.append(" AND ROWNUM = 1");
+            } else {
                 sql.append(" LIMIT 1");
             }
         }
