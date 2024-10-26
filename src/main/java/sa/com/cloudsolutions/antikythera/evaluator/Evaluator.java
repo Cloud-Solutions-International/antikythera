@@ -12,6 +12,8 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.symbolsolver.reflectionmodel.ReflectionMethodDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -47,6 +49,8 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -54,6 +58,8 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
+
+import static java.lang.reflect.AccessibleObject.setAccessible;
 
 
 /**
@@ -183,8 +189,6 @@ public class Evaluator {
             MethodCallExpr methodCall = expr.asMethodCallExpr();
             return evaluateMethodCall(methodCall);
 
-        } else if (expr.isMethodReferenceExpr()) {
-            return evaluateMethodReference(expr.asMethodReferenceExpr());
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
@@ -210,8 +214,20 @@ public class Evaluator {
         return null;
     }
 
-    Variable evaluateMethodReference(MethodReferenceExpr expr) {
-        return resolveExpression(expr.getScope().asTypeExpr());
+    Method evaluateMethodReference(Expression expr) {
+        MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
+        ResolvedMethodDeclaration resolvedMethod = mexpr.resolve();
+        if(resolvedMethod instanceof ReflectionMethodDeclaration md) {
+            try {
+                Field f =  md.getClass().getDeclaredField("method");
+                f.setAccessible(true);
+                return (Method) f.get(md);
+            } catch (NoSuchFieldException|IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+
+        }
+        return null;
     }
 
     /**
@@ -854,11 +870,6 @@ public class Evaluator {
         return chain;
     }
 
-    private Variable resolveExpression(TypeExpr expr) {
-        Type t = expr.getType();
-        return null;
-    }
-
     private Variable resolveExpression(NameExpr expr) {
         if(expr.getNameAsString().equals("System")) {
             Variable variable = new Variable(System.class);
@@ -892,6 +903,41 @@ public class Evaluator {
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         try {
             if (v != null) {
+                NodeList<Expression> arguments = methodCall.getArguments();
+                if(arguments.isNonEmpty())
+                {
+
+                    if(arguments.get(0).isMethodReferenceExpr()) {
+                        Expression rfCall = arguments.get(0).asMethodReferenceExpr();
+                        Expression scope = rfCall.asMethodReferenceExpr().getScope();
+                        if (scope.isFieldAccessExpr()) {
+                            FieldAccessExpr fieldAccess = scope.asFieldAccessExpr();
+                            String className = fieldAccess.getScope().toString();
+                            String fieldName = fieldAccess.getNameAsString();
+
+                            Class<?> clazz = Class.forName(className);
+                            Field field = clazz.getField(fieldName);
+                            if (Modifier.isStatic(field.getModifiers())) {
+                                return null;
+                            }
+                        }
+                        Method m = evaluateMethodReference(arguments.get(0));
+
+                        Class<?> declaringClass = m.getDeclaringClass();
+                        Object instance = declaringClass.getDeclaredConstructor().newInstance();
+                        if(v.getValue() instanceof Collection<?> c) {
+                            for (Object o : c) {
+                                if (instance != null) {
+                                    m.invoke(instance, o);
+                                }
+                                else {
+                                    m.invoke(o);
+                                }
+                            }
+                            return null;
+                        }
+                    }
+                }
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
 
                 if (v.getValue() instanceof Evaluator eval) {

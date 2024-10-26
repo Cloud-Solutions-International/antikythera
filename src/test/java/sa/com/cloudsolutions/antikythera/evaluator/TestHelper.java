@@ -10,11 +10,11 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 public class TestHelper {
-    Evaluator evaluator;
-    AbstractCompiler compiler;
+    protected Evaluator evaluator;
+    protected AbstractCompiler compiler;
 
-    final PrintStream standardOut = System.out;
-    final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+    protected final PrintStream standardOut = System.out;
+    protected final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
 
     @AfterEach
     public void tearDown() {
