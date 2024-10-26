@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -421,6 +422,12 @@ public class AbstractCompiler {
         }
         return null;
     }
+
+    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
+                                                                    ClassOrInterfaceDeclaration decl) {
+        return findMethodDeclaration(methodCall, decl.getMethods());
+    }
+
 
     /**
      * Find the method declaration matching the given method call expression

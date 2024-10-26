@@ -235,7 +235,7 @@ public class DTOHandler extends ClassProcessor {
     }
 
     /**
-     * Cleans up all the annotations in the clas.
+     * Cleans up all the annotations in the class.
      * The only annotations that we will preserve are four annotations from lombok
      * @param classDecl the class which we are going to clean up.
      */

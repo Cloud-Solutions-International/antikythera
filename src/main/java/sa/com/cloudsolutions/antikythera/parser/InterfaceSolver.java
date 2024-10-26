@@ -37,11 +37,12 @@ public class InterfaceSolver extends AbstractCompiler {
         for (TypeDeclaration<?> t : cu.getTypes()) {
             if (t.isClassOrInterfaceDeclaration() && t.getFullyQualifiedName().isPresent()) {
                 ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+
                 for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
                     String interfaceName = AbstractCompiler.findFullyQualifiedName(cu, iface.getNameAsString());
                     if (interfaceName != null) {
                         /*
-                         * The interfaceName variable represents an interface taht has been implemented by the
+                         * The interfaceName variable represents an interface that has been implemented by the
                          * cdecl class. The call to addImplementation will result in record being created that
                          * cdecl is an implementation of the interface. Thus when ever @Autowired is encountered
                          * we can make use of one of the implementing classes.
@@ -51,7 +52,7 @@ public class InterfaceSolver extends AbstractCompiler {
                 }
             }
         }
-
         return b;
     }
+
 }

@@ -1,8 +1,11 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ParseResult;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -42,6 +45,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -55,6 +59,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
  * Parses JPARespository subclasses to indentify the queries that they execute.
@@ -110,34 +115,6 @@ public class RepositoryParser extends ClassProcessor {
      * wasteful in terms of both time and money! So we will cache the result sets here.
      */
     private Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
-
-    private static final String JPA = """
-            public interface JpaRepository<T, ID> extends PagingAndSortingRepository<T, ID>, QueryByExampleExecutor<T> {
-                    List<T> findAll();
-                    List<T> findAll(Sort sort);
-                    List<T> findAllById(Iterable<ID> ids);
-                    <S extends T> List<S> saveAll(Iterable<S> entities);
-                    <S extends T> S saveAndFlush(S entity);
-                    <S extends T> List<S> saveAllAndFlush(Iterable<S> entities);
-                    void deleteInBatch(Iterable<T> entities);
-                    void deleteAllInBatch(Iterable<T> entities);
-                    void deleteAllByIdInBatch(Iterable<ID> ids);
-                    void deleteAllInBatch();
-                    T getOne(ID id);
-                    T getById(ID id);
-                    <S extends T> List<S> findAll(Example<S> example);
-                    <S extends T> List<S> findAll(Example<S> example, Sort sort);
-                    Optional<T> findById(ID id);
-                    boolean existsById(ID id);
-                    long count();
-                    void deleteById(ID id);
-                    void delete(T entity);
-                    void deleteAll(Iterable<? extends T> entities);
-                    void deleteAll();
-                }
-            """;
-
-    private static CompilationUnit repoCu = null;
 
     public RepositoryParser() throws IOException {
         super();
@@ -211,28 +188,66 @@ public class RepositoryParser extends ClassProcessor {
      * @throws IOException
      */
     public void process() throws IOException {
-        var cls = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
-        var parents = cls.getExtendedTypes();
-        if(!parents.isEmpty() && parents.get(0).toString().startsWith(JPA_REPOSITORY)) {
-            Optional<NodeList<Type>> t = parents.get(0).getTypeArguments();
-            if(t.isPresent()) {
-                entityType = t.get().get(0);
-                entityCu = findEntity(entityType);
-                table = findTableName(entityCu);
+        for(var tp : cu.getTypes()) {
+            if(tp.isClassOrInterfaceDeclaration()) {
+                var cls = tp.asClassOrInterfaceDeclaration();
+                boolean found = false;
 
-                cu.accept(new Visitor(), null);
-
-                /* JpaRepository interface defines a bunch of useful queries s well. But this interface
-                 * is not part of the application under test. So we will add the queries here.
-                 */
-                if(repoCu == null) {
-                    ParseResult<CompilationUnit> repo = getJavaParser().parse(JPA);
-                    if (repo.isSuccessful()) {
-                        repo.getResult().ifPresent(r -> repoCu = r);
+                for(var parent : cls.getExtendedTypes()) {
+                    if (parent.toString().startsWith(JPA_REPOSITORY)) {
+                        found = true;
+                        Optional<NodeList<Type>> t = parent.getTypeArguments();
+                        if (t.isPresent()) {
+                            entityType = t.get().get(0);
+                            entityCu = findEntity(entityType);
+                            table = findTableName(entityCu);
+                        }
+                        break;
                     }
                 }
-                repoCu.accept(new Visitor(), null);
+                if(found) {
+                    tackOn(cls);
+                    cu.accept(new Visitor(), null);
+                }
             }
+        }
+    }
+
+    private void tackOn(ClassOrInterfaceDeclaration cls) {
+        for(var parent : cls.getExtendedTypes()) {
+            String fullName = AbstractCompiler.findFullyQualifiedName(cu, parent.getNameAsString());
+            if (fullName != null) {
+                CompilationUnit p = AntikytheraRunTime.getCompilationUnit(fullName);
+                if(p == null) {
+                    try {
+                        Class<?> interfaceClass = Class.forName(fullName);
+                        Method[] methods = interfaceClass.getMethods();
+
+                        for (Method method : methods) {
+                            // Extract method information
+                            String methodName = method.getName();
+                            Class<?> returnType = method.getReturnType();
+                            java.lang.reflect.Parameter[] params = method.getParameters();
+                            // Create a MethodDeclaration node using JavaParser
+                            MethodDeclaration methodDeclaration = new MethodDeclaration();
+                            methodDeclaration.setName(methodName);
+                            methodDeclaration.setType(returnType.getCanonicalName());
+
+                            // Add parameters to the method declaration
+                            for (java.lang.reflect.Parameter param : params) {
+                                Parameter parameter = new Parameter();
+                                parameter.setType(param.getType());
+                                parameter.setName(param.getName());
+                                methodDeclaration.addParameter(parameter);
+                            }
+                            cls.addMember(methodDeclaration);
+                        }
+                    } catch (ClassNotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+
         }
     }
 
@@ -912,17 +927,9 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
-
         List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
         MethodDeclaration md = findMethodDeclaration(methodCall, methods).orElse(null);
-        if (md == null) {
-            methods = repoCu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
-            md = findMethodDeclaration(methodCall, methods).orElse(null);
-            return md;
-        }
         return md;
     }
-
-
 }
 
