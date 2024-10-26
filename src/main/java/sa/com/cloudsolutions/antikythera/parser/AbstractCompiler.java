@@ -403,6 +403,12 @@ public class AbstractCompiler {
         }
     }
 
+    /**
+     * Finds an import statement corresponding to the class name in the compilation unit
+     * @param cu The Compilation unit
+     * @param className the class to search for
+     * @return the import declaration or null if not found
+     */
     public static ImportDeclaration findImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
@@ -416,6 +422,12 @@ public class AbstractCompiler {
         return null;
     }
 
+    /**
+     * Find the method declaration matching the given method call expression
+     * @param methodCall the method call exppression
+     * @param methods the list of method declarations to search from
+     * @return the method declaration or empty if not found
+     */
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
         for (MethodDeclaration method : methods) {
             if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
@@ -455,5 +467,6 @@ public class AbstractCompiler {
             solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
         }
     }
+
 
 }

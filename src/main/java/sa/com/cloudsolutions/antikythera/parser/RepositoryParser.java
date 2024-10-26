@@ -299,7 +299,7 @@ public class RepositoryParser extends ClassProcessor {
                         .replaceAll("(?i)false", "0");
             }
 
-            // if the sql contains more than 1 and clause we will delete '1' IN '1'
+            // if the sql contains more than 1 AND clause we will delete '1' IN '1'
             Pattern pattern = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(query);
             int count = 0;
@@ -922,6 +922,7 @@ public class RepositoryParser extends ClassProcessor {
         }
         return md;
     }
+
 
 }
 

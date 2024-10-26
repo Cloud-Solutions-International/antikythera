@@ -428,8 +428,8 @@ public class ClassProcessor extends AbstractCompiler {
 
     /**
      * Asterisk imports are tricky.
-     * We have so much code for resolving them. Please make life easier for compiler writes
-     * don't want to use them in your code.
+     * We have so much code for resolving them. Please make life easier for compiler writers
+     * they don't you want to use them in your code.
      * Checks all the classes under the package to find if there is a match. Sometimes what we
      * think to be a package is not really a package but a class and the import happens to be a
      * static import.
@@ -540,6 +540,10 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
+    /**
+     * Puts all the classes marked as dependencies of the current class through java parser.
+     * @throws IOException
+     */
     protected void compileDependencies() throws IOException {
         Optional<String> fullyQualifiedName = getPublicClass(cu).getFullyQualifiedName();
         if (fullyQualifiedName.isPresent()) {

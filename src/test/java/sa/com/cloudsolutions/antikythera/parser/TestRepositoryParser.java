@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
@@ -17,8 +18,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -33,7 +36,7 @@ class TestRepositoryParser {
 
     @BeforeAll
     static void setUpAll() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
     }
 
     @BeforeEach
@@ -113,5 +116,19 @@ class TestRepositoryParser {
         functionExpr.setParameters(new ExpressionList(new Column("totalAmount")));
         Expression result = parser.convertExpressionToSnakeCase(functionExpr, true);
         assertEquals("SUM(total_amount)", result.toString());
+    }
+
+    @Test
+    void testProcess() throws IOException {
+        RepositoryParser parser = new RepositoryParser();
+        AntikytheraRunTime.resetAll();
+        AbstractCompiler.preProcess();
+
+        parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
+        parser.process();
+
+        MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
+        assertNotNull(parser.get(md));
+
     }
 }
