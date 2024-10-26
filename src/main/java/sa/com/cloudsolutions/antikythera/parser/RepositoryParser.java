@@ -59,7 +59,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
  * Parses JPARespository subclasses to indentify the queries that they execute.

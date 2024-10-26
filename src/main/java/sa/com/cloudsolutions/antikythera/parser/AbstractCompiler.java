@@ -442,7 +442,7 @@ public class AbstractCompiler {
                 for (int i =0 ; i < method.getParameters().size(); i++) {
                     ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
                     ResolvedType paramType = method.getParameter(i).getType().resolve();
-                    if (!argType.describe().equals(paramType.describe())) {
+                    if (!argType.describe().equals(paramType.describe()) && !paramType.describe().equals("java.lang.Object")) {
                         matched = false;
                         break;
                     }

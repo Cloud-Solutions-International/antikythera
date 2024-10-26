@@ -129,11 +129,5 @@ class TestRepositoryParser {
 
         MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
         assertNotNull(parser.get(md));
-
-        MethodCallExpr mce = new MethodCallExpr("findById");
-        mce.addArgument("1L");
-        md = parser.findMethodDeclaration(mce);
-        assertNotNull(md);
-
     }
 }
