@@ -216,7 +216,7 @@ public class ProjectGenerator {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
 
-        preProcess();
+        AbstractCompiler.preProcess();
 
         String controllersCleaned = controllers.split("#")[0];
         if (controllersCleaned.matches(".*\\.java$")) {
@@ -227,25 +227,6 @@ public class ProjectGenerator {
             Path path = Paths.get(basePath, controllersCleaned.replace(".", "/"));
             RestControllerParser processor = new RestControllerParser(path.toFile());
             processor.start();
-        }
-    }
-
-    /**
-     * Precompile all the java files in the base folder.
-     * While doing so we will try to determine what interfaces are implemented by each class.
-     *
-     * @throws IOException
-     */
-    private void preProcess() throws IOException {
-        List<File> javaFiles = Files.walk(Paths.get(basePath))
-                .filter(Files::isRegularFile)
-                .filter(path -> path.toString().endsWith(SUFFIX))
-                .map(Path::toFile)
-                .toList();
-
-        for (File javaFile : javaFiles) {
-            InterfaceSolver solver = new InterfaceSolver();
-            solver.compile(Paths.get(basePath).relativize(javaFile.toPath()).toString());
         }
     }
 

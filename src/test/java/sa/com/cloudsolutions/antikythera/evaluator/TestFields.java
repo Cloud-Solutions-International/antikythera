@@ -57,6 +57,7 @@ class TestFields extends TestHelper {
         assertEquals("false\n", outContent.toString() );
 
     }
+
     class TestFieldsCompiler extends ClassProcessor {
         protected TestFieldsCompiler() throws IOException, AntikytheraException {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));

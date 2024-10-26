@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -289,10 +290,8 @@ public class AbstractCompiler {
      */
     protected static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
         for (var type : cu.getTypes()) {
-            if (type.isClassOrInterfaceDeclaration()) {
-                if (type.asClassOrInterfaceDeclaration().isPublic()) {
-                    return type;
-                }
+            if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
+                return type;
             }
         }
         return null;
@@ -435,6 +434,26 @@ public class AbstractCompiler {
             }
         }
         return Optional.empty();
+    }
+
+
+    /**
+     * Precompile all the java files in the base folder.
+     * While doing so we will try to determine what interfaces are implemented by each class.
+     *
+     * @throws IOException
+     */
+    public static void preProcess() throws IOException {
+        List<File> javaFiles = Files.walk(Paths.get(Settings.getBasePath()))
+                .filter(Files::isRegularFile)
+                .filter(path -> path.toString().endsWith(SUFFIX))
+                .map(Path::toFile)
+                .toList();
+
+        for (File javaFile : javaFiles) {
+            InterfaceSolver solver = new InterfaceSolver();
+            solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+        }
     }
 
 }
