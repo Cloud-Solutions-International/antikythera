@@ -91,21 +91,21 @@ class TestRepositoryParser {
     @Test
     void convertExpressionToSnakeCaseAndExpression() {
         AndExpression andExpr = new AndExpression(new Column("firstName"), new Column("lastName"));
-        Expression result = parser.convertExpressionToSnakeCase(andExpr);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(andExpr);
         assertEquals("first_name AND last_name", result.toString());
     }
 
     @Test
     void convertExpressionToSnakeCaseIsNullExpression() {
         IsNullExpression isNullExpr = new IsNullExpression(new Column("middleName"));
-        Expression result = parser.convertExpressionToSnakeCase(isNullExpr);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(isNullExpr);
         assertEquals("middle_name IS NULL", result.toString());
     }
 
     @Test
     void convertExpressionToSnakeCaseComparisonOperator() {
         EqualsTo equalsExpr = new EqualsTo(new Column("salary"), new LongValue(5000));
-        Expression result = parser.convertExpressionToSnakeCase(equalsExpr);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(equalsExpr);
         assertEquals("salary = 5000", result.toString());
     }
 
@@ -114,7 +114,7 @@ class TestRepositoryParser {
         Function functionExpr = new Function();
         functionExpr.setName("SUM");
         functionExpr.setParameters(new ExpressionList(new Column("totalAmount")));
-        Expression result = parser.convertExpressionToSnakeCase(functionExpr);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(functionExpr);
         assertEquals("SUM(total_amount)", result.toString());
     }
 

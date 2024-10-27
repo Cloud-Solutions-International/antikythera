@@ -7,6 +7,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.Select;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ public class IntegrationTestRepositoryParser {
 
                 String sql = rql.getOriginalQuery();
                 assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
-                assertTrue(rql.getQuery().contains("SELECT  * from person p"));
+                assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
 
                 try {
                     tp.setCurrentQuery(rql);
@@ -62,9 +63,9 @@ public class IntegrationTestRepositoryParser {
                          "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
                             stmt.toString()
                     );
-                    Expression ex = tp.setValuesInWhereClause(stmt.getPlainSelect().getWhere());
+                    Statement ex = rql.getSimplifiedStatement();
                     assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
-                            stmt.toString());
+                            ex.toString());
                 } catch (JSQLParserException|IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -97,40 +98,40 @@ public class IntegrationTestRepositoryParser {
                 assertNotNull(rql);
 
                 if(n.getNameAsString().equals("findById")) {
-                    assertEquals("SELECT * FROM person WHERE id = ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE id = ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeBetween")) {
-                    assertEquals("SELECT * FROM person WHERE age BETWEEN ? AND ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age BETWEEN ? AND ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAge")) {
-                    assertEquals("SELECT * FROM person WHERE age = ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age = ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeGreaterThan")) {
-                    assertEquals("SELECT * FROM person WHERE age > ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age > ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeLessThan")) {
-                    assertEquals("SELECT * FROM person WHERE age < ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age < ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeLessThanEqual")) {
-                    assertEquals("SELECT * FROM person WHERE age <= ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age <= ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeGreaterThanEqual")) {
-                    assertEquals("SELECT * FROM person WHERE age >= ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age >= ?", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeIn")) {
-                    assertEquals("SELECT * FROM person WHERE age In  (?) ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age IN (?)", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeNotIn")) {
-                    assertEquals("SELECT * FROM person WHERE age NOT In (?) ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age NOT IN (?)", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeIsNull")) {
-                    assertEquals("SELECT * FROM person WHERE age IS NULL ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age IS NULL", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByAgeIsNotNull")) {
-                    assertEquals("SELECT * FROM person WHERE age IS NOT NULL ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE age IS NOT NULL", rql.getQuery());
                 }
                 else if(n.getNameAsString().equals("findByNameLike")) {
-                    assertEquals("SELECT * FROM person WHERE name LIKE ? ", rql.getQuery());
+                    assertEquals("SELECT * FROM person WHERE name LIKE ?", rql.getQuery());
                 }
             }
         }, null);

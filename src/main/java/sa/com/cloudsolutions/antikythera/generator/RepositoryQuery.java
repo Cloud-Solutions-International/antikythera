@@ -5,10 +5,23 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.BinaryExpression;
+import net.sf.jsqlparser.expression.CaseExpression;
+import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.JdbcNamedParameter;
 import net.sf.jsqlparser.expression.JdbcParameter;
+import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.expression.StringValue;
+import net.sf.jsqlparser.expression.WhenClause;
+import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.relational.Between;
+import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,11 +47,6 @@ public class RepositoryQuery {
     boolean isNative;
 
     /**
-     * The string representation of the query.
-     */
-    String query;
-
-    /**
      * The result set from the last execution of this query if any
      */
     private ResultSet resultSet;
@@ -46,11 +54,11 @@ public class RepositoryQuery {
     /**
      * This is the list of parameters that are defined in the function signature
      */
-    private List<QueryMethodParameter> methodParameters;
+    private final List<QueryMethodParameter> methodParameters;
     /**
      * This is the list of arguments that are passed to the function when being called.
      */
-    private List<QueryMethodArgument> methodArguments;
+    private final List<QueryMethodArgument> methodArguments;
 
     /**
      * The method declaration that represents the query on the JPARepository
@@ -58,9 +66,26 @@ public class RepositoryQuery {
     MethodDeclaration methodDeclaration;
 
     Variable cachedResult;
+    /**
+     * The type of the entity that is being queried.
+     */
     private Type entityType;
+    /**
+     * The table that the entity is mapped to.
+     */
     private String table;
+    /**
+     * The SQL statement that represents the query.
+     */
     private Statement statement;
+    /**
+     * The simplified statement where some arguments may have been removed.
+     */
+    private Statement simplifiedStatement;
+
+    /**
+     * The original query as it was passed to the repository method.
+     */
     private String originalQuery;
 
     public RepositoryQuery() {
@@ -73,11 +98,7 @@ public class RepositoryQuery {
     }
 
     public String getQuery() {
-        return query;
-    }
-
-    public MethodDeclaration getMethodDeclaration() {
-        return methodDeclaration;
+        return statement.toString();
     }
 
     public void setMethodDeclaration(MethodDeclaration methodDeclaration) {
@@ -119,6 +140,13 @@ public class RepositoryQuery {
         return methodArguments;
     }
 
+    public void setStatement(Statement statement) {
+        this.statement = statement;
+    }
+
+    public Statement getSimplifiedStatement() {
+        return simplifiedStatement;
+    }
 
     public void mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
         if(right instanceof  JdbcParameter rhs) {
@@ -151,9 +179,9 @@ public class RepositoryQuery {
 
     public void setQuery(String query) {
         this.originalQuery = query;
-        this.query = cleanUp(query);
+        query = cleanUp(query);
         try {
-            this.statement = CCJSqlParserUtil.parse(this.query);
+            this.statement = CCJSqlParserUtil.parse(query);
 
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);
@@ -162,10 +190,6 @@ public class RepositoryQuery {
 
     public String getOriginalQuery() {
         return originalQuery;
-    }
-
-    public void setOriginalQuery(String originalQuery) {
-        this.originalQuery = originalQuery;
     }
 
     /**
@@ -220,6 +244,113 @@ public class RepositoryQuery {
 
     public void setIsNative(boolean isNative) {
         this.isNative = isNative;
+    }
+
+
+    /**
+     * Change the where clause so that the query is likely to be executed with success.
+     *
+     * By default, when we get a query, we need to figure out what arguments in the where clause
+     * will give a non-empty result. That's one of the key challenges of API and Integration
+     * testing.
+     *
+     * If we are able to run the query with a very limited where clause or a non existent where
+     * clause we can then examine the result to figure out what values can actually be used to
+     * @param expr the expression to be modified
+     *
+     */
+    net.sf.jsqlparser.expression.Expression simplifyWhereClause(net.sf.jsqlparser.expression.Expression expr) {
+        if (expr instanceof Between between) {
+            mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
+            mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
+            remove(RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
+            between.setBetweenExpressionStart(new LongValue("2"));
+            between.setBetweenExpressionEnd(new LongValue("4"));
+            between.setLeftExpression(new LongValue("3"));
+        } else if (expr instanceof InExpression ine) {
+            Column col = (Column) ine.getLeftExpression();
+            if (!("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
+                mapPlaceHolders(ine.getRightExpression(), RepositoryParser.camelToSnake(col.toString()));
+                remove(RepositoryParser.camelToSnake(ine.getLeftExpression().toString()));
+                ine.setLeftExpression(new StringValue("1"));
+                ExpressionList<net.sf.jsqlparser.expression.Expression> rightExpression = new ExpressionList<>();
+                rightExpression.add(new StringValue("1"));
+                ine.setRightExpression(rightExpression);
+            }
+        } else if (expr instanceof ComparisonOperator compare) {
+            net.sf.jsqlparser.expression.Expression left = compare.getLeftExpression();
+            net.sf.jsqlparser.expression.Expression right = compare.getRightExpression();
+            if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
+
+                String name = RepositoryParser.camelToSnake(left.toString());
+                mapPlaceHolders(right, name);
+                if (col.getColumnName().equals("hospitalId")) {
+                    compare.setRightExpression(new LongValue("59"));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left));
+                    return expr;
+                } else if (col.getColumnName().equals("hospitalGroupId")) {
+                    compare.setRightExpression(new LongValue("58"));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left));
+                    return expr;
+                } else  {
+                    remove(name);
+                    compare.setLeftExpression(new StringValue("1"));
+                    compare.setRightExpression(new StringValue("1"));
+                    return expr;
+                }
+            }
+        }
+        return expr;
+    }
+
+
+    /**
+     * Recursively convert field names in expressions to snake case
+     *
+     * @param expr to be converted
+     * @return the converted expression
+     */
+    public static net.sf.jsqlparser.expression.Expression convertExpressionToSnakeCase(net.sf.jsqlparser.expression.Expression expr) {
+        if (expr instanceof AndExpression andExpr) {
+            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression()));
+            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression()));
+        } else if (expr instanceof Between between) {
+            between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression()));
+            between.setBetweenExpressionStart(convertExpressionToSnakeCase(between.getBetweenExpressionStart()));
+            between.setBetweenExpressionEnd(convertExpressionToSnakeCase(between.getBetweenExpressionEnd()));
+        } else if (expr instanceof InExpression ine) {
+            ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression()));
+        } else if (expr instanceof IsNullExpression isNull) {
+            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression()));
+        } else if (expr instanceof ParenthesedExpressionList pel) {
+            for (int i = 0; i < pel.size(); i++) {
+                pel.getExpressions().set(i, convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) pel.get(i)));
+            }
+        } else if (expr instanceof CaseExpression ce) {
+            for (int i = 0; i < ce.getWhenClauses().size(); i++) {
+                WhenClause when = ce.getWhenClauses().get(i);
+                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression()));
+                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression()));
+            }
+        } else if (expr instanceof WhenClause wh) {
+            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression()));
+        } else if (expr instanceof Function function) {
+            ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
+            if (params != null) {
+                for (int i = 0; i < params.size(); i++) {
+                    params.getExpressions().set(i, convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
+                }
+            }
+        } else if (expr instanceof ComparisonOperator compare) {
+            compare.setRightExpression(convertExpressionToSnakeCase(compare.getRightExpression()));
+            compare.setLeftExpression(convertExpressionToSnakeCase(compare.getLeftExpression()));
+        } else if (expr instanceof BinaryExpression binaryExpr) {
+            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression()));
+            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression()));
+        } else if (expr instanceof Column column) {
+            column.setColumnName(RepositoryParser.camelToSnake(column.getColumnName()));
+        }
+        return expr;
     }
 
     /**
