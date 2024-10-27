@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 
 import com.github.javaparser.ast.expr.Expression;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 /**
  * Represents an argument in a call to a query method.
@@ -9,18 +10,29 @@ import com.github.javaparser.ast.expr.Expression;
  */
 public class QueryMethodArgument {
     /**
-     * The name of the argument as defined in the respository function
+     * The name of the argument as defined in the repository function
      */
     private Expression argument;
 
     private int index;
 
-    public QueryMethodArgument(Expression argument, int index) {
+    private Variable variable;
+
+    public QueryMethodArgument(Expression argument, int index, Variable variable) {
         this.argument = argument;
         this.index = index;
+        this.variable = variable;
     }
 
     public Expression getArgument() {
         return argument;
+    }
+
+    public Variable getVariable() {
+        return variable;
+    }
+
+    public void setVariable(Variable variable) {
+        this.variable = variable;
     }
 }

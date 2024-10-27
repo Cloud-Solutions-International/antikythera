@@ -433,7 +433,7 @@ public class RepositoryQuery {
             sql = sql.replace(" as "," ");
         }
 
-        return sql;
+        return sql.replaceAll("\\?\\d+", "?");
     }
 
     public Statement getStatement() {

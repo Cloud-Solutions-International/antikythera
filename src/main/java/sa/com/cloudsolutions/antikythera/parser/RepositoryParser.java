@@ -8,6 +8,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -301,8 +302,15 @@ public class RepositoryParser extends ClassProcessor {
             if(runQueries) {
                 PreparedStatement prep = conn.prepareStatement(sql);
 
-                for (int j = 0; j < countPlaceholders(sql); j++) {
-                    prep.setLong(j + 1, 1);
+                for (int i = 0, j = countPlaceholders(sql); i < j ; i++) {
+                    QueryMethodArgument arg = rql.getMethodArguments().get(i);
+                    String name = arg.getVariable().getClazz().getName();
+                    switch (name) {
+                        case "Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
+                        case "String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
+                        case "Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
+                        case "Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+                    }
                 }
 
                 if (prep.execute()) {
@@ -311,7 +319,7 @@ public class RepositoryParser extends ClassProcessor {
             }
 
         } catch (SQLException e) {
-            logger.error("\tUnparsable JPA Repository query: {}", rql.getQuery());
+            logger.error(rql.getQuery());
         }
         return null;
     }

@@ -289,7 +289,7 @@ public class SpringEvaluator extends Evaluator {
      * @param methodCall the method call expression
      * @return the result set
      */
-    private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
+    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
             MethodDeclaration repoMethod = repository.findMethodDeclaration(methodCall);
@@ -304,7 +304,8 @@ public class SpringEvaluator extends Evaluator {
                 String nameAsString = repoMethod.getNameAsString();
                 if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                        q.getMethodArguments().add(new QueryMethodArgument(methodCall.getArgument(i), i));
+                        Expression argument = methodCall.getArgument(i);
+                        q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
                         q.getMethodParameters().add(new QueryMethodParameter(repoMethod.getParameter(i), i));
                     }
 
