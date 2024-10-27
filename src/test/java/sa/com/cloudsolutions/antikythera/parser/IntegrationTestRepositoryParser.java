@@ -55,18 +55,16 @@ public class IntegrationTestRepositoryParser {
                 assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
 
                 try {
-                    tp.setCurrentQuery(rql);
                     Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
                     assertNotNull(stmt);
-                    tp.convertFieldsToSnakeCase(stmt, AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.model.Person"));
                     assertEquals(
-                         "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
+                         "SELECT * FROM person p JOIN p.department d WHERE d.id = :departmentId",
                             stmt.toString()
                     );
                     Statement ex = rql.getSimplifiedStatement();
                     assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
                             ex.toString());
-                } catch (JSQLParserException|IOException e) {
+                } catch (JSQLParserException e) {
                     throw new RuntimeException(e);
                 }
 

@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
@@ -16,18 +17,31 @@ import net.sf.jsqlparser.expression.WhenClause;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
+import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.select.AllColumns;
+import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.GroupByElement;
+import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.OrderByElement;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -151,25 +165,203 @@ public class RepositoryQuery {
     public void mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
         if(right instanceof  JdbcParameter rhs) {
             int pos = rhs.getIndex();
-            RepositoryQuery.QueryMethodParameter params = getMethodParameters().get(pos - 1);
-            params.getPlaceHolderId().add(pos);
-            params.setColumnName(name);
-
-            logger.debug("Mapping " + name + " to " + params.getParameter().getName());
+            if (pos < getMethodParameters().size() -1) {
+                RepositoryQuery.QueryMethodParameter params = getMethodParameters().get(pos - 1);
+                params.getPlaceHolderId().add(pos);
+                params.setColumnName(name);
+            }
         }
-        else {
-            String placeHolder = ((JdbcNamedParameter) right).getName();
+        else if (right instanceof JdbcNamedParameter rhs ){
+            String placeHolder = rhs.getName();
             for(RepositoryQuery.QueryMethodParameter p : getMethodParameters()) {
                 if(p.getPlaceHolderName().equals(placeHolder)) {
                     p.setColumnName(name);
-                    logger.debug("Mapping " + name + " to " + p.getParameter().getName());
                     break;
+                }
+            }
+        }
+        else if (right instanceof ParenthesedExpressionList<?> rhs) {
+            System.out.println(rhs + " not mapped");
+        }
+    }
+
+
+    /**
+     * Java field names need to be converted to snake case to match the table column.
+     *
+     * This method does not return anything but has a side effect. The changes will be made to the
+     * select statement that is passed in.
+     *
+     * @param stmt   the sql statement
+     * @param entity a compilation unit representing the entity.
+     * @throws FileNotFoundException
+     */
+    void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws IOException {
+
+        if(stmt instanceof Select) {
+            PlainSelect select = ((Select) stmt).getPlainSelect();
+
+            List<SelectItem<?>> items = select.getSelectItems();
+            if(items.size() == 1 && items.get(0).toString().length() == 1) {
+                // This is a select * query but because it's an HQL query it appears as SELECT t
+                // replace select t with select *
+                items.set(0, SelectItem.from(new AllColumns()));
+            }
+            else {
+                // here we deal with general projections
+                for (int i = 0; i < items.size(); i++) {
+                    SelectItem<?> item = items.get(i);
+                    String itemStr = item.toString();
+                    String[] parts = itemStr.split("\\.");
+
+                    if (itemStr.contains(".") && parts.length == 2) {
+                        String field = parts[1];
+                        String snakeCaseField = RepositoryParser.camelToSnake(field);
+                        SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
+                        items.set(i, col);
+                    }
+                    else {
+                        String snakeCaseField = RepositoryParser.camelToSnake(parts[0]);
+                        SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
+                        items.set(i, col);
+                    }
+                }
+            }
+
+            if (select.getWhere() != null) {
+                select.setWhere(RepositoryQuery.convertExpressionToSnakeCase(select.getWhere()));
+            }
+
+            if (select.getGroupBy() != null) {
+                GroupByElement group = select.getGroupBy();
+                List<net.sf.jsqlparser.expression.Expression> groupBy = group.getGroupByExpressions();
+                for (int i = 0; i < groupBy.size(); i++) {
+                    groupBy.set(i, RepositoryQuery.convertExpressionToSnakeCase(groupBy.get(i)));
+                }
+            }
+
+            if (select.getOrderByElements() != null) {
+                List<OrderByElement> orderBy = select.getOrderByElements();
+                for (int i = 0; i < orderBy.size(); i++) {
+                    orderBy.get(i).setExpression(RepositoryQuery.convertExpressionToSnakeCase(orderBy.get(i).getExpression()));
+                }
+            }
+
+            if (select.getHaving() != null) {
+                select.setHaving(RepositoryQuery.convertExpressionToSnakeCase(select.getHaving()));
+            }
+            processJoins(entity, select);
+        }
+    }
+
+
+    /**
+     * HQL joins use entity names instead of table name and column names.
+     * We need to replace those with the proper table and column name syntax if we are to execut the
+     * query through JDBC.
+     * @param entity the primary table or view for the join
+     * @param select the select statement
+     * @throws FileNotFoundException if we are unable to find related entities.
+     */
+    private void processJoins(CompilationUnit entity, PlainSelect select) throws IOException {
+        List<CompilationUnit> units = new ArrayList<>();
+        units.add(entity);
+
+        List<Join> joins = select.getJoins();
+        if(joins != null) {
+            for (int i = 0 ; i < joins.size() ; i++) {
+                Join j = joins.get(i);
+                if (j.getRightItem() instanceof ParenthesedSelect ps) {
+                    convertFieldsToSnakeCase(ps.getSelectBody(), entity);
+                } else {
+                    FromItem a = j.getRightItem();
+                    // the toString() of this will look something like p.dischargeNurseRequest n
+                    // from this we need to extract the dischargeNurseRequest
+                    String[] parts = a.toString().split("\\.");
+                    if (parts.length == 2) {
+                        CompilationUnit other = null;
+                        // the join may happen against any of the tables that we have encountered so far
+                        // hence the need to loop through here.
+                        for(CompilationUnit unit : units) {
+                            String field = parts[1].split(" ")[0];
+                            var x = unit.getType(0).getFieldByName(field);
+                            if(x.isPresent()) {
+                                var member = x.get();
+                                String lhs = null;
+                                String rhs = null;
+
+                                // find if there is a join column annotation, that will tell us the column names
+                                // to map for the on clause.
+                                for (var ann : member.getAnnotations()) {
+                                    if (ann.getNameAsString().equals("JoinColumn")) {
+                                        if (ann.isNormalAnnotationExpr()) {
+                                            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                                                if (pair.getNameAsString().equals("name")) {
+                                                    lhs = RepositoryParser.camelToSnake(pair.getValue().toString());
+                                                }
+                                                if (pair.getNameAsString().equals("referencedColumnName")) {
+                                                    rhs = RepositoryParser.camelToSnake(pair.getValue().toString());
+                                                }
+                                            }
+                                        } else {
+                                            lhs = RepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                other = RepositoryParser.findEntity(member.getElementType());
+
+                                String tableName = RepositoryParser.findTableName(other);
+                                if(RepositoryParser.isOracle()) {
+                                    tableName = tableName.replace("\"","");
+                                }
+
+                                var f = j.getFromItem();
+                                if (f instanceof Table) {
+                                    Table t = new Table(tableName);
+                                    t.setAlias(f.getAlias());
+                                    j.setFromItem(t);
+
+                                }
+                                if(lhs == null || rhs == null) {
+                                    // lets roll with an implicit join for now
+                                    // todo fix this by figuring out the join column from other annotations
+                                    for(var column : other.getType(0).getFields()) {
+                                        for(var ann : column.getAnnotations()) {
+                                            if(ann.getNameAsString().equals("Id")) {
+                                                lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
+                                                rhs = lhs;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                if(lhs != null && rhs != null) {
+                                    if (RepositoryParser.isOracle()) {
+                                        lhs = lhs.replace("\"", "");
+                                        rhs = rhs.replace("\"", "");
+                                    }
+                                    EqualsTo eq = new EqualsTo();
+                                    eq.setLeftExpression(new Column(parts[0] + "." + lhs));
+                                    eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
+                                    j.getOnExpressions().add(eq);
+                                }
+
+                            }
+                        }
+                        // if we have discovered a new entity add it to our collection for looking up
+                        // join fields in the next one
+                        if(other != null) {
+                            units.add(other);
+                        }
+                    }
                 }
             }
         }
     }
 
-    public void setEntity(Type entityType) {
+    public void setEntityType(Type entityType) {
         this.entityType = entityType;
     }
 
@@ -182,9 +374,16 @@ public class RepositoryQuery {
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
+            this.simplifiedStatement = CCJSqlParserUtil.parse(query);
+            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
 
+            if (simplifiedStatement instanceof PlainSelect ps) {
+                simplifyWhereClause(ps.getWhere());
+            }
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);
+        } catch (IOException e) {
+            logger.debug("{} entity could not be located", entityType);
         }
     }
 
@@ -461,6 +660,4 @@ public class RepositoryQuery {
             return argument;
         }
     }
-
-
 }
