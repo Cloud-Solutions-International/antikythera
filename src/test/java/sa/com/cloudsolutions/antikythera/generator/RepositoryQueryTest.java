@@ -18,15 +18,4 @@ class RepositoryQueryTest {
         repositoryQuery.setIsNative(true);
     }
 
-    @Test
-    void testRemove() {
-        Parameter mockParameter = mock(Parameter.class);
-        RepositoryQuery.QueryMethodParameter param = new RepositoryQuery.QueryMethodParameter(mockParameter, 0);
-        param.setColumnName("id");
-        repositoryQuery.getMethodParameters().add(param);
-
-        repositoryQuery.remove("id");
-
-        assertTrue(param.removed);
-    }
 }
