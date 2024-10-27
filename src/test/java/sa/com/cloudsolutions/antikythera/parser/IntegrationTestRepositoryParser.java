@@ -4,6 +4,9 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.select.Select;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -15,6 +18,8 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IntegrationTestRepositoryParser {
     @BeforeAll
@@ -41,7 +46,22 @@ public class IntegrationTestRepositoryParser {
                 MethodDeclaration md = tp.findMethodDeclaration(n);
                 assertNotNull(md);
                 RepositoryQuery rql = tp.get(md);
-                System.out.println(n);
+                assertNotNull(rql);
+
+                String sql = rql.getQuery();
+                assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
+                sql = tp.cleanUp(sql);
+                assertTrue(sql.contains("SELECT  * from person p"));
+
+                try {
+                    Select stmt = (Select) CCJSqlParserUtil.parse(sql);
+                    assertNotNull(stmt);
+                    tp.convertFieldsToSnakeCase(stmt, AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.model.Person"));
+                    System.out.println(stmt);
+                } catch (JSQLParserException|IOException e) {
+                    throw new RuntimeException(e);
+                }
+
             }
         }, null);
     }

@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ParseResult;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -252,7 +251,7 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Execute all the queries that were identified.
-     * This is usefull only for visualization purposes.
+     * This is useful only for visualization purposes.
      * @throws IOException
      * @throws SQLException
      */
@@ -282,7 +281,7 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     /**
-     * Execute the query given in entry.value
+     * Execute the query represented by the method.
      * @param method the name of the method that represents the query in the JPARepository interface
      * @throws FileNotFoundException raised by covertFieldsToSnakeCase
      * @return the result set if the query was executed successfully
@@ -302,7 +301,7 @@ public class RepositoryParser extends ClassProcessor {
             current = rql;
 
             RepositoryParser.createConnection();
-            String query = rql.getQuery().replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
+            String query = rql.getQuery();
             Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
 
             convertFieldsToSnakeCase(stmt, entityCu);
@@ -395,12 +394,14 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Java field names need to be converted to snake case to match the table column.
      *
+     * This method does not return anything but has a side effect. The changes will be made to the
+     * select statement that is passed in.
+     *
      * @param stmt   the sql statement
      * @param entity a compilation unit representing the entity.
-     * @return
      * @throws FileNotFoundException
      */
-    private void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws IOException {
+    void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws IOException {
 
         if(stmt instanceof  Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
@@ -873,17 +874,26 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Clean up method to be called before handing over to JSQL
-     * @param sql
+     * @param sql the SQL to be cleaned up.
      * @return the cleaned up sql as a string
      */
-    private String cleanUp(String sql) {
-        // If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
-        // the select JSQL does not recognize this. So lets remove everything starting at the NEW keyword
-        // and finishing at the FROM keyword. It will be replaced by  the '*' character.
-        //
-        // A second pattern is SELECT t FROM EntityClassName t ...
+    String cleanUp(String sql) {
+        /*
+         * First up we replace the entity name with the table name
+         */
+        sql = sql.replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
 
-        // Use case-insensitive regex to find and replace the NEW keyword and the FROM keyword
+       /*
+        * If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
+        * the select. Since this is Hibernate syntax and not SQL, the JSQL parser does not recognize it.
+        * So lets remove everything starting at the NEW keyword and finishing at the FROM keyword.
+        * The constructor call will be replaced by  the '*' character.
+        *
+        * A second pattern is SELECT t FROM EntityClassName t ...
+        *
+        * The first step is to Use a case-insensitive regex to find and replace the NEW keyword
+        * and the FROM keyword
+        */
         Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(sql);
         if (matcher.find()) {
