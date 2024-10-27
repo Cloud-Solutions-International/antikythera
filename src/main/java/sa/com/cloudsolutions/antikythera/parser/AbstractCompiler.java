@@ -78,6 +78,7 @@ public class AbstractCompiler {
     protected static ArrayList<JarTypeSolver> jarSolvers;
     protected static ClassLoader loader;
     protected CompilationUnit cu;
+    protected String className;
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
@@ -164,7 +165,7 @@ public class AbstractCompiler {
      * @throws FileNotFoundException when the source code cannot be found
      */
     public boolean compile(String relativePath) throws FileNotFoundException {
-        String className = pathToClass(relativePath);
+        this.className = pathToClass(relativePath);
 
         cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {

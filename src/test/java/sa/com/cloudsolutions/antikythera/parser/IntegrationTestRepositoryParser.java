@@ -49,14 +49,13 @@ public class IntegrationTestRepositoryParser {
                 RepositoryQuery rql = tp.get(md);
                 assertNotNull(rql);
 
-                String sql = rql.getQuery();
+                String sql = rql.getOriginalQuery();
                 assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
-                sql = tp.cleanUp(sql);
-                assertTrue(sql.contains("SELECT  * from person p"));
+                assertTrue(rql.getQuery().contains("SELECT  * from person p"));
 
                 try {
                     tp.setCurrentQuery(rql);
-                    Select stmt = (Select) CCJSqlParserUtil.parse(sql);
+                    Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
                     assertNotNull(stmt);
                     tp.convertFieldsToSnakeCase(stmt, AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.model.Person"));
                     assertEquals(

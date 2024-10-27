@@ -3,9 +3,13 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.type.Type;
+import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.JdbcNamedParameter;
 import net.sf.jsqlparser.expression.JdbcParameter;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -14,6 +18,8 @@ import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Represents a query from a JPARepository
@@ -52,10 +58,12 @@ public class RepositoryQuery {
     MethodDeclaration methodDeclaration;
 
     Variable cachedResult;
+    private Type entityType;
+    private String table;
+    private Statement statement;
+    private String originalQuery;
 
-    public RepositoryQuery(String query, boolean isNative) {
-        this.isNative = isNative;
-        this.query = query;
+    public RepositoryQuery() {
         methodParameters = new ArrayList<>();
         methodArguments = new ArrayList<>();
     }
@@ -131,6 +139,87 @@ public class RepositoryQuery {
                 }
             }
         }
+    }
+
+    public void setEntity(Type entityType) {
+        this.entityType = entityType;
+    }
+
+    public void setTable(String table) {
+        this.table = table;
+    }
+
+    public void setQuery(String query) {
+        this.originalQuery = query;
+        this.query = cleanUp(query);
+        try {
+            this.statement = CCJSqlParserUtil.parse(this.query);
+
+        } catch (JSQLParserException e) {
+            logger.debug("{} could not be parsed", query);
+        }
+    }
+
+    public String getOriginalQuery() {
+        return originalQuery;
+    }
+
+    public void setOriginalQuery(String originalQuery) {
+        this.originalQuery = originalQuery;
+    }
+
+    /**
+     * Clean up method to be called before handing over to JSQL
+     * @param sql the SQL to be cleaned up.
+     * @return the cleaned up sql as a string
+     */
+    String cleanUp(String sql) {
+        /*
+         * First up we replace the entity name with the table name
+         */
+        if(entityType != null && table != null) {
+            sql = sql.replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
+        }
+
+        /*
+         * If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
+         * the select. Since this is Hibernate syntax and not SQL, the JSQL parser does not recognize it.
+         * So lets remove everything starting at the NEW keyword and finishing at the FROM keyword.
+         * The constructor call will be replaced by  the '*' character.
+         *
+         * A second pattern is SELECT t FROM EntityClassName t ...
+         *
+         * The first step is to Use a case-insensitive regex to find and replace the NEW keyword
+         * and the FROM keyword
+         */
+        Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(sql);
+        if (matcher.find()) {
+            sql = matcher.replaceAll(" * from ");
+        }
+
+        // Remove '+' signs only when they have spaces and a quotation mark on either side
+        sql = sql.replaceAll("\"\\s*\\+\\s*\"", " ");
+
+        // Remove quotation marks
+        sql = sql.replace("\"", "");
+
+        Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+        Matcher selectMatcher = selectPattern.matcher(sql);
+        if (selectMatcher.find()) {
+            sql = selectMatcher.replaceAll("SELECT * FROM $1 $2");
+            sql = sql.replace(" as "," ");
+        }
+
+        return sql;
+    }
+
+    public Statement getStatement() {
+        return statement;
+    }
+
+    public void setIsNative(boolean isNative) {
+        this.isNative = isNative;
     }
 
     /**

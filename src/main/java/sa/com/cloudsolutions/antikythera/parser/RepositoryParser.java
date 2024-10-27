@@ -5,6 +5,9 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -13,7 +16,6 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.Between;
@@ -24,7 +26,6 @@ import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
@@ -302,7 +303,7 @@ public class RepositoryParser extends ClassProcessor {
 
             RepositoryParser.createConnection();
             String query = rql.getQuery();
-            Select stmt = (Select) CCJSqlParserUtil.parse(cleanUp(query));
+            Select stmt = (Select) rql.getStatement();
 
             convertFieldsToSnakeCase(stmt, entityCu);
 
@@ -336,7 +337,7 @@ public class RepositoryParser extends ClassProcessor {
                 }
             }
 
-        } catch (JSQLParserException | SQLException e) {
+        } catch (SQLException e) {
             logger.error("\tUnparsable JPA Repository query: {}", rql.getQuery());
         }
         return null;
@@ -700,7 +701,15 @@ public class RepositoryParser extends ClassProcessor {
             for (var ann : n.getAnnotations()) {
                 if (ann.getNameAsString().equals("Query")) {
                     if (ann.isSingleMemberAnnotationExpr()) {
-                        query = ann.asSingleMemberAnnotationExpr().getMemberValue().toString();
+                        try {
+                            Evaluator eval = new Evaluator(className);
+                            Variable v = eval.evaluateExpression(
+                                    ann.asSingleMemberAnnotationExpr().getMemberValue()
+                            );
+                            query = v.getValue().toString();
+                        } catch (AntikytheraException|ReflectiveOperationException e) {
+                            throw new RuntimeException(e);
+                        }
                     } else if (ann.isNormalAnnotationExpr()) {
 
                         for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
@@ -719,11 +728,20 @@ public class RepositoryParser extends ClassProcessor {
             }
 
             if (query != null) {
-                queries.put(n, new RepositoryQuery(cleanUp(query), nt));
+                queries.put(n, queryBuilder(query, nt));
             } else {
                 parseNonAnnotatedMethod(n);
             }
         }
+    }
+
+    RepositoryQuery queryBuilder(String query, boolean isNative) {
+        RepositoryQuery rql = new RepositoryQuery();
+        rql.setIsNative(isNative);
+        rql.setEntity(entityType);
+        rql.setTable(table);
+        rql.setQuery(query);
+        return rql;
     }
 
     void parseNonAnnotatedMethod(MethodDeclaration md) {
@@ -796,7 +814,7 @@ public class RepositoryParser extends ClassProcessor {
                 sql.append(" LIMIT 1");
             }
         }
-        queries.put(md, new RepositoryQuery(sql.toString(), true));
+        queries.put(md, queryBuilder(sql.toString(), true));
     }
 
     /**
@@ -828,50 +846,6 @@ public class RepositoryParser extends ClassProcessor {
         return components;
     }
 
-
-    /**
-     * Clean up method to be called before handing over to JSQL
-     * @param sql the SQL to be cleaned up.
-     * @return the cleaned up sql as a string
-     */
-    String cleanUp(String sql) {
-        /*
-         * First up we replace the entity name with the table name
-         */
-        sql = sql.replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
-
-       /*
-        * If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
-        * the select. Since this is Hibernate syntax and not SQL, the JSQL parser does not recognize it.
-        * So lets remove everything starting at the NEW keyword and finishing at the FROM keyword.
-        * The constructor call will be replaced by  the '*' character.
-        *
-        * A second pattern is SELECT t FROM EntityClassName t ...
-        *
-        * The first step is to Use a case-insensitive regex to find and replace the NEW keyword
-        * and the FROM keyword
-        */
-        Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(sql);
-        if (matcher.find()) {
-            sql = matcher.replaceAll(" * from ");
-        }
-
-        // Remove '+' signs only when they have spaces and a quotation mark on either side
-        sql = sql.replaceAll("\"\\s*\\+\\s*\"", " ");
-
-        // Remove quotation marks
-        sql = sql.replace("\"", "");
-
-        Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
-        Matcher selectMatcher = selectPattern.matcher(sql);
-        if (selectMatcher.find()) {
-            sql = selectMatcher.replaceAll("SELECT * FROM $1 $2");
-            sql = sql.replace(" as "," ");
-        }
-
-        return sql;
-    }
 
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
         List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());

@@ -13,7 +13,9 @@ class RepositoryQueryTest {
 
     @BeforeEach
     void setUp() {
-        repositoryQuery = new RepositoryQuery("SELECT * FROM users WHERE id = :id", true);
+        repositoryQuery = new RepositoryQuery();
+        repositoryQuery.setQuery("SELECT * FROM users WHERE id = :id");
+        repositoryQuery.setIsNative(true);
     }
 
     @Test
