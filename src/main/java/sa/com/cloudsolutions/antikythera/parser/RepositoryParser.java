@@ -113,7 +113,7 @@ public class RepositoryParser extends ClassProcessor {
      * different branches, we will end up executing the same query over and over again. This is
      * wasteful in terms of both time and money! So we will cache the result sets here.
      */
-    private Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
+    private final Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
 
     public RepositoryParser() throws IOException {
         super();
@@ -476,8 +476,8 @@ public class RepositoryParser extends ClassProcessor {
         if(joins != null) {
             for (int i = 0 ; i < joins.size() ; i++) {
                 Join j = joins.get(i);
-                if (j.getRightItem() instanceof ParenthesedSelect) {
-                    convertFieldsToSnakeCase(((ParenthesedSelect) j.getRightItem()).getSelectBody(), entity);
+                if (j.getRightItem() instanceof ParenthesedSelect ps) {
+                    convertFieldsToSnakeCase(ps.getSelectBody(), entity);
                 } else {
                     FromItem a = j.getRightItem();
                     // the toString() of this will look something like p.dischargeNurseRequest n
@@ -648,8 +648,8 @@ public class RepositoryParser extends ClassProcessor {
         } else if (expr instanceof ComparisonOperator compare) {
             Expression left = compare.getLeftExpression();
             Expression right = compare.getRightExpression();
-            if (left instanceof Column && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
-                Column col = (Column) left;
+            if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
+
                 String name = camelToSnake(left.toString());
                 currentQuery.mapPlaceHolders(right, name);
                 if (col.getColumnName().equals("hospitalId")) {
@@ -704,10 +704,8 @@ public class RepositoryParser extends ClassProcessor {
                     } else if (ann.isNormalAnnotationExpr()) {
 
                         for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("nativeQuery")) {
-                                if (pair.getValue().toString().equals("true")) {
-                                    nt = true;
-                                }
+                            if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
+                                nt = true;
                             }
                         }
                         for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
@@ -765,7 +763,6 @@ public class RepositoryParser extends ClassProcessor {
                         ordering = true;
                         sql.append(" ORDER BY ");
                     }
-                    case "" -> {}
                     default -> {
                         sql.append(camelToSnake(component));
                         if (!ordering) {
@@ -809,7 +806,7 @@ public class RepositoryParser extends ClassProcessor {
      */
     private List<String> extractComponents(String methodName) {
         List<String> components = new ArrayList<>();
-        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|Like";
+        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan";
         Pattern pattern = Pattern.compile(keywords);
         Matcher matcher = pattern.matcher(methodName);
 
@@ -878,8 +875,7 @@ public class RepositoryParser extends ClassProcessor {
 
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
         List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
-        MethodDeclaration md = findMethodDeclaration(methodCall, methods).orElse(null);
-        return md;
+        return findMethodDeclaration(methodCall, methods).orElse(null);
     }
 
     public RepositoryQuery getCurrentQuery() {

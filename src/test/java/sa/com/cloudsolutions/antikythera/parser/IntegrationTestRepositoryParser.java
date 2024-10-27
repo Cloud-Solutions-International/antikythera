@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.select.Select;
 import org.junit.jupiter.api.BeforeAll;
@@ -62,7 +63,9 @@ public class IntegrationTestRepositoryParser {
                          "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
                             stmt.toString()
                     );
-                    //tp.setValuesInWhereClause(rql.getStatement());
+                    Expression ex = tp.setValuesInWhereClause(stmt.getPlainSelect().getWhere());
+                    assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
+                            stmt.toString());
                 } catch (JSQLParserException|IOException e) {
                     throw new RuntimeException(e);
                 }
