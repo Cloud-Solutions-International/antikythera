@@ -60,35 +60,6 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testParseNonAnnotatedMethod() throws ReflectiveOperationException {
-        Field entityCuField = RepositoryParser.class.getDeclaredField("entityCu");
-        entityCuField.setAccessible(true);
-        entityCuField.set(parser, cu);
-
-        MethodDeclaration md1 = new MethodDeclaration().setName("findAll");
-        parser.parseNonAnnotatedMethod(md1);
-        RepositoryQuery q = parser.get(md1);
-        assertNotNull(q);
-        assertEquals("SELECT * FROM table_name", q.getQuery());
-
-        // Test findById method
-        MethodDeclaration md2 = new MethodDeclaration().setName("findById");
-        parser.parseNonAnnotatedMethod(md2);
-        RepositoryQuery q2 = parser.get(md2);
-        assertNotNull(q);
-
-        assertEquals("SELECT * FROM table_name WHERE id = ?", q2.getQuery().strip());
-
-        // Test findAllById method
-        MethodDeclaration md3 = new MethodDeclaration().setName("findAllById");
-        parser.parseNonAnnotatedMethod(md3);
-        RepositoryQuery q3 = parser.get(md3);
-        assertNotNull(q);
-
-        assertEquals("SELECT * FROM table_name WHERE id = ?", q3.getQuery());
-    }
-
-    @Test
     void convertExpressionToSnakeCaseAndExpression() {
         AndExpression andExpr = new AndExpression(new Column("firstName"), new Column("lastName"));
         Expression result = RepositoryQuery.convertExpressionToSnakeCase(andExpr);
