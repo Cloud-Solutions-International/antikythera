@@ -105,7 +105,7 @@ public class RepositoryParser extends ClassProcessor {
      * The java parser type associated with the entity.
      */
     private Type entityType;
-    private RepositoryQuery current;
+    private RepositoryQuery currentQuery;
 
     /**
      * A query cache.
@@ -298,7 +298,7 @@ public class RepositoryParser extends ClassProcessor {
 
     public ResultSet executeQuery(RepositoryQuery rql) throws IOException {
         try {
-            current = rql;
+            currentQuery = rql;
 
             RepositoryParser.createConnection();
             String query = rql.getQuery();
@@ -434,26 +434,26 @@ public class RepositoryParser extends ClassProcessor {
             }
 
             if (select.getWhere() != null) {
-                select.setWhere(convertExpressionToSnakeCase(select.getWhere(), true));
+                select.setWhere(convertExpressionToSnakeCase(select.getWhere()));
             }
 
             if (select.getGroupBy() != null) {
                 GroupByElement group = select.getGroupBy();
                 List<Expression> groupBy = group.getGroupByExpressions();
                 for (int i = 0; i < groupBy.size(); i++) {
-                    groupBy.set(i, convertExpressionToSnakeCase(groupBy.get(i), false));
+                    groupBy.set(i, convertExpressionToSnakeCase(groupBy.get(i)));
                 }
             }
 
             if (select.getOrderByElements() != null) {
                 List<OrderByElement> orderBy = select.getOrderByElements();
                 for (int i = 0; i < orderBy.size(); i++) {
-                    orderBy.get(i).setExpression(convertExpressionToSnakeCase(orderBy.get(i).getExpression(), false));
+                    orderBy.get(i).setExpression(convertExpressionToSnakeCase(orderBy.get(i).getExpression()));
                 }
             }
 
             if (select.getHaving() != null) {
-                select.setHaving(convertExpressionToSnakeCase(select.getHaving(), false));
+                select.setHaving(convertExpressionToSnakeCase(select.getHaving()));
             }
             processJoins(entity, select);
         }
@@ -569,146 +569,106 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Recursively convert field names in expressions to snake case
      *
-     * We violate SRP by also cleaning up some of the fields in the where clause. What we
-     * hope to achieve through repository query parsing is to identify suitable data for
-     * our test cases. That means the more filters that we apply the less likely that we
-     * will get any results from query execution. Then the thing to do is to remove the
-     * conditions.
-     *
      * @param expr to be converted
      * @return the converted expression
      */
-    Expression convertExpressionToSnakeCase(Expression expr, boolean where) {
+     Expression convertExpressionToSnakeCase(Expression expr) {
         if (expr instanceof AndExpression andExpr) {
-            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression(), where));
-            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression(), where));
+            andExpr.setLeftExpression(convertExpressionToSnakeCase(andExpr.getLeftExpression()));
+            andExpr.setRightExpression(convertExpressionToSnakeCase(andExpr.getRightExpression()));
+        } else if (expr instanceof Between between) {
+            between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression()));
+            between.setBetweenExpressionStart(convertExpressionToSnakeCase(between.getBetweenExpressionStart()));
+            between.setBetweenExpressionEnd(convertExpressionToSnakeCase(between.getBetweenExpressionEnd()));
+        } else if (expr instanceof InExpression ine) {
+            ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression()));
+        } else if (expr instanceof IsNullExpression isNull) {
+            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression()));
+        } else if (expr instanceof ParenthesedExpressionList pel) {
+            for (int i = 0; i < pel.size(); i++) {
+                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i)));
+            }
+        } else if (expr instanceof CaseExpression ce) {
+            for (int i = 0; i < ce.getWhenClauses().size(); i++) {
+                WhenClause when = ce.getWhenClauses().get(i);
+                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression()));
+                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression()));
+            }
+        } else if (expr instanceof WhenClause wh) {
+            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression()));
+        } else if (expr instanceof Function function) {
+            ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
+            if (params != null) {
+                for (int i = 0; i < params.size(); i++) {
+                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i)));
+                }
+            }
+        } else if (expr instanceof ComparisonOperator compare) {
+            compare.setRightExpression(convertExpressionToSnakeCase(compare.getRightExpression()));
+            compare.setLeftExpression(convertExpressionToSnakeCase(compare.getLeftExpression()));
+        } else if (expr instanceof BinaryExpression binaryExpr) {
+            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression()));
+            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression()));
+        } else if (expr instanceof Column column) {
+            column.setColumnName(camelToSnake(column.getColumnName()));
         }
-        else if (expr instanceof Between between) {
-            between.setLeftExpression(convertExpressionToSnakeCase(between.getLeftExpression(), where));
-            Expression start = between.getBetweenExpressionStart();
-            Expression end = between.getBetweenExpressionEnd();
+        return expr;
+    }
 
-            mapPlaceHolders(start, camelToSnake(between.getLeftExpression().toString()));
-            mapPlaceHolders(end, camelToSnake(between.getLeftExpression().toString()));
-            current.remove(camelToSnake(between.getLeftExpression().toString()));
+    /**
+     * Change the where clause so that the query is likely to be executed with success.
+     *
+     * By default when we get a query, we need to figure out what arguments in the where clause
+     * will give a non empty result. That's one of the key challenges of API and Integration
+     * testing.
+     *
+     * If we are able to run the query with a very limited where clause or a non existant where
+     * clause we can then examine the result to figure out what values can actually be used to
+     * @param expr the expression to be modified
+     *
+     */
+    Expression setValuesInWhereClause(Expression expr) {
+        if (expr instanceof Between between) {
+            currentQuery.mapPlaceHolders(between.getBetweenExpressionStart(), camelToSnake(between.getLeftExpression().toString()));
+            currentQuery.mapPlaceHolders(between.getBetweenExpressionEnd(), camelToSnake(between.getLeftExpression().toString()));
+            currentQuery.remove(camelToSnake(between.getLeftExpression().toString()));
             between.setBetweenExpressionStart(new LongValue("2"));
             between.setBetweenExpressionEnd(new LongValue("4"));
             between.setLeftExpression(new LongValue("3"));
-        }
-        else if (expr instanceof  InExpression ine) {
+        } else if (expr instanceof InExpression ine) {
             Column col = (Column) ine.getLeftExpression();
-            if(where &&
-                    !("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
-                mapPlaceHolders(ine.getRightExpression(), camelToSnake(col.toString()));
-                current.remove(camelToSnake(ine.getLeftExpression().toString()));
+            if (!("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
+                currentQuery.mapPlaceHolders(ine.getRightExpression(), camelToSnake(col.toString()));
+                currentQuery.remove(camelToSnake(ine.getLeftExpression().toString()));
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<Expression> rightExpression = new ExpressionList<>();
-
                 rightExpression.add(new StringValue("1"));
                 ine.setRightExpression(rightExpression);
             }
-            else {
-                ine.setLeftExpression(convertExpressionToSnakeCase(ine.getLeftExpression(), where));
-            }
-        }
-        else if (expr instanceof IsNullExpression isNull) {
-            isNull.setLeftExpression(convertExpressionToSnakeCase(isNull.getLeftExpression(), where));
-        }
-        else if (expr instanceof ParenthesedExpressionList pel) {
-            for(int i = 0 ; i < pel.size() ; i++) {
-                pel.getExpressions().set(i, convertExpressionToSnakeCase((Expression) pel.get(i), where));
-            }
-        }
-        else if (expr instanceof CaseExpression) {
-            CaseExpression ce = (CaseExpression) expr;
-            for(int i = 0; i < ce.getWhenClauses().size(); i++) {
-                WhenClause when = ce.getWhenClauses().get(i);
-                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression(), where));
-                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression(), where));
-            }
-
-        }
-        else if (expr instanceof WhenClause wh) {
-            wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression(), where));
-        }
-        else if (expr instanceof Function function) {
-            ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
-            if(params != null) {
-                for (int i = 0; i < params.size(); i++) {
-                    params.getExpressions().set(i, convertExpressionToSnakeCase((Expression) params.get(i), where));
-                }
-            }
-        }
-        else if (expr instanceof ComparisonOperator compare) {
-            // this will be the leaf for Most WHERE clauses and HAVING clauses
+        } else if (expr instanceof ComparisonOperator compare) {
             Expression left = compare.getLeftExpression();
             Expression right = compare.getRightExpression();
-
-            if(left instanceof Column && right instanceof JdbcParameter || right instanceof JdbcNamedParameter) {
+            if (left instanceof Column && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
                 Column col = (Column) left;
                 String name = camelToSnake(left.toString());
-
-                mapPlaceHolders(right, name);
-
-                if(col.getColumnName().equals("hospitalId")) {
+                currentQuery.mapPlaceHolders(right, name);
+                if (col.getColumnName().equals("hospitalId")) {
                     compare.setRightExpression(new LongValue("59"));
-                    compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left));
                     return expr;
-                }
-                else if(col.getColumnName().equals("hospitalGroupId")) {
+                } else if (col.getColumnName().equals("hospitalGroupId")) {
                     compare.setRightExpression(new LongValue("58"));
-                    compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
+                    compare.setLeftExpression(convertExpressionToSnakeCase(left));
                     return expr;
-                }
-                else if (where){
-                    // we have a comparison so this is vary likely to be a part of the where clause.
-                    // our object is to run a query to identify likely data. So removing as many
-                    // components from the where clause is the way to go
-
-                    current.remove(name);
+                } else  {
+                    currentQuery.remove(name);
                     compare.setLeftExpression(new StringValue("1"));
                     compare.setRightExpression(new StringValue("1"));
                     return expr;
                 }
             }
-
-            // common fall through for everything
-            compare.setRightExpression(convertExpressionToSnakeCase(right, where));
-            compare.setLeftExpression(convertExpressionToSnakeCase(left, where));
-
-        }
-        else if (expr instanceof BinaryExpression binaryExpr) {
-            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression(), where));
-            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression(), where));
-        } else if (expr instanceof Column column) {
-            String columnName = column.getColumnName();
-
-            String snakeCaseField = camelToSnake(columnName);
-            column.setColumnName(snakeCaseField);
-            return column;
         }
         return expr;
-    }
-
-    private void mapPlaceHolders(Expression right, String name) {
-        if(right instanceof  JdbcParameter rhs) {
-            int pos = rhs.getIndex();
-            RepositoryQuery.QueryMethodParameter params = current.getMethodParameters().get(pos - 1);
-            params.getPlaceHolderId().add(pos);
-            params.setColumnName(name);
-
-            logger.debug("Mapping " + name + " to " + params.getParameter().getName());
-        }
-        else {
-            String placeHolder = ((JdbcNamedParameter) right).getName();
-            for(RepositoryQuery.QueryMethodParameter p : current.getMethodParameters()) {
-                if(p.getPlaceHolderName().equals(placeHolder)) {
-                    p.setColumnName(name);
-                    logger.debug("Mapping " + name + " to " + p.getParameter().getName());
-                    break;
-                }
-            }
-        }
     }
 
     /**
@@ -920,6 +880,14 @@ public class RepositoryParser extends ClassProcessor {
         List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
         MethodDeclaration md = findMethodDeclaration(methodCall, methods).orElse(null);
         return md;
+    }
+
+    public RepositoryQuery getCurrentQuery() {
+        return currentQuery;
+    }
+
+    public void setCurrentQuery(RepositoryQuery currentQuery) {
+        this.currentQuery = currentQuery;
     }
 }
 

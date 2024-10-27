@@ -3,8 +3,13 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
+import net.sf.jsqlparser.expression.JdbcNamedParameter;
+import net.sf.jsqlparser.expression.JdbcParameter;
 import net.sf.jsqlparser.schema.Table;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -14,6 +19,7 @@ import java.util.List;
  * Represents a query from a JPARepository
  */
 public class RepositoryQuery {
+    private static final Logger logger = LoggerFactory.getLogger(RepositoryQuery.class);
 
     /**
      * Whether the query is native or not.
@@ -105,6 +111,27 @@ public class RepositoryQuery {
         return methodArguments;
     }
 
+
+    public void mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
+        if(right instanceof  JdbcParameter rhs) {
+            int pos = rhs.getIndex();
+            RepositoryQuery.QueryMethodParameter params = getMethodParameters().get(pos - 1);
+            params.getPlaceHolderId().add(pos);
+            params.setColumnName(name);
+
+            logger.debug("Mapping " + name + " to " + params.getParameter().getName());
+        }
+        else {
+            String placeHolder = ((JdbcNamedParameter) right).getName();
+            for(RepositoryQuery.QueryMethodParameter p : getMethodParameters()) {
+                if(p.getPlaceHolderName().equals(placeHolder)) {
+                    p.setColumnName(name);
+                    logger.debug("Mapping " + name + " to " + p.getParameter().getName());
+                    break;
+                }
+            }
+        }
+    }
 
     /**
      * Represents a parameter in the query method.
@@ -214,5 +241,6 @@ public class RepositoryQuery {
             return argument;
         }
     }
+
 
 }
