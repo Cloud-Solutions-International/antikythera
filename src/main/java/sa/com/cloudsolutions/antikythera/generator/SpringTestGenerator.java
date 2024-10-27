@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 
-import com.github.javaparser.StaticJavaParser;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -46,7 +45,7 @@ import java.util.Set;
  * We traverse the code in the method line by line until we encounter an if/else statement. At that
  * point we generate a truth table to determine what values will lead to the condition being true.
  *
- * The first eligble candidate set of values will be chosen for the true state which will result
+ * The first eligible candidate set of values will be chosen for the true state which will result
  * in the THEN branch being executed. We proceed until a return statement is encountered. At that
  * point we generate the tests based on the values that were applied to the condition. These values
  * may have percolated downward from method arguments. So we need to trace the values back to the
@@ -60,6 +59,11 @@ import java.util.Set;
  *
  * That means a function will have to be executed multiple times until we have covered all
  * possible branches. Therefor we need to keep track of the last line that has been executed.
+ *
+ * There is a Caveat. Simple controller functions without any branching in them also exists and
+ * actions taken depend sorely on the query string or post body. Therefore, it's always necessary
+ * for us to try methods without branching three times. The first time without any query strings,
+ * Secondly with naive values and finally with values that will result in queries being executed.
  */
 public class SpringTestGenerator implements  TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
@@ -91,11 +95,32 @@ public class SpringTestGenerator implements  TestGenerator {
      */
     private List<Expression> preConditions;
 
+    /**
+     * Boolean value indicating if the method under test has any branching.
+     */
+    private boolean branched;
 
     /**
-     * Create tests based on the method declarion and return type
-     * @param md
-     * @param controllerResponse
+     * We are going to try to generate tests assuming no query strings or post data
+     */
+    private final int NULL_STATE = 0;
+    /**
+     * Tests will be written providing not null values for query strings or post data.
+     */
+    private final int DUMMY_STATE = 1;
+    /**
+     * Tests will be written with values that were identified from database queries.
+     */
+    private final int ENLIGHTENED_STATE = 2;
+    /**
+     * The current state of the test generation. It will be one of the values above.
+     */
+    private int state = NULL_STATE;
+    /**
+     * Create tests based on the method declaration and return type
+     * @param md the descriptor of the method for which we are about to write tests.
+     * @param controllerResponse the ControllerResponse instance, inside that we will find the
+     *                           ResponseEntity as well as the body of the ResponseEntity.
      */
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse controllerResponse) {
@@ -142,7 +167,20 @@ public class SpringTestGenerator implements  TestGenerator {
 
 
     private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        httpWithoutBody(md, annotation, "makeGet", returnType);
+        if (!branched) {
+            state = NULL_STATE;
+            httpWithoutBody(md, annotation, "makeGet", returnType);
+
+            state = DUMMY_STATE;
+            httpWithoutBody(md, annotation, "makeGet", returnType);
+
+            state = ENLIGHTENED_STATE;
+            httpWithoutBody(md, annotation, "makeGet", returnType);
+        }
+        else {
+            state = DUMMY_STATE;
+            httpWithoutBody(md, annotation, "makeGet", returnType);
+        }
     }
 
     private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call, ControllerResponse response)  {
@@ -170,7 +208,9 @@ public class SpringTestGenerator implements  TestGenerator {
             } catch (SQLException e) {
                 logger.warn(e.getMessage());
             }
-            handleURIVariables(md, request);
+            if (state == DUMMY_STATE) {
+                handleURIVariables(md, request);
+            }
 
             makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
             if(!request.getQueryParameters().isEmpty()) {
@@ -522,6 +562,14 @@ public class SpringTestGenerator implements  TestGenerator {
         return commonPath;
     }
 
+    /**
+     * Handle the RequestParam and PathVariables.
+     * We just set the values to a reasonable default. These defaults are likely to result in the
+     * method not throwing any null pointer exceptions, that's all!
+     *
+     * @param md the method declaration
+     * @param request the controller request
+     */
     void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
             String paramString = String.valueOf(param);
@@ -595,6 +643,16 @@ public class SpringTestGenerator implements  TestGenerator {
     @Override
     public void setPreconditions(List<Expression> preconditions) {
         this.preConditions = preconditions;
+    }
+
+    @Override
+    public boolean isBranched() {
+        return branched;
+    }
+
+    @Override
+    public void setBranched(boolean branched) {
+        this.branched = branched;
     }
 }
 

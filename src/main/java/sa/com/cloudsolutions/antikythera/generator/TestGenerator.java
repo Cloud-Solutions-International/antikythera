@@ -19,4 +19,9 @@ public interface TestGenerator {
     CompilationUnit getCompilationUnit();
 
     void setPreconditions(List<Expression> expr);
+
+
+    public boolean isBranched();
+
+    public void setBranched(boolean branched);
 }

@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
-import javax.naming.ldap.Control;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -552,6 +551,10 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
+        for(TestGenerator gen : generators) {
+            gen.setBranched(true);
+        }
+
         LineOfCode l = lines.get(ifst.hashCode());
         if (l == null) {
             /*
@@ -747,6 +750,11 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        if (AntikytheraRunTime.isControllerClass(getClassName())) {
+            for(TestGenerator gen : generators) {
+                gen.setBranched(false);
+            }
+        }
         Expression expression = methodCall.getScope().orElseGet(null);
         if (expression != null && expression.isNameExpr()) {
             String fieldName = expression.asNameExpr().getNameAsString();
