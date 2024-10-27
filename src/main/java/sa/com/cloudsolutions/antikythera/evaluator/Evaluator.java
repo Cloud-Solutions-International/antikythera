@@ -192,7 +192,7 @@ public class Evaluator {
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
-            return createObject(expr, null, expr);
+            return createObject(expr, null, expr.asObjectCreationExpr());
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
@@ -473,7 +473,7 @@ public class Evaluator {
             }
         }
         else if(init.isObjectCreationExpr()) {
-            v = createObject(init, decl, init);
+            v = createObject(init, decl, init.asObjectCreationExpr());
             if (v != null) {
                 v.setType(decl.getType());
                 setLocal(decl, decl.getNameAsString(), v);
@@ -498,11 +498,10 @@ public class Evaluator {
      * @param decl  The variable declaration. Pass null here if you don't want to create local variable.
      *              This would typically be the case if you have a method call and one of the arguments
      *              to the method call is a new instance.
-     * @param expression The expression to be evaluated and assigned as the initial value
+     * @param oce The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
-    Variable createObject(Node instructionPointer, VariableDeclarator decl, Expression expression) throws AntikytheraException, ReflectiveOperationException {
-        ObjectCreationExpr oce = expression.asObjectCreationExpr();
+    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
         Variable vx;
 
@@ -1303,7 +1302,7 @@ public class Evaluator {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
-                Variable v = createObject(variable, variable, init.get());
+                Variable v = createObject(variable, variable, init.get().asObjectCreationExpr());
                 fields.put(variable.getNameAsString(), v);
             }
             else {

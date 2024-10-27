@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.base;
 
-import com.cloud.api.configurations.Configurations;
+import sa.com.cloudsolutions.antikythera.configurations.Configurations;
 import sa.com.cloudsolutions.antikythera.constants.StaticHeaders;
 import com.cloud.api.rest.APIRequester;
 import com.cloud.core.config.enums.ConfigKeys;

@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
+import javax.naming.ldap.Control;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -404,8 +405,7 @@ public class SpringEvaluator extends Evaluator {
             if (parent.isPresent()) {
                 // the return statement will have a parent no matter what but the optionals approach
                 // requires the use of isPresent.
-                ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
-                return createTests(response);
+                return createTests((ControllerResponse) returnValue.getValue());
             }
         }
         else {
@@ -446,11 +446,6 @@ public class SpringEvaluator extends Evaluator {
             return new Variable(response);
         }
         return null;
-    }
-
-    private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) {
-        return new ControllerResponse(returnValue);
-
     }
 
     public void addGenerator(TestGenerator generator) {
@@ -896,6 +891,19 @@ public class SpringEvaluator extends Evaluator {
 
     public void setOnTest(boolean b) {
         onTest = b;
+    }
+
+    @Override
+    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = super.createObject(instructionPointer, decl, oce);
+        ClassOrInterfaceType type = oce.getType();
+        if (type.getNameAsString().equals("ResponseEntity")) {
+            ControllerResponse response = new ControllerResponse(v);
+            response.setBody(evaluateExpression(oce.getArguments().get(0)));
+            response.setType(type);
+            return new Variable(response);
+        }
+        return v;
     }
 }
 

@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 
+import com.github.javaparser.StaticJavaParser;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -94,36 +95,36 @@ public class SpringTestGenerator implements  TestGenerator {
     /**
      * Create tests based on the method declarion and return type
      * @param md
-     * @param returnType
+     * @param controllerResponse
      */
     @Override
-    public void createTests(MethodDeclaration md, ControllerResponse returnType) {
+    public void createTests(MethodDeclaration md, ControllerResponse controllerResponse) {
         RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
         for (AnnotationExpr annotation : md.getAnnotations()) {
             if (annotation.getNameAsString().equals("GetMapping") ) {
-                buildGetMethodTests(md, annotation, returnType);
+                buildGetMethodTests(md, annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("PostMapping")) {
-                buildPostMethodTests(md, annotation, returnType);
+                buildPostMethodTests(md, annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("DeleteMapping")) {
-                buildDeleteMethodTests(md, annotation, returnType);
+                buildDeleteMethodTests(md, annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                 NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
                 for (var pair : normalAnnotation.getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
                         if (pair.getValue().toString().equals("RequestMethod.GET")) {
-                            buildGetMethodTests(md, annotation, returnType);
+                            buildGetMethodTests(md, annotation, controllerResponse);
                         }
                         if (pair.getValue().toString().equals("RequestMethod.POST")) {
-                            buildPostMethodTests(md, annotation, returnType);
+                            buildPostMethodTests(md, annotation, controllerResponse);
                         }
                         if (pair.getValue().toString().equals("RequestMethod.PUT")) {
-                            buildPutMethodTests(md, annotation, returnType);
+                            buildPutMethodTests(md, annotation, controllerResponse);
                         }
                         if (pair.getValue().toString().equals("RequestMethod.DELETE")) {
-                            buildDeleteMethodTests(md, annotation, returnType);
+                            buildDeleteMethodTests(md, annotation, controllerResponse);
                         }
                     }
                 }
@@ -185,7 +186,7 @@ public class SpringTestGenerator implements  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(testMethod, response, body);
+        addCheckStatus(testMethod, response);
         gen.getType(0).addMember(testMethod);
 
     }
@@ -250,11 +251,19 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
 
-    private void addCheckStatus(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
+    private void addCheckStatus(MethodDeclaration md, ControllerResponse resp) {
 
         Type returnType = resp.getType();
-        if(returnType.asString().equals("ResponseEntity")) {
+        BlockStmt body = md.getBody().orElseGet(() -> {
+            BlockStmt blockStmt = new BlockStmt();
+            md.setBody(blockStmt);
+            return blockStmt;
+        });
 
+        if (resp.getBody().getValue() == null) {
+            MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
+            as.addArgument("response.getBody().asString().isEmpty()");
+            body.addStatement(new ExpressionStmt(as));
         }
         else {
             Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
@@ -266,6 +275,7 @@ public class SpringTestGenerator implements  TestGenerator {
             ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
             body.addStatement(expressionStmt);
         }
+        addHttpStatusCheck(body, resp.getStatusCode());
     }
 
 
@@ -326,7 +336,7 @@ public class SpringTestGenerator implements  TestGenerator {
                     if (respType.toString().equals("String")) {
                         testForResponseBodyAsString(md, resp, body);
                     } else {
-                        addCheckStatus(md, resp, body);
+                        addCheckStatus(md, resp);
                     }
                 }
             }

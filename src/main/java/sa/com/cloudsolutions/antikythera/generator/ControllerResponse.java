@@ -10,6 +10,7 @@ import java.util.Map;
 public class ControllerResponse {
     Type type;
     Variable response;
+    Variable body;
 
     private static Map<String, Integer> statusCodes = new HashMap<>();
     static {
@@ -55,6 +56,14 @@ public class ControllerResponse {
             return re.getStatusCodeValue();
         }
         return 0;
+    }
+
+    public Variable getBody() {
+        return body;
+    }
+
+    public void setBody(Variable body) {
+        this.body = body;
     }
 
     public static Map<String, Integer> getStatusCodes() {
