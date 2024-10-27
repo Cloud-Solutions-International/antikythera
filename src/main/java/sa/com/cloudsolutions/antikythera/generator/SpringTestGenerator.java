@@ -131,8 +131,8 @@ public class SpringTestGenerator implements  TestGenerator {
         }
     }
 
-    private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        httpWithoutBody(md, annotation, "makeDelete");
+    private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse response) {
+        httpWithoutBody(md, annotation, "makeDelete", response);
     }
 
     private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
@@ -141,10 +141,10 @@ public class SpringTestGenerator implements  TestGenerator {
 
 
     private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        httpWithoutBody(md, annotation, "makeGet");
+        httpWithoutBody(md, annotation, "makeGet", returnType);
     }
 
-    private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call)  {
+    private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call, ControllerResponse response)  {
         MethodDeclaration testMethod = buildTestMethod(md);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
@@ -164,6 +164,7 @@ public class SpringTestGenerator implements  TestGenerator {
             request.setPath(getPath(annotation).replace("\"", ""));
 
             try {
+                // todo : this is not how you do it.
                 replaceURIVariablesFromDb(md, request);
             } catch (SQLException e) {
                 logger.warn(e.getMessage());
@@ -184,7 +185,7 @@ public class SpringTestGenerator implements  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(testMethod);
+        addCheckStatus(testMethod, response, body);
         gen.getType(0).addMember(testMethod);
 
     }
@@ -249,10 +250,22 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
 
-    private void addCheckStatus(MethodDeclaration md) {
-        MethodCallExpr check = new MethodCallExpr("checkStatusCode");
-        check.addArgument(new NameExpr("response"));
-        md.getBody().get().addStatement(new ExpressionStmt(check));
+    private void addCheckStatus(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
+
+        Type returnType = resp.getType();
+        if(returnType.asString().equals("ResponseEntity")) {
+
+        }
+        else {
+            Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+            VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+            MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+            variableDeclarator.setInitializer(methodCallExpr);
+            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+            ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+            body.addStatement(expressionStmt);
+        }
     }
 
 
@@ -313,20 +326,14 @@ public class SpringTestGenerator implements  TestGenerator {
                     if (respType.toString().equals("String")) {
                         testForResponseBodyAsString(md, resp, body);
                     } else {
-                        System.out.println("bada 1");
-                        // todo get thsi back on line
-                        //                                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                        //                                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                        //                                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                        //                                variableDeclarator.setInitializer(methodCallExpr);
-                        //                                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                        //                                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                        //                                body.addStatement(expressionStmt);
+                        addCheckStatus(md, resp, body);
                     }
                 }
             }
         }
     }
+
+
 
     private static void testForResponseBodyAsString(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
         body.addStatement("String resp = response.getBody().asString();");

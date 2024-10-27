@@ -832,8 +832,8 @@ public class Evaluator {
             }
         }
 
-        variable = evaluateMethodCall(variable, methodCall);
-        return variable;
+        return evaluateMethodCall(variable, methodCall);
+
     }
 
     /**

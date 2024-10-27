@@ -9,7 +9,7 @@ import java.util.Map;
 
 public class ControllerResponse {
     Type type;
-    Object response;
+    Variable response;
 
     private static Map<String, Integer> statusCodes = new HashMap<>();
     static {
@@ -31,8 +31,7 @@ public class ControllerResponse {
     }
 
     public ControllerResponse(Variable v) {
-        this.response = v.getValue();
-        this.type = v.getType();
+        this.response = v;
     }
 
     public void setType(Type type) {
@@ -47,12 +46,12 @@ public class ControllerResponse {
         return response;
     }
 
-    public void setResponse(Object response) {
+    public void setResponse(Variable response) {
         this.response = response;
     }
 
     public int getStatusCode() {
-        if (response instanceof ResponseEntity<?> re) {
+        if (response.getValue() instanceof ResponseEntity<?> re) {
             return re.getStatusCodeValue();
         }
         return 0;

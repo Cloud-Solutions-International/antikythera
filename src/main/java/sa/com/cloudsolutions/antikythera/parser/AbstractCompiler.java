@@ -251,7 +251,7 @@ public class AbstractCompiler {
                 return Optional.of(node.resolve());
             } catch (Exception e) {
                 // Handle the exception or log it
-                logger.info("Error resolving type: {}", node);
+                logger.debug("Error resolving type: {}", node);
             }
         }
         return Optional.empty();

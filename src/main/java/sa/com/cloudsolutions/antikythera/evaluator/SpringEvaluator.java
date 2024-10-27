@@ -529,7 +529,8 @@ public class SpringEvaluator extends Evaluator {
             if (aex instanceof EvaluatorException eex) {
                 ControllerResponse controllerResponse = new ControllerResponse();
                 if (eex.getError() != 0 && onTest) {
-                    controllerResponse.setResponse( new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
+                    Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
+                    controllerResponse.setResponse(r);
                     createTests(controllerResponse);
                     returnFrom = methodCall;
                 }
@@ -827,9 +828,9 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Convers an SQL row to an Entity.
+     * Converts an SQL row to an Entity.
      * @param variable copy the data from the record into this variable.
-     * @param rs the sql resultset
+     * @param rs the sql result set
      *
      * @throws AntikytheraException
      * @throws ReflectiveOperationException
@@ -853,8 +854,8 @@ public class SpringEvaluator extends Evaluator {
                         }
                     }
                 }
+                return true;
             }
-            return true;
         } catch (SQLException e) {
             logger.warn(e.getMessage());
         }

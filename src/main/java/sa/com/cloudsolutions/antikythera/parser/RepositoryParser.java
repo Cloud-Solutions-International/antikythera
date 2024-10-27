@@ -306,10 +306,10 @@ public class RepositoryParser extends ClassProcessor {
                     QueryMethodArgument arg = rql.getMethodArguments().get(i);
                     String name = arg.getVariable().getClazz().getName();
                     switch (name) {
-                        case "Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
-                        case "String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
-                        case "Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
-                        case "Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+                        case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
+                        case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
+                        case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
+                        case "java.lang.Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
                     }
                 }
 
