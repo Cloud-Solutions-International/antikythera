@@ -8,6 +8,8 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -302,8 +304,8 @@ public class SpringEvaluator extends Evaluator {
                 String nameAsString = repoMethod.getNameAsString();
                 if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                        q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(methodCall.getArgument(i), i));
-                        q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
+                        q.getMethodArguments().add(new QueryMethodArgument(methodCall.getArgument(i), i));
+                        q.getMethodParameters().add(new QueryMethodParameter(repoMethod.getParameter(i), i));
                     }
 
                     ResultSet rs = repository.executeQuery(repoMethod);

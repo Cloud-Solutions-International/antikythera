@@ -207,13 +207,13 @@ public class SpringTestGenerator implements  TestGenerator {
     private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
         if (last != null && last.getResultSet() != null) {
             ResultSet rs = last.getResultSet();
-            List<RepositoryQuery.QueryMethodParameter> paramMap = last.getMethodParameters();
-            List<RepositoryQuery.QueryMethodArgument> argsMap = last.getMethodArguments();
+            List<QueryMethodParameter> paramMap = last.getMethodParameters();
+            List<QueryMethodArgument> argsMap = last.getMethodArguments();
 
             if(rs.next()) {
                 for(int i = 0 ; i < paramMap.size() ; i++) {
-                    RepositoryQuery.QueryMethodParameter param = paramMap.get(i);
-                    RepositoryQuery.QueryMethodArgument arg = argsMap.get(i);
+                    QueryMethodParameter param = paramMap.get(i);
+                    QueryMethodArgument arg = argsMap.get(i);
 
                     if(param.getColumnName() != null) {
                         String[] parts = param.getColumnName().split("\\.");
