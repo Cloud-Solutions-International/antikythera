@@ -9,6 +9,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
@@ -89,11 +90,16 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * A query cache.
-     * Since we execute the same lines of code repeatedly in order to generate testss to cover
+     * Since we execute the same lines of code repeatedly in order to generate tests to cover
      * different branches, we will end up executing the same query over and over again. This is
      * wasteful in terms of both time and money! So we will cache the result sets here.
      */
     private final Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
+
+    /**
+     * A cache for the simplified queries.
+     */
+    private final Map<MethodDeclaration, ResultSet> happyCache = new HashMap<>();
 
     public RepositoryParser() throws IOException {
         super();
@@ -272,49 +278,46 @@ public class RepositoryParser extends ClassProcessor {
             return cached;
         }
         RepositoryQuery rql = queries.get(method);
-        ResultSet rs = executeQuery(rql);
+        ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
         cache.put(method, rs);
         return rs;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql) throws IOException {
+    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method)  {
         try {
-            RepositoryParser.createConnection();
-            Select stmt = (Select) rql.getSimplifiedStatement();
-
-            String sql = stmt.toString().replaceAll("\\?\\d+", "?");
-            if(dialect.equals(ORACLE)) {
-                sql = sql.replaceAll("(?i)true", "1")
-                        .replaceAll("(?i)false", "0");
-            }
-
-            // if the sql contains more than 1 AND clause we will delete '1' IN '1'
-            Pattern pattern = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(sql);
-            int count = 0;
-            while (matcher.find()) {
-                count++;
-                if(count == 3) {
-                    sql = sql.replaceAll("'1' IN '1' AND", "");
-                    break;
-                }
-            }
-
             if(runQueries) {
+                RepositoryParser.createConnection();
+                
+                Select stmt = (Select) rql.getSimplifiedStatement();
+                String sql = beautify(stmt.toString());
+                sql = trueFalseCheck(sql);
+
                 int argumentCount = countPlaceholders(sql);
+
+                if (argumentCount != 0) {
+                    // we will run the query the simplified query as well.
+                    Select simplified = (Select) rql.getSimplifiedStatement();
+                    String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
+                    PreparedStatement prep = conn.prepareStatement(simplifiedSql);
+                    for (int i = 0; i < argumentCount ; i++) {
+                        QueryMethodArgument arg = rql.getMethodArguments().get(i);
+                        QueryMethodParameter p = rql.getMethodParameters().get(i);
+                        if(!p.isRemoved()) {
+                            bindParameters(arg, prep, i);
+                        }
+                    }
+
+                    if (prep.execute()) {
+                        happyCache.put(method, prep.getResultSet());
+                    }
+                }
 
                 PreparedStatement prep = conn.prepareStatement(sql);
 
                 for (int i = 0; i < argumentCount ; i++) {
                     QueryMethodArgument arg = rql.getMethodArguments().get(i);
-                    String name = arg.getVariable().getClazz().getName();
-                    switch (name) {
-                        case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
-                        case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
-                        case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
-                        case "java.lang.Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
-                    }
+                    bindParameters(arg, prep, i);
                 }
 
                 if (prep.execute()) {
@@ -326,6 +329,47 @@ public class RepositoryParser extends ClassProcessor {
             logger.error(rql.getQuery());
         }
         return null;
+    }
+
+    private static void bindParameters(QueryMethodArgument arg, PreparedStatement prep, int i) throws SQLException {
+        String name = arg.getVariable().getClazz().getName();
+        switch (name) {
+            case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
+            case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
+            case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
+            case "java.lang.Boolean" ->
+                    prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+        }
+    }
+
+    /**
+     * Oracle has wierd ideas about boolean
+     * @param sql
+     * @return
+     */
+    private static String trueFalseCheck(String sql) {
+        if(dialect.equals(ORACLE)) {
+            sql = sql.replaceAll("(?i)true", "1")
+                    .replaceAll("(?i)false", "0");
+        }
+        return sql;
+    }
+
+    private static String beautify(String sql) {
+        sql = sql.replaceAll("\\?\\d+", "?");
+
+        // if the sql contains more than 1 AND clause we will delete '1' IN '1'
+        Pattern pattern = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(sql);
+        int count = 0;
+        while (matcher.find()) {
+            count++;
+            if(count == 3) {
+                sql = sql.replaceAll("'1' IN '1' AND", "");
+                break;
+            }
+        }
+        return sql;
     }
 
     /**
