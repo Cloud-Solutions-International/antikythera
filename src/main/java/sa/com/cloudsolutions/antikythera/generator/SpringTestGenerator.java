@@ -82,7 +82,7 @@ public class SpringTestGenerator implements  TestGenerator {
     /**
      * The last executed database query.
      */
-    RepositoryQuery last;
+    RepositoryQuery query;
     /**
      * The compilation unit that represents the tests being generated.
      * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
@@ -202,11 +202,12 @@ public class SpringTestGenerator implements  TestGenerator {
             ControllerRequest request = new ControllerRequest();
             request.setPath(getPath(annotation).replace("\"", ""));
 
-            try {
-                // todo : this is not how you do it.
-                replaceURIVariablesFromDb(md, request);
-            } catch (SQLException e) {
-                logger.warn(e.getMessage());
+            if (state == ENLIGHTENED_STATE) {
+                try {
+                    replaceURIVariablesFromDb(md, request);
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
             }
             if (state == DUMMY_STATE) {
                 handleURIVariables(md, request);
@@ -247,10 +248,10 @@ public class SpringTestGenerator implements  TestGenerator {
      *    The placeholder may have been removed though!
      */
     private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
-        if (last != null && last.getResultSet() != null) {
-            ResultSet rs = last.getResultSet();
-            List<QueryMethodParameter> paramMap = last.getMethodParameters();
-            List<QueryMethodArgument> argsMap = last.getMethodArguments();
+        if (query != null && query.getSimplifiedResultSet() != null) {
+            ResultSet rs = query.getResultSet();
+            List<QueryMethodParameter> paramMap = query.getMethodParameters();
+            List<QueryMethodArgument> argsMap = query.getMethodArguments();
 
             if(rs.next()) {
                 for(int i = 0 ; i < paramMap.size() ; i++) {
@@ -593,7 +594,7 @@ public class SpringTestGenerator implements  TestGenerator {
                     case "float", "Float", "double", "Double" -> request.getPath().replace(target, "0.0");
                     case "Integer", "int", "Long" -> request.getPath().replace(target, "0");
                     case "String" -> request.getPath().replace(target, "Ibuprofen");
-                    default -> request.getPath().replace(target, "0");
+                    default -> request.getPath().replace(target, "");
                 };
                 request.setPath(path);
             }
@@ -653,6 +654,16 @@ public class SpringTestGenerator implements  TestGenerator {
     @Override
     public void setBranched(boolean branched) {
         this.branched = branched;
+    }
+
+    @Override
+    public void setQuery(RepositoryQuery query) {
+        this.query = query;
+    }
+
+    @Override
+    public RepositoryQuery getQuery() {
+        return null;
     }
 }
 

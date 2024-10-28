@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -24,4 +25,7 @@ public interface TestGenerator {
     public boolean isBranched();
 
     public void setBranched(boolean branched);
+
+    public void setQuery(RepositoryQuery query);
+    public RepositoryQuery getQuery();
 }

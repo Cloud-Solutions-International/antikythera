@@ -99,6 +99,7 @@ public class RepositoryQuery {
      * The original query as it was passed to the repository method.
      */
     private String originalQuery;
+    private ResultSet simplifiedResultSet;
 
     public RepositoryQuery() {
         methodParameters = new ArrayList<>();
@@ -115,6 +116,9 @@ public class RepositoryQuery {
 
     public void setMethodDeclaration(MethodDeclaration methodDeclaration) {
         this.methodDeclaration = methodDeclaration;
+        for (int i = 0; i < methodDeclaration.getParameters().size(); i++) {
+            methodParameters.add(new QueryMethodParameter(methodDeclaration.getParameter(i), i));
+        }
     }
 
     public Variable getCachedResult() {
@@ -135,6 +139,10 @@ public class RepositoryQuery {
                 p.setRemoved(true);
             }
         }
+    }
+
+    public ResultSet getSimplifiedResultSet() {
+        return simplifiedResultSet;
     }
 
     public ResultSet getResultSet() {
@@ -457,6 +465,10 @@ public class RepositoryQuery {
      *
      */
     net.sf.jsqlparser.expression.Expression simplifyWhereClause(net.sf.jsqlparser.expression.Expression expr) {
+        if (expr instanceof AndExpression andExpr) {
+            andExpr.setLeftExpression(simplifyWhereClause(andExpr.getLeftExpression()));
+            andExpr.setRightExpression(simplifyWhereClause(andExpr.getRightExpression()));
+        }
         if (expr instanceof Between between) {
             mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
             mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
@@ -481,20 +493,18 @@ public class RepositoryQuery {
 
                 String name = RepositoryParser.camelToSnake(left.toString());
                 mapPlaceHolders(right, name);
-                if (col.getColumnName().equals("hospitalId")) {
+                if (col.getColumnName().equals("hospital_id")) {
                     compare.setRightExpression(new LongValue("59"));
                     compare.setLeftExpression(convertExpressionToSnakeCase(left));
-                    return expr;
-                } else if (col.getColumnName().equals("hospitalGroupId")) {
+                } else if (col.getColumnName().equals("hospital_group_id")) {
                     compare.setRightExpression(new LongValue("58"));
                     compare.setLeftExpression(convertExpressionToSnakeCase(left));
-                    return expr;
                 } else  {
-                    remove(name);
                     compare.setLeftExpression(new StringValue("1"));
                     compare.setRightExpression(new StringValue("1"));
-                    return expr;
                 }
+                remove(name);
+                return expr;
             }
         }
         return expr;
@@ -548,5 +558,9 @@ public class RepositoryQuery {
             column.setColumnName(RepositoryParser.camelToSnake(column.getColumnName()));
         }
         return expr;
+    }
+
+    public void setSimplifedResultSet(ResultSet resultSet) {
+        this.simplifiedResultSet = resultSet;
     }
 }

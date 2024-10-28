@@ -294,7 +294,7 @@ public class SpringEvaluator extends Evaluator {
         if(repository != null) {
             MethodDeclaration repoMethod = repository.findMethodDeclaration(methodCall);
             RepositoryQuery q = repository.get(repoMethod);
-            q.setMethodDeclaration(repoMethod);
+
             try {
                 /*
                  * We have one more challenge; to find the parameters that are being used in the repository
@@ -306,10 +306,12 @@ public class SpringEvaluator extends Evaluator {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
                         Expression argument = methodCall.getArgument(i);
                         q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
-                        q.getMethodParameters().add(new QueryMethodParameter(repoMethod.getParameter(i), i));
                     }
 
                     repository.executeQuery(repoMethod);
+                    for(TestGenerator gen : generators) {
+                        gen.setQuery(q);
+                    }
                 }
                 else {
                     // todo do some fake work here

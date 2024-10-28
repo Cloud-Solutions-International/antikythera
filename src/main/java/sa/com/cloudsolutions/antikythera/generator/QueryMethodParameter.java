@@ -42,8 +42,14 @@ public class QueryMethodParameter {
 
     public QueryMethodParameter(Parameter parameter, int index) {
         this.parameter = parameter;
-        parameter.getAnnotationByName("Param").ifPresent(a ->
-                setPlaceHolderName(a.asStringLiteralExpr().asString())
+        parameter.getAnnotationByName("Param").ifPresent(a -> {
+                    if(a.isStringLiteralExpr()) {
+                        setPlaceHolderName(a.asStringLiteralExpr().asString());
+                    }
+                    else {
+                        setPlaceHolderName(a.asSingleMemberAnnotationExpr().getMemberValue().asStringLiteralExpr().asString());
+                    }
+                }
         );
         setPlaceHolderId(new ArrayList<>());
         this.paramIndex = index;

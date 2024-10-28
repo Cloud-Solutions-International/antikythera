@@ -289,7 +289,7 @@ public class RepositoryParser extends ClassProcessor {
             if(runQueries) {
                 RepositoryParser.createConnection();
                 
-                Select stmt = (Select) rql.getSimplifiedStatement();
+                Select stmt = (Select) rql.getStatement();
                 String sql = beautify(stmt.toString());
                 sql = trueFalseCheck(sql);
 
@@ -310,6 +310,7 @@ public class RepositoryParser extends ClassProcessor {
 
                     if (prep.execute()) {
                         happyCache.put(method, prep.getResultSet());
+                        rql.setSimplifedResultSet(prep.getResultSet());
                     }
                 }
 
@@ -477,15 +478,22 @@ public class RepositoryParser extends ClassProcessor {
             }
 
             if (query != null) {
-                queries.put(n, queryBuilder(query, nt));
+                queries.put(n, queryBuilder(query, nt, n));
             } else {
                 parseNonAnnotatedMethod(n);
             }
         }
     }
 
-    RepositoryQuery queryBuilder(String query, boolean isNative) {
+    /**
+     * Build a repository query object
+     * @param query
+     * @param isNative
+     * @return
+     */
+    RepositoryQuery queryBuilder(String query, boolean isNative, MethodDeclaration md) {
         RepositoryQuery rql = new RepositoryQuery();
+        rql.setMethodDeclaration(md);
         rql.setIsNative(isNative);
         rql.setEntityType(entityType);
         rql.setTable(table);
@@ -493,6 +501,11 @@ public class RepositoryParser extends ClassProcessor {
         return rql;
     }
 
+    /**
+     * Parse a repository method that does not have a query annotation.
+     * In these cases the naming convention of the method is used to infer the query.
+     * @param md
+     */
     void parseNonAnnotatedMethod(MethodDeclaration md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
@@ -563,7 +576,7 @@ public class RepositoryParser extends ClassProcessor {
                 sql.append(" LIMIT 1");
             }
         }
-        queries.put(md, queryBuilder(sql.toString(), true));
+        queries.put(md, queryBuilder(sql.toString(), true, md));
     }
 
     /**
@@ -595,6 +608,11 @@ public class RepositoryParser extends ClassProcessor {
         return components;
     }
 
+    /**
+     * Find the method declaration that corresponds to a method call.
+     * @param methodCall the method call being executed
+     * @return the MethodDeclaration from the repository interface.
+     */
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
         List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
         return findMethodDeclaration(methodCall, methods).orElse(null);

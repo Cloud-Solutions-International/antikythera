@@ -35,4 +35,9 @@ public class QueryMethodArgument {
     public void setVariable(Variable variable) {
         this.variable = variable;
     }
+
+    @Override
+    public String toString() {
+        return argument.toString() + " : " + variable.toString();
+    }
 }
