@@ -309,8 +309,7 @@ public class SpringEvaluator extends Evaluator {
                         q.getMethodParameters().add(new QueryMethodParameter(repoMethod.getParameter(i), i));
                     }
 
-                    ResultSet rs = repository.executeQuery(repoMethod);
-                    q.setResultSet(rs);
+                    repository.executeQuery(repoMethod);
                 }
                 else {
                     // todo do some fake work here

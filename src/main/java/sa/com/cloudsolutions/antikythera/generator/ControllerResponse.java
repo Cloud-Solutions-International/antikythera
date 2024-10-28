@@ -52,7 +52,7 @@ public class ControllerResponse {
     }
 
     public int getStatusCode() {
-        if (response.getValue() instanceof ResponseEntity<?> re) {
+        if (response != null && response.getValue() instanceof ResponseEntity<?> re) {
             return re.getStatusCodeValue();
         }
         return 0;

@@ -232,7 +232,7 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
 
-    /*
+    /**
      * Replace PathVariable and RequestParam values with the values from the database.
      *
       We need to figure out if any of the path or request parameters are supposed to
@@ -300,7 +300,7 @@ public class SpringTestGenerator implements  TestGenerator {
             return blockStmt;
         });
 
-        if (resp.getBody().getValue() == null) {
+        if (resp.getBody() == null || resp.getBody().getValue() == null) {
             MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
             as.addArgument("response.getBody().asString().isEmpty()");
             body.addStatement(new ExpressionStmt(as));

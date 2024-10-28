@@ -271,7 +271,9 @@ public class RepositoryParser extends ClassProcessor {
         if (cached != null) {
             return cached;
         }
-        ResultSet rs = executeQuery(queries.get(method));
+        RepositoryQuery rql = queries.get(method);
+        ResultSet rs = executeQuery(rql);
+        rql.setResultSet(rs);
         cache.put(method, rs);
         return rs;
     }
@@ -300,9 +302,11 @@ public class RepositoryParser extends ClassProcessor {
             }
 
             if(runQueries) {
+                int argumentCount = countPlaceholders(sql);
+
                 PreparedStatement prep = conn.prepareStatement(sql);
 
-                for (int i = 0, j = countPlaceholders(sql); i < j ; i++) {
+                for (int i = 0; i < argumentCount ; i++) {
                     QueryMethodArgument arg = rql.getMethodArguments().get(i);
                     String name = arg.getVariable().getClazz().getName();
                     switch (name) {
