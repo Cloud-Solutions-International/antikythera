@@ -576,7 +576,18 @@ public class RepositoryParser extends ClassProcessor {
                 sql.append(" LIMIT 1");
             }
         }
-        queries.put(md, queryBuilder(sql.toString(), true, md));
+
+        StringBuilder result = new StringBuilder();
+        for(int i = 0, j = 1 ; i < sql.length() ; i++) {
+            char c = sql.charAt(i);
+            if(c == '?') {
+                result.append('?').append(j++);
+            }
+            else {
+                result.append(c);
+            }
+        }
+        queries.put(md, queryBuilder(result.toString(), true, md));
     }
 
     /**

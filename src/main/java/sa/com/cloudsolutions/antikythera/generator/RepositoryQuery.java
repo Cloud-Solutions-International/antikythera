@@ -6,6 +6,7 @@ import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.CaseExpression;
+import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.JdbcNamedParameter;
 import net.sf.jsqlparser.expression.JdbcParameter;
@@ -133,7 +134,7 @@ public class RepositoryQuery {
      * Mark that the column was actually not used in the query filters.
      * @param column
      */
-    public void remove(String column) {
+    public void remove(String column, Expression right) {
         for (QueryMethodParameter p : methodParameters) {
             if (p != null && column.equals(p.getColumnName())) {
                 p.setRemoved(true);
@@ -440,9 +441,12 @@ public class RepositoryQuery {
             sql = sql.replace(" as "," ");
         }
 
-        return sql.replaceAll("\\?\\d+", "?");
+        return sql;
     }
 
+    public static String removeNumberedParams(String sql) {
+        return sql.replaceAll("\\?\\d+", "?");
+    }
     public Statement getStatement() {
         return statement;
     }
@@ -472,7 +476,7 @@ public class RepositoryQuery {
         if (expr instanceof Between between) {
             mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
             mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
-            remove(RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
+            remove(RepositoryParser.camelToSnake(between.getLeftExpression().toString()), between);
             between.setBetweenExpressionStart(new LongValue("2"));
             between.setBetweenExpressionEnd(new LongValue("4"));
             between.setLeftExpression(new LongValue("3"));
@@ -480,7 +484,7 @@ public class RepositoryQuery {
             Column col = (Column) ine.getLeftExpression();
             if (!("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
                 mapPlaceHolders(ine.getRightExpression(), RepositoryParser.camelToSnake(col.toString()));
-                remove(RepositoryParser.camelToSnake(ine.getLeftExpression().toString()));
+                remove(RepositoryParser.camelToSnake(ine.getLeftExpression().toString()), ine);
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<net.sf.jsqlparser.expression.Expression> rightExpression = new ExpressionList<>();
                 rightExpression.add(new StringValue("1"));
@@ -503,7 +507,7 @@ public class RepositoryQuery {
                     compare.setLeftExpression(new StringValue("1"));
                     compare.setRightExpression(new StringValue("1"));
                 }
-                remove(name);
+                remove(name, right);
                 return expr;
             }
         }
