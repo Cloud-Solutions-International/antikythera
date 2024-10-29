@@ -249,10 +249,10 @@ public class SpringTestGenerator implements  TestGenerator {
      */
     private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
         if (query != null && query.getSimplifiedResultSet() != null) {
-            ResultSet rs = query.getResultSet();
+            ResultSet rs = query.getSimplifiedResultSet();
             List<QueryMethodParameter> paramMap = query.getMethodParameters();
             List<QueryMethodArgument> argsMap = query.getMethodArguments();
-
+            System.out.println(query.getSimplifiedStatement().toString());
             if(rs.next()) {
                 for(int i = 0 ; i < paramMap.size() ; i++) {
                     QueryMethodParameter param = paramMap.get(i);
@@ -367,7 +367,7 @@ public class SpringTestGenerator implements  TestGenerator {
                     testForResponseBodyAsString(md, resp, body);
                 }
                 else {
-                    logger.warn("THIS testing parth is not completed");
+                    logger.warn("THIS testing path is not completed");
                 }
             } else {
                 List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");

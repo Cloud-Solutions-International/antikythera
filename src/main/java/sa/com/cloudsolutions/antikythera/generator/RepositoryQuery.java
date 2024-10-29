@@ -514,11 +514,9 @@ public class RepositoryQuery {
                 String name = RepositoryParser.camelToSnake(left.toString());
                 mapPlaceHolders(right, name);
                 if (col.getColumnName().equals("hospital_id")) {
-                    compare.setRightExpression(new LongValue("59"));
-                    compare.setLeftExpression(convertExpressionToSnakeCase(left));
+                    compare.setRightExpression(new LongValue("1"));
                 } else if (col.getColumnName().equals("hospital_group_id")) {
-                    compare.setRightExpression(new LongValue("58"));
-                    compare.setLeftExpression(convertExpressionToSnakeCase(left));
+                    compare.setRightExpression(new LongValue("1"));
                 } else  {
                     compare.setLeftExpression(new StringValue("1"));
                     compare.setRightExpression(new StringValue("1"));
