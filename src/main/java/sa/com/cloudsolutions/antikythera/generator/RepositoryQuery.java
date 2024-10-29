@@ -135,9 +135,23 @@ public class RepositoryQuery {
      * @param column
      */
     public void remove(String column, Expression right) {
+        boolean matched = false;
         for (QueryMethodParameter p : methodParameters) {
-            if (p != null && column.equals(p.getColumnName())) {
+            if (column.equals(p.getColumnName())) {
                 p.setRemoved(true);
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) {
+            if(right instanceof Between bw) {
+                int a = ((JdbcParameter)bw.getBetweenExpressionStart()).getIndex();
+                methodParameters.get(a - 1).setRemoved(true);
+                int b = ((JdbcParameter)bw.getBetweenExpressionStart()).getIndex();
+                methodParameters.get(b - 1).setRemoved(true);
+            }
+            else if(right instanceof JdbcParameter param) {
+                methodParameters.get(param.getIndex() - 1).setRemoved(true);
             }
         }
     }
@@ -382,7 +396,9 @@ public class RepositoryQuery {
         try {
             this.statement = CCJSqlParserUtil.parse(query);
             this.simplifiedStatement = CCJSqlParserUtil.parse(query);
+
             convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
+            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(entityType));
 
             if (simplifiedStatement instanceof PlainSelect ps) {
                 simplifyWhereClause(ps.getWhere());
