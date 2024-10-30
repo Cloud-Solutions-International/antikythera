@@ -8,6 +8,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
@@ -107,6 +108,7 @@ public class SpringEvaluator extends Evaluator {
         return repositories;
     }
 
+    public static ArgumentGenerator argumentGenerator;
 
     /**
      * Called by the java parser method visitor.
