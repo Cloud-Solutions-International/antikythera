@@ -32,7 +32,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -44,10 +43,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
-
-import javax.swing.text.html.Option;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -479,6 +477,4 @@ public class AbstractCompiler {
             solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
         }
     }
-
-
 }

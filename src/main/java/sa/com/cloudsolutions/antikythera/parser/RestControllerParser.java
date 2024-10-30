@@ -27,12 +27,13 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
-import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
+import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends ClassProcessor {
@@ -180,7 +181,7 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
-        ProjectGenerator.getInstance().writeFilesToTest(
+        Antikythera.getInstance().writeFilesToTest(
                 pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 

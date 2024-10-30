@@ -1,4 +1,4 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.stmt.Statement;
@@ -27,7 +27,9 @@ import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
+import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Dependency;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -119,7 +121,7 @@ public class DTOHandler extends ClassProcessor {
             if (! (AntikytheraRunTime.isServiceClass(className) || AntikytheraRunTime.isInterface(className)
                     || AntikytheraRunTime.isControllerClass(className)
                     || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
-                ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
+                CopyUtils.writeFile(relativePath, cu.toString());
             }
 
             /*
@@ -504,4 +506,5 @@ public class DTOHandler extends ClassProcessor {
     public void setCompilationUnit(CompilationUnit cu) {
         this.cu = cu;
     }
+
 }

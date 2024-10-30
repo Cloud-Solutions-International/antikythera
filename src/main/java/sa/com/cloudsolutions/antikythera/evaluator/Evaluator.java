@@ -42,7 +42,7 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -58,8 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
-
-import static java.lang.reflect.AccessibleObject.setAccessible;
 
 
 /**

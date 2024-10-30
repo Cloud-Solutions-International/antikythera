@@ -1,4 +1,4 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -60,7 +60,7 @@ class DTOHandlerTest {
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();
         typeCollector = handler.new TypeCollector();
-        handler.cu = new CompilationUnit();
+        handler.setCompilationUnit(new CompilationUnit());
     }
 
     @Test
@@ -554,7 +554,7 @@ class DTOHandlerTest {
         classDecl.addConstructor();
         classDecl.addMethod("someMethod");
 
-        handler.cu.addType(classDecl);
+        handler.getCompilationUnit().addType(classDecl);
         handler.removeUnwanted();
 
         assertTrue(classDecl.getConstructors().isEmpty());
@@ -569,7 +569,7 @@ class DTOHandlerTest {
         classDecl.setName("TempClass");
         classDecl.addImplementedType("SomeInterface");
 
-        handler.cu.addType(classDecl);
+        handler.getCompilationUnit().addType(classDecl);
         handler.removeUnwanted();
 
         assertTrue(classDecl.getImplementedTypes().isEmpty());
@@ -596,10 +596,10 @@ class DTOHandlerTest {
         enumDecl.addEnumConstant("VALUE2");
         enumDecl.addAnnotation("AllArgsConstructor");
 
-        handler.cu.addType(enumDecl);
+        handler.getCompilationUnit().addType(enumDecl);
         handler.removeUnwanted();
 
-        assertTrue(handler.cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("lombok.AllArgsConstructor")));
+        assertTrue(handler.getCompilationUnit().getImports().stream().anyMatch(i -> i.getNameAsString().equals("lombok.AllArgsConstructor")));
     }
 
     @Test
@@ -642,7 +642,7 @@ class DTOHandlerTest {
 
     @Test
     void generateGetterCreatesPublicMethod() {
-        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+        ClassOrInterfaceDeclaration classDeclaration = handler.getCompilationUnit().addClass("TestClass");
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
@@ -652,7 +652,7 @@ class DTOHandlerTest {
 
         typeCollector.generateGetter(field, "getName");
 
-        MethodDeclaration getter = (MethodDeclaration) handler.cu.getType(0).getMembers().stream()
+        MethodDeclaration getter = (MethodDeclaration) handler.getCompilationUnit().getType(0).getMembers().stream()
                 .filter(member -> member instanceof MethodDeclaration)
                 .filter(member -> ((MethodDeclaration) member).getNameAsString().equals("getName"))
                 .findFirst()
@@ -663,7 +663,7 @@ class DTOHandlerTest {
 
     @Test
     void generateGetterReturnsFieldValue() {
-        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+        ClassOrInterfaceDeclaration classDeclaration = handler.getCompilationUnit().addClass("TestClass");
 
         FieldDeclaration field = new FieldDeclaration();
         field.addVariable(new VariableDeclarator(new ClassOrInterfaceType(null, "String"), "name"));
@@ -673,7 +673,7 @@ class DTOHandlerTest {
 
         typeCollector.generateGetter(field, "getName");
 
-        MethodDeclaration getter = (MethodDeclaration) handler.cu.getType(0).getMembers().stream()
+        MethodDeclaration getter = (MethodDeclaration) handler.getCompilationUnit().getType(0).getMembers().stream()
                 .filter(member -> member instanceof MethodDeclaration)
                 .filter(member -> ((MethodDeclaration) member).getNameAsString().equals("getName"))
                 .findFirst()
@@ -711,7 +711,7 @@ class DTOHandlerTest {
 
     @Test
     void generateSetterCreatesPublicMethod() {
-        ClassOrInterfaceDeclaration classDeclaration = handler.cu.addClass("TestClass");
+        ClassOrInterfaceDeclaration classDeclaration = handler.getCompilationUnit().addClass("TestClass");
 
         FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private int value;").asFieldDeclaration();
         field.setParentNode(classDeclaration);

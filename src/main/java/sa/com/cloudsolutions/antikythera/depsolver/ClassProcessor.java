@@ -1,4 +1,4 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -29,6 +29,8 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Dependency;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -80,7 +82,7 @@ public class ClassProcessor extends AbstractCompiler {
      * A collection of all imports encountered in a class.
      * This maybe a huge list because sometimes we find wild card imports.
      */
-    final Set<ImportDeclaration> allImports = new HashSet<>();
+    protected final Set<ImportDeclaration> allImports = new HashSet<>();
 
     /**
      * This is a collection of imports that we want to preserve.
@@ -161,7 +163,7 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param type the type to resolve
      */
-    void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
+    protected void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
         if (type.isClassOrInterfaceType()) {
             if (type.asClassOrInterfaceType().isBoxedType()) {
                 solveConstant(from, type);
@@ -617,4 +619,6 @@ public class ClassProcessor extends AbstractCompiler {
     private ModifierVisitor createTypeCollector() {
         return new TypeCollector();
     }
+
+
 }
