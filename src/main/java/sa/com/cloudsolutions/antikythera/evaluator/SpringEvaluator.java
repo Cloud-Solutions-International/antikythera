@@ -388,7 +388,7 @@ public class SpringEvaluator extends Evaluator {
      *
      * @param variable a variable declaration statement
      * @param resolvedClass the name of the class that the field is of
-     * @return true if the resolution was successfully
+     * @return true if the resolution was successful
      * @throws AntikytheraException when the field cannot be resolved
      * @throws ReflectiveOperationException if a reflective operation goes wrong
      */
@@ -570,7 +570,6 @@ public class SpringEvaluator extends Evaluator {
                                     logger.info("Could not create class for {}", fullname);
                                 }
                             }
-
                         }
 
                         if (v != null && v.getValue() instanceof Evaluator eval) {
@@ -822,7 +821,7 @@ public class SpringEvaluator extends Evaluator {
                  * We have found the expression statement correspoing to this query
                  */
                 return lines.get(stmt.hashCode());
-                            }
+            }
             n = n.getParentNode().orElse(null);
         }
         return null;
