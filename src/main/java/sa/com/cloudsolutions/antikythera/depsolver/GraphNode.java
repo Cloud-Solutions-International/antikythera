@@ -4,13 +4,18 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class GraphNode {
+    private final CompilationUnit compilationUnit;
     Node node;
     CompilationUnit destination;
+
+
+    boolean visited;
 
     public GraphNode(Node node) throws AntikytheraException {
         this.node = node;
@@ -20,23 +25,57 @@ public class GraphNode {
         this.destination = new CompilationUnit();
 
         ClassOrInterfaceDeclaration cdecl = destination.addClass(enclosing.getNameAsString());
-        CompilationUnit src = cdecl.findCompilationUnit().get();
+        compilationUnit = cdecl.findCompilationUnit().get();
         cdecl.setInterface(enclosing.isInterface());
 
         for (ClassOrInterfaceType ifc : enclosing.getImplementedTypes()) {
             cdecl.addImplementedType(ifc.getNameAsString());
-            ImportDeclaration imp = AbstractCompiler.findImport(src, ifc.getNameAsString());
+            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
             if (imp != null) {
-                src.addImport(imp);
+                compilationUnit.addImport(imp);
             }
         }
 
         for (ClassOrInterfaceType ifc : enclosing.getExtendedTypes()) {
             cdecl.addImplementedType(ifc.getNameAsString());
-            ImportDeclaration imp = AbstractCompiler.findImport(src, ifc.getNameAsString());
+            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
             if (imp != null) {
-                src.addImport(imp);
+                compilationUnit.addImport(imp);
             }
         }
+
+        for (AnnotationExpr ann : enclosing.getAnnotations()) {
+            cdecl.addAnnotation(ann);
+        }
+
+
+    }
+
+    public boolean isVisited() {
+        return visited;
+    }
+
+    public void setVisited(boolean visited) {
+        this.visited = visited;
+    }
+
+    public CompilationUnit getDestination() {
+        return destination;
+    }
+
+    public void setDestination(CompilationUnit destination) {
+        this.destination = destination;
+    }
+
+    public Node getNode() {
+        return node;
+    }
+
+    public void setNode(Node node) {
+        this.node = node;
+    }
+
+    public CompilationUnit getCompilationUnit() {
+        return compilationUnit;
     }
 }
