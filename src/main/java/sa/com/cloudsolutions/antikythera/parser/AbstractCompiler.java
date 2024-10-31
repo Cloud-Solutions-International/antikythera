@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -346,13 +347,14 @@ public class AbstractCompiler {
 
     /**
      * Finds the fully qualified classname given the short name of a class.
-     * @param cu
-     * @param className
-     * @return
+     * @param cu Compilation unit where the classname name was discovered
+     * @param className to find the fully qualified name for. If the class name is a already a
+     *                  fully qualified name the same will be returned.
+     * @return the fully qualified name of the class.
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
         /*
-         * The strategy is three fold. First check if there exists an import that ends with the
+         * The strategy is threefold. First check if there exists an import that ends with the
          * short class name as it's last component. Our preprocessing would have already replaced
          * all the wild card imports with individual imports.
          * If we are unable to find a match, we will check for the existence of a file in the same
@@ -476,5 +478,12 @@ public class AbstractCompiler {
             InterfaceSolver solver = new InterfaceSolver();
             solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
         }
+    }
+
+    public static ClassOrInterfaceDeclaration getEnclosingClassOrInterface(Node n) {
+        if (n instanceof ClassOrInterfaceDeclaration cdecl) {
+            return cdecl;
+        }
+        return getEnclosingClassOrInterface(n.getParentNode().orElseThrow());
     }
 }
