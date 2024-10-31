@@ -5,8 +5,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A very basic Runtime for Antikythera.
@@ -28,6 +30,21 @@ public class AntikytheraRunTime {
      * stack, we are not doing so in here.
      */
     protected static final Deque<Variable> stack = new LinkedList<>();
+
+    /**
+     * Stores the interfaces and their implementations.
+     */
+    protected static final Map<String, Set<String>> interfaces = new HashMap<>();
+
+    /**
+     * Stores the fields that have been autowired.
+     * While there should not be cyclic dependencies the reality is that they do exist in the wild.
+     * Additionally due to the way that transactions work in spring boot, you often find classes
+     * auto wiring themselves.
+     * What this means to us is that setting up the fields will often lead to infinite recursions
+     * and stack overflows. To avoid that lets keep all Autowired instances cached.
+     */
+    protected static final Map<String, Variable> autowired = new HashMap<>();
 
     public static CompilationUnit getCompilationUnit(String cls) {
         ClassInfo info = resolved.get(cls);
@@ -91,7 +108,6 @@ public class AntikytheraRunTime {
         private boolean componentClass;
         private boolean isInterface;
         private boolean abstractClass;
-
         protected ClassInfo() {}
 
         public static ClassInfo factory(String className, CompilationUnit cu) {
@@ -130,5 +146,28 @@ public class AntikytheraRunTime {
         public CompilationUnit getCu() {
             return cu;
         }
+    }
+
+    public static void resetAll() {
+        stack.clear();
+        resolved.clear();
+        interfaces.clear();
+    }
+
+    public static void addImplementation(String iface, String impl) {
+        Set<String> s = interfaces.computeIfAbsent(iface, k -> new HashSet<>());
+        s.add(impl);
+    }
+
+    public static Set<String> findImplementations(String iface) {
+        return interfaces.getOrDefault(iface, new HashSet<>());
+    }
+
+    public static void autoWire(String className, Variable variable) {
+        autowired.put(className, variable);
+    }
+
+    public static Variable getAutoWire(String className) {
+        return autowired.get(className);
     }
 }

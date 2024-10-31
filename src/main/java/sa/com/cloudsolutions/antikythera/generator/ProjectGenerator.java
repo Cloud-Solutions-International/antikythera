@@ -1,5 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -10,6 +14,8 @@ import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
 import java.io.*;
@@ -24,6 +30,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class ProjectGenerator {
     private static final Logger logger = LoggerFactory.getLogger(ProjectGenerator.class);
@@ -208,6 +215,9 @@ public class ProjectGenerator {
     public void generate() throws IOException, XmlPullParserException, EvaluatorException {
         createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
+
+        AbstractCompiler.preProcess();
+
         String controllersCleaned = controllers.split("#")[0];
         if (controllersCleaned.matches(".*\\.java$")) {
             Path path = Paths.get(basePath, controllersCleaned.replace(".", "/").replace("/java", SUFFIX));

@@ -1,10 +1,14 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
@@ -28,6 +32,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -37,6 +45,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
+
+import javax.swing.text.html.Option;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -61,24 +72,41 @@ public class AbstractCompiler {
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
     public static final String SUFFIX = ".java";
 
-    private final JavaParser javaParser;
-    protected JavaSymbolSolver symbolResolver;
-    protected CombinedTypeSolver combinedTypeSolver;
-    protected ArrayList<JarTypeSolver> jarSolvers;
-
+    private static JavaParser javaParser;
+    protected static JavaSymbolSolver symbolResolver;
+    protected static CombinedTypeSolver combinedTypeSolver;
+    protected static ArrayList<JarTypeSolver> jarSolvers;
+    protected static ClassLoader loader;
     protected CompilationUnit cu;
+    protected String className;
 
     protected AbstractCompiler() throws IOException {
+        if (combinedTypeSolver == null) {
+
+            try {
+                setupParser();
+            } catch (ReflectiveOperationException e) {
+                logger.error("Could not load custom jar files");
+            }
+        }
+    }
+
+    protected static void setupParser() throws IOException, ReflectiveOperationException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
-
         jarSolvers = new ArrayList<>();
-        for(String jarFile : Settings.getJarFiles()) {
+
+        URL[] urls = new URL[Settings.getJarFiles().length];
+
+        for(int i = 0 ; i < Settings.getJarFiles().length ; i++) {
+            String jarFile = Settings.getJarFiles()[i];
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
+            urls[i] = new URL("file:///" + jarFile);
         }
+        loader = new URLClassLoader(urls);
 
         Object f = Settings.getProperty("finch");
         if(f != null) {
@@ -89,7 +117,7 @@ public class AbstractCompiler {
         }
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        this.javaParser = new JavaParser(parserConfiguration);
+        javaParser = new JavaParser(parserConfiguration);
     }
 
     /**
@@ -119,6 +147,14 @@ public class AbstractCompiler {
         return  path.replace("/", ".");
     }
 
+    public static Class<?> loadClass(String resolvedClass) throws ClassNotFoundException {
+        return loader.loadClass(resolvedClass);
+    }
+
+    public static void reset() throws ReflectiveOperationException, IOException {
+        setupParser();
+    }
+
 
     /**
      * Creates a compilation unit from the source code at the relative path.
@@ -129,7 +165,7 @@ public class AbstractCompiler {
      * @throws FileNotFoundException when the source code cannot be found
      */
     public boolean compile(String relativePath) throws FileNotFoundException {
-        String className = pathToClass(relativePath);
+        this.className = pathToClass(relativePath);
 
         cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
@@ -215,7 +251,7 @@ public class AbstractCompiler {
                 return Optional.of(node.resolve());
             } catch (Exception e) {
                 // Handle the exception or log it
-                logger.info("Error resolving type: {}", node);
+                logger.debug("Error resolving type: {}", node);
             }
         }
         return Optional.empty();
@@ -257,10 +293,8 @@ public class AbstractCompiler {
      */
     protected static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
         for (var type : cu.getTypes()) {
-            if (type.isClassOrInterfaceDeclaration()) {
-                if (type.asClassOrInterfaceDeclaration().isPublic()) {
-                    return type;
-                }
+            if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
+                return type;
             }
         }
         return null;
@@ -312,6 +346,72 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    /**
+     * Finds the fully qualified classname given the short name of a class.
+     * @param cu
+     * @param className
+     * @return
+     */
+    public static String findFullyQualifiedName(CompilationUnit cu, String className) {
+        /*
+         * The strategy is three fold. First check if there exists an import that ends with the
+         * short class name as it's last component. Our preprocessing would have already replaced
+         * all the wild card imports with individual imports.
+         * If we are unable to find a match, we will check for the existence of a file in the same
+         * package locally.
+         * Lastly, if we will try to invoke Class.forName to see if the class can be located in
+         * any jar file that we have loaded.
+         */
+        ImportDeclaration imp = findImport(cu, className);
+        if (imp != null) {
+            return imp.getNameAsString();
+        }
+
+        String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
+        String fileName = packageName + "." + className + SUFFIX;
+        if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
+            return packageName + "." + className;
+        }
+
+        try {
+            Class.forName(className);
+            return className;
+        } catch (ClassNotFoundException e) {
+            /*
+             * It's ok to silently ignore this one. It just means that the class cannot be
+             * located in a jar. That maybe because we don't still have a fully qualified name.
+             */
+        }
+
+        try {
+            Class.forName("java.lang." + className);
+            return "java.lang." + className;
+        } catch (ClassNotFoundException ex) {
+            /*
+             * Once again ignore the exception. We don't have the class in the lang package
+             * but it can probably still be found in the same package as the current CU
+             */
+
+        }
+
+        try {
+            Class.forName(packageName + className);
+            return packageName + className;
+        } catch (ClassNotFoundException ex) {
+            /*
+             * Once again ignore the exception. We don't have the class in the lang package
+             * but it can probably still be found in the same package as the current CU
+             */
+            return null;
+        }
+    }
+
+    /**
+     * Finds an import statement corresponding to the class name in the compilation unit
+     * @param cu The Compilation unit
+     * @param className the class to search for
+     * @return the import declaration or null if not found
+     */
     public static ImportDeclaration findImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
@@ -324,4 +424,61 @@ public class AbstractCompiler {
         }
         return null;
     }
+
+    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
+                                                                    ClassOrInterfaceDeclaration decl) {
+        return findMethodDeclaration(methodCall, decl.getMethods());
+    }
+
+
+    /**
+     * Find the method declaration matching the given method call expression
+     * @param methodCall the method call exppression
+     * @param methods the list of method declarations to search from
+     * @return the method declaration or empty if not found
+     */
+    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+        for (MethodDeclaration method : methods) {
+            if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
+                if(method.getParameters().isEmpty()) {
+                    return Optional.of(method);
+                }
+                for (int i =0 ; i < method.getParameters().size(); i++) {
+                    ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
+                    ResolvedType paramType = method.getParameter(i).getType().resolve();
+                    if (argType.describe().equals(paramType.describe())
+                            || paramType.describe().equals("java.lang.Object")
+                            || paramType.describe().equals(Reflect.primitiveToWrapper(argType.describe()))
+                            || argType.describe().equals(Reflect.primitiveToWrapper(paramType.describe()))
+                    )
+                    {
+                        return Optional.of(method);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+
+    /**
+     * Precompile all the java files in the base folder.
+     * While doing so we will try to determine what interfaces are implemented by each class.
+     *
+     * @throws IOException
+     */
+    public static void preProcess() throws IOException {
+        List<File> javaFiles = Files.walk(Paths.get(Settings.getBasePath()))
+                .filter(Files::isRegularFile)
+                .filter(path -> path.toString().endsWith(SUFFIX))
+                .map(Path::toFile)
+                .toList();
+
+        for (File javaFile : javaFiles) {
+            InterfaceSolver solver = new InterfaceSolver();
+            solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+        }
+    }
+
+
 }

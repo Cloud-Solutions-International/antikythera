@@ -38,8 +38,8 @@ database:
   url: jdbc:oracle:thin:@//host:1521/service_name
   user: C##xstrm
   password: oracle_pwd
-  schema: EH_IP
-  run_queries: true
+  schema: your_schema
+  run_queries: false
 
 log_level: DEBUG
 

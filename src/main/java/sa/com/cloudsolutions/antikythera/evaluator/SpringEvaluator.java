@@ -5,7 +5,11 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
@@ -33,6 +37,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -87,6 +92,8 @@ public class SpringEvaluator extends Evaluator {
      * primary keys there's nothing we can do about it, we just move onto the next test.
      */
     private final Set<IfStmt> branching = new HashSet<>();
+
+    private boolean onTest;
 
     /**
      * It is better to use create evaluator
@@ -209,8 +216,8 @@ public class SpringEvaluator extends Evaluator {
                  */
                 Type t = param.getType();
                 if (t.isClassOrInterfaceType()) {
-                    String className = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
-                    if (className.startsWith("java")) {
+                    String fullClassName = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
+                    if (fullClassName.startsWith("java")) {
                         /*
                          * However you can't rule out the possibility that this is a Map or a List or even a
                          * boxed type.
@@ -223,15 +230,15 @@ public class SpringEvaluator extends Evaluator {
                             AntikytheraRunTime.push(v);
                         }
                         else {
-                            if (className.startsWith("java.util")) {
-                                Variable v = Reflect.variableFactory(className);
+                            if (fullClassName.startsWith("java.util")) {
+                                Variable v = Reflect.variableFactory(fullClassName);
                                 /*
                                  * Pushed to be popped later in the callee
                                  */
                                 AntikytheraRunTime.push(v);
                             }
                             else {
-                                Class<?> clazz = Class.forName(className);
+                                Class<?> clazz = Class.forName(fullClassName);
                                 Variable v = new Variable(clazz.newInstance());
                                 /*
                                  * PUsh arguments
@@ -242,8 +249,8 @@ public class SpringEvaluator extends Evaluator {
                     }
                     else {
 
-                        Evaluator o = new SpringEvaluator(className);
-                        o.setupFields(AntikytheraRunTime.getCompilationUnit(className));
+                        Evaluator o = new SpringEvaluator(fullClassName);
+                        o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
                         Variable v = new Variable(o);
                         /*
                          * Args to be popped by the callee
@@ -282,26 +289,29 @@ public class SpringEvaluator extends Evaluator {
      * @param methodCall the method call expression
      * @return the result set
      */
-    private static RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
+    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            RepositoryQuery q = repository.getQueries().get(methodCall.getNameAsString());
+            MethodDeclaration repoMethod = repository.findMethodDeclaration(methodCall);
+            RepositoryQuery q = repository.get(repoMethod);
+
             try {
                 /*
                  * We have one more challenge; to find the parameters that are being used in the repository
                  * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                  * to the arguments that are passed in when the method is actually being called.
                  */
-                MethodDeclaration repoMethod = repository.getMethodDeclaration(methodCall);
                 String nameAsString = repoMethod.getNameAsString();
                 if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                        q.getMethodArguments().add(new RepositoryQuery.QueryMethodArgument(methodCall.getArgument(i), i));
-                        q.getMethodParameters().add(new RepositoryQuery.QueryMethodParameter(repoMethod.getParameter(i), i));
+                        Expression argument = methodCall.getArgument(i);
+                        q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
                     }
 
-                    ResultSet rs = repository.executeQuery(methodCall.getNameAsString(), q);
-                    q.setResultSet(rs);
+                    repository.executeQuery(repoMethod);
+                    for(TestGenerator gen : generators) {
+                        gen.setQuery(q);
+                    }
                 }
                 else {
                     // todo do some fake work here
@@ -387,15 +397,19 @@ public class SpringEvaluator extends Evaluator {
         /*
          * Leg work is done in the overloaded method.
          */
-        ReturnStmt stmt = statement.asReturnStmt();
-        Optional<Node> parent = stmt.getParentNode();
-        buildPreconditions();
-        super.executeReturnStatement(stmt);
-        if (parent.isPresent() ) {
-            // the return statement will have a parent no matter what but the optionals approach
-            // requires the use of isPresent.
-            ControllerResponse response = evaluateReturnStatement(parent.get(), stmt);
-            return createTests(response);
+        if (AntikytheraRunTime.isControllerClass(getClassName()) || onTest) {
+            ReturnStmt stmt = statement.asReturnStmt();
+            Optional<Node> parent = stmt.getParentNode();
+            buildPreconditions();
+            super.executeReturnStatement(stmt);
+            if (parent.isPresent()) {
+                // the return statement will have a parent no matter what but the optionals approach
+                // requires the use of isPresent.
+                return createTests((ControllerResponse) returnValue.getValue());
+            }
+        }
+        else {
+            return super.executeReturnStatement(statement);
         }
 
         return null;
@@ -434,37 +448,60 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
-    private ControllerResponse evaluateReturnStatement(Node parent, ReturnStmt stmt) {
-        return new ControllerResponse(returnValue);
-
-    }
-
     public void addGenerator(TestGenerator generator) {
         generators.add(generator);
     }
 
     /**
-     * Resolves fields while taking into consideration the AutoWired annotation of srping
+     * Resolves fields while taking into consideration the AutoWired annotation of spring.
+     * When the field declaration is an interface, will try to find a suitable implementation.
+     *
      * @param variable a variable declaration statement
      * @param resolvedClass the name of the class that the field is of
-     * @return true if the resolution was successfull
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @return true if the resolution was successfully
+     * @throws AntikytheraException when the field cannot be resolved
+     * @throws ReflectiveOperationException if a reflective operation goes wrong
      */
     @Override
     boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+        /*
+         * Try to substitute an implementation for the interface.
+         */
+        String name = AbstractCompiler.findFullyQualifiedName(
+                AntikytheraRunTime.getCompilationUnit(resolvedClass),
+                variable.getType().asString());
+
+        Set<String> implementations = AntikytheraRunTime.findImplementations(name);
+        if (implementations != null) {
+            for (String impl : implementations) {
+                if (super.resolveFieldRepresentedByCode(variable, impl)) {
+                    return true;
+                }
+                else {
+                    if (autoWire(variable, impl)) return true;
+                }
+            }
+        }
+
         if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
             return true;
         }
+        return autoWire(variable, resolvedClass);
+    }
+
+    private boolean autoWire(VariableDeclarator variable, String resolvedClass) {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
 
-
-            Evaluator eval = new SpringEvaluator(resolvedClass);
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-            eval.setupFields(cu);
-            Variable v = new Variable(eval);
+            Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
+            if (v == null) {
+                Evaluator eval = new SpringEvaluator(resolvedClass);
+                CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                v = new Variable(eval);
+                AntikytheraRunTime.autoWire(resolvedClass, v);
+                eval.setupFields(dependant);
+            }
             fields.put(variable.getNameAsString(), v);
 
             return true;
@@ -474,14 +511,28 @@ public class SpringEvaluator extends Evaluator {
 
 
     @Override
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException {
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException, ReflectiveOperationException {
         try {
+            if(methodCall.getScope().isPresent()) {
+                Expression scope = methodCall.getScope().get();
+                if(repositories.get(scope.toString()) != null) {
+                    return executeSource(methodCall);
+                }
+            }
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
-                throw eex;
+                ControllerResponse controllerResponse = new ControllerResponse();
+                if (eex.getError() != 0 && onTest) {
+                    Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
+                    controllerResponse.setResponse(r);
+                    createTests(controllerResponse);
+                    returnFrom = methodCall;
+                }
+                else {
+                    throw eex;
+                }
             }
-            ControllerResponse response = new ControllerResponse();
         }
         return null;
     }
@@ -501,6 +552,10 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
+        for(TestGenerator gen : generators) {
+            gen.setBranched(true);
+        }
+
         LineOfCode l = lines.get(ifst.hashCode());
         if (l == null) {
             /*
@@ -551,7 +606,7 @@ public class SpringEvaluator extends Evaluator {
      * @param ifst the if statement to mess with
      * @param state the desired state.
      */
-    private void setupIfCondition(IfStmt ifst, boolean state) {
+    private void setupIfCondition(IfStmt ifst, boolean state) throws AntikytheraException, ReflectiveOperationException {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
         LineOfCode l = lines.get(ifst.hashCode());
@@ -561,15 +616,51 @@ public class SpringEvaluator extends Evaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if(entry.getKey().isMethodCallExpr()) {
+                    MethodCallExpr mce = entry.getKey().asMethodCallExpr();
                     LinkedList<Expression> chain = findScopeChain(entry.getKey());
                     if (!chain.isEmpty()) {
                         Expression expr = chain.getFirst();
                         Variable v = getValue(ifst, expr.toString());
-                        if (v != null) {
+                        if (v == null && expr.isNameExpr()) {
+                            /*
+                             * This is likely to be a static method.
+                             */
+                            String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
+                            if(fullname != null) {
+                                /*
+                                 * The only other possibility is static access on a class
+                                 */
+                                try {
+                                    Class<?> clazz = Class.forName(fullname);
+
+                                } catch (ReflectiveOperationException e) {
+                                    /*
+                                     * Can probably be ignroed
+                                     */
+                                    logger.info("Could not create class for {}", fullname);
+                                }
+                            }
+
+                        }
+
+                        if (v != null && v.getValue() instanceof Evaluator eval) {
                             MethodCallExpr setter = new MethodCallExpr();
-                            setter.setName("set" + entry.getKey().asMethodCallExpr().getNameAsString().substring(3));
+                            String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
+                            setter.setName("set" + name);
                             setter.setScope(expr);
-                            setter.addArgument("1L");
+                            Variable field = eval.getFields().get(ClassProcessor.classToInstanceName(name));
+
+                            setter.addArgument(
+                                    switch (field.getType().asString()) {
+                                        case "String" -> "\"Hello\"";
+                                        case "int", "Integer" -> "0";
+                                        case "long", "Long" -> "0L";
+                                        case "float", "Float" -> "0.0f";
+                                        case "double", "Double" -> "0.0";
+                                        case "boolean", "Boolean" -> "false";
+                                        default -> "null";
+                                    }
+                            );
                             l.addPrecondition(setter, state);
                         }
                     }
@@ -660,16 +751,25 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        if (AntikytheraRunTime.isControllerClass(getClassName())) {
+            for(TestGenerator gen : generators) {
+                gen.setBranched(false);
+            }
+        }
         Expression expression = methodCall.getScope().orElseGet(null);
         if (expression != null && expression.isNameExpr()) {
-            RepositoryParser rp = repositories.get(expression.asNameExpr().getNameAsString());
+            String fieldName = expression.asNameExpr().getNameAsString();
+            RepositoryParser rp = repositories.get(fieldName);
             if (rp != null) {
-                RepositoryQuery q = executeQuery(expression.asNameExpr().getNameAsString(), methodCall);
+                RepositoryQuery q = executeQuery(fieldName, methodCall);
                 if (q != null) {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
                         ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        Variable v = processResult(stmt, q.getResultSet());
+                        Variable v = (q.getCachedResult() == null)
+                                ? processResult(stmt, q.getResultSet())
+                                : q.getCachedResult();
+
                         if (l.getRepositoryQuery() == null) {
                             l.setRepositoryQuery(q);
                             l.setColor(LineOfCode.GREY);
@@ -691,46 +791,79 @@ public class SpringEvaluator extends Evaluator {
             VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
             VariableDeclarator v = vdecl.getVariable(0);
 
-            if (vdecl.getElementType().isClassOrInterfaceType()) {
-                ClassOrInterfaceType classType = new ClassOrInterfaceType(null, vdecl.getElementType().asString());
-                ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
-                try {
-                    if (rs.next()) {
-                        return resultToEntity(stmt, rs, v, objectCreationExpr);
+            Type elementType = vdecl.getElementType();
+            if (elementType.isClassOrInterfaceType()) {
+                ClassOrInterfaceType classType = elementType.asClassOrInterfaceType();
+                NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
+
+                if (secondaryType != null) {
+                    String mainType = classType.getNameAsString();
+                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu,mainType);
+
+                    if (fullyQualifiedName != null) {
+                        ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null,
+                                secondaryType.get(0).asClassOrInterfaceType(), new NodeList<>());
+
+                        Variable variable = Reflect.variableFactory(fullyQualifiedName);
+                        if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
+                            for(int i = 0 ; i < 10 ; i++) {
+                                Variable row = createObject(stmt, v, objectCreationExpr);
+                                if(resultToEntity(row, rs)) {
+                                    ((Collection) variable.getValue()).add(row);
+                                }
+                            }
+                        }
+                        return variable;
                     }
-                    else {
+                }
+                else {
+                    ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
+                    Variable row = createObject(stmt, v, objectCreationExpr);
+                    if(resultToEntity(row, rs)) {
+                        return row;
+                    } else {
                         return new Variable(null);
                     }
-                } catch (SQLException e) {
-                    logger.warn(e.getMessage());
+
                 }
             }
         }
         return null;
     }
 
-    private Variable resultToEntity(ExpressionStmt stmt, ResultSet rs, VariableDeclarator v, ObjectCreationExpr objectCreationExpr)
-            throws AntikytheraException, ReflectiveOperationException {
-        Variable variable = createObject(stmt, v, objectCreationExpr);
-        if (variable.getValue() instanceof Evaluator evaluator) {
-            Map<String, Variable> fields = evaluator.getFields();
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
+    /**
+     * Converts an SQL row to an Entity.
+     * @param variable copy the data from the record into this variable.
+     * @param rs the sql result set
+     *
+     * @throws AntikytheraException
+     * @throws ReflectiveOperationException
+     */
+    private boolean resultToEntity(Variable variable, ResultSet rs) {
 
-            for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-                for (VariableDeclarator var : field.getVariables()) {
-                    String fieldName = var.getNameAsString();
-                    try {
-                        if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
-                            Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
-                            fields.put(fieldName, new Variable(value));
+        try {
+            if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
+                Map<String, Variable> fields = evaluator.getFields();
+
+                for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+                    for (VariableDeclarator var : field.getVariables()) {
+                        String fieldName = var.getNameAsString();
+                        try {
+                            if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
+                                Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
+                                fields.put(fieldName, new Variable(value));
+                            }
+                        } catch (SQLException e) {
+                            logger.warn(e.getMessage());
                         }
-                    } catch (SQLException e) {
-                        logger.warn(e.getMessage());
                     }
                 }
+                return true;
             }
+        } catch (SQLException e) {
+            logger.warn(e.getMessage());
         }
-        return variable;
+        return false;
     }
 
     private boolean isRepositoryMethod(ExpressionStmt stmt) {
@@ -763,6 +896,23 @@ public class SpringEvaluator extends Evaluator {
             n = n.getParentNode().orElse(null);
         }
         return null;
+    }
+
+    public void setOnTest(boolean b) {
+        onTest = b;
+    }
+
+    @Override
+    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = super.createObject(instructionPointer, decl, oce);
+        ClassOrInterfaceType type = oce.getType();
+        if (type.getNameAsString().equals("ResponseEntity")) {
+            ControllerResponse response = new ControllerResponse(v);
+            response.setBody(evaluateExpression(oce.getArguments().get(0)));
+            response.setType(type);
+            return new Variable(response);
+        }
+        return v;
     }
 }
 

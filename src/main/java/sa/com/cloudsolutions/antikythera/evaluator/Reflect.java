@@ -14,6 +14,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class Reflect {
     /**
@@ -91,15 +93,7 @@ public class Reflect {
             } else {
                 try {
                     String className = arguments.get(0).calculateResolvedType().describe();
-                    className = switch (className) {
-                        case "boolean" -> "java.lang.Boolean";
-                        case "int" -> "java.lang.Integer";
-                        case "long" -> "java.lang.Long";
-                        case "float" -> "java.lang.Float";
-                        case "double" -> "java.lang.Double";
-                        case "char" -> "java.lang.Character";
-                        default -> className;
-                    };
+                    className = primitiveToWrapper(className);
                     paramTypes[i] = Class.forName(className);
                 } catch (UnsolvedSymbolException us) {
                     paramTypes[i] = Object.class;
@@ -108,6 +102,18 @@ public class Reflect {
         }
 
         return new ReflectionArguments(methodName, args, paramTypes);
+    }
+
+    public static String primitiveToWrapper(String className) {
+        return switch (className) {
+            case "boolean" -> "java.lang.Boolean";
+            case "int" -> "java.lang.Integer";
+            case "long" -> "java.lang.Long";
+            case "float" -> "java.lang.Float";
+            case "double" -> "java.lang.Double";
+            case "char" -> "java.lang.Character";
+            default -> className;
+        };
     }
 
     public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
@@ -139,9 +145,11 @@ public class Reflect {
 
     public static Variable variableFactory(String qualifiedName) {
         return switch (qualifiedName) {
-            case "java.util.List" ->  new Variable(new ArrayList<>());
-            case "java.util.Map" ->  new Variable(new HashMap<>());
-            case "java.util.Set" ->  new Variable(new HashSet<>());
+            case "java.util.List", "java.util.ArrayList" ->  new Variable(new ArrayList<>());
+            case "java.util.Map", "java.util.HashMap" ->  new Variable(new HashMap<>());
+            case "java.util.TreeMap" -> new Variable(new TreeMap<>());
+            case "java.util.Set", "java.util.HashSet" ->  new Variable(new HashSet<>());
+            case "java.util.TreeSet" -> new Variable(new TreeSet<>());
             case "java.util.Optional" ->  new Variable(Optional.empty());
             case "java.lang.Long" ->  new Variable(0L);
             default -> null;
@@ -153,8 +161,8 @@ public class Reflect {
      * Finds a matching method using parameters.
      *
      * This function has side effects. The paramTypes may end up being converted from a boxed to
-     * primitive or wise versa. This is because the Variable class that we use has an Object
-     * representing the value. Where as some of the methods have parameters that require a primitive
+     * primitive or vice versa. This is because the Variable class that we use has an Object
+     * representing the value. Whereas some of the methods have parameters that require a primitive
      * type. Hence the conversion needs to happen.
      *
      * @param clazz the class on which we need to match the method name
@@ -218,6 +226,15 @@ public class Reflect {
         }
         return null;
     }
+
+    public static Class<?> wrapperToPrimitive(Class<?> clazz) {
+        return wrapperToPrimitive.getOrDefault(clazz, null);
+    }
+
+    public static Class<?> primitiveToWrapper(Class<?> clazz) {
+        return primitiveToWrapper.getOrDefault(clazz, null);
+    }
+
 
     private static boolean findMatch(Class<?>[] paramTypes, Class<?>[] types, int i) {
         if (types[i].isAssignableFrom(paramTypes[i])) {

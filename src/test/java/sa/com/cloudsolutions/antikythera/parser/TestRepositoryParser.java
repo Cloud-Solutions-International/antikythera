@@ -2,6 +2,8 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
@@ -16,13 +18,16 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRepositoryParser {
@@ -31,7 +36,7 @@ class TestRepositoryParser {
 
     @BeforeAll
     static void setUpAll() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
     }
 
     @BeforeEach
@@ -55,47 +60,23 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testParseNonAnnotatedMethod() throws ReflectiveOperationException {
-        Field entityCuField = RepositoryParser.class.getDeclaredField("entityCu");
-        entityCuField.setAccessible(true);
-        entityCuField.set(parser, cu);
-
-        parser.parseNonAnnotatedMethod("findAll");
-        Map<String, RepositoryQuery> queries = parser.getQueries();
-        assertTrue(queries.containsKey("findAll"));
-        assertEquals("SELECT * FROM table_name", queries.get("findAll").getQuery());
-
-        // Test findById method
-        parser.parseNonAnnotatedMethod("findById");
-        queries = parser.getQueries();
-        assertTrue(queries.containsKey("findById"));
-        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findById").getQuery().strip());
-
-        // Test findAllById method
-        parser.parseNonAnnotatedMethod("findAllById");
-        queries = parser.getQueries();
-        assertTrue(queries.containsKey("findAllById"));
-        assertEquals("SELECT * FROM table_name WHERE id = ?", queries.get("findAllById").getQuery());
-    }
-
-    @Test
     void convertExpressionToSnakeCaseAndExpression() {
         AndExpression andExpr = new AndExpression(new Column("firstName"), new Column("lastName"));
-        Expression result = parser.convertExpressionToSnakeCase(andExpr, true);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(andExpr);
         assertEquals("first_name AND last_name", result.toString());
     }
 
     @Test
     void convertExpressionToSnakeCaseIsNullExpression() {
         IsNullExpression isNullExpr = new IsNullExpression(new Column("middleName"));
-        Expression result = parser.convertExpressionToSnakeCase(isNullExpr, true);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(isNullExpr);
         assertEquals("middle_name IS NULL", result.toString());
     }
 
     @Test
     void convertExpressionToSnakeCaseComparisonOperator() {
         EqualsTo equalsExpr = new EqualsTo(new Column("salary"), new LongValue(5000));
-        Expression result = parser.convertExpressionToSnakeCase(equalsExpr, true);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(equalsExpr);
         assertEquals("salary = 5000", result.toString());
     }
 
@@ -104,7 +85,20 @@ class TestRepositoryParser {
         Function functionExpr = new Function();
         functionExpr.setName("SUM");
         functionExpr.setParameters(new ExpressionList(new Column("totalAmount")));
-        Expression result = parser.convertExpressionToSnakeCase(functionExpr, true);
+        Expression result = RepositoryQuery.convertExpressionToSnakeCase(functionExpr);
         assertEquals("SUM(total_amount)", result.toString());
+    }
+
+    @Test
+    void testProcess() throws IOException {
+        RepositoryParser parser = new RepositoryParser();
+        AntikytheraRunTime.resetAll();
+        AbstractCompiler.preProcess();
+
+        parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
+        parser.process();
+
+        MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
+        assertNotNull(parser.get(md));
     }
 }

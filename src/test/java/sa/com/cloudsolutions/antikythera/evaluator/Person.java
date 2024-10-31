@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-public class Person {
+public class Person implements IPerson {
     private int id;
     String name;
     private String address;
@@ -21,6 +21,11 @@ public class Person {
 
     public String getName() {
         return name;
+    }
+
+    @Override
+    public void setName(String name) {
+        this.name = name;
     }
 
     public void setAddress(String address) {

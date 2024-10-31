@@ -13,18 +13,9 @@ class RepositoryQueryTest {
 
     @BeforeEach
     void setUp() {
-        repositoryQuery = new RepositoryQuery("SELECT * FROM users WHERE id = :id", true);
+        repositoryQuery = new RepositoryQuery();
+        repositoryQuery.setQuery("SELECT * FROM users WHERE id = :id");
+        repositoryQuery.setIsNative(true);
     }
 
-    @Test
-    void testRemove() {
-        Parameter mockParameter = mock(Parameter.class);
-        RepositoryQuery.QueryMethodParameter param = new RepositoryQuery.QueryMethodParameter(mockParameter, 0);
-        param.setColumnName("id");
-        repositoryQuery.getMethodParameters().add(param);
-
-        repositoryQuery.remove("id");
-
-        assertTrue(param.removed);
-    }
 }

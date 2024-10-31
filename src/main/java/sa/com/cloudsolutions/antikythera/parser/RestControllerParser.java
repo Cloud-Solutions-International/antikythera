@@ -116,6 +116,7 @@ public class RestControllerParser extends ClassProcessor {
         TypeDeclaration<?> type = getPublicClass(cu);
 
         evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
+        evaluator.setOnTest(true);
 
         SpringTestGenerator generator = new SpringTestGenerator();
         evaluator.addGenerator(generator);

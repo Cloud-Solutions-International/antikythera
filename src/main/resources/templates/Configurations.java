@@ -1,4 +1,4 @@
-package com.cloud.api.configurations;
+package sa.com.cloudsolutions.antikythera.configurations;
 
 public enum Configurations {
     Login,

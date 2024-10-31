@@ -82,4 +82,9 @@ public class Loops {
         List<Integer> numbers = List.of(1, 2, 3, 4, 5);
         numbers.forEach(System.out::println);
     }
+
+    private void forEach2() {
+        List<Integer> numbers = List.of(1, 2, 3, 4, 5);
+        numbers.forEach(x -> System.out.println(x));
+    }
 }

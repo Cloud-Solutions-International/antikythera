@@ -1,6 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-public class Employee {
+import java.io.Serializable;
+
+/**
+ * Note Serializable to help test the InterfaceSolver
+ */
+public class Employee implements Serializable {
     int id = 100;
     Person p = new Person("Hornblower");
 
