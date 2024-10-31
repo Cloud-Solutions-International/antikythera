@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.parser.Dependency;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -160,7 +159,7 @@ public class DTOHandler extends ClassProcessor {
                     if (className.startsWith("java")) {
                         continue;
                     }
-                    Dependency dependency = new Dependency(typeDeclaration, className);
+                    ClassDependency dependency = new ClassDependency(typeDeclaration, className);
                     dependency.setExtension(true);
                     addEdge(className, dependency);
                 }

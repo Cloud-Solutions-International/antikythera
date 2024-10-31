@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassDependency;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
@@ -168,7 +169,7 @@ public class RestControllerParser extends ClassProcessor {
                 boolean found = false;
                 var deps = dependencies.get(type.getFullyQualifiedName().get());
                 if(deps != null) {
-                    for (Dependency dependency : deps) {
+                    for (ClassDependency dependency : deps) {
                         if (dependency.getTo().equals(name)) {
                             found = true;
                             break;
