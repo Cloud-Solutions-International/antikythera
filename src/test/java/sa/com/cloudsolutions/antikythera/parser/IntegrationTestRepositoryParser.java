@@ -58,7 +58,7 @@ public class IntegrationTestRepositoryParser {
                     Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
                     assertNotNull(stmt);
                     assertEquals(
-                         "SELECT * FROM person p JOIN p.department d WHERE d.id = :departmentId",
+                         "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
                             stmt.toString()
                     );
                     Statement ex = rql.getSimplifiedStatement();

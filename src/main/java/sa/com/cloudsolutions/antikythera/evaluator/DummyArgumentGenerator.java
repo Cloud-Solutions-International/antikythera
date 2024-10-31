@@ -6,7 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
-    private static final Logger logger = LoggerFactory.getLogger(ArgumentGenerator.class);
+    private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
 
 
     @Override
@@ -58,7 +58,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     AntikytheraRunTime.push(v);
                 }
             } else {
-                logger.warn("Unhandled {}", t);
+                AntikytheraRunTime.push(mockParameter(param.getTypeAsString()));
             }
         } else {
             /*

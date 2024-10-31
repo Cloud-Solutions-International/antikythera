@@ -365,8 +365,8 @@ public class SpringEvaluator extends Evaluator {
     /**
      * Finally create the tests by calling each of the test generators.
      * There maybe multiple test generators, one of unit tests, one of API tests aec.
-     * @param response
-     * @return
+     * @param response the response from the controller
+     * @return a variable that encloses the response
      */
     private Variable createTests(ControllerResponse response) {
         if (response != null) {
@@ -771,7 +771,7 @@ public class SpringEvaluator extends Evaluator {
     private boolean resultToEntity(Variable variable, ResultSet rs) {
 
         try {
-            if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
+            if (variable.getValue() instanceof Evaluator evaluator && rs.next() && cu != null) {
                 Map<String, Variable> fields = evaluator.getFields();
 
                 for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
@@ -818,7 +818,7 @@ public class SpringEvaluator extends Evaluator {
         while (n != null && !(n instanceof MethodDeclaration)) {
             if (n instanceof ExpressionStmt stmt) {
                 /*
-                 * We have found the expression statement correspoing to this query
+                 * We have found the expression statement corresponding to this query
                  */
                 return lines.get(stmt.hashCode());
             }
