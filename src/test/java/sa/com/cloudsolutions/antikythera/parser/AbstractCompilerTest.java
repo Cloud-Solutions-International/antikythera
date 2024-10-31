@@ -214,8 +214,8 @@ class AbstractCompilerTest {
         result = AbstractCompiler.findFullyQualifiedName(cu, "Integer");
         assertEquals("java.lang.Integer", result);
 
-        result = AbstractCompiler.findFullyQualifiedName(cu, "DTOHandlerTest");
-        assertEquals("sa.com.cloudsolutions.antikythera.parser.DTOHandlerTest", result);
+        result = AbstractCompiler.findFullyQualifiedName(cu, "ClassProcessorTest");
+        assertEquals("sa.com.cloudsolutions.antikythera.parser.ClassProcessorTest", result);
 
     }
 }
