@@ -428,24 +428,47 @@ public class AbstractCompiler {
     public static ImportDeclaration findImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
+                /*
+                 * Easy one straight up match involving a fully qualified name as className
+                 */
                 return imp;
             }
             String[] parts = imp.getNameAsString().split("\\.");
             if (parts.length > 0 && className.equals(parts[parts.length - 1])) {
+                /*
+                 * last part of the import matches the class name
+                 */
                 return imp;
             }
             if (imp.isAsterisk()) {
                 String impName = imp.getNameAsString();
                 if (!className.contains("\\.")) {
+                    String fullClassName = impName + "." + className;
                     try {
-                        Class.forName(impName + "." + className);
-                        return new ImportDeclaration(impName + "." + className, false, false);
+                        Class.forName(fullClassName);
+                        /*
+                         * Wild card import. Append the class name to the end and load the class,
+                         * we are on this line because it has worked so this is the correct import.
+                         */
+                        return new ImportDeclaration(fullClassName, false, false);
                     } catch (ClassNotFoundException e) {
                         try {
-                            AbstractCompiler.loadClass(impName + "." + className);
-                            return new ImportDeclaration(impName + "." + className, false, false);
+                            AbstractCompiler.loadClass(fullClassName);
+                            /*
+                             * We are here because the previous attempt at class forname was
+                             * unsuccessfully simply because the class had not been loaded.
+                             * Here we have loaded it, which obviously means it's there
+                             */
+                            return new ImportDeclaration(fullClassName, false, false);
                         } catch (ClassNotFoundException ex) {
-                            // can safely ignore this exception
+                            /*
+                             * There's one more thing that we can try, append the class name to the
+                             * end of the wildcard import and see if the corresponding file can be
+                             * located on the base folder.
+                             */
+                            if (new File(Settings.getBasePath(), classToPath(fullClassName)).exists()) {
+                                return new ImportDeclaration(fullClassName, false, false);
+                            }
                         }
                     }
                 }

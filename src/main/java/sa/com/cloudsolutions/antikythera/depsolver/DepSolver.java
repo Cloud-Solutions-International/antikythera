@@ -94,10 +94,11 @@ public class DepSolver {
     private void methodSearch(GraphNode node) throws AntikytheraException {
         if(node.getNode() instanceof MethodDeclaration md ) {
             searchMethodParameters(node, md);
+            Type returnType = md.getType();
             String returns = md.getTypeAsString();
-            if(!returns.equals("void")) {
+            if(!returns.equals("void") && returnType.isClassOrInterfaceType()) {
+                stack.addAll(node.addTypeArguments(returnType.asClassOrInterfaceType()));
                 ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), returns);
-                searchClass(node, imp);
             }
             md.accept(new VoidVisitorAdapter<Void>() {
                 @Override

@@ -164,15 +164,15 @@ public class GraphNode {
      * @return a list of graph nodes.
      * @throws AntikytheraException if the types cannot be fully resolved.
      */
-    private List<GraphNode> addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
+    public List<GraphNode> addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
         List<GraphNode> list = new ArrayList<>();
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
         if (typeArguments.isPresent()) {
             for (Type typeArg : typeArguments.get()) {
-                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, typeArg.asString());
-                if (imp != null) {
-                    destination.addImport(imp);
-                    list.addAll(addClassDependency(typeArg, imp.getNameAsString()));
+                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, typeArg.asString());
+                if (fullyQualifiedName != null) {
+                    destination.addImport(fullyQualifiedName);
+                    list.addAll(addClassDependency(typeArg, fullyQualifiedName));
                 }
             }
         }
