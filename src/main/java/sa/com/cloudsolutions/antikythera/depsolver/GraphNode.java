@@ -7,6 +7,10 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.ArrayInitializerExpr;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MemberValuePair;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -92,16 +96,48 @@ public class GraphNode {
         }
 
         if (classDeclaration.getAnnotations().isEmpty()) {
-            for (AnnotationExpr ann : enclosingType.getAnnotations()) {
-                classDeclaration.addAnnotation(ann);
-                String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
-                if (fqName != null) {
-                    destination.addImport(fqName);
-                }
-            }
+            processClassAnnotations();
         }
 
         return list;
+    }
+
+    private void processClassAnnotations() {
+        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
+            classDeclaration.addAnnotation(ann);
+            String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
+            if (fqName != null) {
+                destination.addImport(fqName);
+            }
+
+            if (ann.isSingleMemberAnnotationExpr()) {
+                Expression expr = ann.asSingleMemberAnnotationExpr().getMemberValue();
+                if (expr.isArrayInitializerExpr()) {
+                    ArrayInitializerExpr aie = expr.asArrayInitializerExpr();
+                    for (Expression e : aie.getValues()) {
+                        if (e.isAnnotationExpr()) {
+                            AnnotationExpr anne = e.asAnnotationExpr();
+                            fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, anne.getName().toString());
+                            if (fqName != null) {
+                                destination.addImport(fqName);
+                            }
+                            if (anne.isNormalAnnotationExpr()) {
+                                NormalAnnotationExpr norm = anne.asNormalAnnotationExpr();
+                                for (MemberValuePair value : norm.getPairs()) {
+                                    if (value.getValue().isAnnotationExpr()) {
+                                        AnnotationExpr ae = value.getValue().asAnnotationExpr();
+                                        fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ae.getName().toString());
+                                        if (fqName != null) {
+                                            destination.addImport(fqName);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
