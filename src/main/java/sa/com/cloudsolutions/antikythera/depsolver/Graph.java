@@ -22,6 +22,10 @@ public class Graph {
      */
     private static final Map<Integer, GraphNode> nodes = new HashMap<>();
 
+    private Graph() {
+
+    }
+
     public static GraphNode createGraphNode(Node n) throws AntikytheraException {
         GraphNode g = nodes.get(n.hashCode());
         if(g != null) {

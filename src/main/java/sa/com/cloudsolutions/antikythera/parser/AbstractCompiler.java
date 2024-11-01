@@ -392,7 +392,6 @@ public class AbstractCompiler {
              * Once again ignore the exception. We don't have the class in the lang package
              * but it can probably still be found in the same package as the current CU
              */
-
         }
 
         try {
@@ -434,6 +433,22 @@ public class AbstractCompiler {
             String[] parts = imp.getNameAsString().split("\\.");
             if (parts.length > 0 && className.equals(parts[parts.length - 1])) {
                 return imp;
+            }
+            if (imp.isAsterisk()) {
+                String impName = imp.getNameAsString();
+                if (!className.contains("\\.")) {
+                    try {
+                        Class.forName(impName + "." + className);
+                        return new ImportDeclaration(impName + "." + className, false, false);
+                    } catch (ClassNotFoundException e) {
+                        try {
+                            AbstractCompiler.loadClass(impName + "." + className);
+                            return new ImportDeclaration(impName + "." + className, false, false);
+                        } catch (ClassNotFoundException ex) {
+                            // can safely ignore this exception
+                        }
+                    }
+                }
             }
         }
         return null;

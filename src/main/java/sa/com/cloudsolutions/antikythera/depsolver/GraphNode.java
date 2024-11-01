@@ -73,26 +73,31 @@ public class GraphNode {
         classDeclaration.setInterface(enclosingType.isInterface());
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
 
-        for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
-            classDeclaration.addImplementedType(ifc.getNameAsString());
-            list.addAll(inherit(ifc));
+        if(classDeclaration.getImplementedTypes().isEmpty()) {
+            for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
+                classDeclaration.addImplementedType(ifc.getNameAsString());
+                list.addAll(inherit(ifc));
+            }
         }
 
-        for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
-            if (classDeclaration.isInterface()) {
-                classDeclaration.addExtendedType(ifc.toString());
+        if (classDeclaration.getExtendedTypes().isEmpty()) {
+            for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
+                if (classDeclaration.isInterface()) {
+                    classDeclaration.addExtendedType(ifc.toString());
+                } else {
+                    classDeclaration.addImplementedType(ifc.clone());
+                }
+                list.addAll(inherit(ifc));
             }
-            else {
-                classDeclaration.addImplementedType(ifc.clone());
-            }
-            list.addAll(inherit(ifc));
         }
 
-        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
-            classDeclaration.addAnnotation(ann);
-            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ann.getNameAsString());
-            if (imp != null) {
-                destination.addImport(imp);
+        if (classDeclaration.getAnnotations().isEmpty()) {
+            for (AnnotationExpr ann : enclosingType.getAnnotations()) {
+                classDeclaration.addAnnotation(ann);
+                String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
+                if (fqName != null) {
+                    destination.addImport(fqName);
+                }
             }
         }
 
