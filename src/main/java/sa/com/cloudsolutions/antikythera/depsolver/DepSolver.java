@@ -18,6 +18,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -40,10 +41,9 @@ public class DepSolver {
      * Map of nodes with their hash code as the key.
      * This is essentially our graph.
      */
-    private final Map<Integer, GraphNode> g = new HashMap<>();
+    private final Map<Integer, GraphNode> graph = new HashMap<>();
 
     private void solve() throws IOException, AntikytheraException {
-        String basePath = Settings.getBasePath();
         AbstractCompiler.preProcess();
         String s = Settings.getProperty("methods").toString();
         String[] parts = s.split("#");
@@ -56,10 +56,14 @@ public class DepSolver {
 
         GraphNode g = new GraphNode(method.get());
         dfs(g);
-        System.out.println(g);
 
     }
 
+    /**
+     * Recursive Depth first search
+     * @param node the node to search from
+     * @throws AntikytheraException if any of the code inspections fails.
+     */
     private void dfs(GraphNode node) throws AntikytheraException {
         if (node.isVisited()) {
             return;
@@ -69,7 +73,7 @@ public class DepSolver {
         CompilationUnit cu = node.getDestination();
         node.getDestination().getClassByName(node.getEnclosingType().getNameAsString()).ifPresent(c -> {
             if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof MethodDeclaration md) {
-                c.asClassOrInterfaceDeclaration().addMember(md);
+                node.getClassDeclaration().addMember(md);
             }
         });
 
@@ -80,9 +84,13 @@ public class DepSolver {
         methodSearch(node);
     }
 
+    /**
+     * Marks the node as visited and keeps track nodes in the graph to avoid duplication.
+     * @param node the graph node to mark as visited
+     */
     private void setVisited(GraphNode node) {
         node.setVisited(true);
-        g.put(node.hashCode(), node);
+        graph.put(node.hashCode(), node);
     }
 
     /**
@@ -90,7 +98,7 @@ public class DepSolver {
      * The return type, all the locals declared inside the method and arguments are searchable.
      * There maybe decorators for the method or some of the arguments. These need to be searched as
      * well.
-     * @param node
+     * @param node A graph node that represents a method in the code.
      */
     private void methodSearch(GraphNode node) throws AntikytheraException {
         if(node.getNode() instanceof MethodDeclaration md ) {
@@ -104,6 +112,8 @@ public class DepSolver {
                 @Override
                 public void visit(VariableDeclarator vd, Void arg) {
                     solveType(vd.getType(), node);
+                    System.out.println("VD: "  + vd);
+
                     vd.getInitializer().ifPresent(init -> {
                         try {
                             searchMethodCall(init, node);
@@ -112,14 +122,14 @@ public class DepSolver {
                         }
                     });
 
-                    System.out.println("VD: "  + vd);
+
                     super.visit(vd, arg);
                 }
 
                 private void solveType(Type vd, GraphNode node) {
-                    Type type = vd;
-                    if (type.isClassOrInterfaceType()) {
-                        List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), type);
+
+                    if (vd.isClassOrInterfaceType()) {
+                        List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
                         for (ImportDeclaration imp : imports) {
                             try {
                                 searchClass(node, imp);
@@ -145,48 +155,57 @@ public class DepSolver {
             MethodCallExpr mce = init.asMethodCallExpr();
             Optional<Expression> scope = mce.getScope();
             if(scope.isPresent()) {
-                ClassOrInterfaceDeclaration cdecl = node.getEnclosingType();
-                Expression e = scope.get();
-                if (e.isNameExpr()) {
-                    NameExpr expr = e.asNameExpr();
-                    Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
-                    if(fd.isPresent()) {
-                        /*
-                         * We have found a matching field declaration, next up we need to find the
-                         * CompilationUnit. If the cu is absent that means the class comes from a
-                         * compiled binary and we can just include the whole thing as a dependency.
-                         *
-                         * The other side of the coin is a lot harder. If we have a cu, we need to
-                         * find the corresponding class declaration for the field and then go
-                         * looking in it for the method of interest.
-                         */
-                        String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                                fd.get().getElementType().toString());
-                        if (fqname != null) {
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                            if (cu != null) {
-                                String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
-                                TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
-                                if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
-                                    Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                                            mce, otherDecl.asClassOrInterfaceDeclaration());
-                                    if (md.isPresent()) {
-                                        GraphNode g = this.g.get(md.get().hashCode());
-                                        if (g != null) {
-                                            if (!g.isVisited()) {
-                                                dfs(g);
-                                            }
-                                        }
-                                        else {
-                                            GraphNode gnode = new GraphNode(md.get());
-                                            dfs(gnode);
-                                        }
+                externalMethod(node, scope.get(), mce);
+            }
+        }
+    }
+
+    private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
+        ClassOrInterfaceDeclaration cdecl = node.getEnclosingType();
+
+        if (scope.isNameExpr()) {
+            NameExpr expr = scope.asNameExpr();
+            Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
+            if(fd.isPresent()) {
+                /*
+                 * We have found a matching field declaration, next up we need to find the
+                 * CompilationUnit. If the cu is absent that means the class comes from a
+                 * compiled binary and we can just include the whole thing as a dependency.
+                 *
+                 * The other side of the coin is a lot harder. If we have a cu, we need to
+                 * find the corresponding class declaration for the field and then go
+                 * looking in it for the method of interest.
+                 */
+                String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                        fd.get().getElementType().toString());
+                if (fqname != null) {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
+                    if (cu != null) {
+                        String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
+                        TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
+                        if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
+                            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
+                                    mce, otherDecl.asClassOrInterfaceDeclaration());
+                            if (md.isPresent()) {
+                                GraphNode g = this.graph.get(md.get().hashCode());
+                                if (g != null) {
+                                    if (!g.isVisited()) {
+                                        dfs(g);
                                     }
+                                }
+                                else {
+                                    GraphNode gnode = new GraphNode(md.get());
+                                    dfs(gnode);
                                 }
                             }
                         }
                     }
                 }
+                /*
+                 * Now we mark the field declaration as part of the source code to preserve from
+                 * current class.
+                 */
+                node.getClassDeclaration().addMember(fd.get());
             }
         }
     }
@@ -228,13 +247,14 @@ public class DepSolver {
                  */
                 TypeDeclaration<?> cls = AbstractCompiler.getMatchingClass(compilationUnit, className);
                 if(cls != null) {
-                    GraphNode n = g.get(cls.hashCode());
+                    GraphNode n = graph.get(cls.hashCode());
                     if (n == null) {
                         n = new GraphNode(cls);
                         dfs(n);
                     }
                 }
             }
+            node.getDestination().addImport(imp);
         }
     }
 
@@ -249,10 +269,23 @@ public class DepSolver {
         }
     }
 
+    private void writeFiles() {
+        for (Map.Entry<String, CompilationUnit> entry : dependencies.entrySet()) {
+            try {
+                CopyUtils.writeFile(AbstractCompiler.classToPath(entry.getKey()), entry.getValue().toString());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public static void main(String[] args) throws IOException, AntikytheraException {
         File yamlFile = new File(Settings.class.getClassLoader().getResource("depsolver.yml").getFile());
         Settings.loadConfigMap(yamlFile);
         DepSolver depSolver = new DepSolver();
         depSolver.solve();
+
+        CopyUtils.createMavenProjectStructure(Settings.getBasePackage(), Settings.getProperty("output_path").toString());
+        depSolver.writeFiles();
     }
 }

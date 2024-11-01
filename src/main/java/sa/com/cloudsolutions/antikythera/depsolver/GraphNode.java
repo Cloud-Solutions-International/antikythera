@@ -15,10 +15,29 @@ import java.util.Optional;
  * Primary purpose to encapsulate the AST node.
  */
 public class GraphNode {
+    /**
+     * This is the compilation unit for the class that contains the node.
+     */
     private final CompilationUnit compilationUnit;
+    /**
+     * This is the enclosing class for the original node.
+     */
     private final ClassOrInterfaceDeclaration enclosingType;
+
+    /**
+     * This is the class declaration that is the target.
+     */
+    private final ClassOrInterfaceDeclaration classDeclaration;
+
+    /**
+     * This is the Abstract Syntax Tree node for the method, class or field
+     */
     Node node;
+    /**
+     * The Compilation Unit that will be used to generate the new class.
+     */
     CompilationUnit destination;
+
 
     boolean visited;
 
@@ -29,31 +48,38 @@ public class GraphNode {
 
         this.destination = new CompilationUnit();
 
-        ClassOrInterfaceDeclaration cdecl = destination.addClass(enclosingType.getNameAsString());
+        classDeclaration = destination.addClass(enclosingType.getNameAsString());
         Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
 
         if (cu.isPresent()) {
             compilationUnit = cu.get();
-            cdecl.setInterface(enclosingType.isInterface());
+            classDeclaration.setInterface(enclosingType.isInterface());
+            if (compilationUnit.getPackageDeclaration().isPresent()) {
+                destination.setPackageDeclaration(compilationUnit.getPackageDeclaration().get());
+            }
 
             for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
-                cdecl.addImplementedType(ifc.getNameAsString());
+                classDeclaration.addImplementedType(ifc.getNameAsString());
                 ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
                 if (imp != null) {
-                    compilationUnit.addImport(imp);
+                    destination.addImport(imp);
                 }
             }
 
             for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
-                cdecl.addImplementedType(ifc.getNameAsString());
+                classDeclaration.addImplementedType(ifc.getNameAsString());
                 ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
                 if (imp != null) {
-                    compilationUnit.addImport(imp);
+                    destination.addImport(imp);
                 }
             }
 
             for (AnnotationExpr ann : enclosingType.getAnnotations()) {
-                cdecl.addAnnotation(ann);
+                classDeclaration.addAnnotation(ann);
+                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ann.getNameAsString());
+                if (imp != null) {
+                    destination.addImport(imp);
+                }
             }
         }
         else {
@@ -101,5 +127,9 @@ public class GraphNode {
         } else {
             return false;
         }
+    }
+
+    public ClassOrInterfaceDeclaration getClassDeclaration() {
+        return classDeclaration;
     }
 }
