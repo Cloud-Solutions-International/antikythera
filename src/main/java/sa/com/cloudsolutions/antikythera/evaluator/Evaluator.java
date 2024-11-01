@@ -214,22 +214,6 @@ public class Evaluator {
         return null;
     }
 
-    Method evaluateMethodReference(Expression expr) {
-        MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
-        ResolvedMethodDeclaration resolvedMethod = mexpr.resolve();
-        if(resolvedMethod instanceof ReflectionMethodDeclaration md) {
-            try {
-                Field f =  md.getClass().getDeclaredField("method");
-                f.setAccessible(true);
-                return (Method) f.get(md);
-            } catch (NoSuchFieldException|IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-
-        }
-        return null;
-    }
-
     /**
      * Create an array using reflection
      * @param arrayInitializerExpr the ArrayInitializerExpr which describes how the array will be build
@@ -791,12 +775,20 @@ public class Evaluator {
             return null;
         }
 
-        Variable variable = null;
         LinkedList<Expression> chain = findScopeChain(methodCall);
+
         if (chain.isEmpty()) {
             return executeLocalMethod(methodCall);
         }
 
+        Variable variable = evaluateScopeChain(chain);
+
+        return evaluateMethodCall(variable, methodCall);
+
+    }
+
+    private Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException, AntikytheraException {
+        Variable variable = null;
         while(!chain.isEmpty()) {
             Expression expr2 = chain.pollLast();
             if (expr2.isNameExpr()) {
@@ -829,10 +821,21 @@ public class Evaluator {
             else if (expr2.isLiteralExpr()) {
                 variable = evaluateLiteral(expr2);
             }
+            else if (expr2.isTypeExpr()) {
+                /*
+                 * todo  : fix this hack.
+                 *  currently only supports System related stuff.
+                 */
+                String s = expr2.toString();
+                variable = new Variable(switch (s) {
+                    case "System.out" -> System.out;
+                    case "System.err" -> System.err;
+                    case "System.in" -> System.in;
+                    default -> throw new IllegalArgumentException("Unexpected value: " + s);
+                });
+            }
         }
-
-        return evaluateMethodCall(variable, methodCall);
-
+        return variable;
     }
 
     /**
@@ -861,6 +864,11 @@ public class Evaluator {
                 FieldAccessExpr mce = expr.asFieldAccessExpr();
                 chain.addLast(mce.getScope());
                 expr = mce.getScope();
+            }
+            else if (expr.isMethodReferenceExpr()) {
+                MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
+                chain.addLast(mexpr.getScope());
+                expr = mexpr.getScope();
             }
             else {
                 break;
@@ -905,37 +913,11 @@ public class Evaluator {
                 NodeList<Expression> arguments = methodCall.getArguments();
                 if(arguments.isNonEmpty())
                 {
-                    if(arguments.get(0).isMethodReferenceExpr()) {
-                        Expression rfCall = arguments.get(0).asMethodReferenceExpr();
-                        Expression scope = rfCall.asMethodReferenceExpr().getScope();
-                        if (scope.isFieldAccessExpr()) {
-                            FieldAccessExpr fieldAccess = scope.asFieldAccessExpr();
-                            String className = fieldAccess.getScope().toString();
-                            String fieldName = fieldAccess.getNameAsString();
-
-                            Class<?> clazz = Class.forName(className);
-                            Field field = clazz.getField(fieldName);
-                            if (Modifier.isStatic(field.getModifiers())) {
-                                return null;
-                            }
-                        }
-                        Method m = evaluateMethodReference(arguments.get(0));
-
-                        Class<?> declaringClass = m.getDeclaringClass();
-                        Object instance = declaringClass.getDeclaredConstructor().newInstance();
-                        if(v.getValue() instanceof Collection<?> c) {
-                            for (Object o : c) {
-                                if (instance != null) {
-                                    m.invoke(instance, o);
-                                }
-                                else {
-                                    m.invoke(o);
-                                }
-                            }
-                            return null;
-                        }
+                    Expression argument = arguments.get(0);
+                    if(argument.isMethodReferenceExpr()) {
+                        return evaluateMethodReference(v, arguments);
                     }
-                    else if (arguments.get(0).isLambdaExpr()) {
+                    else if (argument.isLambdaExpr()) {
                         return evaluateLambda(v, arguments);
                     }
                 }
@@ -958,6 +940,28 @@ public class Evaluator {
         } catch (ReflectiveOperationException ex) {
             throw new EvaluatorException("Error evaluating method call", ex);
         }
+    }
+
+    private Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException, AntikytheraException {
+        MethodReferenceExpr rfCall = arguments.get(0).asMethodReferenceExpr();
+        LinkedList<Expression> chain = findScopeChain(rfCall);
+
+        if (chain.isEmpty()) {
+            return null;
+        }
+
+        Variable variable = evaluateScopeChain(chain);
+        if (v.getValue() instanceof Collection<?> c) {
+            Method m = Reflect.findMethod(variable.getClazz(), rfCall.getIdentifier(), new Class[]{c.getClass()});
+            if (m != null) {
+                for(Object o : c) {
+                    m.invoke(variable.getValue(), o);
+                }
+            }
+        }
+        returnValue = new Variable(null);
+        return null;
+
     }
 
     private Variable evaluateLambda(Variable v, NodeList<Expression> arguments) throws AntikytheraException, ReflectiveOperationException {
