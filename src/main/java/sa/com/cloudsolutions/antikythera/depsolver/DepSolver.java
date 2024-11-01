@@ -24,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +44,11 @@ public class DepSolver {
      */
     private final Map<Integer, GraphNode> graph = new HashMap<>();
 
+    /**
+     * The stack for the depth first search.
+     */
+    private final LinkedList<GraphNode> stack = new LinkedList<>();
+
     private void solve() throws IOException, AntikytheraException {
         AbstractCompiler.preProcess();
         String s = Settings.getProperty("methods").toString();
@@ -61,27 +67,31 @@ public class DepSolver {
 
     /**
      * Recursive Depth first search
-     * @param node the node to search from
+     * @param v the node to search from
      * @throws AntikytheraException if any of the code inspections fails.
      */
-    private void dfs(GraphNode node) throws AntikytheraException {
-        if (node.isVisited()) {
-            return;
-        }
-        setVisited(node);
+    private void dfs(GraphNode v) throws AntikytheraException {
+        stack.push(v);
 
-        CompilationUnit cu = node.getDestination();
-        node.getDestination().getClassByName(node.getEnclosingType().getNameAsString()).ifPresent(c -> {
-            if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof MethodDeclaration md) {
-                node.getClassDeclaration().addMember(md);
+        while (! stack.isEmpty()) {
+            GraphNode node = stack.pollLast();
+            if (!node.isVisited()) {
+                setVisited(node);
+
+                CompilationUnit cu = node.getDestination();
+                node.getDestination().getClassByName(node.getEnclosingType().getNameAsString()).ifPresent(c -> {
+                    if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof MethodDeclaration md) {
+                        node.getClassDeclaration().addMember(md);
+                    }
+                });
+
+                ClassOrInterfaceDeclaration decl = AbstractCompiler.getEnclosingClassOrInterface(node.getNode());
+                dependencies.put(decl.getFullyQualifiedName().get(), cu);
+
+                fieldSearch(node);
+                methodSearch(node);
             }
-        });
-
-        ClassOrInterfaceDeclaration decl = AbstractCompiler.getEnclosingClassOrInterface(node.getNode());
-        dependencies.put(decl.getFullyQualifiedName().get(), cu);
-
-        fieldSearch(node);
-        methodSearch(node);
+        }
     }
 
     /**
@@ -194,12 +204,12 @@ public class DepSolver {
                                 GraphNode g = this.graph.get(md.get().hashCode());
                                 if (g != null) {
                                     if (!g.isVisited()) {
-                                        dfs(g);
+                                        stack.push(g);
                                     }
                                 }
                                 else {
-                                    GraphNode gnode = new GraphNode(md.get());
-                                    dfs(gnode);
+                                    g = new GraphNode(md.get());
+                                    stack.push(g);
                                 }
                             }
                         }
@@ -261,8 +271,7 @@ public class DepSolver {
                 if(cls != null) {
                     GraphNode n = graph.get(cls.hashCode());
                     if (n == null) {
-                        n = new GraphNode(cls);
-                        dfs(n);
+                        stack.push(new GraphNode(cls));
                     }
                 }
             }
