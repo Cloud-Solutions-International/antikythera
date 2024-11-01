@@ -469,7 +469,6 @@ public class AbstractCompiler {
                     return Optional.of(method);
                 }
                 for (int i =0 ; i < method.getParameters().size(); i++) {
-
                     ResolvedType paramType = method.getParameter(i).getType().resolve();
                     if (arguments.get(i).equals(paramType.describe())
                             || paramType.describe().equals("java.lang.Object")

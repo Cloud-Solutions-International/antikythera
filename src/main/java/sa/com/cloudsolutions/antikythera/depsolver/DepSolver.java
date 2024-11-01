@@ -10,8 +10,9 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -104,8 +105,10 @@ public class DepSolver {
                 public void visit(VariableDeclarator vd, Void arg) {
                     solveType(vd.getType(), node);
                     vd.getInitializer().ifPresent(init -> {
-                        if (init.isMethodCallExpr()) {
-                            System.out.println("VD : MethodCall " + init);
+                        try {
+                            searchMethodCall(init, node);
+                        } catch (AntikytheraException e) {
+                            throw new RuntimeException(e);
                         }
                     });
 
@@ -134,6 +137,57 @@ public class DepSolver {
                     super.visit(oce, arg);
                 }
             }, null);
+        }
+    }
+
+    private void searchMethodCall(Expression init, GraphNode node) throws AntikytheraException {
+        if (init.isMethodCallExpr()) {
+            MethodCallExpr mce = init.asMethodCallExpr();
+            Optional<Expression> scope = mce.getScope();
+            if(scope.isPresent()) {
+                ClassOrInterfaceDeclaration cdecl = node.getEnclosingType();
+                Expression e = scope.get();
+                if (e.isNameExpr()) {
+                    NameExpr expr = e.asNameExpr();
+                    Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
+                    if(fd.isPresent()) {
+                        /*
+                         * We have found a matching field declaration, next up we need to find the
+                         * CompilationUnit. If the cu is absent that means the class comes from a
+                         * compiled binary and we can just include the whole thing as a dependency.
+                         *
+                         * The other side of the coin is a lot harder. If we have a cu, we need to
+                         * find the corresponding class declaration for the field and then go
+                         * looking in it for the method of interest.
+                         */
+                        String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                                fd.get().getElementType().toString());
+                        if (fqname != null) {
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
+                            if (cu != null) {
+                                String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
+                                TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
+                                if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
+                                    Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
+                                            mce, otherDecl.asClassOrInterfaceDeclaration());
+                                    if (md.isPresent()) {
+                                        GraphNode g = this.g.get(md.get().hashCode());
+                                        if (g != null) {
+                                            if (!g.isVisited()) {
+                                                dfs(g);
+                                            }
+                                        }
+                                        else {
+                                            GraphNode gnode = new GraphNode(md.get());
+                                            dfs(gnode);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

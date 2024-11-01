@@ -9,6 +9,8 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.util.Optional;
+
 /**
  * Primary purpose to encapsulate the AST node.
  */
@@ -28,27 +30,34 @@ public class GraphNode {
         this.destination = new CompilationUnit();
 
         ClassOrInterfaceDeclaration cdecl = destination.addClass(enclosingType.getNameAsString());
-        compilationUnit = enclosingType.findCompilationUnit().get();
-        cdecl.setInterface(enclosingType.isInterface());
+        Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
 
-        for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
-            cdecl.addImplementedType(ifc.getNameAsString());
-            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
-            if (imp != null) {
-                compilationUnit.addImport(imp);
+        if (cu.isPresent()) {
+            compilationUnit = cu.get();
+            cdecl.setInterface(enclosingType.isInterface());
+
+            for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
+                cdecl.addImplementedType(ifc.getNameAsString());
+                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
+                if (imp != null) {
+                    compilationUnit.addImport(imp);
+                }
+            }
+
+            for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
+                cdecl.addImplementedType(ifc.getNameAsString());
+                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
+                if (imp != null) {
+                    compilationUnit.addImport(imp);
+                }
+            }
+
+            for (AnnotationExpr ann : enclosingType.getAnnotations()) {
+                cdecl.addAnnotation(ann);
             }
         }
-
-        for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
-            cdecl.addImplementedType(ifc.getNameAsString());
-            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
-            if (imp != null) {
-                compilationUnit.addImport(imp);
-            }
-        }
-
-        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
-            cdecl.addAnnotation(ann);
+        else {
+            throw new AntikytheraException("CompilationUnit not found for " + enclosingType.getNameAsString());
         }
     }
 
@@ -62,10 +71,6 @@ public class GraphNode {
 
     public CompilationUnit getDestination() {
         return destination;
-    }
-
-    public void setDestination(CompilationUnit destination) {
-        this.destination = destination;
     }
 
     public Node getNode() {
@@ -91,8 +96,8 @@ public class GraphNode {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof GraphNode) {
-            return node.equals(((GraphNode) obj).node);
+        if (obj instanceof GraphNode other) {
+            return node.equals(other.node);
         } else {
             return false;
         }
