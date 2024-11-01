@@ -24,7 +24,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -32,26 +31,12 @@ import java.util.Optional;
 
 public class DepSolver {
     /**
-     * Map of fully qualified class names and their generated compilation units.
-     *
-     * For most classes the generated compilation unit will only be a subset of the input
-     * compilation unit.
-     */
-    private final Map<String, CompilationUnit> dependencies = new HashMap<>();
-
-    /**
-     * Map of nodes with their hash code as the key.
-     * This is essentially our graph.
-     */
-    private final Map<Integer, GraphNode> graph = new HashMap<>();
-
-    /**
      * The stack for the depth first search.
      */
     private final LinkedList<GraphNode> stack = new LinkedList<>();
 
     GraphNode nodeBuilder(Node n) throws AntikytheraException {
-        GraphNode g = new GraphNode(n);
+        GraphNode g = Graph.createGraphNode(n);
         stack.addAll(g.buildNode());
         stack.push(g);
         return g;
@@ -84,17 +69,13 @@ public class DepSolver {
         while (! stack.isEmpty()) {
             GraphNode node = stack.pollLast();
             if (!node.isVisited()) {
-                setVisited(node);
+                node.setVisited(true);
 
-                CompilationUnit cu = node.getDestination();
                 node.getDestination().getClassByName(node.getEnclosingType().getNameAsString()).ifPresent(c -> {
                     if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof MethodDeclaration md) {
                         node.getClassDeclaration().addMember(md);
                     }
                 });
-
-                ClassOrInterfaceDeclaration decl = AbstractCompiler.getEnclosingClassOrInterface(node.getNode());
-                dependencies.put(decl.getFullyQualifiedName().get(), cu);
 
                 fieldSearch(node);
                 methodSearch(node);
@@ -102,14 +83,6 @@ public class DepSolver {
         }
     }
 
-    /**
-     * Marks the node as visited and keeps track nodes in the graph to avoid duplication.
-     * @param node the graph node to mark as visited
-     */
-    private void setVisited(GraphNode node) {
-        node.setVisited(true);
-        graph.put(node.hashCode(), node);
-    }
 
     /**
      * Search in methods.
@@ -209,15 +182,7 @@ public class DepSolver {
                             Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
                                     mce, otherDecl.asClassOrInterfaceDeclaration());
                             if (md.isPresent()) {
-                                GraphNode g = this.graph.get(md.get().hashCode());
-                                if (g != null) {
-                                    if (!g.isVisited()) {
-                                        stack.push(g);
-                                    }
-                                }
-                                else {
-                                    nodeBuilder(md.get());
-                                }
+                                nodeBuilder(md.get());
                             }
                         }
                     }
@@ -276,10 +241,7 @@ public class DepSolver {
                  */
                 TypeDeclaration<?> cls = AbstractCompiler.getMatchingClass(compilationUnit, className);
                 if(cls != null) {
-                    GraphNode n = graph.get(cls.hashCode());
-                    if (n == null) {
-                        nodeBuilder(cls);
-                    }
+                    nodeBuilder(cls);
                 }
             }
             node.getDestination().addImport(imp);
@@ -298,7 +260,7 @@ public class DepSolver {
     }
 
     private void writeFiles() {
-        for (Map.Entry<String, CompilationUnit> entry : dependencies.entrySet()) {
+        for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             try {
                 CopyUtils.writeFile(AbstractCompiler.classToPath(entry.getKey()), entry.getValue().toString());
             } catch (IOException e) {

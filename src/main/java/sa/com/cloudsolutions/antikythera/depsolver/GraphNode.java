@@ -33,7 +33,7 @@ public class GraphNode {
     /**
      * This is the class declaration that is the target.
      */
-    private final ClassOrInterfaceDeclaration classDeclaration;
+    private ClassOrInterfaceDeclaration classDeclaration;
 
     /**
      * This is the Abstract Syntax Tree node for the method, class or field
@@ -52,8 +52,6 @@ public class GraphNode {
     public GraphNode(Node node) throws AntikytheraException {
         this.node = node;
         enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
-        this.destination = new CompilationUnit();
-        classDeclaration = destination.addClass(enclosingType.getNameAsString());
 
         Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
 
@@ -155,7 +153,7 @@ public class GraphNode {
         if (cu != null) {
             TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
             if (t != null) {
-                GraphNode g = new GraphNode(t);
+                GraphNode g = Graph.createGraphNode(t);
                 list.addAll(g.buildNode());
                 list.add(g);
             }
@@ -207,5 +205,13 @@ public class GraphNode {
 
     public ClassOrInterfaceDeclaration getClassDeclaration() {
         return classDeclaration;
+    }
+
+    public void setDestination(CompilationUnit destination) {
+        this.destination = destination;
+    }
+
+    public void setClassDeclaration(ClassOrInterfaceDeclaration classDeclaration) {
+        this.classDeclaration = classDeclaration;
     }
 }
