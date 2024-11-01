@@ -6,6 +6,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -67,7 +68,16 @@ public class GraphNode {
             }
 
             for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
-                classDeclaration.addImplementedType(ifc.getNameAsString());
+                classDeclaration.addImplementedType(ifc.clone());
+                ifc.getTypeArguments().ifPresent(typeArgs -> {
+                    for (Type typeArg : typeArgs) {
+                        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, typeArg.asString());
+                        if (imp != null) {
+                            destination.addImport(imp);
+                        }
+                    }
+                });
+
                 ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
                 if (imp != null) {
                     destination.addImport(imp);

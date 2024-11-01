@@ -179,6 +179,10 @@ public class DepSolver {
                 String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
                         fd.get().getElementType().toString());
                 if (fqname != null) {
+                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
+                    if (imp != null) {
+                        node.getDestination().addImport(imp);
+                    }
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
                     if (cu != null) {
                         String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
@@ -206,6 +210,14 @@ public class DepSolver {
                  * current class.
                  */
                 node.getClassDeclaration().addMember(fd.get());
+
+                for(AnnotationExpr ann : fd.get().getAnnotations()) {
+                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                    if (imp != null) {
+                        node.getDestination().addImport(imp);
+                    }
+                }
+
             }
         }
     }
