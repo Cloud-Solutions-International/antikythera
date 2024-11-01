@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -85,7 +86,7 @@ public class Evaluator {
      * The fully qualified name of the class for which we created this evaluator.
      */
     private final String className;
-    protected final CompilationUnit cu;
+    protected CompilationUnit cu;
 
     /**
      * The most recent return value that was encountered.
@@ -545,11 +546,13 @@ public class Evaluator {
                 dependant = AntikytheraRunTime.getCompilationUnit(importDeclaration.getNameAsString());
             }
         }
+
+
         if (dependant != null) {
             TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(dependant, type.getNameAsString());
             if (match != null) {
                 Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
-
+                annonymousOverrides(type, oce, eval);
                 List<ConstructorDeclaration> constructors = dependant.findAll(ConstructorDeclaration.class);
                 if (constructors.isEmpty()) {
                     return new Variable(eval);
@@ -576,6 +579,34 @@ public class Evaluator {
         return null;
     }
 
+    private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
+        TypeDeclaration<?> match;
+        if (oce.getAnonymousClassBody().isPresent()) {
+            /*
+             * Merge the anon class stuff into the parent
+             */
+            eval.cu = eval.cu.clone();
+            match = AbstractCompiler.getMatchingClass(eval.cu, type.getNameAsString());
+            for(BodyDeclaration body : oce.getAnonymousClassBody().get()) {
+                if (body.isMethodDeclaration()) {
+                    MethodDeclaration md = body.asMethodDeclaration();
+                    MethodDeclaration replace = null;
+                    for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
+                        if (method.getNameAsString().equals(md.getNameAsString())) {
+                            replace = method;
+                            break;
+                        }
+                    }
+                    if (replace != null) {
+                        replace.replace(md);
+                    }
+                    else {
+                        match.addMember(md);
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Create a new object using reflection.
@@ -1026,13 +1057,10 @@ public class Evaluator {
      */
      Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-        try {
-            Optional<Node> n = methodCall.resolve().toAst();
-            if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
-                return executeMethod(md);
-            }
-        } catch (IllegalStateException ise) {
-            return executeSource(methodCall);
+
+        Optional<MethodDeclaration> n = AbstractCompiler.findMethodDeclaration(methodCall, cu.getType(0).asClassOrInterfaceDeclaration());
+        if (n.isPresent()) {
+            return executeMethod(n.get());
         }
 
         return null;
