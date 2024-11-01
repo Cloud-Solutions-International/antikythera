@@ -9,8 +9,12 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+/**
+ * Primary purpose to encapsulate the AST node.
+ */
 public class GraphNode {
     private final CompilationUnit compilationUnit;
+    private final ClassOrInterfaceDeclaration enclosingType;
     Node node;
     CompilationUnit destination;
 
@@ -20,15 +24,15 @@ public class GraphNode {
     public GraphNode(Node node) throws AntikytheraException {
         this.node = node;
 
-        ClassOrInterfaceDeclaration enclosing = AbstractCompiler.getEnclosingClassOrInterface(node);
+        enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
 
         this.destination = new CompilationUnit();
 
-        ClassOrInterfaceDeclaration cdecl = destination.addClass(enclosing.getNameAsString());
-        compilationUnit = cdecl.findCompilationUnit().get();
-        cdecl.setInterface(enclosing.isInterface());
+        ClassOrInterfaceDeclaration cdecl = destination.addClass(enclosingType.getNameAsString());
+        compilationUnit = enclosingType.findCompilationUnit().get();
+        cdecl.setInterface(enclosingType.isInterface());
 
-        for (ClassOrInterfaceType ifc : enclosing.getImplementedTypes()) {
+        for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
             cdecl.addImplementedType(ifc.getNameAsString());
             ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
             if (imp != null) {
@@ -36,7 +40,7 @@ public class GraphNode {
             }
         }
 
-        for (ClassOrInterfaceType ifc : enclosing.getExtendedTypes()) {
+        for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
             cdecl.addImplementedType(ifc.getNameAsString());
             ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
             if (imp != null) {
@@ -44,11 +48,9 @@ public class GraphNode {
             }
         }
 
-        for (AnnotationExpr ann : enclosing.getAnnotations()) {
+        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             cdecl.addAnnotation(ann);
         }
-
-
     }
 
     public boolean isVisited() {
@@ -77,5 +79,9 @@ public class GraphNode {
 
     public CompilationUnit getCompilationUnit() {
         return compilationUnit;
+    }
+
+    public ClassOrInterfaceDeclaration getEnclosingType() {
+        return enclosingType;
     }
 }

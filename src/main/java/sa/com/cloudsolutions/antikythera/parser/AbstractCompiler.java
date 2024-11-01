@@ -11,6 +11,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
@@ -406,6 +407,15 @@ public class AbstractCompiler {
         }
     }
 
+    public static ImportDeclaration findImport(CompilationUnit cu, Type t) {
+        if (t.isClassOrInterfaceType()) {
+            ClassOrInterfaceType ctype = t.asClassOrInterfaceType();
+            if (ctype.getTypeArguments().isPresent()) {
+                return findImport(cu, ctype.getNameAsString());
+            }
+        }
+        return findImport(cu, t.asString());
+    }
     /**
      * Finds an import statement corresponding to the class name in the compilation unit
      * @param cu The Compilation unit
