@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -49,6 +50,13 @@ public class DepSolver {
      */
     private final LinkedList<GraphNode> stack = new LinkedList<>();
 
+    GraphNode nodeBuilder(Node n) throws AntikytheraException {
+        GraphNode g = new GraphNode(n);
+        stack.addAll(g.buildNode());
+        stack.push(g);
+        return g;
+    }
+
     private void solve() throws IOException, AntikytheraException {
         AbstractCompiler.preProcess();
         String s = Settings.getProperty("methods").toString();
@@ -60,9 +68,9 @@ public class DepSolver {
                 .filter(m -> m.getNameAsString().equals(parts[1]))
                 .findFirst();
 
-        GraphNode g = new GraphNode(method.get());
-        dfs(g);
-
+        if (method.isPresent()) {
+            dfs(nodeBuilder(method.get()));
+        }
     }
 
     /**
@@ -208,8 +216,7 @@ public class DepSolver {
                                     }
                                 }
                                 else {
-                                    g = new GraphNode(md.get());
-                                    stack.push(g);
+                                    nodeBuilder(md.get());
                                 }
                             }
                         }
@@ -271,7 +278,7 @@ public class DepSolver {
                 if(cls != null) {
                     GraphNode n = graph.get(cls.hashCode());
                     if (n == null) {
-                        stack.push(new GraphNode(cls));
+                        nodeBuilder(cls);
                     }
                 }
             }

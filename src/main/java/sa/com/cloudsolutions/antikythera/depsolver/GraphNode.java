@@ -3,13 +3,18 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -44,57 +49,97 @@ public class GraphNode {
 
     public GraphNode(Node node) throws AntikytheraException {
         this.node = node;
-
         enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
-
         this.destination = new CompilationUnit();
-
         classDeclaration = destination.addClass(enclosingType.getNameAsString());
+
         Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
 
         if (cu.isPresent()) {
             compilationUnit = cu.get();
-            classDeclaration.setInterface(enclosingType.isInterface());
-            if (compilationUnit.getPackageDeclaration().isPresent()) {
-                destination.setPackageDeclaration(compilationUnit.getPackageDeclaration().get());
-            }
-
-            for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
-                classDeclaration.addImplementedType(ifc.getNameAsString());
-                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
-                if (imp != null) {
-                    destination.addImport(imp);
-                }
-            }
-
-            for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
-                classDeclaration.addImplementedType(ifc.clone());
-                ifc.getTypeArguments().ifPresent(typeArgs -> {
-                    for (Type typeArg : typeArgs) {
-                        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, typeArg.asString());
-                        if (imp != null) {
-                            destination.addImport(imp);
-                        }
-                    }
-                });
-
-                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
-                if (imp != null) {
-                    destination.addImport(imp);
-                }
-            }
-
-            for (AnnotationExpr ann : enclosingType.getAnnotations()) {
-                classDeclaration.addAnnotation(ann);
-                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ann.getNameAsString());
-                if (imp != null) {
-                    destination.addImport(imp);
-                }
-            }
         }
         else {
             throw new AntikytheraException("CompilationUnit not found for " + enclosingType.getNameAsString());
         }
+    }
+
+    /**
+     * Builds the graph node from the information available in enclosing type
+     * @return a list of nodes that need to be explored
+     */
+    public List<GraphNode> buildNode() throws AntikytheraException {
+        List<GraphNode> list = new ArrayList<>();
+
+        classDeclaration.setInterface(enclosingType.isInterface());
+        compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
+
+        for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
+            classDeclaration.addImplementedType(ifc.getNameAsString());
+            list.addAll(inherit(ifc));
+        }
+
+        for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
+            if (classDeclaration.isInterface()) {
+                classDeclaration.addExtendedType(ifc.toString());
+            }
+            else {
+                classDeclaration.addImplementedType(ifc.clone());
+            }
+            list.addAll(inherit(ifc));
+        }
+
+        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
+            classDeclaration.addAnnotation(ann);
+            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ann.getNameAsString());
+            if (imp != null) {
+                destination.addImport(imp);
+            }
+        }
+
+        return list;
+    }
+
+    private List<GraphNode> inherit(ClassOrInterfaceType ifc) throws AntikytheraException {
+        List<GraphNode> list = new ArrayList<>();
+        list.addAll(addTypeArguments(ifc));
+
+        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
+        if (imp != null) {
+            destination.addImport(imp);
+        }
+        list.addAll(addClassDependency(ifc, imp == null ?  ifc.getNameAsString() : imp.getNameAsString()));
+        return list;
+    }
+
+    private List<GraphNode> addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
+        List<GraphNode> list = new ArrayList<>();
+        Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
+        if (typeArguments.isPresent()) {
+            for (Type typeArg : typeArguments.get()) {
+                ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, typeArg.asString());
+                if (imp != null) {
+                    destination.addImport(imp);
+                    list.addAll(addClassDependency(typeArg, imp.getNameAsString()));
+                }
+            }
+        }
+        return list;
+    }
+
+    private List<GraphNode> addClassDependency(Type typeArg, String className) throws AntikytheraException {
+        List<GraphNode> list = new ArrayList<>();
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                AbstractCompiler.findFullyQualifiedName(compilationUnit, className)
+        );
+        if (cu != null) {
+            TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
+            if (t != null) {
+                GraphNode g = new GraphNode(t);
+                list.addAll(g.buildNode());
+                list.add(g);
+            }
+        }
+        return list;
     }
 
     public boolean isVisited() {
