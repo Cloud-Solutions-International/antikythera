@@ -18,7 +18,6 @@ public class GraphNode {
     Node node;
     CompilationUnit destination;
 
-
     boolean visited;
 
     public GraphNode(Node node) throws AntikytheraException {
@@ -83,5 +82,19 @@ public class GraphNode {
 
     public ClassOrInterfaceDeclaration getEnclosingType() {
         return enclosingType;
+    }
+
+    @Override
+    public int hashCode() {
+        return node.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof GraphNode) {
+            return node.equals(((GraphNode) obj).node);
+        } else {
+            return false;
+        }
     }
 }

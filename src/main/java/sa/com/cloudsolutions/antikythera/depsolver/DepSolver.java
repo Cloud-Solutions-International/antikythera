@@ -7,7 +7,9 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.type.Type;
@@ -20,6 +22,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -30,13 +33,13 @@ public class DepSolver {
      * For most classes the generated compilation unit will only be a subset of the input
      * compilation unit.
      */
-    private Map<String, CompilationUnit> dependencies = new HashMap<>();
+    private final Map<String, CompilationUnit> dependencies = new HashMap<>();
 
     /**
      * Map of nodes with their hash code as the key.
      * This is essentially our graph.
      */
-    private Map<Integer, GraphNode> g = new HashMap<>();
+    private final Map<Integer, GraphNode> g = new HashMap<>();
 
     private void solve() throws IOException, AntikytheraException {
         String basePath = Settings.getBasePath();
@@ -60,12 +63,11 @@ public class DepSolver {
         if (node.isVisited()) {
             return;
         }
-        node.setVisited(true);
-        g.put(node.hashCode(), node);
+        setVisited(node);
 
         CompilationUnit cu = node.getDestination();
         node.getDestination().getClassByName(node.getEnclosingType().getNameAsString()).ifPresent(c -> {
-            if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof  MethodDeclaration md) {
+            if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof MethodDeclaration md) {
                 c.asClassOrInterfaceDeclaration().addMember(md);
             }
         });
@@ -75,6 +77,11 @@ public class DepSolver {
 
         fieldSearch(node);
         methodSearch(node);
+    }
+
+    private void setVisited(GraphNode node) {
+        node.setVisited(true);
+        g.put(node.hashCode(), node);
     }
 
     /**
@@ -94,24 +101,37 @@ public class DepSolver {
             }
             md.accept(new VoidVisitorAdapter<Void>() {
                 @Override
-                public void visit(VariableDeclarationExpr vd, Void arg) {
-                    Type type = vd.getElementType();
-                    if (type.isClassOrInterfaceType()) {
-                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), type.asClassOrInterfaceType().getNameAsString());
-                        try {
-                            searchClass(node, imp);
-                        } catch (AntikytheraException e) {
-                            throw new RuntimeException(e);
+                public void visit(VariableDeclarator vd, Void arg) {
+                    solveType(vd.getType(), node);
+                    vd.getInitializer().ifPresent(init -> {
+                        if (init.isMethodCallExpr()) {
+                            System.out.println("VD : MethodCall " + init);
                         }
-                    }
-                    System.out.println(vd);
+                    });
+
+                    System.out.println("VD: "  + vd);
                     super.visit(vd, arg);
                 }
 
+                private void solveType(Type vd, GraphNode node) {
+                    Type type = vd;
+                    if (type.isClassOrInterfaceType()) {
+                        List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), type);
+                        for (ImportDeclaration imp : imports) {
+                            try {
+                                searchClass(node, imp);
+                            } catch (AntikytheraException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    }
+                }
+
                 @Override
-                public void visit(ObjectCreationExpr vd, Void arg) {
-                    System.out.println(vd);
-                    super.visit(vd, arg);
+                public void visit(ObjectCreationExpr oce, Void arg) {
+                    solveType(oce.getType(), node);
+                    System.out.println("OCE:" + oce);
+                    super.visit(oce, arg);
                 }
             }, null);
         }
@@ -119,8 +139,11 @@ public class DepSolver {
 
     private void searchMethodParameters(GraphNode node, MethodDeclaration md) throws AntikytheraException {
         for(Parameter p : md.getParameters()) {
-            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
-            searchClass(node, imp);
+            List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
+            for(ImportDeclaration imp : imports) {
+                searchClass(node, imp);
+            }
+
             for(AnnotationExpr ann : p.getAnnotations()) {
                 ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
                 searchClass(node, imp2);
@@ -129,9 +152,9 @@ public class DepSolver {
     }
 
     /**
-     * Search the class
-     * @param node
-     * @param imp
+     * Search for an outgoing edge to another class
+     * @param node the current node
+     * @param imp the import declaration for the other class.
      * @throws AntikytheraException
      */
     private void searchClass(GraphNode node, ImportDeclaration imp) throws AntikytheraException {
@@ -144,9 +167,19 @@ public class DepSolver {
             String className = imp.getNameAsString();
             CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(className);
             if (compilationUnit != null) {
+                /*
+                 * The presence of a compilation unit indicates that this class is available as
+                 * source code. Therefore it becomes part of the dependency graph of classes that
+                 * we are trying to extract.
+                 */
                 TypeDeclaration<?> cls = AbstractCompiler.getMatchingClass(compilationUnit, className);
-                GraphNode n = new GraphNode(cls);
-                dfs(n);
+                if(cls != null) {
+                    GraphNode n = g.get(cls.hashCode());
+                    if (n == null) {
+                        n = new GraphNode(cls);
+                        dfs(n);
+                    }
+                }
             }
         }
     }

@@ -407,14 +407,18 @@ public class AbstractCompiler {
         }
     }
 
-    public static ImportDeclaration findImport(CompilationUnit cu, Type t) {
+    public static List<ImportDeclaration> findImport(CompilationUnit cu, Type t) {
         if (t.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = t.asClassOrInterfaceType();
             if (ctype.getTypeArguments().isPresent()) {
-                return findImport(cu, ctype.getNameAsString());
+                return List.of(findImport(cu, ctype.getNameAsString()));
             }
         }
-        return findImport(cu, t.asString());
+        ImportDeclaration imp = findImport(cu, t.asString());
+        if(imp == null) {
+            return List.of();
+        }
+        return List.of(imp);
     }
     /**
      * Finds an import statement corresponding to the class name in the compilation unit
