@@ -44,7 +44,9 @@ public class GraphNode {
      */
     CompilationUnit destination;
 
-
+    /**
+     * Has this node been visited before?
+     */
     boolean visited;
 
     public GraphNode(Node node) throws AntikytheraException {
@@ -99,9 +101,15 @@ public class GraphNode {
         return list;
     }
 
+    /**
+     * Adds the extended and implemented types to the class
+     * @param ifc the interface or class that is being implemented or extended.
+     * @return List of graph nodes representing the various classes, interfaces and type arguments
+     * that were encountered
+     * @throws AntikytheraException if type resolution fails.
+     */
     private List<GraphNode> inherit(ClassOrInterfaceType ifc) throws AntikytheraException {
-        List<GraphNode> list = new ArrayList<>();
-        list.addAll(addTypeArguments(ifc));
+        List<GraphNode> list = new ArrayList<>(addTypeArguments(ifc));
 
         ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
         if (imp != null) {
@@ -111,6 +119,12 @@ public class GraphNode {
         return list;
     }
 
+    /**
+     * Adds the type arguments to the graph
+     * @param ifc interface or class
+     * @return a list of graph nodes.
+     * @throws AntikytheraException if the types cannot be fully resolved.
+     */
     private List<GraphNode> addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
         List<GraphNode> list = new ArrayList<>();
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
@@ -126,6 +140,13 @@ public class GraphNode {
         return list;
     }
 
+    /**
+     * Adds the class dependencies to the graph
+     * @param typeArg the type argument
+     * @param className the class name
+     * @return a list of graph nodes.
+     * @throws AntikytheraException if the types cannot be fully resolved.
+     */
     private List<GraphNode> addClassDependency(Type typeArg, String className) throws AntikytheraException {
         List<GraphNode> list = new ArrayList<>();
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
