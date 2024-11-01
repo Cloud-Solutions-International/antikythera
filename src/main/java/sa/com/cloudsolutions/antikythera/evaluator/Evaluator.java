@@ -905,7 +905,6 @@ public class Evaluator {
                 NodeList<Expression> arguments = methodCall.getArguments();
                 if(arguments.isNonEmpty())
                 {
-
                     if(arguments.get(0).isMethodReferenceExpr()) {
                         Expression rfCall = arguments.get(0).asMethodReferenceExpr();
                         Expression scope = rfCall.asMethodReferenceExpr().getScope();
@@ -936,6 +935,9 @@ public class Evaluator {
                             return null;
                         }
                     }
+                    else if (arguments.get(0).isLambdaExpr()) {
+                        return evaluateLambda(v, arguments);
+                    }
                 }
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
 
@@ -956,6 +958,31 @@ public class Evaluator {
         } catch (ReflectiveOperationException ex) {
             throw new EvaluatorException("Error evaluating method call", ex);
         }
+    }
+
+    private Variable evaluateLambda(Variable v, NodeList<Expression> arguments) throws AntikytheraException, ReflectiveOperationException {
+        LambdaExpr lambda = arguments.get(0).asLambdaExpr();
+        MethodDeclaration md = new MethodDeclaration();
+        if(lambda.getBody().isBlockStmt()) {
+            md.setBody(lambda.getBody().asBlockStmt());
+        }
+        else {
+            BlockStmt blockStmt = new BlockStmt();
+            blockStmt.addStatement(lambda.getBody());
+            md.setBody(blockStmt);
+        }
+
+        md.addParameter(lambda.getParameter(0));
+
+        if (v.getValue() instanceof Collection<?> c) {
+            Evaluator eval = new Evaluator("lambda");
+            for (Object o : c) {
+                AntikytheraRunTime.push(new Variable(o));
+                eval.executeMethod(md);
+            }
+        }
+        returnValue = new Variable(null);
+        return null;
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException, EvaluatorException {
