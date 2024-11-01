@@ -547,7 +547,6 @@ public class Evaluator {
             }
         }
 
-
         if (dependant != null) {
             TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(dependant, type.getNameAsString());
             if (match != null) {
@@ -581,14 +580,15 @@ public class Evaluator {
 
     private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
         TypeDeclaration<?> match;
-        if (oce.getAnonymousClassBody().isPresent()) {
+        Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
+        if (anonymousClassBody.isPresent()) {
             /*
              * Merge the anon class stuff into the parent
              */
             eval.cu = eval.cu.clone();
             match = AbstractCompiler.getMatchingClass(eval.cu, type.getNameAsString());
-            for(BodyDeclaration body : oce.getAnonymousClassBody().get()) {
-                if (body.isMethodDeclaration()) {
+            for(BodyDeclaration<?> body : anonymousClassBody.get()) {
+                if (body.isMethodDeclaration() && match != null) {
                     MethodDeclaration md = body.asMethodDeclaration();
                     MethodDeclaration replace = null;
                     for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
