@@ -8,6 +8,10 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -20,7 +24,18 @@ import java.util.Map;
 import java.util.Optional;
 
 public class DepSolver {
+    /**
+     * Map of fully qualified class names and their generated compilation units.
+     *
+     * For most classes the generated compilation unit will only be a subset of the input
+     * compilation unit.
+     */
     private Map<String, CompilationUnit> dependencies = new HashMap<>();
+
+    /**
+     * Map of nodes with their hash code as the key.
+     * This is essentially our graph.
+     */
     private Map<Integer, GraphNode> g = new HashMap<>();
 
     private void solve() throws IOException, AntikytheraException {
@@ -45,6 +60,7 @@ public class DepSolver {
         if (node.isVisited()) {
             return;
         }
+        node.setVisited(true);
         g.put(node.hashCode(), node);
 
         CompilationUnit cu = node.getDestination();
@@ -76,6 +92,28 @@ public class DepSolver {
                 ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), returns);
                 searchClass(node, imp);
             }
+            md.accept(new VoidVisitorAdapter<Void>() {
+                @Override
+                public void visit(VariableDeclarationExpr vd, Void arg) {
+                    Type type = vd.getElementType();
+                    if (type.isClassOrInterfaceType()) {
+                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), type.asClassOrInterfaceType().getNameAsString());
+                        try {
+                            searchClass(node, imp);
+                        } catch (AntikytheraException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                    System.out.println(vd);
+                    super.visit(vd, arg);
+                }
+
+                @Override
+                public void visit(ObjectCreationExpr vd, Void arg) {
+                    System.out.println(vd);
+                    super.visit(vd, arg);
+                }
+            }, null);
         }
     }
 
@@ -90,7 +128,17 @@ public class DepSolver {
         }
     }
 
+    /**
+     * Search the class
+     * @param node
+     * @param imp
+     * @throws AntikytheraException
+     */
     private void searchClass(GraphNode node, ImportDeclaration imp) throws AntikytheraException {
+        /*
+         * It is likely that this is a DTO an Entity or a model. So we will assume that all the
+         * fields are required along with their respective annotations.
+         */
         if (imp != null) {
             node.getDestination().addImport(imp);
             String className = imp.getNameAsString();
