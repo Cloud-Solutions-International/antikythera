@@ -98,47 +98,8 @@ public class DepSolver {
             String returns = md.getTypeAsString();
             if(!returns.equals("void") && returnType.isClassOrInterfaceType()) {
                 stack.addAll(node.addTypeArguments(returnType.asClassOrInterfaceType()));
-                ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), returns);
             }
-            md.accept(new VoidVisitorAdapter<Void>() {
-                @Override
-                public void visit(VariableDeclarator vd, Void arg) {
-                    solveType(vd.getType(), node);
-                    System.out.println("VD: "  + vd);
-
-                    vd.getInitializer().ifPresent(init -> {
-                        try {
-                            searchMethodCall(init, node);
-                        } catch (AntikytheraException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
-
-
-                    super.visit(vd, arg);
-                }
-
-                private void solveType(Type vd, GraphNode node) {
-
-                    if (vd.isClassOrInterfaceType()) {
-                        List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
-                        for (ImportDeclaration imp : imports) {
-                            try {
-                                searchClass(node, imp);
-                            } catch (AntikytheraException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                    }
-                }
-
-                @Override
-                public void visit(ObjectCreationExpr oce, Void arg) {
-                    solveType(oce.getType(), node);
-                    System.out.println("OCE:" + oce);
-                    super.visit(oce, arg);
-                }
-            }, null);
+            md.accept(new Visitor(), node);
         }
     }
 
@@ -267,6 +228,46 @@ public class DepSolver {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    private class Visitor extends VoidVisitorAdapter<GraphNode> {
+        @Override
+        public void visit(VariableDeclarator vd, GraphNode node) {
+            solveType(vd.getType(), node);
+            System.out.println("VD: "  + vd);
+
+            vd.getInitializer().ifPresent(init -> {
+                try {
+                    searchMethodCall(init, node);
+                } catch (AntikytheraException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+
+            super.visit(vd, node);
+        }
+
+        private void solveType(Type vd, GraphNode node) {
+
+            if (vd.isClassOrInterfaceType()) {
+                List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
+                for (ImportDeclaration imp : imports) {
+                    try {
+                        searchClass(node, imp);
+                    } catch (AntikytheraException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void visit(ObjectCreationExpr oce, GraphNode node) {
+            solveType(oce.getType(), node);
+            System.out.println("OCE:" + oce);
+            super.visit(oce, node);
         }
     }
 

@@ -82,16 +82,11 @@ public class AbstractCompiler {
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
-
-            try {
-                setupParser();
-            } catch (ReflectiveOperationException e) {
-                logger.error("Could not load custom jar files");
-            }
+            setupParser();
         }
     }
 
-    protected static void setupParser() throws IOException, ReflectiveOperationException {
+    protected static void setupParser() throws IOException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
@@ -104,7 +99,7 @@ public class AbstractCompiler {
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
-            urls[i] = new URL("file:///" + jarFile);
+            urls[i] = Paths.get(jarFile).toUri().toURL();
         }
         loader = new URLClassLoader(urls);
 
@@ -151,7 +146,7 @@ public class AbstractCompiler {
         return loader.loadClass(resolvedClass);
     }
 
-    public static void reset() throws ReflectiveOperationException, IOException {
+    public static void reset() throws IOException {
         setupParser();
     }
 
@@ -527,18 +522,19 @@ public class AbstractCompiler {
      * Precompile all the java files in the base folder.
      * While doing so we will try to determine what interfaces are implemented by each class.
      *
-     * @throws IOException
+     * @throws IOException when the files cannot be precompiled.
      */
     public static void preProcess() throws IOException {
-        List<File> javaFiles = Files.walk(Paths.get(Settings.getBasePath()))
-                .filter(Files::isRegularFile)
-                .filter(path -> path.toString().endsWith(SUFFIX))
-                .map(Path::toFile)
-                .toList();
-
-        for (File javaFile : javaFiles) {
-            InterfaceSolver solver = new InterfaceSolver();
-            solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+        try (var paths = Files.walk(Paths.get(Settings.getBasePath()))) {
+            List<File> javaFiles = paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(SUFFIX))
+                    .map(Path::toFile)
+                    .toList();
+            for (File javaFile : javaFiles) {
+                InterfaceSolver solver = new InterfaceSolver();
+                solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+            }
         }
     }
 
