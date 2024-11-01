@@ -447,23 +447,34 @@ public class AbstractCompiler {
 
     /**
      * Find the method declaration matching the given method call expression
-     * @param methodCall the method call exppression
+     * @param methodCall the method call expression
      * @param methods the list of method declarations to search from
      * @return the method declaration or empty if not found
      */
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+        List<String> arguments = new ArrayList<>();
+        for (Expression arg : methodCall.getArguments()) {
+            try {
+                ResolvedType argType = arg.calculateResolvedType();
+                arguments.add(argType.describe());
+            } catch (Exception e) {
+                ResolvedType argType = symbolResolver.calculateType(arg);
+                arguments.add(argType.describe());
+            }
+        }
+
         for (MethodDeclaration method : methods) {
             if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
                 if(method.getParameters().isEmpty()) {
                     return Optional.of(method);
                 }
                 for (int i =0 ; i < method.getParameters().size(); i++) {
-                    ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
+
                     ResolvedType paramType = method.getParameter(i).getType().resolve();
-                    if (argType.describe().equals(paramType.describe())
+                    if (arguments.get(i).equals(paramType.describe())
                             || paramType.describe().equals("java.lang.Object")
-                            || paramType.describe().equals(Reflect.primitiveToWrapper(argType.describe()))
-                            || argType.describe().equals(Reflect.primitiveToWrapper(paramType.describe()))
+                            || paramType.describe().equals(Reflect.primitiveToWrapper(arguments.get(i)))
+                            || arguments.get(i).equals(Reflect.primitiveToWrapper(paramType.describe()))
                     )
                     {
                         return Optional.of(method);
