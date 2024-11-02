@@ -96,8 +96,10 @@ public class DepSolver {
     private void methodSearch(GraphNode node) throws AntikytheraException {
         if (node.getEnclosingType() != null) {
 
-            Optional<ClassOrInterfaceDeclaration> c = node.getDestination().getClassByName(
-                    node.getEnclosingType().getNameAsString());
+            String className = node.getEnclosingType().getNameAsString();
+            Optional<ClassOrInterfaceDeclaration> c = node.getDestination().findFirst(ClassOrInterfaceDeclaration.class,
+                    t -> t.getNameAsString().equals(className));
+
             if (node.getNode() instanceof MethodDeclaration md) {
                 if (c.isPresent()) {
                     node.getTypeDeclaration().addMember(md);

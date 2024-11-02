@@ -5,6 +5,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -146,9 +147,17 @@ public class GraphNode {
                 typeDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
                 typeDeclaration.getAnnotationByName("Data").isPresent()) {
             copyFields(list);
+            copyConstructors();
         }
 
         return list;
+    }
+
+    private void copyConstructors() {
+        for (ConstructorDeclaration cdecl : enclosingType.asClassOrInterfaceDeclaration().getConstructors()) {
+            ClassOrInterfaceDeclaration target = typeDeclaration.asClassOrInterfaceDeclaration();
+            target.addMember(cdecl.clone());
+        }
     }
 
     private void copyFields(List<GraphNode> list) throws AntikytheraException {
