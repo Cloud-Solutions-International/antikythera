@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -12,6 +13,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
@@ -182,30 +184,6 @@ public class AbstractCompiler {
         return false;
     }
 
-    /**
-     * Build a map of all the fields in a class by field name.
-     * Warning: Most of the time you should use a Visitor instead of this method
-     *
-     * @param cu Compilation unit
-     * @param className the name of the class that we are searching for in the compilation unit
-     * @return a collection of fields in this class
-     */
-    public static Map<String, FieldDeclaration> getFields(CompilationUnit cu, String className) {
-        Map<String, FieldDeclaration> fields = new HashMap<>();
-        for (var type : cu.getTypes()) {
-            if(type.getNameAsString().equals(className)) {
-                for (var member : type.getMembers()) {
-                    if (member.isFieldDeclaration()) {
-                        FieldDeclaration field = member.asFieldDeclaration();
-                        for (var variable : field.getVariables()) {
-                            fields.put(variable.getNameAsString(), field);
-                        }
-                    }
-                }
-            }
-        }
-        return fields;
-    }
 
     /**
      * Get the name of the parameter for a rest controller
@@ -402,18 +380,32 @@ public class AbstractCompiler {
     }
 
     public static List<ImportDeclaration> findImport(CompilationUnit cu, Type t) {
+        List<ImportDeclaration> imports = new ArrayList<>();
         if (t.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = t.asClassOrInterfaceType();
-            if (ctype.getTypeArguments().isPresent()) {
-                return List.of(findImport(cu, ctype.getNameAsString()));
+            Optional<NodeList<Type>> typeArguments = ctype.getTypeArguments();
+            if (typeArguments.isPresent()) {
+                for (Type type : typeArguments.get()) {
+                    ImportDeclaration imp = findImport(cu, type.asString());
+                    if(imp != null) {
+                        imports.add(imp);
+                    }
+                }
+            }
+            ImportDeclaration imp = findImport(cu, ctype.getNameAsString());
+            if (imp != null) {
+                imports.add(imp);
             }
         }
-        ImportDeclaration imp = findImport(cu, t.asString());
-        if(imp == null) {
-            return List.of();
+        else {
+            ImportDeclaration imp = findImport(cu, t.asString());
+            if (imp != null) {
+                imports.add(imp);
+            }
         }
-        return List.of(imp);
+        return imports;
     }
+
     /**
      * Finds an import statement corresponding to the class name in the compilation unit
      * @param cu The Compilation unit
@@ -502,8 +494,12 @@ public class AbstractCompiler {
                 ResolvedType argType = arg.calculateResolvedType();
                 arguments.add(argType.describe());
             } catch (Exception e) {
-                ResolvedType argType = symbolResolver.calculateType(arg);
-                arguments.add(argType.describe());
+                try {
+                    ResolvedType argType = symbolResolver.calculateType(arg);
+                    arguments.add(argType.describe());
+                } catch (UnsolvedSymbolException ex) {
+                    return Optional.empty();
+                }
             }
         }
 

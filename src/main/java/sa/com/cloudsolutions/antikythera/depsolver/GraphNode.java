@@ -5,7 +5,9 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -97,6 +99,21 @@ public class GraphNode {
 
         if (classDeclaration.getAnnotations().isEmpty()) {
             processClassAnnotations();
+        }
+
+        if (classDeclaration.getFields().isEmpty() && classDeclaration.getAnnotationByName("Entity").isPresent()) {
+            for(FieldDeclaration field : enclosingType.getFields()) {
+                FieldDeclaration newField = new FieldDeclaration();
+                newField.setModifiers(field.getModifiers());
+
+                for (VariableDeclarator declarator : field.getVariables()) {
+                    newField.addVariable(new VariableDeclarator(declarator.getType(),
+                            declarator.getNameAsString(), declarator.getInitializer().orElse(null))
+                    );
+                }
+
+                classDeclaration.addMember(newField);
+            }
         }
 
         return list;

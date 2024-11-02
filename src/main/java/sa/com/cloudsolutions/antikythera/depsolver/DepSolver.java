@@ -25,19 +25,16 @@ import com.github.javaparser.printer.configuration.PrettyPrinterConfiguration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
 
 public class DepSolver {
     /**
@@ -52,19 +49,25 @@ public class DepSolver {
         return g;
     }
 
+    /**
+     * Main entry point for the dependency solver
+     * @throws IOException if files could not be read
+     * @throws AntikytheraException if a dependency could not be resolved.
+     */
     private void solve() throws IOException, AntikytheraException {
         AbstractCompiler.preProcess();
         String s = Settings.getProperty("methods").toString();
         String[] parts = s.split("#");
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0] );
+        if (cu != null) {
+            Optional<MethodDeclaration> method = cu.findAll(MethodDeclaration.class).stream()
+                    .filter(m -> m.getNameAsString().equals(parts[1]))
+                    .findFirst();
 
-        Optional<MethodDeclaration> method = cu.findAll(MethodDeclaration.class).stream()
-                .filter(m -> m.getNameAsString().equals(parts[1]))
-                .findFirst();
-
-        if (method.isPresent()) {
-            dfs(nodeBuilder(method.get()));
+            if (method.isPresent()) {
+                dfs(nodeBuilder(method.get()));
+            }
         }
     }
 
@@ -305,7 +308,7 @@ public class DepSolver {
                 try {
                     searchMethodCall(init, node);
                 } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
+                    throw new DepsolverException(e);
                 }
             });
             super.visit(vd, node);
@@ -319,12 +322,17 @@ public class DepSolver {
                     try {
                         searchClass(node, imp);
                     } catch (AntikytheraException e) {
-                        throw new RuntimeException(e);
+                        throw new DepsolverException(e);
                     }
                 }
             }
         }
 
+        /**
+         * Resolve dependencies for an object creation expression
+         * @param oce the object creation expression
+         * @param node the graph node.
+         */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
             solveType(oce.getType(), node);
