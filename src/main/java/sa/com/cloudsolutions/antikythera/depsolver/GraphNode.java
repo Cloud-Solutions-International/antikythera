@@ -5,6 +5,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -16,18 +17,13 @@ import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.visitor.VoidVisitor;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import javax.swing.text.html.Option;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Primary purpose to encapsulate the AST node.
@@ -40,12 +36,12 @@ public class GraphNode {
     /**
      * This is the enclosing class for the original node.
      */
-    private final ClassOrInterfaceDeclaration enclosingType;
+    private TypeDeclaration<?> enclosingType;
 
     /**
      * This is the class declaration that is the target.
      */
-    private ClassOrInterfaceDeclaration classDeclaration;
+    private TypeDeclaration<?> typeDeclaration;
 
     /**
      * This is the Abstract Syntax Tree node for the method, class or field
@@ -90,6 +86,10 @@ public class GraphNode {
             compilationUnit = node.findCompilationUnit().orElseThrow();
             destination = compilationUnit.clone();
             preProcessed = true;
+
+            if(node instanceof EnumDeclaration ed) {
+                enclosingType = ed;
+            }
         }
     }
 
@@ -108,38 +108,43 @@ public class GraphNode {
          */
         preProcessed = true;
 
-        classDeclaration.setInterface(enclosingType.isInterface());
+        if (typeDeclaration.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+            ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
+
+            cdecl.setInterface(enclosingDeclaration.isInterface());
+            if(cdecl.getImplementedTypes().isEmpty()) {
+                for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
+                    cdecl.addImplementedType(ifc.getNameAsString());
+                    list.addAll(addTypeArguments(ifc));
+                }
+            }
+
+            if (cdecl.getExtendedTypes().isEmpty()) {
+                for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
+                    if (cdecl.isInterface()) {
+                        cdecl.addExtendedType(ifc.toString());
+                    } else {
+                        cdecl.addImplementedType(ifc.clone());
+                    }
+                    list.addAll(addTypeArguments(ifc));
+                }
+            }
+        }
+
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
 
-        if(classDeclaration.getImplementedTypes().isEmpty()) {
-            for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
-                classDeclaration.addImplementedType(ifc.getNameAsString());
-                list.addAll(addTypeArguments(ifc));
-            }
-        }
-
-        if (classDeclaration.getExtendedTypes().isEmpty()) {
-            for (ClassOrInterfaceType ifc : enclosingType.getExtendedTypes()) {
-                if (classDeclaration.isInterface()) {
-                    classDeclaration.addExtendedType(ifc.toString());
-                } else {
-                    classDeclaration.addImplementedType(ifc.clone());
-                }
-                list.addAll(addTypeArguments(ifc));
-            }
-        }
-
-        if (classDeclaration.getAnnotations().isEmpty()) {
+        if (typeDeclaration.getAnnotations().isEmpty()) {
             processClassAnnotations();
         }
 
         /*
          * If the class is an entity, we will need to preserve all the fields.
          */
-        if (classDeclaration.getFields().isEmpty() &&
-                (classDeclaration.getAnnotationByName("Entity").isPresent()) ||
-                classDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
-                classDeclaration.getAnnotationByName("Data").isPresent()) {
+        if (typeDeclaration.getFields().isEmpty() &&
+                (typeDeclaration.getAnnotationByName("Entity").isPresent()) ||
+                typeDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
+                typeDeclaration.getAnnotationByName("Data").isPresent()) {
             copyFields(list);
         }
 
@@ -147,7 +152,7 @@ public class GraphNode {
     }
 
     private void copyFields(List<GraphNode> list) throws AntikytheraException {
-        for(FieldDeclaration field : enclosingType.getFields()) {
+        for(FieldDeclaration field : enclosingType.asClassOrInterfaceDeclaration().getFields()) {
             for (VariableDeclarator declarator : field.getVariables()) {
                 Type type = declarator.getType();
                 if (type.isClassOrInterfaceType()) {
@@ -166,13 +171,13 @@ public class GraphNode {
                 }
             }
             field.accept(new AnnotationVisitor(), this);
-            classDeclaration.addMember(field.clone());
+            typeDeclaration.addMember(field.clone());
         }
     }
 
     private void processClassAnnotations() {
-        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
-            classDeclaration.addAnnotation(ann);
+        for (AnnotationExpr ann : enclosingType.asClassOrInterfaceDeclaration().getAnnotations()) {
+            typeDeclaration.addAnnotation(ann);
             String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
             if (fqName != null) {
                 destination.addImport(fqName);
@@ -279,7 +284,7 @@ public class GraphNode {
         return compilationUnit;
     }
 
-    public ClassOrInterfaceDeclaration getEnclosingType() {
+    public TypeDeclaration getEnclosingType() {
         return enclosingType;
     }
 
@@ -297,22 +302,22 @@ public class GraphNode {
         }
     }
 
-    public ClassOrInterfaceDeclaration getClassDeclaration() {
-        return classDeclaration;
+    public TypeDeclaration getTypeDeclaration() {
+        return typeDeclaration;
     }
 
     public void setDestination(CompilationUnit destination) {
         this.destination = destination;
     }
 
-    public void setClassDeclaration(ClassOrInterfaceDeclaration classDeclaration) {
-        this.classDeclaration = classDeclaration;
+    public void setTypeDeclaration(ClassOrInterfaceDeclaration typeDeclaration) {
+        this.typeDeclaration = typeDeclaration;
     }
 
     @Override
     public String toString() {
         if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
-            return enclosingType.getFullyQualifiedName().get();
+            return enclosingType.getFullyQualifiedName().get().toString();
         }
         return super.toString();
     }

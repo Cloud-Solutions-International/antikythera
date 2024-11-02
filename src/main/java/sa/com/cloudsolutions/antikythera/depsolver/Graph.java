@@ -3,6 +3,8 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.comments.JavadocComment;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.HashMap;
@@ -42,31 +44,37 @@ public class Graph {
         g = new GraphNode(n);
         nodes.put(n.hashCode(), g);
 
-        ClassOrInterfaceDeclaration cdecl = g.getEnclosingType();
+        TypeDeclaration<?> cdecl = g.getEnclosingType();
         if (cdecl != null) {
             Optional<String> fullyQualifiedName = cdecl.getFullyQualifiedName();
             if (fullyQualifiedName.isPresent()) {
                 String fqn = fullyQualifiedName.get();
-                CompilationUnit destination = new CompilationUnit();
+                if (g.getDestination() == null) {
+                    g.setDestination(new CompilationUnit());
+                    ClassOrInterfaceDeclaration target = g.getDestination().addClass(cdecl.getNameAsString());
+                    target.setModifiers(cdecl.getModifiers());
+
+                    Optional<JavadocComment> comment = cdecl.getJavadocComment();
+                    if(comment.isPresent()) {
+                        target.setJavadocComment(comment.get());
+                    }
+                    g.setTypeDeclaration(target);
+                }
+
                 if (!dependencies.containsKey(fqn)) {
                     /*
                      * We have not previously processed this class.
                      */
-                    dependencies.put(fqn, destination);
-                    ClassOrInterfaceDeclaration target = destination.addClass(cdecl.getNameAsString());
-                    target.setModifiers(cdecl.getModifiers());
-                    cdecl.getJavadocComment().ifPresent(target::setJavadocComment);
-                    g.setClassDeclaration(target);
+                    dependencies.put(fqn, g.getDestination());
                 }
                 else {
                     /*
                      * This class has been processed before, but this particular method or field
                      * may not have been considered
                      */
-                    destination = dependencies.get(fqn);
-                    g.setClassDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
+                    CompilationUnit destination = dependencies.get(fqn);
+                    g.setTypeDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
                 }
-                g.setDestination(destination);
             }
         }
 

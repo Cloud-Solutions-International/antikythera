@@ -11,15 +11,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
-import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.printer.PrettyPrinter;
 import com.github.javaparser.printer.configuration.PrettyPrinterConfiguration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -104,7 +99,7 @@ public class DepSolver {
                     node.getEnclosingType().getNameAsString());
             if (node.getNode() instanceof MethodDeclaration md) {
                 if (c.isPresent()) {
-                    node.getClassDeclaration().addMember(md);
+                    node.getTypeDeclaration().addMember(md);
                 }
 
                 searchMethodParameters(node, md);
@@ -138,7 +133,7 @@ public class DepSolver {
      * @throws AntikytheraException
      */
     private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
-        ClassOrInterfaceDeclaration cdecl = node.getEnclosingType();
+        TypeDeclaration cdecl = node.getEnclosingType();
 
         if (scope.isNameExpr()) {
             NameExpr expr = scope.asNameExpr();
@@ -177,7 +172,7 @@ public class DepSolver {
                  * Now we mark the field declaration as part of the source code to preserve from
                  * current class.
                  */
-                node.getClassDeclaration().addMember(fd.get());
+                node.getTypeDeclaration().addMember(fd.get());
 
                 for(AnnotationExpr ann : fd.get().getAnnotations()) {
                     ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
