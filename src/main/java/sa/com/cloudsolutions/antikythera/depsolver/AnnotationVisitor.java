@@ -18,8 +18,18 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
         if (imp != null) {
             node.getDestination().addImport(imp);
         }
-        if (n.getMemberValue() != null && n.getMemberValue().isFieldAccessExpr()) {
-            resolveField(node, n.getMemberValue());
+        if (n.getMemberValue() != null) {
+            if (n.getMemberValue().isFieldAccessExpr()) {
+                resolveField(node, n.getMemberValue());
+            }
+            else if (n.getMemberValue().isNameExpr()) {
+                ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                        n.getMemberValue().asNameExpr().getNameAsString()
+                );
+                if (imp2 != null) {
+                    node.getDestination().addImport(imp2);
+                }
+            }
         }
         super.visit(n, node);
     }
