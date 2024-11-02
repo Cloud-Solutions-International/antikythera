@@ -27,6 +27,7 @@ import javax.swing.text.html.Option;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Primary purpose to encapsulate the AST node.
@@ -61,6 +62,13 @@ public class GraphNode {
     boolean visited;
 
     /**
+     * Has this node been processed?
+     * There are cyclic dependencies with in entities and DTOs. If we did not have a flag like this
+     * we would end up in an infinite loop.
+     */
+    boolean preProcessed;
+
+    /**
      * Creates a new GraphNode
      * but it will not really be ready for use until you call the buildNode method
      * @param node an AST Node
@@ -90,9 +98,15 @@ public class GraphNode {
      */
     public List<GraphNode> buildNode() throws AntikytheraException {
         List<GraphNode> list = new ArrayList<>();
-        if(enclosingType == null) {
+        if(enclosingType == null || preProcessed) {
             return list;
         }
+        /*
+         * Set it here before we actually do the processing. If we dont' the cyclic dependencies
+         * will kill us.
+         */
+        preProcessed = true;
+
         classDeclaration.setInterface(enclosingType.isInterface());
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
 
@@ -122,7 +136,9 @@ public class GraphNode {
          * If the class is an entity, we will need to preserve all the fields.
          */
         if (classDeclaration.getFields().isEmpty() &&
-                (classDeclaration.getAnnotationByName("Entity").isPresent()) ) {
+                (classDeclaration.getAnnotationByName("Entity").isPresent()) ||
+                classDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
+                classDeclaration.getAnnotationByName("Data").isPresent()) {
             copyFields(list);
         }
 
@@ -212,9 +228,9 @@ public class GraphNode {
     /**
      * Search for the type and put it on the stack.
      * This method is only intended to be called by addTypeArguments
-     * @param typeArg
-     * @param list
-     * @throws AntikytheraException
+     * @param typeArg the class or interface type that we are looking for
+     * @param list if we find a node , it will be added to this list
+     * @throws AntikytheraException on type resolution errors.
      */
     private void searchType(Type typeArg, List<GraphNode> list) throws AntikytheraException {
         String name = typeArg.isClassOrInterfaceType()
@@ -290,5 +306,13 @@ public class GraphNode {
 
     public void setClassDeclaration(ClassOrInterfaceDeclaration classDeclaration) {
         this.classDeclaration = classDeclaration;
+    }
+
+    @Override
+    public String toString() {
+        if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
+            return enclosingType.getFullyQualifiedName().get();
+        }
+        return super.toString();
     }
 }

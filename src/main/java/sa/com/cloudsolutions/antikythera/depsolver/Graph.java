@@ -7,6 +7,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public class Graph {
     /**
@@ -26,6 +27,13 @@ public class Graph {
 
     }
 
+    /**
+     * Creates a new graph node from the AST node if required.
+     * If the GraphNode is already present in the graph, the same object is returned.
+     * @param n AST node
+     * @return a GraphNode that may have already existed.
+     * @throws AntikytheraException if resolution fails
+     */
     public static GraphNode createGraphNode(Node n) throws AntikytheraException {
         GraphNode g = nodes.get(n.hashCode());
         if(g != null) {
@@ -35,19 +43,22 @@ public class Graph {
         nodes.put(n.hashCode(), g);
 
         ClassOrInterfaceDeclaration cdecl = g.getEnclosingType();
-        if (cdecl != null && cdecl.getFullyQualifiedName().isPresent()) {
-            String fqn = cdecl.getFullyQualifiedName().get();
-            CompilationUnit destination = new CompilationUnit();
-            if (!dependencies.containsKey(fqn)) {
-                dependencies.put(fqn, destination);
-                ClassOrInterfaceDeclaration target = destination.addClass(cdecl.getNameAsString());
-                target.setModifiers(cdecl.getModifiers());
-                if(cdecl.getJavadocComment().isPresent()) {
-                    target.setJavadocComment(cdecl.getJavadocComment().get());
+        if (cdecl != null) {
+            Optional<String> fullyQualifiedName = cdecl.getFullyQualifiedName();
+            if (fullyQualifiedName.isPresent()) {
+                String fqn = fullyQualifiedName.get();
+                CompilationUnit destination = new CompilationUnit();
+                if (!dependencies.containsKey(fqn)) {
+                    dependencies.put(fqn, destination);
+                    ClassOrInterfaceDeclaration target = destination.addClass(cdecl.getNameAsString());
+                    target.setModifiers(cdecl.getModifiers());
+                    if (cdecl.getJavadocComment().isPresent()) {
+                        target.setJavadocComment(cdecl.getJavadocComment().get());
+                    }
+                    g.setClassDeclaration(target);
                 }
-                g.setClassDeclaration(target);
+                g.setDestination(destination);
             }
-            g.setDestination(destination);
         }
 
         return g;
