@@ -524,7 +524,6 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-
     /**
      * Precompile all the java files in the base folder.
      * While doing so we will try to determine what interfaces are implemented by each class.

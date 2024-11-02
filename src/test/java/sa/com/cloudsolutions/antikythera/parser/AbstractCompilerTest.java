@@ -127,6 +127,7 @@ class AbstractCompilerTest {
 
         result = AbstractCompiler.findFullyQualifiedName(cu, "ClassProcessorTest");
         assertEquals("sa.com.cloudsolutions.antikythera.parser.ClassProcessorTest", result);
-
     }
+
+
 }

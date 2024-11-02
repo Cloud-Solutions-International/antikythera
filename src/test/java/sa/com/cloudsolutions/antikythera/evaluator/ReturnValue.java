@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-public class ReturnValue {
+import java.io.Serializable;
+
+public class ReturnValue implements Serializable {
     private int number = 10;
 
     public void printName() {
