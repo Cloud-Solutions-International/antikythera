@@ -95,6 +95,7 @@ public class DepSolver {
      */
     private void methodSearch(GraphNode node) throws AntikytheraException {
         if (node.getEnclosingType() != null) {
+
             Optional<ClassOrInterfaceDeclaration> c = node.getDestination().getClassByName(
                     node.getEnclosingType().getNameAsString());
             if (node.getNode() instanceof MethodDeclaration md) {
@@ -182,6 +183,15 @@ public class DepSolver {
                 }
 
             }
+            else {
+                /*
+                 * Can be either a call related to a local or a static call
+                 */
+                ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp);
+                }
+            }
         }
     }
 
@@ -266,18 +276,10 @@ public class DepSolver {
         @Override
         public void visit(VariableDeclarator vd, GraphNode node) {
             solveType(vd.getType(), node);
-            vd.getInitializer().ifPresent(init -> {
-                try {
-                    searchMethodCall(init, node);
-                } catch (AntikytheraException e) {
-                    throw new DepsolverException(e);
-                }
-            });
             super.visit(vd, node);
         }
 
         private void solveType(Type vd, GraphNode node) {
-
             if (vd.isClassOrInterfaceType()) {
                 List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
                 for (ImportDeclaration imp : imports) {
@@ -290,6 +292,19 @@ public class DepSolver {
             }
         }
 
+        public void visit(MethodCallExpr mce, GraphNode node) {
+            mce.getScope().ifPresent(scope -> {
+                try {
+                    if(scope.isNameExpr()) {
+                        externalMethod(node, scope, mce);
+                    }
+                } catch (AntikytheraException e) {
+                    throw new DepsolverException(e);
+                }
+            });
+
+            super.visit(mce, node);
+        }
         /**
          * Resolve dependencies for an object creation expression
          * @param oce the object creation expression
