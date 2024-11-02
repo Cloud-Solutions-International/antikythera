@@ -11,11 +11,17 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
+import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.printer.PrettyPrinter;
+import com.github.javaparser.printer.configuration.PrettyPrinterConfiguration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -24,10 +30,14 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
 public class DepSolver {
     /**
@@ -71,12 +81,6 @@ public class DepSolver {
             if (!node.isVisited()) {
                 node.setVisited(true);
 
-                node.getDestination().getClassByName(node.getEnclosingType().getNameAsString()).ifPresent(c -> {
-                    if (c.isClassOrInterfaceDeclaration() && node.getNode() instanceof MethodDeclaration md) {
-                        node.getClassDeclaration().addMember(md);
-                    }
-                });
-
                 fieldSearch(node);
                 methodSearch(node);
             }
@@ -92,7 +96,13 @@ public class DepSolver {
      * @param node A graph node that represents a method in the code.
      */
     private void methodSearch(GraphNode node) throws AntikytheraException {
+        Optional<ClassOrInterfaceDeclaration> c = node.getDestination().getClassByName(
+                node.getEnclosingType().getNameAsString());
         if(node.getNode() instanceof MethodDeclaration md ) {
+            if(c.isPresent()) {
+                node.getClassDeclaration().addMember(md);
+            }
+
             searchMethodParameters(node, md);
             Type returnType = md.getType();
             String returns = md.getTypeAsString();
@@ -222,9 +232,20 @@ public class DepSolver {
     }
 
     private void writeFiles() {
+        PrettyPrinterConfiguration config = new PrettyPrinterConfiguration();
+        config.setColumnAlignFirstMethodChain(true);
+        config.setColumnAlignParameters(true);
+        config.setIndentSize(4);
+        config.setPrintComments(true);
+        config.setPrintJavadoc(true);
+        config.setEndOfLineCharacter("\n");
+        config.setOrderImports(true);
+        PrettyPrinter prettyPrinter = new PrettyPrinter(config);
+
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             try {
-                CopyUtils.writeFile(AbstractCompiler.classToPath(entry.getKey()), entry.getValue().toString());
+                CopyUtils.writeFile(
+                        AbstractCompiler.classToPath(entry.getKey()), prettyPrinter.print(entry.getValue()));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -233,10 +254,50 @@ public class DepSolver {
 
     private class Visitor extends VoidVisitorAdapter<GraphNode> {
         @Override
+        public void visit(final SingleMemberAnnotationExpr n, final GraphNode node) {
+            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+            if (imp != null) {
+                node.getDestination().addImport(imp);
+            }
+            super.visit(n, node);
+        }
+
+        @Override
+        public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
+            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+            if (imp != null) {
+                node.getDestination().addImport(imp);
+            }
+            super.visit(n, node);
+        }
+
+        @Override
+        public void visit(final NormalAnnotationExpr n, final GraphNode node) {
+            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+            if (imp != null) {
+                node.getDestination().addImport(imp);
+            }
+            for(MemberValuePair pair : n.getPairs()) {
+                Expression value = pair.getValue();
+                if (value.isFieldAccessExpr()) {
+                    Expression scope = value.asFieldAccessExpr().getScope();
+                    if (scope.isNameExpr()) {
+                        ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                                scope.asNameExpr().getNameAsString()
+                        );
+
+                        if (imp2 != null) {
+                            node.getDestination().addImport(imp2);
+                        }
+                    }
+                }
+            }
+            super.visit(n, node);
+        }
+
+        @Override
         public void visit(VariableDeclarator vd, GraphNode node) {
             solveType(vd.getType(), node);
-            System.out.println("VD: "  + vd);
-
             vd.getInitializer().ifPresent(init -> {
                 try {
                     searchMethodCall(init, node);
@@ -270,6 +331,7 @@ public class DepSolver {
             super.visit(oce, node);
         }
     }
+
 
     public static void main(String[] args) throws IOException, AntikytheraException {
         File yamlFile = new File(Settings.class.getClassLoader().getResource("depsolver.yml").getFile());

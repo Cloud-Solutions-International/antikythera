@@ -469,6 +469,17 @@ public class AbstractCompiler {
                 }
             }
         }
+        /*
+         * We are still not done, there's one more thing we can do. Check the extra_exports section
+         * which is used precisely for situations where we have a nearly impossible import to
+         * resolve
+         */
+        for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
+            if (e.toString().endsWith(className)) {
+                return new ImportDeclaration(e.toString(), false, false);
+            }
+        }
+
         return null;
     }
 
