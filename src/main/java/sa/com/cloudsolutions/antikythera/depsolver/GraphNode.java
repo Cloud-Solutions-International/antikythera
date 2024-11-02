@@ -15,6 +15,8 @@ import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.visitor.VoidVisitor;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -117,23 +119,27 @@ public class GraphNode {
          * If the class is an entity, we will need to preserve all the fields.
          */
         if (classDeclaration.getFields().isEmpty() && classDeclaration.getAnnotationByName("Entity").isPresent()) {
-            for(FieldDeclaration field : enclosingType.getFields()) {
-
-                for (VariableDeclarator declarator : field.getVariables()) {
-                    Type type = declarator.getType();
-                    if (type.isClassOrInterfaceType()) {
-                        ClassOrInterfaceType ct = type.asClassOrInterfaceType();
-                        if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
-                            list.addAll(addTypeArguments(ct));
-                        }
-                    }
-                }
-
-                classDeclaration.addMember(field.clone());
-            }
+            copyFields(list);
         }
 
         return list;
+    }
+
+    private void copyFields(List<GraphNode> list) throws AntikytheraException {
+        for(FieldDeclaration field : enclosingType.getFields()) {
+
+            for (VariableDeclarator declarator : field.getVariables()) {
+                Type type = declarator.getType();
+                if (type.isClassOrInterfaceType()) {
+                    ClassOrInterfaceType ct = type.asClassOrInterfaceType();
+                    if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
+                        list.addAll(addTypeArguments(ct));
+                    }
+                }
+            }
+            field.accept(new AnnotationVisitor(), this);
+            classDeclaration.addMember(field.clone());
+        }
     }
 
     private void processClassAnnotations() {
@@ -200,11 +206,15 @@ public class GraphNode {
      * @throws AntikytheraException
      */
     private void searchType(Type typeArg, List<GraphNode> list) throws AntikytheraException {
-        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, typeArg.toString());
+        String name = typeArg.isClassOrInterfaceType()
+                ? typeArg.asClassOrInterfaceType().getNameAsString()
+                : typeArg.toString();
+
+        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, name);
         if (imp != null) {
             destination.addImport(imp.getNameAsString());
         }
-        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, typeArg.toString());
+        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, name);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
 
         if (cu != null) {

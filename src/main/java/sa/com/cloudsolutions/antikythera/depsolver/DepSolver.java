@@ -266,51 +266,7 @@ public class DepSolver {
         }
     }
 
-    private class Visitor extends VoidVisitorAdapter<GraphNode> {
-        @Override
-        public void visit(final SingleMemberAnnotationExpr n, final GraphNode node) {
-            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
-            if (imp != null) {
-                node.getDestination().addImport(imp);
-            }
-            super.visit(n, node);
-        }
-
-        @Override
-        public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
-            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
-            if (imp != null) {
-                node.getDestination().addImport(imp);
-            }
-            super.visit(n, node);
-        }
-
-        @Override
-        public void visit(final NormalAnnotationExpr n, final GraphNode node) {
-            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
-            if (imp != null) {
-                node.getDestination().addImport(imp);
-            }
-            for(MemberValuePair pair : n.getPairs()) {
-                Expression value = pair.getValue();
-                if (value.isFieldAccessExpr()) {
-                    resolveField(node, value);
-                }
-            }
-            super.visit(n, node);
-        }
-
-        private static void resolveField(GraphNode node, Expression value) {
-            Expression scope = value.asFieldAccessExpr().getScope();
-            if (scope.isNameExpr()) {
-                ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                        scope.asNameExpr().getNameAsString()
-                );
-                if (imp2 != null) {
-                    node.getDestination().addImport(imp2);
-                }
-            }
-        }
+    private class Visitor extends AnnotationVisitor {
 
         @Override
         public void visit(VariableDeclarator vd, GraphNode node) {
