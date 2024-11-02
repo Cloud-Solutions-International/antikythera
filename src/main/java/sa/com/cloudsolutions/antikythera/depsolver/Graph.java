@@ -49,31 +49,35 @@ public class Graph {
             Optional<String> fullyQualifiedName = cdecl.getFullyQualifiedName();
             if (fullyQualifiedName.isPresent()) {
                 String fqn = fullyQualifiedName.get();
-                if (g.getDestination() == null) {
-                    g.setDestination(new CompilationUnit());
-                    ClassOrInterfaceDeclaration target = g.getDestination().addClass(cdecl.getNameAsString());
-                    target.setModifiers(cdecl.getModifiers());
-
-                    Optional<JavadocComment> comment = cdecl.getJavadocComment();
-                    if(comment.isPresent()) {
-                        target.setJavadocComment(comment.get());
-                    }
-                    g.setTypeDeclaration(target);
-                }
-
-                if (!dependencies.containsKey(fqn)) {
-                    /*
-                     * We have not previously processed this class.
-                     */
-                    dependencies.put(fqn, g.getDestination());
-                }
-                else {
+                if (dependencies.containsKey(fqn)) {
                     /*
                      * This class has been processed before, but this particular method or field
                      * may not have been considered
                      */
-                    CompilationUnit destination = dependencies.get(fqn);
-                    g.setTypeDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
+                    if (g.getDestination() == null) {
+                        CompilationUnit destination = dependencies.get(fqn);
+                        g.setDestination(destination);
+                        g.setTypeDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
+                    }
+                }
+                else {
+                    /*
+                     * We have not previously processed this class.
+                     */
+
+                    if (g.getDestination() == null) {
+                        g.setDestination(new CompilationUnit());
+                        ClassOrInterfaceDeclaration target = g.getDestination().addClass(cdecl.getNameAsString());
+                        target.setModifiers(cdecl.getModifiers());
+
+                        Optional<JavadocComment> comment = cdecl.getJavadocComment();
+                        if(comment.isPresent()) {
+                            target.setJavadocComment(comment.get());
+                        }
+                        g.setTypeDeclaration(target);
+                    }
+
+                    dependencies.put(fqn, g.getDestination());
                 }
             }
         }

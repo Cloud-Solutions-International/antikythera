@@ -133,7 +133,7 @@ public class DepSolver {
      * @throws AntikytheraException
      */
     private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
-        TypeDeclaration cdecl = node.getEnclosingType();
+        TypeDeclaration<?> cdecl = node.getEnclosingType();
 
         if (scope.isNameExpr()) {
             NameExpr expr = scope.asNameExpr();
