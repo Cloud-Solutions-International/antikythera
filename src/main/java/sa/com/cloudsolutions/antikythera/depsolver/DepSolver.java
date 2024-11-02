@@ -126,6 +126,15 @@ public class DepSolver {
         }
     }
 
+    /**
+     * Handles calling an external method.
+     * An external method will typically have a field, a local variable or a method parameter as
+     * scope. If the scope is a field, that will be preserved.
+     * @param node a graph node that represents a method in the code.
+     * @param scope the scope of the method call.
+     * @param mce the method call expression
+     * @throws AntikytheraException
+     */
     private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
         ClassOrInterfaceDeclaration cdecl = node.getEnclosingType();
 

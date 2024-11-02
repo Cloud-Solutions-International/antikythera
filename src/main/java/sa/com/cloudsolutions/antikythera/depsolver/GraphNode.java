@@ -55,6 +55,12 @@ public class GraphNode {
      */
     boolean visited;
 
+    /**
+     * Creates a new GraphNode
+     * but it will not really be ready for use until you call the buildNode method
+     * @param node an AST Node
+     * @throws AntikytheraException if something cannot be resolved.
+     */
     public GraphNode(Node node) throws AntikytheraException {
         this.node = node;
         enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
@@ -101,15 +107,25 @@ public class GraphNode {
             processClassAnnotations();
         }
 
+        /*
+         * If the class is an entity, we will need to preserve all the fields.
+         */
         if (classDeclaration.getFields().isEmpty() && classDeclaration.getAnnotationByName("Entity").isPresent()) {
             for(FieldDeclaration field : enclosingType.getFields()) {
                 FieldDeclaration newField = new FieldDeclaration();
                 newField.setModifiers(field.getModifiers());
 
                 for (VariableDeclarator declarator : field.getVariables()) {
-                    newField.addVariable(new VariableDeclarator(declarator.getType(),
+                    Type type = declarator.getType();
+                    newField.addVariable(new VariableDeclarator(type,
                             declarator.getNameAsString(), declarator.getInitializer().orElse(null))
                     );
+                    if (type.isClassOrInterfaceType()) {
+                        ClassOrInterfaceType ct = type.asClassOrInterfaceType();
+                        if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
+                            list.addAll(addClassDependency(ct, ct.getNameAsString()));
+                        }
+                    }
                 }
 
                 classDeclaration.addMember(newField);
@@ -198,8 +214,11 @@ public class GraphNode {
 
     /**
      * Adds the class dependencies to the graph
-     * @param typeArg the type argument
-     * @param className the class name
+     * @param typeArg the type argument that we are trying to resolve
+     * @param className the fully qualified name of the type argument.
+     *                  while argubaly this method can derive this information from the type
+     *                  argument, the cost of doing so is high. The caller already has this
+     *                  information so might as well pass it in.
      * @return a list of graph nodes.
      * @throws AntikytheraException if the types cannot be fully resolved.
      */
