@@ -280,19 +280,22 @@ public class DepSolver {
             for(MemberValuePair pair : n.getPairs()) {
                 Expression value = pair.getValue();
                 if (value.isFieldAccessExpr()) {
-                    Expression scope = value.asFieldAccessExpr().getScope();
-                    if (scope.isNameExpr()) {
-                        ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                                scope.asNameExpr().getNameAsString()
-                        );
-
-                        if (imp2 != null) {
-                            node.getDestination().addImport(imp2);
-                        }
-                    }
+                    resolveField(node, value);
                 }
             }
             super.visit(n, node);
+        }
+
+        private static void resolveField(GraphNode node, Expression value) {
+            Expression scope = value.asFieldAccessExpr().getScope();
+            if (scope.isNameExpr()) {
+                ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                        scope.asNameExpr().getNameAsString()
+                );
+                if (imp2 != null) {
+                    node.getDestination().addImport(imp2);
+                }
+            }
         }
 
         @Override
@@ -305,8 +308,6 @@ public class DepSolver {
                     throw new RuntimeException(e);
                 }
             });
-
-
             super.visit(vd, node);
         }
 
@@ -327,7 +328,21 @@ public class DepSolver {
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
             solveType(oce.getType(), node);
-            System.out.println("OCE:" + oce);
+            for(Expression arg : oce.getArguments()) {
+                if(arg.isFieldAccessExpr()) {
+                    resolveField(node, arg);
+                }
+                else if(arg.isMethodCallExpr()) {
+                    Optional<Expression> scope = arg.asMethodCallExpr().getScope();
+                    if(scope.isPresent() && scope.get().isNameExpr()) {
+                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(),
+                                scope.get().asNameExpr().getNameAsString());
+                        if (imp != null) {
+                            node.getDestination().addImport(imp);
+                        }
+                    }
+                }
+            }
             super.visit(oce, node);
         }
     }
