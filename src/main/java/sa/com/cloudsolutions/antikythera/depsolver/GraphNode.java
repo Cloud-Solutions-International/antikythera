@@ -121,7 +121,8 @@ public class GraphNode {
         /*
          * If the class is an entity, we will need to preserve all the fields.
          */
-        if (classDeclaration.getFields().isEmpty() && classDeclaration.getAnnotationByName("Entity").isPresent()) {
+        if (classDeclaration.getFields().isEmpty() &&
+                (classDeclaration.getAnnotationByName("Entity").isPresent()) ) {
             copyFields(list);
         }
 

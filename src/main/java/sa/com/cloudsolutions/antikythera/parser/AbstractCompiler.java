@@ -284,14 +284,12 @@ public class AbstractCompiler {
             if (type.getNameAsString().equals(className)) {
                 return type;
             }
+            Optional<String> fullyQualifiedName = type.getFullyQualifiedName();
+            if (fullyQualifiedName.isPresent() && fullyQualifiedName.get().equals(className)) {
+                return type;
+            }
         }
         return null;
-    }
-
-    protected static TypeDeclaration<?> getMatchingClass(String fullyQualifiedClassName) {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedClassName);
-        String[] parts = fullyQualifiedClassName.split(".");
-        return getMatchingClass(cu, parts[parts.length - 1]);
     }
 
     public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
@@ -417,7 +415,22 @@ public class AbstractCompiler {
         if (imp != null) {
             return imp;
         }
-        return findWildcardImport(cu, className);
+        imp = findWildcardImport(cu, className);
+        if (imp != null) {
+            return imp;
+        }
+
+        /*
+         * We are still not done, there's one more thing we can do. Check the extra_exports section
+         * which is used precisely for situations where we have a nearly impossible import to
+         * resolve
+         */
+        for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
+            if (e.toString().endsWith(className)) {
+                return new ImportDeclaration(e.toString(), false, false);
+            }
+        }
+        return null;
     }
 
     private static ImportDeclaration findNonWildcardImport(CompilationUnit cu, String className) {
@@ -436,51 +449,40 @@ public class AbstractCompiler {
                 return imp;
             }
         }
-        /*
-         * We are still not done, there's one more thing we can do. Check the extra_exports section
-         * which is used precisely for situations where we have a nearly impossible import to
-         * resolve
-         */
-        for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
-            if (e.toString().endsWith(className)) {
-                return new ImportDeclaration(e.toString(), false, false);
-            }
-        }
 
         return null;
     }
 
     private static ImportDeclaration findWildcardImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
-            if (imp.isAsterisk()) {
+            if (imp.isAsterisk() && !className.contains("\\.")) {
                 String impName = imp.getNameAsString();
-                if (!className.contains("\\.")) {
-                    String fullClassName = impName + "." + className;
+
+                String fullClassName = impName + "." + className;
+                try {
+                    Class.forName(fullClassName);
+                    /*
+                     * Wild card import. Append the class name to the end and load the class,
+                     * we are on this line because it has worked so this is the correct import.
+                     */
+                    return new ImportDeclaration(fullClassName, false, false);
+                } catch (ClassNotFoundException e) {
                     try {
-                        Class.forName(fullClassName);
+                        AbstractCompiler.loadClass(fullClassName);
                         /*
-                         * Wild card import. Append the class name to the end and load the class,
-                         * we are on this line because it has worked so this is the correct import.
+                         * We are here because the previous attempt at class forname was
+                         * unsuccessfully simply because the class had not been loaded.
+                         * Here we have loaded it, which obviously means it's there
                          */
                         return new ImportDeclaration(fullClassName, false, false);
-                    } catch (ClassNotFoundException e) {
-                        try {
-                            AbstractCompiler.loadClass(fullClassName);
-                            /*
-                             * We are here because the previous attempt at class forname was
-                             * unsuccessfully simply because the class had not been loaded.
-                             * Here we have loaded it, which obviously means it's there
-                             */
+                    } catch (ClassNotFoundException ex) {
+                        /*
+                         * There's one more thing that we can try, append the class name to the
+                         * end of the wildcard import and see if the corresponding file can be
+                         * located on the base folder.
+                         */
+                        if (new File(Settings.getBasePath(), classToPath(fullClassName)).exists()) {
                             return new ImportDeclaration(fullClassName, false, false);
-                        } catch (ClassNotFoundException ex) {
-                            /*
-                             * There's one more thing that we can try, append the class name to the
-                             * end of the wildcard import and see if the corresponding file can be
-                             * located on the base folder.
-                             */
-                            if (new File(Settings.getBasePath(), classToPath(fullClassName)).exists()) {
-                                return new ImportDeclaration(fullClassName, false, false);
-                            }
                         }
                     }
                 }

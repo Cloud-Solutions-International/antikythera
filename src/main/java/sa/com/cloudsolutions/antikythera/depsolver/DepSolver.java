@@ -312,8 +312,10 @@ public class DepSolver {
                     if(scope.isPresent() && scope.get().isNameExpr()) {
                         ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(),
                                 scope.get().asNameExpr().getNameAsString());
-                        if (imp != null) {
-                            node.getDestination().addImport(imp);
+                        try {
+                            searchClass(node, imp);
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
                         }
                     }
                 }
