@@ -89,6 +89,7 @@ public class GraphNode {
         else {
             compilationUnit = node.findCompilationUnit().orElseThrow();
             destination = compilationUnit.clone();
+            preProcessed = true;
         }
     }
 

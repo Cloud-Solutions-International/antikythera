@@ -49,15 +49,20 @@ public class Graph {
                 String fqn = fullyQualifiedName.get();
                 CompilationUnit destination = new CompilationUnit();
                 if (!dependencies.containsKey(fqn)) {
+                    /*
+                     * We have not previously processed this class.
+                     */
                     dependencies.put(fqn, destination);
                     ClassOrInterfaceDeclaration target = destination.addClass(cdecl.getNameAsString());
                     target.setModifiers(cdecl.getModifiers());
-                    if (cdecl.getJavadocComment().isPresent()) {
-                        target.setJavadocComment(cdecl.getJavadocComment().get());
-                    }
+                    cdecl.getJavadocComment().ifPresent(target::setJavadocComment);
                     g.setClassDeclaration(target);
                 }
                 else {
+                    /*
+                     * This class has been processed before, but this particular method or field
+                     * may not have been considered
+                     */
                     destination = dependencies.get(fqn);
                     g.setClassDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
                 }
@@ -70,9 +75,5 @@ public class Graph {
 
     public static Map<String, CompilationUnit> getDependencies() {
         return dependencies;
-    }
-
-    public static Map<Integer, GraphNode> getNodes() {
-        return nodes;
     }
 }
