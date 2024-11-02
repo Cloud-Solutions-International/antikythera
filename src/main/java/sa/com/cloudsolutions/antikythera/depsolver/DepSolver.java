@@ -317,6 +317,33 @@ public class DepSolver {
                         } catch (AntikytheraException e) {
                             throw new DepsolverException(e);
                         }
+
+                        /*
+                         * We need to find the method declaration and then add it to the stack.
+                         * First step is to find the CompilationUnit. We cannot rely on using the
+                         * import declaration as the other class maybe in the same package and may
+                         * not have an import.
+                         */
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                                AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                                        scope.get().asNameExpr().getNameAsString()));
+
+                        if (cu != null) {
+                            Optional<ClassOrInterfaceDeclaration> cdecl = cu.findFirst(ClassOrInterfaceDeclaration.class,
+                                    c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
+
+                            if (cdecl.isPresent()) {
+                                AbstractCompiler.findMethodDeclaration(
+                                        arg.asMethodCallExpr(), cdecl.get()
+                                ).ifPresent(md -> {
+                                    try {
+                                        nodeBuilder(md);
+                                    } catch (AntikytheraException e) {
+                                        throw new DepsolverException(e);
+                                    }
+                                });
+                            }
+                        }
                     }
                 }
             }

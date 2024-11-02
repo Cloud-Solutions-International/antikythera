@@ -57,6 +57,10 @@ public class Graph {
                     }
                     g.setClassDeclaration(target);
                 }
+                else {
+                    destination = dependencies.get(fqn);
+                    g.setClassDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
+                }
                 g.setDestination(destination);
             }
         }
