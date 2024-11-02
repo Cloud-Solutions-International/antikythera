@@ -118,14 +118,9 @@ public class GraphNode {
          */
         if (classDeclaration.getFields().isEmpty() && classDeclaration.getAnnotationByName("Entity").isPresent()) {
             for(FieldDeclaration field : enclosingType.getFields()) {
-                FieldDeclaration newField = new FieldDeclaration();
-                newField.setModifiers(field.getModifiers());
 
                 for (VariableDeclarator declarator : field.getVariables()) {
                     Type type = declarator.getType();
-                    newField.addVariable(new VariableDeclarator(type,
-                            declarator.getNameAsString(), declarator.getInitializer().orElse(null))
-                    );
                     if (type.isClassOrInterfaceType()) {
                         ClassOrInterfaceType ct = type.asClassOrInterfaceType();
                         if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
@@ -134,7 +129,7 @@ public class GraphNode {
                     }
                 }
 
-                classDeclaration.addMember(newField);
+                classDeclaration.addMember(field.clone());
             }
         }
 
