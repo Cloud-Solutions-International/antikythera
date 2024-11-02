@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -40,9 +41,33 @@ class GraphTest {
         assertTrue(nodes.isEmpty());
     }
 
+    @Test
+    void testPersonInterface() throws AntikytheraException, IOException {
+        PersonCompiler comp = new PersonCompiler();
+        CompilationUnit cu = comp.getCompilationUnit();
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("getName")).orElseThrow();
+
+        GraphNode gn = Graph.createGraphNode(md);
+        assertEquals(md, gn.getNode());
+        assertEquals("Person",gn.getEnclosingType().getNameAsString());
+        assertNotNull(gn.getDestination());
+
+        List<GraphNode> nodes = gn.buildNode();
+        assertTrue(nodes.isEmpty());
+    }
+
     class ReturnValueCompiler extends AbstractCompiler {
         protected ReturnValueCompiler() throws IOException, AntikytheraException {
             cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
+        }
+    }
+
+    class PersonCompiler extends AbstractCompiler {
+        protected PersonCompiler() throws IOException, AntikytheraException {
+            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Person.java")).getResult().get();
+            AntikytheraRunTime.addClass("sa.com.cloudsolutions.antikythera.evaluator.IPerson",
+                getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/IPerson.java")).getResult().get());
         }
     }
 }
