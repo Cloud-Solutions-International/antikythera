@@ -35,7 +35,7 @@ public class Graph {
         nodes.put(n.hashCode(), g);
 
         ClassOrInterfaceDeclaration cdecl = g.getEnclosingType();
-        if (cdecl.getFullyQualifiedName().isPresent()) {
+        if (cdecl != null && cdecl.getFullyQualifiedName().isPresent()) {
             String fqn = cdecl.getFullyQualifiedName().get();
             CompilationUnit destination = new CompilationUnit();
             if (!dependencies.containsKey(fqn)) {

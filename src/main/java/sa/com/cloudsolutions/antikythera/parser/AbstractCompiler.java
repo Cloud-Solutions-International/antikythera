@@ -548,6 +548,13 @@ public class AbstractCompiler {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
             return cdecl;
         }
-        return getEnclosingClassOrInterface(n.getParentNode().orElseThrow());
+        Optional<Node> parent = n.getParentNode();
+        if (parent.isPresent()) {
+            return getEnclosingClassOrInterface(parent.get());
+        }
+
+        else {
+            return null;
+        }
     }
 }

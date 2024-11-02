@@ -99,20 +99,22 @@ public class DepSolver {
      * @param node A graph node that represents a method in the code.
      */
     private void methodSearch(GraphNode node) throws AntikytheraException {
-        Optional<ClassOrInterfaceDeclaration> c = node.getDestination().getClassByName(
-                node.getEnclosingType().getNameAsString());
-        if(node.getNode() instanceof MethodDeclaration md ) {
-            if(c.isPresent()) {
-                node.getClassDeclaration().addMember(md);
-            }
+        if (node.getEnclosingType() != null) {
+            Optional<ClassOrInterfaceDeclaration> c = node.getDestination().getClassByName(
+                    node.getEnclosingType().getNameAsString());
+            if (node.getNode() instanceof MethodDeclaration md) {
+                if (c.isPresent()) {
+                    node.getClassDeclaration().addMember(md);
+                }
 
-            searchMethodParameters(node, md);
-            Type returnType = md.getType();
-            String returns = md.getTypeAsString();
-            if(!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                stack.addAll(node.addTypeArguments(returnType.asClassOrInterfaceType()));
+                searchMethodParameters(node, md);
+                Type returnType = md.getType();
+                String returns = md.getTypeAsString();
+                if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
+                    stack.addAll(node.addTypeArguments(returnType.asClassOrInterfaceType()));
+                }
+                md.accept(new Visitor(), node);
             }
-            md.accept(new Visitor(), node);
         }
     }
 

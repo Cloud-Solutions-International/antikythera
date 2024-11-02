@@ -64,14 +64,18 @@ public class GraphNode {
     public GraphNode(Node node) throws AntikytheraException {
         this.node = node;
         enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
+        if (enclosingType != null) {
+            Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
 
-        Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
-
-        if (cu.isPresent()) {
-            compilationUnit = cu.get();
+            if (cu.isPresent()) {
+                compilationUnit = cu.get();
+            } else {
+                throw new AntikytheraException("CompilationUnit not found for " + enclosingType.getNameAsString());
+            }
         }
         else {
-            throw new AntikytheraException("CompilationUnit not found for " + enclosingType.getNameAsString());
+            compilationUnit = node.findCompilationUnit().orElseThrow();
+            destination = compilationUnit.clone();
         }
     }
 
@@ -81,14 +85,16 @@ public class GraphNode {
      */
     public List<GraphNode> buildNode() throws AntikytheraException {
         List<GraphNode> list = new ArrayList<>();
-
+        if(enclosingType == null) {
+            return list;
+        }
         classDeclaration.setInterface(enclosingType.isInterface());
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
 
         if(classDeclaration.getImplementedTypes().isEmpty()) {
             for (ClassOrInterfaceType ifc : enclosingType.getImplementedTypes()) {
                 classDeclaration.addImplementedType(ifc.getNameAsString());
-                list.addAll(inherit(ifc));
+                list.addAll(addTypeArguments(ifc));
             }
         }
 
@@ -99,7 +105,7 @@ public class GraphNode {
                 } else {
                     classDeclaration.addImplementedType(ifc.clone());
                 }
-                list.addAll(inherit(ifc));
+                list.addAll(addTypeArguments(ifc));
             }
         }
 
@@ -123,7 +129,7 @@ public class GraphNode {
                     if (type.isClassOrInterfaceType()) {
                         ClassOrInterfaceType ct = type.asClassOrInterfaceType();
                         if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
-                            list.addAll(addClassDependency(ct, ct.getNameAsString()));
+                            list.addAll(addTypeArguments(ct));
                         }
                     }
                 }
@@ -174,24 +180,6 @@ public class GraphNode {
     }
 
     /**
-     * Adds the extended and implemented types to the class
-     * @param ifc the interface or class that is being implemented or extended.
-     * @return List of graph nodes representing the various classes, interfaces and type arguments
-     * that were encountered
-     * @throws AntikytheraException if type resolution fails.
-     */
-    private List<GraphNode> inherit(ClassOrInterfaceType ifc) throws AntikytheraException {
-        List<GraphNode> list = new ArrayList<>(addTypeArguments(ifc));
-
-        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, ifc.getNameAsString());
-        if (imp != null) {
-            destination.addImport(imp);
-        }
-        list.addAll(addClassDependency(ifc, imp == null ?  ifc.getNameAsString() : imp.getNameAsString()));
-        return list;
-    }
-
-    /**
      * Adds the type arguments to the graph
      * @param ifc interface or class
      * @return a list of graph nodes.
@@ -202,31 +190,28 @@ public class GraphNode {
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
         if (typeArguments.isPresent()) {
             for (Type typeArg : typeArguments.get()) {
-                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, typeArg.asString());
-                if (fullyQualifiedName != null) {
-                    destination.addImport(fullyQualifiedName);
-                    list.addAll(addClassDependency(typeArg, fullyQualifiedName));
-                }
+                searchType(typeArg, list);
             }
         }
+        searchType(ifc, list);
         return list;
     }
 
     /**
-     * Adds the class dependencies to the graph
-     * @param typeArg the type argument that we are trying to resolve
-     * @param className the fully qualified name of the type argument.
-     *                  while argubaly this method can derive this information from the type
-     *                  argument, the cost of doing so is high. The caller already has this
-     *                  information so might as well pass it in.
-     * @return a list of graph nodes.
-     * @throws AntikytheraException if the types cannot be fully resolved.
+     * Search for the type and put it on the stack.
+     * This method is only intended to be called by addTypeArguments
+     * @param typeArg
+     * @param list
+     * @throws AntikytheraException
      */
-    private List<GraphNode> addClassDependency(Type typeArg, String className) throws AntikytheraException {
-        List<GraphNode> list = new ArrayList<>();
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
-                AbstractCompiler.findFullyQualifiedName(compilationUnit, className)
-        );
+    private void searchType(Type typeArg, List<GraphNode> list) throws AntikytheraException {
+        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, typeArg.toString());
+        if (imp != null) {
+            destination.addImport(imp.getNameAsString());
+        }
+        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, typeArg.toString());
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+
         if (cu != null) {
             TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
             if (t != null) {
@@ -235,7 +220,6 @@ public class GraphNode {
                 list.add(g);
             }
         }
-        return list;
     }
 
     public boolean isVisited() {
