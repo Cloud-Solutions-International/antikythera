@@ -413,10 +413,18 @@ public class AbstractCompiler {
      * @return the import declaration or null if not found
      */
     public static ImportDeclaration findImport(CompilationUnit cu, String className) {
+        ImportDeclaration imp = findNonWildcardImport(cu, className);
+        if (imp != null) {
+            return imp;
+        }
+        return findWildcardImport(cu, className);
+    }
+
+    private static ImportDeclaration findNonWildcardImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
                 /*
-                 * Easy one straight up match involving a fully qualified name as className
+                 * Easy one straight-up match involving a fully qualified name as className
                  */
                 return imp;
             }
@@ -427,6 +435,23 @@ public class AbstractCompiler {
                  */
                 return imp;
             }
+        }
+        /*
+         * We are still not done, there's one more thing we can do. Check the extra_exports section
+         * which is used precisely for situations where we have a nearly impossible import to
+         * resolve
+         */
+        for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
+            if (e.toString().endsWith(className)) {
+                return new ImportDeclaration(e.toString(), false, false);
+            }
+        }
+
+        return null;
+    }
+
+    private static ImportDeclaration findWildcardImport(CompilationUnit cu, String className) {
+        for (ImportDeclaration imp : cu.getImports()) {
             if (imp.isAsterisk()) {
                 String impName = imp.getNameAsString();
                 if (!className.contains("\\.")) {
@@ -461,17 +486,6 @@ public class AbstractCompiler {
                 }
             }
         }
-        /*
-         * We are still not done, there's one more thing we can do. Check the extra_exports section
-         * which is used precisely for situations where we have a nearly impossible import to
-         * resolve
-         */
-        for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
-            if (e.toString().endsWith(className)) {
-                return new ImportDeclaration(e.toString(), false, false);
-            }
-        }
-
         return null;
     }
 

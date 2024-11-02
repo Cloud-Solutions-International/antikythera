@@ -13,14 +13,17 @@ import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import javax.swing.text.html.Option;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -127,7 +130,6 @@ public class GraphNode {
 
     private void copyFields(List<GraphNode> list) throws AntikytheraException {
         for(FieldDeclaration field : enclosingType.getFields()) {
-
             for (VariableDeclarator declarator : field.getVariables()) {
                 Type type = declarator.getType();
                 if (type.isClassOrInterfaceType()) {
@@ -135,6 +137,14 @@ public class GraphNode {
                     if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
                         list.addAll(addTypeArguments(ct));
                     }
+                }
+            }
+            Optional<Expression> init = field.getVariables().get(0).getInitializer();
+            if (init.isPresent()) {
+                if (init.get().isObjectCreationExpr()) {
+                    ObjectCreationExpr oce = init.get().asObjectCreationExpr();
+                    List<ImportDeclaration> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
+                    destination.getImports().addAll(imports);
                 }
             }
             field.accept(new AnnotationVisitor(), this);
