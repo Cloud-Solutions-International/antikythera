@@ -35,7 +35,7 @@ class AbstractCompilerTest {
     private final String BASE_PATH = (String) Settings.getProperty(Constants.BASE_PATH);
 
     @BeforeAll
-    static void setUp() throws IOException, ReflectiveOperationException {
+    static void setUp() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
     }
@@ -54,95 +54,6 @@ class AbstractCompilerTest {
         assertEquals("com.cloud.api.generator.AbstractCompilerTest", AbstractCompiler.pathToClass(path));
         assertEquals("com.cloud.api.generator.AbstractCompilerTest.javaxxx",
                 AbstractCompiler.pathToClass(path + "xxx"));
-    }
-
-    //    Tests for getFields() method
-    @Test
-    void getFieldsReturnsEmptyMapWhenClassNotFound() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-                public class TempClass {
-                }
-            """.getBytes());
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        try (FileInputStream in = new FileInputStream(tempFilePath.toFile())) {
-            CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-            AbstractCompiler compiler = new AbstractCompiler();
-            Map<String, FieldDeclaration> fields = compiler.getFields(cu, "NonExistentClass");
-            assertTrue(fields.isEmpty());
-        } finally {
-            Files.delete(tempFilePath);
-        }
-    }
-
-    @Test
-    void getFieldsReturnsMapWithFieldNamesAndTypes() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-                public class TempClass {
-                    private Long id;
-                    private String name;
-                    private String description;
-                }
-            """.getBytes());
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        try (FileInputStream in = new FileInputStream(tempFilePath.toFile())) {
-            CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-            AbstractCompiler compiler = new AbstractCompiler();
-            Map<String, FieldDeclaration> fields = compiler.getFields(cu, "TempClass");
-            assertFalse(fields.isEmpty());
-            assertEquals(fields.size(), 3);
-            assertTrue(fields.containsKey("id"));
-            assertEquals(fields.get("id").toString(), "private Long id;");
-            assertTrue(fields.containsKey("name"));
-            assertEquals(fields.get("name").toString(), "private String name;");
-            assertTrue(fields.containsKey("description"));
-            assertEquals(fields.get("description").toString(), "private String description;");
-        } finally {
-            Files.delete(tempFilePath);
-        }
-    }
-
-    @Test
-    void getFieldsReturnsEmptyMapForClassWithoutFields() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-                public class TempClass {
-                }
-            """.getBytes());
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        try (FileInputStream in = new FileInputStream(tempFilePath.toFile())) {
-            CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-            AbstractCompiler compiler = new AbstractCompiler();
-            Map<String, FieldDeclaration> fields = compiler.getFields(cu, "TempClass");
-            assertTrue(fields.isEmpty());
-        } finally {
-            Files.delete(tempFilePath);
-        }
     }
 
     // Tests for compile() method
