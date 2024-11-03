@@ -3,7 +3,9 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -14,9 +16,8 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.printer.PrettyPrinter;
-import com.github.javaparser.printer.configuration.PrettyPrinterConfiguration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -28,6 +29,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -63,17 +67,17 @@ public class DepSolver {
                     .findFirst();
 
             if (method.isPresent()) {
-                dfs(nodeBuilder(method.get()));
+                nodeBuilder(method.get());
+                dfs();
             }
         }
     }
 
     /**
      * Recursive Depth first search
-     * @param v the node to search from
      * @throws AntikytheraException if any of the code inspections fails.
      */
-    private void dfs(GraphNode v) throws AntikytheraException {
+    private void dfs() throws AntikytheraException {
         while (! stack.isEmpty()) {
             GraphNode node = stack.pollLast();
             if (!node.isVisited()) {
@@ -81,10 +85,10 @@ public class DepSolver {
 
                 fieldSearch(node);
                 methodSearch(node);
+                constructorSearch(node);
             }
         }
     }
-
 
     /**
      * Search in methods.
@@ -105,7 +109,7 @@ public class DepSolver {
                     node.getTypeDeclaration().addMember(md);
                 }
 
-                searchMethodParameters(node, md);
+                searchMethodParameters(node, md.getParameters());
                 Type returnType = md.getType();
                 String returns = md.getTypeAsString();
                 if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
@@ -116,13 +120,16 @@ public class DepSolver {
         }
     }
 
-    private void searchMethodCall(Expression init, GraphNode node) throws AntikytheraException {
-        if (init.isMethodCallExpr()) {
-            MethodCallExpr mce = init.asMethodCallExpr();
-            Optional<Expression> scope = mce.getScope();
-            if(scope.isPresent()) {
-                externalMethod(node, scope.get(), mce);
-            }
+    /**
+     * Search in constructors.
+     * All the locals declared inside the constructor and arguments are searchable.
+     * Any annotations for the arguments or the constructor will be searched as well.
+     * @param node A graph node that represents a constructor
+     */
+    private void constructorSearch(GraphNode node) throws AntikytheraException {
+        if (node.getEnclosingType() != null && node.getNode() instanceof ConstructorDeclaration cd) {
+            searchMethodParameters(node, cd.getParameters());
+            cd.accept(new Visitor(), node);
         }
     }
 
@@ -197,8 +204,8 @@ public class DepSolver {
         }
     }
 
-    private void searchMethodParameters(GraphNode node, MethodDeclaration md) throws AntikytheraException {
-        for(Parameter p : md.getParameters()) {
+    private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters) throws AntikytheraException {
+        for(Parameter p : parameters) {
             List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
             for(ImportDeclaration imp : imports) {
                 searchClass(node, imp);
@@ -254,10 +261,17 @@ public class DepSolver {
 
     private void writeFiles() throws IOException {
         Files.copy(Paths.get(Settings.getProperty("base_path").toString().replace("src/main/java",""), "pom.xml"),
-                Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"));
+                Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"),
+                StandardCopyOption.REPLACE_EXISTING);
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
+            CompilationUnit cu = entry.getValue();
+            List<ImportDeclaration> list = new ArrayList<>(cu.getImports());
+            cu.getImports().clear();
+            list.sort(Comparator.comparing(NodeWithName::getNameAsString));
+            cu.getImports().addAll(list);
+
             CopyUtils.writeFile(
-                        AbstractCompiler.classToPath(entry.getKey()), entry.getValue().toString());
+                        AbstractCompiler.classToPath(entry.getKey()), cu.toString());
         }
     }
 

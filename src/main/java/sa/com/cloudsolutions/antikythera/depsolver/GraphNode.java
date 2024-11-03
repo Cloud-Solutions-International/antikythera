@@ -147,18 +147,22 @@ public class GraphNode {
         if (typeDeclaration.getFields().isEmpty() &&
                 (typeDeclaration.getAnnotationByName("Entity").isPresent()) ||
                 typeDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
+                typeDeclaration.getAnnotationByName("JsonInclude").isPresent() ||
+                typeDeclaration.getAnnotationByName("MappedSuperclass").isPresent() ||
                 typeDeclaration.getAnnotationByName("Data").isPresent()) {
             copyFields(list);
-            copyConstructors();
+            copyConstructors(list);
         }
 
         return list;
     }
 
-    private void copyConstructors() {
+    private void copyConstructors(List<GraphNode> list) throws AntikytheraException {
         for (ConstructorDeclaration cdecl : enclosingType.asClassOrInterfaceDeclaration().getConstructors()) {
             ClassOrInterfaceDeclaration target = typeDeclaration.asClassOrInterfaceDeclaration();
-            target.addMember(cdecl.clone());
+            ConstructorDeclaration constructor = cdecl.clone();
+            target.addMember(constructor);
+            list.add(Graph.createGraphNode(cdecl));
         }
     }
 
