@@ -41,13 +41,13 @@ public class DepSolver {
     /**
      * The stack for the depth first search.
      */
-    private final LinkedList<GraphNode> stack = new LinkedList<>();
+    private static final LinkedList<GraphNode> stack = new LinkedList<>();
 
-    GraphNode nodeBuilder(Node n) throws AntikytheraException {
+    static void nodeBuilder(Node n) throws AntikytheraException {
         GraphNode g = Graph.createGraphNode(n);
+
         stack.addAll(g.buildNode());
         stack.push(g);
-        return g;
     }
 
     /**
@@ -382,5 +382,9 @@ public class DepSolver {
 
         CopyUtils.createMavenProjectStructure(Settings.getBasePackage(), Settings.getProperty("output_path").toString());
         depSolver.writeFiles();
+    }
+
+    public static void push(GraphNode g) {
+        stack.push(g);
     }
 }

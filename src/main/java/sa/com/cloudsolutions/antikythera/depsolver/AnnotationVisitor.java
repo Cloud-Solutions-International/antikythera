@@ -1,6 +1,9 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -9,6 +12,9 @@ import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
@@ -60,6 +66,34 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 );
                 if (imp2 != null) {
                     node.getDestination().addImport(imp2);
+                    if (imp2.isStatic()) {
+                        TypeDeclaration<?> t = null;
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                        if (cu != null) {
+                            t = AbstractCompiler.getMatchingClass(cu, imp2.getName().getIdentifier());
+                        }
+                        else {
+                            cu = AntikytheraRunTime.getCompilationUnit(imp2.getName().getQualifier().get().toString());
+                            if (cu != null) {
+                                t = AbstractCompiler.getMatchingClass(cu, imp2.getName().getQualifier().get().getIdentifier());
+                            }
+                        }
+                        if(t != null) {
+                            FieldDeclaration f = t.getFieldByName(value.asNameExpr().getNameAsString()).orElse(null);
+                            if (f != null) {
+                                GraphNode g = null;
+                                try {
+                                    g = Graph.createGraphNode(f);
+                                    for (GraphNode gn : g.buildNode()) {
+                                        DepSolver.push(gn);
+                                    }
+                                    DepSolver.push(g);
+                                } catch (AntikytheraException e) {
+                                    throw new DepsolverException(e);
+                                }
+                            }
+                        }
+                    }
                 }
             }
             else if (value.isArrayInitializerExpr()) {
