@@ -50,6 +50,8 @@ import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 
+import javax.swing.text.html.Option;
+
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
  */
@@ -522,7 +524,28 @@ public class AbstractCompiler {
                     ResolvedType argType = symbolResolver.calculateType(arg);
                     arguments.add(argType.describe());
                 } catch (UnsolvedSymbolException ex) {
-                    return Optional.empty();
+                    boolean solved = false;
+                    Optional<ClassOrInterfaceDeclaration> cdecl = arg.findAncestor(ClassOrInterfaceDeclaration.class);
+                    if (cdecl.isPresent()) {
+                        Optional<String> fqn = cdecl.get().getFullyQualifiedName();
+                        if(fqn.isPresent()) {
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn.get());
+                            if (cu != null) {
+                                ImportDeclaration imp = findImport(cu, arg.asNameExpr().getNameAsString());
+                                String className = findFullyQualifiedName(cu, arg.asNameExpr().getNameAsString());
+                                if (className != null) {
+                                    arguments.add(className);
+                                    solved = true;
+                                }
+                            }
+                            else {
+                                arguments.add(arg.toString());
+                            }
+                        }
+                    }
+                    if (!solved) {
+                        return Optional.empty();
+                    }
                 }
             }
         }

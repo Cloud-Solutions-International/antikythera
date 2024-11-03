@@ -202,7 +202,7 @@ public class GraphNode {
                     destination.getImports().addAll(imports);
                 }
                 else if(initializer.isNameExpr()) {
-                    extracted(list, initializer);
+                    setupFieldInitializer(list, initializer);
                 }
             }
             field.accept(new AnnotationVisitor(), this);
@@ -210,7 +210,7 @@ public class GraphNode {
         }
     }
 
-    private void extracted(List<GraphNode> list, Expression initializer) throws AntikytheraException {
+    private void setupFieldInitializer(List<GraphNode> list, Expression initializer) throws AntikytheraException {
         ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
         if (imp != null) {
             if (imp.isStatic()) {
