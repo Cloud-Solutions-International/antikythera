@@ -26,6 +26,8 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -72,8 +74,6 @@ public class DepSolver {
      * @throws AntikytheraException if any of the code inspections fails.
      */
     private void dfs(GraphNode v) throws AntikytheraException {
-        stack.push(v);
-
         while (! stack.isEmpty()) {
             GraphNode node = stack.pollLast();
             if (!node.isVisited()) {
@@ -252,24 +252,12 @@ public class DepSolver {
         }
     }
 
-    private void writeFiles() {
-        PrettyPrinterConfiguration config = new PrettyPrinterConfiguration();
-        config.setColumnAlignFirstMethodChain(true);
-        config.setColumnAlignParameters(true);
-        config.setIndentSize(4);
-        config.setPrintComments(true);
-        config.setPrintJavadoc(true);
-        config.setEndOfLineCharacter("\n");
-        config.setOrderImports(true);
-        PrettyPrinter prettyPrinter = new PrettyPrinter(config);
-
+    private void writeFiles() throws IOException {
+        Files.copy(Paths.get(Settings.getProperty("base_path").toString().replace("src/main/java",""), "pom.xml"),
+                Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"));
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
-            try {
-                CopyUtils.writeFile(
-                        AbstractCompiler.classToPath(entry.getKey()), prettyPrinter.print(entry.getValue()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            CopyUtils.writeFile(
+                        AbstractCompiler.classToPath(entry.getKey()), entry.getValue().toString());
         }
     }
 
@@ -321,40 +309,45 @@ public class DepSolver {
                 }
                 else if(arg.isMethodCallExpr()) {
                     Optional<Expression> scope = arg.asMethodCallExpr().getScope();
-                    if(scope.isPresent() && scope.get().isNameExpr()) {
-                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(),
-                                scope.get().asNameExpr().getNameAsString());
-                        try {
-                            searchClass(node, imp);
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-
-                        /*
-                         * We need to find the method declaration and then add it to the stack.
-                         * First step is to find the CompilationUnit. We cannot rely on using the
-                         * import declaration as the other class maybe in the same package and may
-                         * not have an import.
-                         */
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
-                                AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                                        scope.get().asNameExpr().getNameAsString()));
-
-                        if (cu != null) {
-                            Optional<ClassOrInterfaceDeclaration> cdecl = cu.findFirst(ClassOrInterfaceDeclaration.class,
-                                    c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
-
-                            if (cdecl.isPresent()) {
-                                AbstractCompiler.findMethodDeclaration(
-                                        arg.asMethodCallExpr(), cdecl.get()
-                                ).ifPresent(md -> {
-                                    try {
-                                        nodeBuilder(md);
-                                    } catch (AntikytheraException e) {
-                                        throw new DepsolverException(e);
-                                    }
-                                });
+                    if (scope.isPresent()) {
+                        if (scope.get().isNameExpr()) {
+                            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(),
+                                    scope.get().asNameExpr().getNameAsString());
+                            try {
+                                searchClass(node, imp);
+                            } catch (AntikytheraException e) {
+                                throw new DepsolverException(e);
                             }
+
+                            /*
+                             * We need to find the method declaration and then add it to the stack.
+                             * First step is to find the CompilationUnit. We cannot rely on using the
+                             * import declaration as the other class maybe in the same package and may
+                             * not have an import.
+                             */
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                                    AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                                            scope.get().asNameExpr().getNameAsString()));
+
+                            if (cu != null) {
+                                Optional<ClassOrInterfaceDeclaration> cdecl = cu.findFirst(ClassOrInterfaceDeclaration.class,
+                                        c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
+
+                                if (cdecl.isPresent()) {
+                                    AbstractCompiler.findMethodDeclaration(
+                                            arg.asMethodCallExpr(), cdecl.get()
+                                    ).ifPresent(md -> {
+                                        try {
+                                            nodeBuilder(md);
+                                        } catch (AntikytheraException e) {
+                                            throw new DepsolverException(e);
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        else if (scope.get().isFieldAccessExpr()) {
+                            resolveField(node, scope.get());
                         }
                     }
                 }

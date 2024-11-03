@@ -8,6 +8,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -121,6 +122,7 @@ public class GraphNode {
                 }
             }
 
+            // todo this logic needs to be fixed. Incorrectly implements parent classes instead of extending.
             if (cdecl.getExtendedTypes().isEmpty()) {
                 for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
                     if (cdecl.isInterface()) {
@@ -326,6 +328,9 @@ public class GraphNode {
     @Override
     public String toString() {
         if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
+            if (node instanceof MethodDeclaration md) {
+                return enclosingType.getFullyQualifiedName().get().toString() + ":" + md.getNameAsString();
+            }
             return enclosingType.getFullyQualifiedName().get().toString();
         }
         return super.toString();
