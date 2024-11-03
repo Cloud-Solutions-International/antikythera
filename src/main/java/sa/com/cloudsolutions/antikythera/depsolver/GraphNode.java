@@ -195,49 +195,51 @@ public class GraphNode {
             }
             Optional<Expression> init = field.getVariables().get(0).getInitializer();
             if (init.isPresent()) {
-                if (init.get().isObjectCreationExpr()) {
-                    ObjectCreationExpr oce = init.get().asObjectCreationExpr();
+                Expression initializer = init.get();
+                if (initializer.isObjectCreationExpr()) {
+                    ObjectCreationExpr oce = initializer.asObjectCreationExpr();
                     List<ImportDeclaration> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
                     destination.getImports().addAll(imports);
                 }
-                else if(init.get().isNameExpr()) {
-                    ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, init.get().asNameExpr().getNameAsString());
-                    if (imp != null) {
-                        if (imp.isStatic()) {
-
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-                            if (cu != null) {
-                                TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
-                                if (t != null) {
-                                    FieldDeclaration f = t.getFieldByName(init.get().asNameExpr().getNameAsString()).orElse(null);
-                                    if (f != null) {
-                                        GraphNode g = Graph.createGraphNode(f);
-                                        list.addAll(g.buildNode());
-                                        list.add(g);
-                                    }
-                                }
-                            }
-                            else {
-                                cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
-                                if (cu != null) {
-                                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getQualifier().get().getIdentifier());
-                                    if (t != null) {
-                                        FieldDeclaration f = t.getFieldByName(init.get().asNameExpr().getNameAsString()).orElse(null);
-                                        if (f != null) {
-                                            GraphNode g = Graph.createGraphNode(f);
-                                            list.addAll(g.buildNode());
-                                            list.add(g);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        destination.addImport(imp);
-                    }
+                else if(initializer.isNameExpr()) {
+                    extracted(list, initializer);
                 }
             }
             field.accept(new AnnotationVisitor(), this);
             typeDeclaration.addMember(field.clone());
+        }
+    }
+
+    private void extracted(List<GraphNode> list, Expression initializer) throws AntikytheraException {
+        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
+        if (imp != null) {
+            if (imp.isStatic()) {
+
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                if (cu != null) {
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                    fieldInitializer(list, t, initializer);
+                }
+                else {
+                    cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
+                    if (cu != null) {
+                        TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getQualifier().get().getIdentifier());
+                        fieldInitializer(list, t, initializer);
+                    }
+                }
+            }
+            destination.addImport(imp);
+        }
+    }
+
+    private void fieldInitializer(List<GraphNode> list, TypeDeclaration<?> t, Expression initializer) throws AntikytheraException {
+        if (t != null) {
+            FieldDeclaration f = t.getFieldByName(initializer.asNameExpr().getNameAsString()).orElse(null);
+            if (f != null) {
+                GraphNode g = Graph.createGraphNode(f);
+                list.addAll(g.buildNode());
+                list.add(g);
+            }
         }
     }
 
