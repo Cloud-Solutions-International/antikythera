@@ -200,6 +200,41 @@ public class GraphNode {
                     List<ImportDeclaration> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
                     destination.getImports().addAll(imports);
                 }
+                else if(init.get().isNameExpr()) {
+                    ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, init.get().asNameExpr().getNameAsString());
+                    if (imp != null) {
+                        if (imp.isStatic()) {
+
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                            if (cu != null) {
+                                TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                                if (t != null) {
+                                    FieldDeclaration f = t.getFieldByName(init.get().asNameExpr().getNameAsString()).orElse(null);
+                                    if (f != null) {
+                                        GraphNode g = Graph.createGraphNode(f);
+                                        list.addAll(g.buildNode());
+                                        list.add(g);
+                                    }
+                                }
+                            }
+                            else {
+                                cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
+                                if (cu != null) {
+                                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getQualifier().get().getIdentifier());
+                                    if (t != null) {
+                                        FieldDeclaration f = t.getFieldByName(init.get().asNameExpr().getNameAsString()).orElse(null);
+                                        if (f != null) {
+                                            GraphNode g = Graph.createGraphNode(f);
+                                            list.addAll(g.buildNode());
+                                            list.add(g);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        destination.addImport(imp);
+                    }
+                }
             }
             field.accept(new AnnotationVisitor(), this);
             typeDeclaration.addMember(field.clone());
@@ -333,7 +368,7 @@ public class GraphNode {
         }
     }
 
-    public TypeDeclaration getTypeDeclaration() {
+    public TypeDeclaration<?> getTypeDeclaration() {
         return typeDeclaration;
     }
 

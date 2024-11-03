@@ -5,6 +5,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -35,6 +36,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -480,6 +482,15 @@ public class AbstractCompiler {
                          */
                         if (new File(Settings.getBasePath(), classToPath(fullClassName)).exists()) {
                             return new ImportDeclaration(fullClassName, false, false);
+                        }
+                        CompilationUnit cu2 = AntikytheraRunTime.getCompilationUnit(impName);
+                        if (cu2 != null && imp.isStatic()) {
+                            Optional<FieldDeclaration> field =  cu2.findFirst(FieldDeclaration.class,
+                                    f -> f.getVariable(0).getNameAsString().equals(className)
+                            );
+                            if (field.isPresent()) {
+                                return imp;
+                            }
                         }
                     }
                 }

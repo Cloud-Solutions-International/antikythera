@@ -256,6 +256,9 @@ public class DepSolver {
                     node.getDestination().addImport(imp);
                 }
             }
+            if(node.getTypeDeclaration().getFieldByName(fd.getVariable(0).getNameAsString()).isEmpty()) {
+                node.getTypeDeclaration().addMember(fd);
+            }
         }
     }
 
