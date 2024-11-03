@@ -110,30 +110,9 @@ public class GraphNode {
          */
         preProcessed = true;
 
-        if (typeDeclaration.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
-            ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
-
-            cdecl.setInterface(enclosingDeclaration.isInterface());
-            if(cdecl.getImplementedTypes().isEmpty()) {
-                for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
-                    cdecl.addImplementedType(ifc.getNameAsString());
-                    list.addAll(addTypeArguments(ifc));
-                }
-            }
-
-            // todo this logic needs to be fixed. Incorrectly implements parent classes instead of extending.
-            if (cdecl.getExtendedTypes().isEmpty()) {
-                for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
-                    if (cdecl.isInterface()) {
-                        cdecl.addExtendedType(ifc.toString());
-                    } else {
-                        cdecl.addImplementedType(ifc.clone());
-                    }
-                    list.addAll(addTypeArguments(ifc));
-                }
-            }
-        }
+       if (enclosingType.isClassOrInterfaceDeclaration()) {
+           inherit(list);
+       }
 
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
 
@@ -155,6 +134,43 @@ public class GraphNode {
         }
 
         return list;
+    }
+
+    private void inherit(List<GraphNode> list) throws AntikytheraException {
+        ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
+
+        if (enclosingDeclaration.isInterface()) {
+            if (typeDeclaration.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+                cdecl.setInterface(true);
+
+                if (cdecl.getExtendedTypes().isEmpty()) {
+                    for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
+                        cdecl.addExtendedType(ifc.clone());
+                        list.addAll(addTypeArguments(ifc));
+                    }
+                }
+            }
+        } else {
+            if (typeDeclaration.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+                cdecl.setInterface(false);
+
+                if (cdecl.getImplementedTypes().isEmpty()) {
+                    for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
+                        cdecl.addImplementedType(ifc.clone());
+                        list.addAll(addTypeArguments(ifc));
+                    }
+                }
+
+                if (cdecl.getExtendedTypes().isEmpty()) {
+                    for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
+                        cdecl.addExtendedType(ifc.clone());
+                        list.addAll(addTypeArguments(ifc));
+                    }
+                }
+            }
+        }
     }
 
     private void copyConstructors(List<GraphNode> list) throws AntikytheraException {
