@@ -537,9 +537,11 @@ public class AbstractCompiler {
                                     }
                                 }
                             }
-                            String className = findFullyQualifiedName(cu, arg.asNameExpr().getNameAsString());
-                            if (className != null) {
-                                return Optional.of(className);
+                            if (arg.isNameExpr()) {
+                                String className = findFullyQualifiedName(cu, arg.asNameExpr().getNameAsString());
+                                if (className != null) {
+                                    return Optional.of(className);
+                                }
                             }
                         }
                         else {

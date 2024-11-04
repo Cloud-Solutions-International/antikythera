@@ -57,7 +57,20 @@ public class DepSolver {
      */
     private void solve() throws IOException, AntikytheraException {
         AbstractCompiler.preProcess();
-        String s = Settings.getProperty("methods").toString();
+        Object methods = Settings.getProperty("methods");
+        if (methods instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof String s) {
+                    processMethod(s);
+                }
+            }
+        }
+        else {
+            processMethod(methods.toString());
+        }
+    }
+
+    private void processMethod(String s) throws AntikytheraException {
         String[] parts = s.split("#");
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0] );
