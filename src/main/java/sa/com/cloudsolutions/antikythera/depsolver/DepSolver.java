@@ -43,13 +43,6 @@ public class DepSolver {
      */
     private static final LinkedList<GraphNode> stack = new LinkedList<>();
 
-    static void nodeBuilder(Node n) throws AntikytheraException {
-        GraphNode g = Graph.createGraphNode(n);
-
-        stack.addAll(g.buildNode());
-        stack.push(g);
-    }
-
     /**
      * Main entry point for the dependency solver
      * @throws IOException if files could not be read
@@ -80,7 +73,7 @@ public class DepSolver {
                     .findFirst();
 
             if (method.isPresent()) {
-                nodeBuilder(method.get());
+                Graph.createGraphNode(method.get());
                 dfs();
             }
         }
@@ -126,7 +119,7 @@ public class DepSolver {
                 Type returnType = md.getType();
                 String returns = md.getTypeAsString();
                 if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                    stack.addAll(node.addTypeArguments(returnType.asClassOrInterfaceType()));
+                    node.addTypeArguments(returnType.asClassOrInterfaceType());
                 }
                 md.accept(new Visitor(), node);
             }
@@ -186,7 +179,7 @@ public class DepSolver {
                             Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
                                     mce, otherDecl.asClassOrInterfaceDeclaration());
                             if (md.isPresent()) {
-                                nodeBuilder(md.get());
+                                Graph.createGraphNode(md.get());
                             }
                         }
                     }
@@ -195,7 +188,7 @@ public class DepSolver {
                  * Now we mark the field declaration as part of the source code to preserve from
                  * current class.
                  */
-                node.getTypeDeclaration().addMember(fd.get());
+                node.addField(fd.get());
 
                 for(AnnotationExpr ann : fd.get().getAnnotations()) {
                     ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
@@ -254,7 +247,7 @@ public class DepSolver {
                  */
                 TypeDeclaration<?> cls = AbstractCompiler.getMatchingClass(compilationUnit, className);
                 if(cls != null) {
-                    nodeBuilder(cls);
+                    Graph.createGraphNode(cls);
                 }
             }
             node.getDestination().addImport(imp);
@@ -279,6 +272,9 @@ public class DepSolver {
         Files.copy(Paths.get(Settings.getProperty("base_path").toString().replace("src/main/java",""), "pom.xml"),
                 Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"),
                 StandardCopyOption.REPLACE_EXISTING);
+
+        Graph.postProcess();
+
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
             List<ImportDeclaration> list = new ArrayList<>(cu.getImports());
@@ -325,7 +321,7 @@ public class DepSolver {
                                 mce, node.getEnclosingType().asClassOrInterfaceDeclaration()
                         );
                         if(md.isPresent()) {
-                            nodeBuilder(md.get());
+                            Graph.createGraphNode(md.get());
                         }
                     }
                 }
@@ -388,7 +384,7 @@ public class DepSolver {
                                             arg.asMethodCallExpr(), cdecl.get()
                                     ).ifPresent(md -> {
                                         try {
-                                            nodeBuilder(md);
+                                            Graph.createGraphNode(md);
                                         } catch (AntikytheraException e) {
                                             throw new DepsolverException(e);
                                         }

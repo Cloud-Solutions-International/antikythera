@@ -26,8 +26,10 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import javax.swing.text.html.Option;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Primary purpose to encapsulate the AST node.
@@ -68,13 +70,17 @@ public class GraphNode {
      */
     boolean preProcessed;
 
+    private Set<FieldDeclaration> fields = new HashSet<>();
+    private Set<MethodDeclaration> methods = new HashSet<>();
+
+
     /**
      * Creates a new GraphNode
      * but it will not really be ready for use until you call the buildNode method
      * @param node an AST Node
      * @throws AntikytheraException if something cannot be resolved.
      */
-    public GraphNode(Node node) throws AntikytheraException {
+    private GraphNode(Node node) throws AntikytheraException {
         this.node = node;
         enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
         if (enclosingType != null) {
@@ -97,14 +103,22 @@ public class GraphNode {
         }
     }
 
+    public static GraphNode graphNodeFactory(Node node) throws AntikytheraException {
+        GraphNode g = Graph.getNodes().get(node.hashCode());
+        if (g == null) {
+            g = new GraphNode(node);
+            Graph.getNodes().put(node.hashCode(), g);
+        }
+        return g;
+    }
+
     /**
      * Builds the graph node from the information available in enclosing type
-     * @return a list of nodes that need to be explored
+     *
      */
-    public List<GraphNode> buildNode() throws AntikytheraException {
-        List<GraphNode> list = new ArrayList<>();
+    public void buildNode() throws AntikytheraException {
         if(enclosingType == null || preProcessed) {
-            return list;
+            return;
         }
         /*
          * Set it here before we actually do the processing. If we dont' the cyclic dependencies
@@ -113,7 +127,7 @@ public class GraphNode {
         preProcessed = true;
 
        if (enclosingType.isClassOrInterfaceDeclaration()) {
-           inherit(list);
+           inherit();
        }
 
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
@@ -131,14 +145,13 @@ public class GraphNode {
                 typeDeclaration.getAnnotationByName("JsonInclude").isPresent() ||
                 typeDeclaration.getAnnotationByName("MappedSuperclass").isPresent() ||
                 typeDeclaration.getAnnotationByName("Data").isPresent()) {
-            copyFields(list);
-            copyConstructors(list);
+            copyFields();
+            copyConstructors();
         }
 
-        return list;
     }
 
-    private void inherit(List<GraphNode> list) throws AntikytheraException {
+    private void inherit() throws AntikytheraException {
         ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
 
         if (enclosingDeclaration.isInterface()) {
@@ -149,7 +162,7 @@ public class GraphNode {
                 if (cdecl.getExtendedTypes().isEmpty()) {
                     for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
                         cdecl.addExtendedType(ifc.clone());
-                        list.addAll(addTypeArguments(ifc));
+                        addTypeArguments(ifc);
                     }
                 }
             }
@@ -161,37 +174,38 @@ public class GraphNode {
                 if (cdecl.getImplementedTypes().isEmpty()) {
                     for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
                         cdecl.addImplementedType(ifc.clone());
-                        list.addAll(addTypeArguments(ifc));
+                        addTypeArguments(ifc);
                     }
                 }
 
                 if (cdecl.getExtendedTypes().isEmpty()) {
                     for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
                         cdecl.addExtendedType(ifc.clone());
-                        list.addAll(addTypeArguments(ifc));
+                        addTypeArguments(ifc);
                     }
                 }
             }
         }
     }
 
-    private void copyConstructors(List<GraphNode> list) throws AntikytheraException {
+    private void copyConstructors() throws AntikytheraException {
         for (ConstructorDeclaration cdecl : enclosingType.asClassOrInterfaceDeclaration().getConstructors()) {
             ClassOrInterfaceDeclaration target = typeDeclaration.asClassOrInterfaceDeclaration();
             ConstructorDeclaration constructor = cdecl.clone();
             target.addMember(constructor);
-            list.add(Graph.createGraphNode(cdecl));
+            Graph.createGraphNode(cdecl);
         }
     }
 
-    private void copyFields(List<GraphNode> list) throws AntikytheraException {
+    private void copyFields() throws AntikytheraException {
         for(FieldDeclaration field : enclosingType.asClassOrInterfaceDeclaration().getFields()) {
+
             for (VariableDeclarator declarator : field.getVariables()) {
                 Type type = declarator.getType();
                 if (type.isClassOrInterfaceType()) {
                     ClassOrInterfaceType ct = type.asClassOrInterfaceType();
                     if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
-                        list.addAll(addTypeArguments(ct));
+                        addTypeArguments(ct);
                     }
                 }
             }
@@ -204,61 +218,58 @@ public class GraphNode {
                     destination.getImports().addAll(imports);
                 }
                 else if(initializer.isNameExpr()) {
-                    setupFieldInitializer(list, initializer);
+                    setupFieldInitializer(initializer);
                 }
                 else if(initializer.isMethodCallExpr()) {
                     MethodCallExpr mce = initializer.asMethodCallExpr();
                     Optional<Expression> scope = mce.getScope();
                     if (scope.isPresent()) {
                         if (scope.get().isNameExpr()) {
-                            setupFieldInitializer(list, scope.get());
+                            setupFieldInitializer(scope.get());
                         }
                         else if (scope.get().isFieldAccessExpr()) {
-                            setupFieldInitializer(list, scope.get().asFieldAccessExpr().getScope().asNameExpr());
+                            setupFieldInitializer(scope.get().asFieldAccessExpr().getScope().asNameExpr());
                         }
                     }
                 }
             }
             field.accept(new AnnotationVisitor(), this);
-            typeDeclaration.addMember(field.clone());
+            fields.add(field.clone());
         }
     }
 
-    private void setupFieldInitializer(List<GraphNode> list, Expression initializer) throws AntikytheraException {
+    private void setupFieldInitializer(Expression initializer) throws AntikytheraException {
         ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
         if (imp != null) {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
             if (imp.isStatic()) {
                 if (cu != null) {
                     TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
-                    fieldInitializer(list, t, initializer);
+                    fieldInitializer(t, initializer);
                 }
                 else {
                     cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
                     if (cu != null) {
                         TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getQualifier().get().getIdentifier());
-                        fieldInitializer(list, t, initializer);
+                        fieldInitializer(t, initializer);
                     }
                 }
             }
             else {
                 if (cu != null) {
                     TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
-                    GraphNode g = Graph.createGraphNode(t);
-                    DepSolver.push(g);
+                    Graph.createGraphNode(t);
                 }
             }
             destination.addImport(imp);
         }
     }
 
-    private void fieldInitializer(List<GraphNode> list, TypeDeclaration<?> t, Expression initializer) throws AntikytheraException {
+    private void fieldInitializer(TypeDeclaration<?> t, Expression initializer) throws AntikytheraException {
         if (t != null) {
             FieldDeclaration f = t.getFieldByName(initializer.asNameExpr().getNameAsString()).orElse(null);
             if (f != null) {
-                GraphNode g = Graph.createGraphNode(f);
-                list.addAll(g.buildNode());
-                list.add(g);
+                Graph.createGraphNode(f);
             }
         }
     }
@@ -304,29 +315,26 @@ public class GraphNode {
     /**
      * Adds the type arguments to the graph
      * @param ifc interface or class
-     * @return a list of graph nodes.
+
      * @throws AntikytheraException if the types cannot be fully resolved.
      */
-    public List<GraphNode> addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
-        List<GraphNode> list = new ArrayList<>();
+    public void addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
         if (typeArguments.isPresent()) {
             for (Type typeArg : typeArguments.get()) {
-                searchType(typeArg, list);
+                searchType(typeArg);
             }
         }
-        searchType(ifc, list);
-        return list;
+        searchType(ifc);
     }
 
     /**
      * Search for the type and put it on the stack.
      * This method is only intended to be called by addTypeArguments
      * @param typeArg the class or interface type that we are looking for
-     * @param list if we find a node , it will be added to this list
      * @throws AntikytheraException on type resolution errors.
      */
-    private void searchType(Type typeArg, List<GraphNode> list) throws AntikytheraException {
+    private void searchType(Type typeArg) throws AntikytheraException {
         String name = typeArg.isClassOrInterfaceType()
                 ? typeArg.asClassOrInterfaceType().getNameAsString()
                 : typeArg.toString();
@@ -341,9 +349,7 @@ public class GraphNode {
         if (cu != null) {
             TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
             if (t != null) {
-                GraphNode g = Graph.createGraphNode(t);
-                list.addAll(g.buildNode());
-                list.add(g);
+                Graph.createGraphNode(t);
             }
         }
     }
@@ -411,5 +417,18 @@ public class GraphNode {
             return enclosingType.getFullyQualifiedName().get().toString();
         }
         return super.toString();
+    }
+
+    public void postProcess() {
+        for(FieldDeclaration fd : fields) {
+            typeDeclaration.addMember(fd);
+        }
+        for(MethodDeclaration md : methods) {
+            typeDeclaration.addMember(md);
+        }
+    }
+
+    public void addField(FieldDeclaration fieldDeclaration) {
+        fields.add(fieldDeclaration);
     }
 }

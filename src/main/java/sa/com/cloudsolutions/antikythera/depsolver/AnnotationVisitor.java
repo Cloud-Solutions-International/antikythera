@@ -81,13 +81,10 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                         if(t != null) {
                             FieldDeclaration f = t.getFieldByName(value.asNameExpr().getNameAsString()).orElse(null);
                             if (f != null) {
-                                GraphNode g = null;
+
                                 try {
-                                    g = Graph.createGraphNode(f);
-                                    for (GraphNode gn : g.buildNode()) {
-                                        DepSolver.push(gn);
-                                    }
-                                    DepSolver.push(g);
+                                    Graph.createGraphNode(f);
+
                                 } catch (AntikytheraException e) {
                                     throw new DepsolverException(e);
                                 }

@@ -37,12 +37,7 @@ public class Graph {
      * @throws AntikytheraException if resolution fails
      */
     public static GraphNode createGraphNode(Node n) throws AntikytheraException {
-        GraphNode g = nodes.get(n.hashCode());
-        if(g != null) {
-            return g;
-        }
-        g = new GraphNode(n);
-        nodes.put(n.hashCode(), g);
+        GraphNode g = GraphNode.graphNodeFactory(n);
 
         TypeDeclaration<?> cdecl = g.getEnclosingType();
         if (cdecl != null) {
@@ -81,11 +76,24 @@ public class Graph {
                 }
             }
         }
-
+        g.buildNode();
+        DepSolver.push(g);
         return g;
     }
 
+
     public static Map<String, CompilationUnit> getDependencies() {
         return dependencies;
+    }
+
+    public static void postProcess() {
+        for(GraphNode g : nodes.values()) {
+            System.out.println(g.toString());
+            g.postProcess();
+        }
+    }
+
+    public static Map<Integer, GraphNode> getNodes() {
+        return nodes;
     }
 }
