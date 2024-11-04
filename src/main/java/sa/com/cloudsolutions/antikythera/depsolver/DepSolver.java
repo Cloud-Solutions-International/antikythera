@@ -215,15 +215,6 @@ public class DepSolver {
                 }
             }
         }
-
-        for(Expression arg : mce.getArguments()) {
-            if (arg.isNameExpr()) {
-                ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp);
-                }
-            }
-        }
     }
 
     private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters) throws AntikytheraException {
@@ -321,16 +312,36 @@ public class DepSolver {
             }
         }
 
+        @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
-            mce.getScope().ifPresent(scope -> {
-                try {
-                    if(scope.isNameExpr()) {
-                        externalMethod(node, scope, mce);
-                    }
-                } catch (AntikytheraException e) {
-                    throw new DepsolverException(e);
+            Optional<Expression> scope = mce.getScope();
+            try {
+                if(scope.isPresent()) {
+                     externalMethod(node, scope.get(), mce);
                 }
-            });
+                else {
+                    if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
+                        Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
+                                mce, node.getEnclosingType().asClassOrInterfaceDeclaration()
+                        );
+                        if(md.isPresent()) {
+                            nodeBuilder(md.get());
+                        }
+                    }
+                }
+
+                for(Expression arg : mce.getArguments()) {
+                    if (arg.isNameExpr()) {
+                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
+                        if (imp != null) {
+                            node.getDestination().addImport(imp);
+                        }
+                    }
+                }
+
+            } catch (Exception e) {
+                throw new DepsolverException("aa");
+            }
 
             super.visit(mce, node);
         }
