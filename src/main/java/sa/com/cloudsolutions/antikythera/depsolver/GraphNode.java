@@ -243,7 +243,6 @@ public class GraphNode {
             }
             field.accept(new AnnotationVisitor(), this);
             addField(field);
-
         }
     }
 

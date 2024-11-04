@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.comments.JavadocComment;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -77,7 +78,15 @@ public class Graph {
             }
         }
         g.buildNode();
-        DepSolver.push(g);
+        if (g.isVisited() && n instanceof ClassOrInterfaceDeclaration || n instanceof EnumDeclaration) {
+            g.setVisited(false);
+            DepSolver.push(g);
+        }
+        if (!g.isVisited()) {
+            nodes.put(g.hashCode(), g);
+            DepSolver.push(g);
+        }
+
         return g;
     }
 

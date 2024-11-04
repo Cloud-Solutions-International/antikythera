@@ -35,7 +35,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class DepSolver {
     /**
@@ -91,6 +90,7 @@ public class DepSolver {
     private void dfs() throws AntikytheraException {
         while (! stack.isEmpty()) {
             GraphNode node = stack.pollLast();
+
             if (!node.isVisited()) {
                 node.setVisited(true);
 
@@ -185,6 +185,8 @@ public class DepSolver {
                                     mce, otherDecl.asClassOrInterfaceDeclaration());
                             if (md.isPresent()) {
                                 Graph.createGraphNode(md.get());
+                            } else {
+                                System.out.println("bada");
                             }
                         }
                     }
@@ -345,6 +347,9 @@ public class DepSolver {
 
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
+            if(mce.toString().contains("REJECT_WITH_INTERVENTION")) {
+                System.out.println("aa");
+            }
             Optional<Expression> scope = mce.getScope();
             try {
                 if(scope.isPresent()) {
