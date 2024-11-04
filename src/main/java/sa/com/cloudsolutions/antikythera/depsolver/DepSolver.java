@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -63,6 +62,11 @@ public class DepSolver {
         }
     }
 
+    /**
+     * Process the dependencies of a method that was declared in the application configuration
+     * @param s
+     * @throws AntikytheraException
+     */
     private void processMethod(String s) throws AntikytheraException {
         String[] parts = s.split("#");
 
@@ -80,7 +84,7 @@ public class DepSolver {
     }
 
     /**
-     * Recursive Depth first search
+     * Iterative Depth first search
      * @throws AntikytheraException if any of the code inspections fails.
      */
     private void dfs() throws AntikytheraException {
@@ -210,6 +214,12 @@ public class DepSolver {
         }
     }
 
+    /**
+     * Search method parameters for dependencies.
+     * @param node GraphNode representing a method.
+     * @param parameters the list of paremeters of that method
+     * @throws AntikytheraException if some resolution problem crops up
+     */
     private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters) throws AntikytheraException {
         for(Parameter p : parameters) {
             List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
