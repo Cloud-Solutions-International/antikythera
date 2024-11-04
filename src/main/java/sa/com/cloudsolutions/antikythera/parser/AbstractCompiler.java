@@ -44,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
@@ -152,7 +153,6 @@ public class AbstractCompiler {
     public static void reset() throws IOException {
         setupParser();
     }
-
 
     /**
      * Creates a compilation unit from the source code at the relative path.
@@ -562,39 +562,25 @@ public class AbstractCompiler {
      * @return the method declaration or empty if not found
      */
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
-        List<String> arguments = new ArrayList<>();
-        for (Expression arg : methodCall.getArguments()) {
-            Optional<String> d = describeType(arg);
-            if (d.isPresent()) {
-                arguments.add(d.get());
-            }
-            else {
-                return Optional.empty();
-            }
-        }
+        Optional<NodeList<Type>> typeArguments = methodCall.getTypeArguments();
 
         for (MethodDeclaration method : methods) {
             if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
-                if(method.getParameters().isEmpty()) {
+                if(method.getParameters().isEmpty() && typeArguments.isEmpty()) {
                     return Optional.of(method);
                 }
-                for (int i =0 ; i < method.getParameters().size(); i++) {
-                    String paramType = null;
-                    try {
-                        paramType = method.getParameter(i).getType().resolve().describe();
-                    } catch (IllegalStateException ex) {
-                        paramType = AbstractCompiler.findFullyQualifiedName(method.findCompilationUnit().get(),
-                                method.getParameter(i).getType().asString());
-                    }
 
-                    if (paramType != null &&
-                            (arguments.get(i).equals(paramType)
-                            || paramType.equals("java.lang.Object")
-                            || paramType.equals(Reflect.primitiveToWrapper(arguments.get(i)))
-                            || arguments.get(i).equals(Reflect.primitiveToWrapper(paramType)))
-                    )
-                    {
-                        return Optional.of(method);
+                if (typeArguments.isPresent()) {
+                    NodeList<Type> arguments = typeArguments.get();
+                    for (int i =0 ; i < method.getParameters().size(); i++) {
+                        Parameter param = method.getParameter(i);
+                        if (param.getType().equals(arguments.get(i))
+                                || param.getType().toString().equals("java.lang.Object")
+                                || arguments.get(i).equals(Reflect.primitiveToWrapper(param.getType().toString()))
+                        )
+                        {
+                            return Optional.of(method);
+                        }
                     }
                 }
             }

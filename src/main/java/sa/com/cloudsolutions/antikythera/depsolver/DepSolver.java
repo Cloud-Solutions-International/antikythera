@@ -5,7 +5,6 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
-import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -35,6 +34,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +68,7 @@ public class DepSolver {
 
     /**
      * Process the dependencies of a method that was declared in the application configuration
-     * @param s
+     * @param s the method name
      * @throws AntikytheraException
      */
     private void processMethod(String s) throws AntikytheraException {
@@ -184,6 +184,7 @@ public class DepSolver {
                         if (cu != null) {
                             String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
                             TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
+
                             if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
                                 Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
                                         mce, otherDecl.asClassOrInterfaceDeclaration());
@@ -210,7 +211,7 @@ public class DepSolver {
 
                 } else {
                     /*
-                     * Can be either a call related to a local or a static call
+                     * Can be either a call related to a local variable or a static call
                      */
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
                     if (imp != null) {
@@ -248,10 +249,6 @@ public class DepSolver {
                         }
                     }
                 }
-
-            }
-            else {
-                System.out.println("BADA " + scope  );
             }
         }
     }
@@ -386,10 +383,6 @@ public class DepSolver {
 
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
-            if(mce.toString().contains("REJECT_WITH_INTERVENTION")) {
-                System.out.println("aa");
-            }
-
             try {
                 LinkedList<Expression> chain = Evaluator.findScopeChain(mce);
                 if (chain.isEmpty()) {
