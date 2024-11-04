@@ -27,7 +27,7 @@ class GraphNodeTest  {
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
 
-        GraphNode gn = new GraphNode(md);
+        GraphNode gn = Graph.createGraphNode(md);
         assertEquals(md, gn.getNode());
         assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
         assertNull(gn.getDestination());

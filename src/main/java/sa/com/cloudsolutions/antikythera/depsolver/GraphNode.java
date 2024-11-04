@@ -70,10 +70,6 @@ public class GraphNode {
      */
     boolean preProcessed;
 
-    private Set<FieldDeclaration> fields = new HashSet<>();
-    private Set<MethodDeclaration> methods = new HashSet<>();
-
-
     /**
      * Creates a new GraphNode
      * but it will not really be ready for use until you call the buildNode method
@@ -234,7 +230,7 @@ public class GraphNode {
                 }
             }
             field.accept(new AnnotationVisitor(), this);
-            fields.add(field.clone());
+            addField(field);
         }
     }
 
@@ -419,16 +415,9 @@ public class GraphNode {
         return super.toString();
     }
 
-    public void postProcess() {
-        for(FieldDeclaration fd : fields) {
-            typeDeclaration.addMember(fd);
-        }
-        for(MethodDeclaration md : methods) {
-            typeDeclaration.addMember(md);
-        }
-    }
-
     public void addField(FieldDeclaration fieldDeclaration) {
-        fields.add(fieldDeclaration);
+        if(typeDeclaration.getFieldByName(fieldDeclaration.getVariable(0).getNameAsString()).isEmpty()) {
+            typeDeclaration.addMember(fieldDeclaration);
+        }
     }
 }

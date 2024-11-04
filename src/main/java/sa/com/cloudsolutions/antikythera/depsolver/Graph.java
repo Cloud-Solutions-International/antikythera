@@ -86,13 +86,6 @@ public class Graph {
         return dependencies;
     }
 
-    public static void postProcess() {
-        for(GraphNode g : nodes.values()) {
-            System.out.println(g.toString());
-            g.postProcess();
-        }
-    }
-
     public static Map<Integer, GraphNode> getNodes() {
         return nodes;
     }

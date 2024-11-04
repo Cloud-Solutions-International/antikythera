@@ -273,8 +273,6 @@ public class DepSolver {
                 Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"),
                 StandardCopyOption.REPLACE_EXISTING);
 
-        Graph.postProcess();
-
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
             List<ImportDeclaration> list = new ArrayList<>(cu.getImports());
