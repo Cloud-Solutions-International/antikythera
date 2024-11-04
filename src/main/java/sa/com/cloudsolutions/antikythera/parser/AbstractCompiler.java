@@ -507,6 +507,51 @@ public class AbstractCompiler {
     }
 
 
+    static Optional<String> describeType(Expression arg) {
+        try {
+            ResolvedType argType = arg.calculateResolvedType();
+            return Optional.of(argType.describe());
+        } catch (Exception e) {
+            try {
+                ResolvedType argType = symbolResolver.calculateType(arg);
+                return Optional.of(argType.describe());
+            } catch (UnsolvedSymbolException ex) {
+                Optional<ClassOrInterfaceDeclaration> cdecl = arg.findAncestor(ClassOrInterfaceDeclaration.class);
+                if (cdecl.isPresent()) {
+                    Optional<String> fqn = cdecl.get().getFullyQualifiedName();
+                    if(fqn.isPresent()) {
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn.get());
+                        if (cu != null) {
+                            ImportDeclaration imp = findImport(cu, arg.toString());
+                            if (imp != null) {
+                                if (imp.isStatic() && imp.isAsterisk() && !imp.getNameAsString().endsWith(arg.toString())) {
+                                    CompilationUnit other = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                                    if (other != null) {
+                                        Optional<FieldDeclaration> f = other.findFirst(FieldDeclaration.class,
+                                                field -> field.getVariable(0).getNameAsString().equals(arg.toString())
+                                        );
+                                        if (f.isPresent()) {
+                                            FieldDeclaration field = f.get();
+                                            return Optional.of(field.getVariable(0).getType().asString());
+                                        }
+                                    }
+                                }
+                            }
+                            String className = findFullyQualifiedName(cu, arg.asNameExpr().getNameAsString());
+                            if (className != null) {
+                                return Optional.of(className);
+                            }
+                        }
+                        else {
+                            return Optional.of(arg.toString());
+                        }
+                    }
+                }
+                return Optional.empty();
+            }
+        }
+    }
+
     /**
      * Find the method declaration matching the given method call expression
      * @param methodCall the method call expression
@@ -516,37 +561,12 @@ public class AbstractCompiler {
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
         List<String> arguments = new ArrayList<>();
         for (Expression arg : methodCall.getArguments()) {
-            try {
-                ResolvedType argType = arg.calculateResolvedType();
-                arguments.add(argType.describe());
-            } catch (Exception e) {
-                try {
-                    ResolvedType argType = symbolResolver.calculateType(arg);
-                    arguments.add(argType.describe());
-                } catch (UnsolvedSymbolException ex) {
-                    boolean solved = false;
-                    Optional<ClassOrInterfaceDeclaration> cdecl = arg.findAncestor(ClassOrInterfaceDeclaration.class);
-                    if (cdecl.isPresent()) {
-                        Optional<String> fqn = cdecl.get().getFullyQualifiedName();
-                        if(fqn.isPresent()) {
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn.get());
-                            if (cu != null) {
-                                ImportDeclaration imp = findImport(cu, arg.asNameExpr().getNameAsString());
-                                String className = findFullyQualifiedName(cu, arg.asNameExpr().getNameAsString());
-                                if (className != null) {
-                                    arguments.add(className);
-                                    solved = true;
-                                }
-                            }
-                            else {
-                                arguments.add(arg.toString());
-                            }
-                        }
-                    }
-                    if (!solved) {
-                        return Optional.empty();
-                    }
-                }
+            Optional<String> d = describeType(arg);
+            if (d.isPresent()) {
+                arguments.add(d.get());
+            }
+            else {
+                return Optional.empty();
             }
         }
 
