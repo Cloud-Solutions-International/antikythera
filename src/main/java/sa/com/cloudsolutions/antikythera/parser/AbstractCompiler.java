@@ -9,11 +9,14 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
@@ -502,8 +505,15 @@ public class AbstractCompiler {
     }
 
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
-                                                                    ClassOrInterfaceDeclaration decl) {
-        return findMethodDeclaration(methodCall, decl.getMethods());
+                                                                    TypeDeclaration<?> decl) {
+        List<MethodDeclaration> methods = decl.findAll(MethodDeclaration.class, md -> md.getNameAsString().equals(methodCall.getNameAsString()));
+        if (methods.isEmpty()) {
+            return Optional.empty();
+        }
+        if (methods.size() == 1) {
+            return Optional.of(methods.get(0));
+        }
+        return findMethodDeclaration(methodCall, methods);
     }
 
 
@@ -618,6 +628,24 @@ public class AbstractCompiler {
 
         else {
             return null;
+        }
+    }
+
+    public static Type convertLiteralToType(LiteralExpr literal) {
+        if (literal.isBooleanLiteralExpr()) {
+            return PrimitiveType.booleanType();
+        } else if (literal.isCharLiteralExpr()) {
+            return PrimitiveType.charType();
+        } else if (literal.isDoubleLiteralExpr()) {
+            return PrimitiveType.doubleType();
+        } else if (literal.isIntegerLiteralExpr()) {
+            return PrimitiveType.intType();
+        } else if (literal.isLongLiteralExpr()) {
+            return PrimitiveType.longType();
+        } else if (literal.isStringLiteralExpr()) {
+            return new ClassOrInterfaceType(null, "String");
+        } else {
+            return new UnknownType();
         }
     }
 }

@@ -31,7 +31,7 @@ class TestOverlord extends TestHelper {
     }
 
     @Test
-    void testFindMethodDeclaration() throws AntikytheraException, ReflectiveOperationException {
+    void testFindMethodDeclaration()  {
         List<MethodDeclaration> mds = compiler.getCompilationUnit().findAll(MethodDeclaration.class);
         assertEquals(4, mds.size());
 

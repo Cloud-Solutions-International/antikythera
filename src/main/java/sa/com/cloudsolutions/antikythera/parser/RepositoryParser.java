@@ -626,8 +626,7 @@ public class RepositoryParser extends ClassProcessor {
      * @return the MethodDeclaration from the repository interface.
      */
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
-        List<MethodDeclaration> methods = cu.getTypes().get(0).getMethodsByName(methodCall.getNameAsString());
-        return findMethodDeclaration(methodCall, methods).orElse(null);
+        return findMethodDeclaration(methodCall, cu.getTypes().get(0)).orElse(null);
     }
 
     public static boolean isOracle() {
