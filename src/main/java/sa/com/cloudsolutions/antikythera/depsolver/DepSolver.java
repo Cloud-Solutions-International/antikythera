@@ -5,6 +5,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -12,6 +13,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
@@ -188,7 +190,7 @@ public class DepSolver {
                                 if (md.isPresent()) {
                                     Graph.createGraphNode(md.get());
                                 } else {
-                                    System.out.println("bada");
+                                    System.out.println("Cannot resolve : " + mce);
                                 }
                             }
                         }
@@ -213,11 +215,43 @@ public class DepSolver {
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
                     if (imp != null) {
                         node.getDestination().addImport(imp.getImport());
+                        if (imp.isExternal()) {
+                            break;
+                        }
                     }
                 }
             }
+            else if (scope.isFieldAccessExpr()) {
+                FieldAccessExpr fae = scope.asFieldAccessExpr();
+                if (fae.getScope().isNameExpr()) {
+                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getScope().asNameExpr().getNameAsString());
+                    if (imp != null) {
+                        node.getDestination().addImport(imp.getImport());
+                        if (imp.isExternal()) {
+                            break;
+                        }
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                        if (cu != null) {
+                            for(TypeDeclaration<?> t : cu.getTypes()) {
+                                if (t.getNameAsString().equals(fae.getScope().asNameExpr().getNameAsString())) {
+                                    if(t.isEnumDeclaration()) {
+                                        Graph.createGraphNode(t);
+                                    }
+                                    else {
+                                        Optional<FieldDeclaration> fd = t.getFieldByName(fae.getNameAsString());
+                                        if (fd.isPresent()) {
+                                            Graph.createGraphNode(fd.get());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
             else {
-                System.out.println("BADA");
+                System.out.println("BADA " + scope  );
             }
         }
     }

@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 public class ImportWrapper {
     ImportDeclaration imp;
@@ -13,7 +14,7 @@ public class ImportWrapper {
 
     public ImportWrapper(ImportDeclaration imp) {
         this.imp = imp;
-        this.isExternal = false;
+        this.isExternal = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString()) == null;
     }
 
     public ImportDeclaration getImport() {
