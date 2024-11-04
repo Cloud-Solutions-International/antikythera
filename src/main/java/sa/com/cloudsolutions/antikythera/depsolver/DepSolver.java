@@ -35,6 +35,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class DepSolver {
     /**
@@ -278,6 +279,27 @@ public class DepSolver {
         }
     }
 
+    private void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
+        List<FieldDeclaration> fields = classOrInterface.getMembers().stream()
+                .filter(FieldDeclaration.class::isInstance)
+                .map(FieldDeclaration.class::cast)
+                .sorted(Comparator.comparing(f -> f.getVariable(0).getNameAsString()))
+                .toList();
+
+        List<MethodDeclaration> methods = classOrInterface.getMembers().stream()
+                .filter(MethodDeclaration.class::isInstance)
+                .map(MethodDeclaration.class::cast)
+                .sorted(Comparator.comparing(MethodDeclaration::getNameAsString))
+                .toList();
+
+        // Clear original members
+        classOrInterface.getMembers().clear();
+
+        // Add sorted fields and methods back
+        classOrInterface.getMembers().addAll(fields);
+        classOrInterface.getMembers().addAll(methods);
+    }
+
     private void writeFiles() throws IOException {
         Files.copy(Paths.get(Settings.getProperty("base_path").toString().replace("src/main/java",""), "pom.xml"),
                 Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"),
@@ -290,6 +312,11 @@ public class DepSolver {
             list.sort(Comparator.comparing(NodeWithName::getNameAsString));
             cu.getImports().addAll(list);
 
+            for(TypeDeclaration<?> decl : cu.getTypes()) {
+                if (decl.isClassOrInterfaceDeclaration()) {
+                    sortClass(decl.asClassOrInterfaceDeclaration());
+                }
+            }
             CopyUtils.writeFile(
                         AbstractCompiler.classToPath(entry.getKey()), cu.toString());
         }
