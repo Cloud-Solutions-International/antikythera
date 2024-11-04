@@ -15,6 +15,7 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -23,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import javax.swing.text.html.Option;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -204,6 +206,18 @@ public class GraphNode {
                 else if(initializer.isNameExpr()) {
                     setupFieldInitializer(list, initializer);
                 }
+                else if(initializer.isMethodCallExpr()) {
+                    MethodCallExpr mce = initializer.asMethodCallExpr();
+                    Optional<Expression> scope = mce.getScope();
+                    if (scope.isPresent()) {
+                        if (scope.get().isNameExpr()) {
+                            setupFieldInitializer(list, scope.get());
+                        }
+                        else if (scope.get().isFieldAccessExpr()) {
+                            setupFieldInitializer(list, scope.get().asFieldAccessExpr().getScope().asNameExpr());
+                        }
+                    }
+                }
             }
             field.accept(new AnnotationVisitor(), this);
             typeDeclaration.addMember(field.clone());
@@ -213,9 +227,8 @@ public class GraphNode {
     private void setupFieldInitializer(List<GraphNode> list, Expression initializer) throws AntikytheraException {
         ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
         if (imp != null) {
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
             if (imp.isStatic()) {
-
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                 if (cu != null) {
                     TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
                     fieldInitializer(list, t, initializer);
@@ -226,6 +239,13 @@ public class GraphNode {
                         TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getQualifier().get().getIdentifier());
                         fieldInitializer(list, t, initializer);
                     }
+                }
+            }
+            else {
+                if (cu != null) {
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                    GraphNode g = Graph.createGraphNode(t);
+                    DepSolver.push(g);
                 }
             }
             destination.addImport(imp);

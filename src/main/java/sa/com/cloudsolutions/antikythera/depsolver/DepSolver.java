@@ -202,6 +202,15 @@ public class DepSolver {
                 }
             }
         }
+
+        for(Expression arg : mce.getArguments()) {
+            if (arg.isNameExpr()) {
+                ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp);
+                }
+            }
+        }
     }
 
     private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters) throws AntikytheraException {
