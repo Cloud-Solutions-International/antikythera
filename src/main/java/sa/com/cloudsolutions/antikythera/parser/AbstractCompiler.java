@@ -578,11 +578,19 @@ public class AbstractCompiler {
                     return Optional.of(method);
                 }
                 for (int i =0 ; i < method.getParameters().size(); i++) {
-                    ResolvedType paramType = method.getParameter(i).getType().resolve();
-                    if (arguments.get(i).equals(paramType.describe())
-                            || paramType.describe().equals("java.lang.Object")
-                            || paramType.describe().equals(Reflect.primitiveToWrapper(arguments.get(i)))
-                            || arguments.get(i).equals(Reflect.primitiveToWrapper(paramType.describe()))
+                    String paramType = null;
+                    try {
+                        paramType = method.getParameter(i).getType().resolve().describe();
+                    } catch (IllegalStateException ex) {
+                        paramType = AbstractCompiler.findFullyQualifiedName(method.findCompilationUnit().get(),
+                                method.getParameter(i).getType().asString());
+                    }
+
+                    if (paramType != null &&
+                            (arguments.get(i).equals(paramType)
+                            || paramType.equals("java.lang.Object")
+                            || paramType.equals(Reflect.primitiveToWrapper(arguments.get(i)))
+                            || arguments.get(i).equals(Reflect.primitiveToWrapper(paramType)))
                     )
                     {
                         return Optional.of(method);
