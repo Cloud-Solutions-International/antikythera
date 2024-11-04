@@ -435,6 +435,7 @@ public class AbstractCompiler {
     }
 
     private static ImportDeclaration findNonWildcardImport(CompilationUnit cu, String className) {
+
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
                 /*

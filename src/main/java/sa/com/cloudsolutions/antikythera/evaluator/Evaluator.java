@@ -1550,7 +1550,7 @@ public class Evaluator {
 
         } else if(stmt.isSwitchStmt()) {
             SwitchStmt switchExpr = stmt.asSwitchStmt();
-            System.out.println("bada");
+            System.out.println("switch missing");
         } else if(stmt.isWhileStmt()) {
             /*
              * Old fashioned while statement
