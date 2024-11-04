@@ -158,7 +158,6 @@ public class DepSolver {
     private void externalMethod(GraphNode node, LinkedList<Expression> chain, MethodCallExpr mce) throws AntikytheraException {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
 
-<<<<<<< HEAD
         while(!chain.isEmpty()) {
             Expression scope = chain.pollLast();
             if (scope.isNameExpr()) {
@@ -194,39 +193,6 @@ public class DepSolver {
                                 } else {
                                     System.out.println("Cannot resolve : " + mce);
                                 }
-=======
-        if (scope.isNameExpr()) {
-            NameExpr expr = scope.asNameExpr();
-            Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
-            if(fd.isPresent()) {
-                /*
-                 * We have found a matching field declaration, next up we need to find the
-                 * CompilationUnit. If the cu is absent that means the class comes from a
-                 * compiled binary and we can just include the whole thing as a dependency.
-                 *
-                 * The other side of the coin is a lot harder. If we have a cu, we need to
-                 * find the corresponding class declaration for the field and then go
-                 * looking in it for the method of interest.
-                 */
-                String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                        fd.get().getElementType().toString());
-                if (fqname != null) {
-                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
-                    if (imp != null) {
-                        node.getDestination().addImport(imp);
-                    }
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                    if (cu != null) {
-                        String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
-                        TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
-                        if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
-                            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                                    mce, otherDecl.asClassOrInterfaceDeclaration());
-                            if (md.isPresent()) {
-                                Graph.createGraphNode(md.get());
-                            } else {
-                                System.out.println("bada");
->>>>>>> 74253c712b5dca4124db84f2a39afd3187194514
                             }
                         }
                     }
@@ -417,13 +383,6 @@ public class DepSolver {
 
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
-<<<<<<< HEAD
-=======
-            if(mce.toString().contains("REJECT_WITH_INTERVENTION")) {
-                System.out.println("aa");
-            }
-            Optional<Expression> scope = mce.getScope();
->>>>>>> 74253c712b5dca4124db84f2a39afd3187194514
             try {
                 LinkedList<Expression> chain = Evaluator.findScopeChain(mce);
                 if (chain.isEmpty()) {
