@@ -335,7 +335,7 @@ public class AbstractCompiler {
          * Lastly, if we will try to invoke Class.forName to see if the class can be located in
          * any jar file that we have loaded.
          */
-        ImportDeclaration imp = findImport(cu, className);
+        ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
             return imp.getNameAsString();
         }
@@ -378,26 +378,26 @@ public class AbstractCompiler {
         }
     }
 
-    public static List<ImportDeclaration> findImport(CompilationUnit cu, Type t) {
-        List<ImportDeclaration> imports = new ArrayList<>();
+    public static List<ImportWrapper> findImport(CompilationUnit cu, Type t) {
+        List<ImportWrapper> imports = new ArrayList<>();
         if (t.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = t.asClassOrInterfaceType();
             Optional<NodeList<Type>> typeArguments = ctype.getTypeArguments();
             if (typeArguments.isPresent()) {
                 for (Type type : typeArguments.get()) {
-                    ImportDeclaration imp = findImport(cu, type.asString());
+                    ImportWrapper imp = findImport(cu, type.asString());
                     if(imp != null) {
                         imports.add(imp);
                     }
                 }
             }
-            ImportDeclaration imp = findImport(cu, ctype.getNameAsString());
+            ImportWrapper imp = findImport(cu, ctype.getNameAsString());
             if (imp != null) {
                 imports.add(imp);
             }
         }
         else {
-            ImportDeclaration imp = findImport(cu, t.asString());
+            ImportWrapper imp = findImport(cu, t.asString());
             if (imp != null) {
                 imports.add(imp);
             }
@@ -411,8 +411,8 @@ public class AbstractCompiler {
      * @param className the class to search for
      * @return the import declaration or null if not found
      */
-    public static ImportDeclaration findImport(CompilationUnit cu, String className) {
-        ImportDeclaration imp = findNonWildcardImport(cu, className);
+    public static ImportWrapper findImport(CompilationUnit cu, String className) {
+        ImportWrapper imp = findNonWildcardImport(cu, className);
         if (imp != null) {
             return imp;
         }
@@ -428,34 +428,34 @@ public class AbstractCompiler {
          */
         for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
             if (e.toString().endsWith(className)) {
-                return new ImportDeclaration(e.toString(), false, false);
+                return new ImportWrapper(new ImportDeclaration(e.toString(), false, false), true);
             }
         }
         return null;
     }
 
-    private static ImportDeclaration findNonWildcardImport(CompilationUnit cu, String className) {
+    private static ImportWrapper findNonWildcardImport(CompilationUnit cu, String className) {
 
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.getNameAsString().equals(className)) {
                 /*
                  * Easy one straight-up match involving a fully qualified name as className
                  */
-                return imp;
+                return new ImportWrapper(imp);
             }
-            String[] parts = imp.getNameAsString().split("\\.");
-            if (parts.length > 0 && className.equals(parts[parts.length - 1])) {
+
+            if (className.equals(imp.getName().getIdentifier())) {
                 /*
                  * last part of the import matches the class name
                  */
-                return imp;
+                return new ImportWrapper(imp);
             }
         }
 
         return null;
     }
 
-    private static ImportDeclaration findWildcardImport(CompilationUnit cu, String className) {
+    private static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.isAsterisk() && !className.contains("\\.")) {
                 String impName = imp.getNameAsString();
@@ -467,7 +467,7 @@ public class AbstractCompiler {
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked so this is the correct import.
                      */
-                    return new ImportDeclaration(fullClassName, false, false);
+                    return new ImportWrapper(new ImportDeclaration(fullClassName, false, false), true);
                 } catch (ClassNotFoundException e) {
                     try {
                         AbstractCompiler.loadClass(fullClassName);
@@ -476,7 +476,7 @@ public class AbstractCompiler {
                          * unsuccessfully simply because the class had not been loaded.
                          * Here we have loaded it, which obviously means it's there
                          */
-                        return new ImportDeclaration(fullClassName, false, false);
+                        return new ImportWrapper(new ImportDeclaration(fullClassName, false, false), true);
                     } catch (ClassNotFoundException ex) {
                         /*
                          * There's one more thing that we can try, append the class name to the
@@ -484,7 +484,7 @@ public class AbstractCompiler {
                          * located on the base folder.
                          */
                         if (new File(Settings.getBasePath(), classToPath(fullClassName)).exists()) {
-                            return new ImportDeclaration(fullClassName, false, false);
+                            return new ImportWrapper(new ImportDeclaration(fullClassName, false, false), false);
                         }
                         CompilationUnit cu2 = AntikytheraRunTime.getCompilationUnit(impName);
                         if (cu2 != null && imp.isStatic()) {
@@ -492,7 +492,7 @@ public class AbstractCompiler {
                                     f -> f.getVariable(0).getNameAsString().equals(className)
                             );
                             if (field.isPresent()) {
-                                return imp;
+                                return new ImportWrapper(imp);
                             }
                         }
                     }
@@ -523,9 +523,9 @@ public class AbstractCompiler {
                     if(fqn.isPresent()) {
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn.get());
                         if (cu != null) {
-                            ImportDeclaration imp = findImport(cu, arg.toString());
+                            ImportWrapper imp = findImport(cu, arg.toString());
                             if (imp != null) {
-                                if (imp.isStatic() && imp.isAsterisk() && !imp.getNameAsString().endsWith(arg.toString())) {
+                                if (imp.getImport().isStatic() && imp.getImport().isAsterisk() && !imp.getNameAsString().endsWith(arg.toString())) {
                                     CompilationUnit other = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                                     if (other != null) {
                                         Optional<FieldDeclaration> f = other.findFirst(FieldDeclaration.class,

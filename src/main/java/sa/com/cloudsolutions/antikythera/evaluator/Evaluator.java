@@ -44,6 +44,7 @@ import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -539,7 +540,7 @@ public class Evaluator {
             dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
         }
         else {
-            ImportDeclaration importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
+            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
             if (importDeclaration != null) {
                 dependant = AntikytheraRunTime.getCompilationUnit(importDeclaration.getNameAsString());
             }
@@ -630,7 +631,7 @@ public class Evaluator {
                 }
             }
             else {
-                ImportDeclaration importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
+                ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
                 if (importDeclaration != null) {
                     resolvedClass = importDeclaration.getNameAsString();
                 }

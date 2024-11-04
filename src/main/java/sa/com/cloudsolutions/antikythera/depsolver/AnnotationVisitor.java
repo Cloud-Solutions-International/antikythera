@@ -16,24 +16,25 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     @Override
     public void visit(final SingleMemberAnnotationExpr n, final GraphNode node) {
-        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
-            node.getDestination().addImport(imp);
+            node.getDestination().addImport(imp.getImport());
         }
         if (n.getMemberValue() != null) {
             if (n.getMemberValue().isFieldAccessExpr()) {
                 resolveField(node, n.getMemberValue());
             }
             else if (n.getMemberValue().isNameExpr()) {
-                ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                         n.getMemberValue().asNameExpr().getNameAsString()
                 );
                 if (imp2 != null) {
-                    node.getDestination().addImport(imp2);
+                    node.getDestination().addImport(imp2.getImport());
                 }
             }
         }
@@ -42,18 +43,18 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
 
     @Override
     public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
-        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
-            node.getDestination().addImport(imp);
+            node.getDestination().addImport(imp.getImport());
         }
         super.visit(n, node);
     }
 
     @Override
     public void visit(final NormalAnnotationExpr n, final GraphNode node) {
-        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
-            node.getDestination().addImport(imp);
+            node.getDestination().addImport(imp.getImport());
         }
         for(MemberValuePair pair : n.getPairs()) {
             Expression value = pair.getValue();
@@ -61,10 +62,11 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 resolveField(node, value);
             }
             else if (value.isNameExpr()) {
-                ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                         value.asNameExpr().getNameAsString()
                 );
-                if (imp2 != null) {
+                if (iw2 != null) {
+                    ImportDeclaration imp2 = iw2.getImport();
                     node.getDestination().addImport(imp2);
                     if (imp2.isStatic()) {
                         TypeDeclaration<?> t = null;
@@ -131,11 +133,11 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     protected static void resolveField(GraphNode node, Expression value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
-            ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+            ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                     scope.asNameExpr().getNameAsString()
             );
             if (imp2 != null) {
-                node.getDestination().addImport(imp2);
+                node.getDestination().addImport(imp2.getImport());
             }
         }
     }

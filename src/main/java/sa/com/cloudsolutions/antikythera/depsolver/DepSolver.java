@@ -24,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -173,9 +174,9 @@ public class DepSolver {
                     String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
                             fd.get().getElementType().toString());
                     if (fqname != null) {
-                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
                         if (imp != null) {
-                            node.getDestination().addImport(imp);
+                            node.getDestination().addImport(imp.getImport());
                         }
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
                         if (cu != null) {
@@ -199,9 +200,9 @@ public class DepSolver {
                     node.addField(fd.get());
 
                     for (AnnotationExpr ann : fd.get().getAnnotations()) {
-                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
                         if (imp != null) {
-                            node.getDestination().addImport(imp);
+                            node.getDestination().addImport(imp.getImport());
                         }
                     }
 
@@ -209,9 +210,9 @@ public class DepSolver {
                     /*
                      * Can be either a call related to a local or a static call
                      */
-                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
+                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
                     if (imp != null) {
-                        node.getDestination().addImport(imp);
+                        node.getDestination().addImport(imp.getImport());
                     }
                 }
             }
@@ -229,13 +230,13 @@ public class DepSolver {
      */
     private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters) throws AntikytheraException {
         for(Parameter p : parameters) {
-            List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
-            for(ImportDeclaration imp : imports) {
+            List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
+            for(ImportWrapper imp : imports) {
                 searchClass(node, imp);
             }
 
             for(AnnotationExpr ann : p.getAnnotations()) {
-                ImportDeclaration imp2 = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
                 searchClass(node, imp2);
             }
         }
@@ -247,13 +248,13 @@ public class DepSolver {
      * @param imp the import declaration for the other class.
      * @throws AntikytheraException
      */
-    private void searchClass(GraphNode node, ImportDeclaration imp) throws AntikytheraException {
+    private void searchClass(GraphNode node, ImportWrapper imp) throws AntikytheraException {
         /*
          * It is likely that this is a DTO an Entity or a model. So we will assume that all the
          * fields are required along with their respective annotations.
          */
         if (imp != null) {
-            node.getDestination().addImport(imp);
+            node.getDestination().addImport(imp.getImport());
             String className = imp.getNameAsString();
             CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(className);
             if (compilationUnit != null) {
@@ -267,16 +268,16 @@ public class DepSolver {
                     Graph.createGraphNode(cls);
                 }
             }
-            node.getDestination().addImport(imp);
+            node.getDestination().addImport(imp.getImport());
         }
     }
 
     private void fieldSearch(GraphNode node) throws AntikytheraException {
         if(node.getNode() instanceof FieldDeclaration fd) {
             for(AnnotationExpr ann : fd.getAnnotations()) {
-                ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
                 if (imp != null) {
-                    node.getDestination().addImport(imp);
+                    node.getDestination().addImport(imp.getImport());
                 }
             }
             if(node.getTypeDeclaration().getFieldByName(fd.getVariable(0).getNameAsString()).isEmpty()) {
@@ -338,8 +339,8 @@ public class DepSolver {
 
         private void solveType(Type vd, GraphNode node) {
             if (vd.isClassOrInterfaceType()) {
-                List<ImportDeclaration> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
-                for (ImportDeclaration imp : imports) {
+                List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
+                for (ImportWrapper imp : imports) {
                     try {
                         searchClass(node, imp);
                     } catch (AntikytheraException e) {
@@ -373,9 +374,9 @@ public class DepSolver {
 
                 for(Expression arg : mce.getArguments()) {
                     if (arg.isNameExpr()) {
-                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
                         if (imp != null) {
-                            node.getDestination().addImport(imp);
+                            node.getDestination().addImport(imp.getImport());
                         }
                     }
                 }
@@ -402,7 +403,7 @@ public class DepSolver {
                     Optional<Expression> scope = arg.asMethodCallExpr().getScope();
                     if (scope.isPresent()) {
                         if (scope.get().isNameExpr()) {
-                            ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(),
+                            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(),
                                     scope.get().asNameExpr().getNameAsString());
                             try {
                                 searchClass(node, imp);

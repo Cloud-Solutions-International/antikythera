@@ -23,6 +23,7 @@ import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import javax.swing.text.html.Option;
 import java.util.ArrayList;
@@ -222,8 +223,10 @@ public class GraphNode {
                 Expression initializer = init.get();
                 if (initializer.isObjectCreationExpr()) {
                     ObjectCreationExpr oce = initializer.asObjectCreationExpr();
-                    List<ImportDeclaration> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
-                    destination.getImports().addAll(imports);
+                    List<ImportWrapper> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
+                    for(ImportWrapper imp : imports) {
+                        destination.getImports().add(imp.getImport());
+                    }
                 }
                 else if(initializer.isNameExpr()) {
                     setupFieldInitializer(initializer);
@@ -247,8 +250,9 @@ public class GraphNode {
     }
 
     private void setupFieldInitializer(Expression initializer) throws AntikytheraException {
-        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
-        if (imp != null) {
+        ImportWrapper iw = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
+        if (iw != null) {
+            ImportDeclaration imp = iw.getImport();
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
             if (imp.isStatic()) {
                 if (cu != null) {
@@ -347,7 +351,7 @@ public class GraphNode {
                 ? typeArg.asClassOrInterfaceType().getNameAsString()
                 : typeArg.toString();
 
-        ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, name);
+        ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, name);
         if (imp != null) {
             destination.addImport(imp.getNameAsString());
         }
@@ -433,16 +437,16 @@ public class GraphNode {
             typeDeclaration.addMember(fieldDeclaration);
             Graph.createGraphNode(fieldDeclaration);
 
-            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, variable.getTypeAsString());
+            ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, variable.getTypeAsString());
             if (imp != null) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                 if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getImport().getName().getIdentifier());
                     if (t != null) {
                         Graph.createGraphNode(t);
                     }
                 }
-                destination.addImport(imp);
+                destination.addImport(imp.getImport());
             }
         }
     }
