@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class GraphNodeTest  {
@@ -30,7 +31,7 @@ class GraphNodeTest  {
         GraphNode gn = Graph.createGraphNode(md);
         assertEquals(md, gn.getNode());
         assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
-        assertNull(gn.getDestination());
+        assertNotNull(gn.getDestination());
     }
 
     class ReturnValueCompiler extends AbstractCompiler {

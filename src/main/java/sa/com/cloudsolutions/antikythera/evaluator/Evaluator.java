@@ -877,7 +877,7 @@ public class Evaluator {
      * @param expr
      * @return
      */
-    protected LinkedList<Expression> findScopeChain(Expression expr) {
+    public static LinkedList<Expression> findScopeChain(Expression expr) {
         LinkedList<Expression> chain = new LinkedList<>();
         while (true) {
             if (expr.isMethodCallExpr()) {

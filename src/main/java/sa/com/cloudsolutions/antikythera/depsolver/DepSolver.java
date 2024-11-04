@@ -19,6 +19,7 @@ import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
@@ -149,70 +150,73 @@ public class DepSolver {
      * An external method will typically have a field, a local variable or a method parameter as
      * scope. If the scope is a field, that will be preserved.
      * @param node a graph node that represents a method in the code.
-     * @param scope the scope of the method call.
-     * @param mce the method call expression
      * @throws AntikytheraException
      */
-    private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
+    private void externalMethod(GraphNode node, LinkedList<Expression> chain, MethodCallExpr mce) throws AntikytheraException {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
 
-        if (scope.isNameExpr()) {
-            NameExpr expr = scope.asNameExpr();
-            Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
-            if(fd.isPresent()) {
-                /*
-                 * We have found a matching field declaration, next up we need to find the
-                 * CompilationUnit. If the cu is absent that means the class comes from a
-                 * compiled binary and we can just include the whole thing as a dependency.
-                 *
-                 * The other side of the coin is a lot harder. If we have a cu, we need to
-                 * find the corresponding class declaration for the field and then go
-                 * looking in it for the method of interest.
-                 */
-                String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                        fd.get().getElementType().toString());
-                if (fqname != null) {
-                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
-                    if (imp != null) {
-                        node.getDestination().addImport(imp);
-                    }
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                    if (cu != null) {
-                        String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
-                        TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
-                        if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
-                            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                                    mce, otherDecl.asClassOrInterfaceDeclaration());
-                            if (md.isPresent()) {
-                                Graph.createGraphNode(md.get());
-                            } else {
-                                System.out.println("bada");
+        while(!chain.isEmpty()) {
+            Expression scope = chain.pollLast();
+            if (scope.isNameExpr()) {
+                NameExpr expr = scope.asNameExpr();
+                Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
+                if (fd.isPresent()) {
+                    /*
+                     * We have found a matching field declaration, next up we need to find the
+                     * CompilationUnit. If the cu is absent that means the class comes from a
+                     * compiled binary and we can just include the whole thing as a dependency.
+                     *
+                     * The other side of the coin is a lot harder. If we have a cu, we need to
+                     * find the corresponding class declaration for the field and then go
+                     * looking in it for the method of interest.
+                     */
+                    String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                            fd.get().getElementType().toString());
+                    if (fqname != null) {
+                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
+                        if (imp != null) {
+                            node.getDestination().addImport(imp);
+                        }
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
+                        if (cu != null) {
+                            String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
+                            TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
+                            if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
+                                Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
+                                        mce, otherDecl.asClassOrInterfaceDeclaration());
+                                if (md.isPresent()) {
+                                    Graph.createGraphNode(md.get());
+                                } else {
+                                    System.out.println("bada");
+                                }
                             }
                         }
                     }
-                }
-                /*
-                 * Now we mark the field declaration as part of the source code to preserve from
-                 * current class.
-                 */
-                node.addField(fd.get());
+                    /*
+                     * Now we mark the field declaration as part of the source code to preserve from
+                     * current class.
+                     */
+                    node.addField(fd.get());
 
-                for(AnnotationExpr ann : fd.get().getAnnotations()) {
-                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                    for (AnnotationExpr ann : fd.get().getAnnotations()) {
+                        ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                        if (imp != null) {
+                            node.getDestination().addImport(imp);
+                        }
+                    }
+
+                } else {
+                    /*
+                     * Can be either a call related to a local or a static call
+                     */
+                    ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
                     if (imp != null) {
                         node.getDestination().addImport(imp);
                     }
                 }
-
             }
             else {
-                /*
-                 * Can be either a call related to a local or a static call
-                 */
-                ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp);
-                }
+                System.out.println("BADA");
             }
         }
     }
@@ -350,12 +354,10 @@ public class DepSolver {
             if(mce.toString().contains("REJECT_WITH_INTERVENTION")) {
                 System.out.println("aa");
             }
-            Optional<Expression> scope = mce.getScope();
+
             try {
-                if(scope.isPresent()) {
-                     externalMethod(node, scope.get(), mce);
-                }
-                else {
+                LinkedList<Expression> chain = Evaluator.findScopeChain(mce);
+                if (chain.isEmpty()) {
                     if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
                         Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
                                 mce, node.getEnclosingType().asClassOrInterfaceDeclaration()
@@ -364,6 +366,9 @@ public class DepSolver {
                             Graph.createGraphNode(md.get());
                         }
                     }
+                }
+                else {
+                    externalMethod(node, chain, mce);
                 }
 
                 for(Expression arg : mce.getArguments()) {
