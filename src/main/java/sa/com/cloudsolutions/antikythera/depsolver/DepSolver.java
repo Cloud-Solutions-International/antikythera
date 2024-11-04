@@ -265,7 +265,7 @@ public class DepSolver {
         }
     }
 
-    private void fieldSearch(GraphNode node) {
+    private void fieldSearch(GraphNode node) throws AntikytheraException {
         if(node.getNode() instanceof FieldDeclaration fd) {
             for(AnnotationExpr ann : fd.getAnnotations()) {
                 ImportDeclaration imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
@@ -274,7 +274,7 @@ public class DepSolver {
                 }
             }
             if(node.getTypeDeclaration().getFieldByName(fd.getVariable(0).getNameAsString()).isEmpty()) {
-                node.getTypeDeclaration().addMember(fd);
+                node.addField(fd);
             }
         }
     }

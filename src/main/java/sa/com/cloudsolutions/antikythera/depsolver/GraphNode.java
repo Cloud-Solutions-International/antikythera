@@ -243,6 +243,7 @@ public class GraphNode {
             }
             field.accept(new AnnotationVisitor(), this);
             addField(field);
+
         }
     }
 
@@ -427,9 +428,23 @@ public class GraphNode {
         return super.toString();
     }
 
-    public void addField(FieldDeclaration fieldDeclaration) {
-        if(typeDeclaration.getFieldByName(fieldDeclaration.getVariable(0).getNameAsString()).isEmpty()) {
+    public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {
+        VariableDeclarator variable = fieldDeclaration.getVariable(0);
+        if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
             typeDeclaration.addMember(fieldDeclaration);
+            Graph.createGraphNode(fieldDeclaration);
+
+            ImportDeclaration imp = AbstractCompiler.findImport(compilationUnit, variable.getTypeAsString());
+            if (imp != null) {
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                if (cu != null) {
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                    if (t != null) {
+                        Graph.createGraphNode(t);
+                    }
+                }
+                destination.addImport(imp);
+            }
         }
     }
 }
