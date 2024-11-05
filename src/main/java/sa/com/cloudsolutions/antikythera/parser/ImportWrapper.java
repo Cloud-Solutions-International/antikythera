@@ -1,11 +1,15 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 public class ImportWrapper {
     ImportDeclaration imp;
     boolean isExternal;
+    private TypeDeclaration<?> type;
+    private FieldDeclaration fieldDeclaration;
 
     public ImportWrapper(ImportDeclaration imp, boolean isExternal) {
         this.imp = imp;
@@ -31,5 +35,21 @@ public class ImportWrapper {
 
     public String getNameAsString() {
         return imp.getNameAsString();
+    }
+
+    public void setType(TypeDeclaration<?> type) {
+        this.type = type;
+    }
+
+    public TypeDeclaration<?> getType() {
+        return type;
+    }
+
+    public void setField(FieldDeclaration fieldDeclaration) {
+        this.fieldDeclaration = fieldDeclaration;
+    }
+
+    public FieldDeclaration getField() {
+        return fieldDeclaration;
     }
 }

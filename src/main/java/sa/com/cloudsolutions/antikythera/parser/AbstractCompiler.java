@@ -268,7 +268,7 @@ public class AbstractCompiler {
      * @param cu the compilation unit
      * @return the public class
      */
-    protected static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
+    public static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
         for (var type : cu.getTypes()) {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
                 return type;
@@ -469,7 +469,7 @@ public class AbstractCompiler {
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked so this is the correct import.
                      */
-                    return new ImportWrapper(new ImportDeclaration(fullClassName, false, false), true);
+                    return new ImportWrapper(imp, true);
                 } catch (ClassNotFoundException e) {
                     try {
                         AbstractCompiler.loadClass(fullClassName);
@@ -478,15 +478,22 @@ public class AbstractCompiler {
                          * unsuccessfully simply because the class had not been loaded.
                          * Here we have loaded it, which obviously means it's there
                          */
-                        return new ImportWrapper(new ImportDeclaration(fullClassName, false, false), true);
+                        return new ImportWrapper(imp, true);
                     } catch (ClassNotFoundException ex) {
                         /*
                          * There's one more thing that we can try, append the class name to the
                          * end of the wildcard import and see if the corresponding file can be
                          * located on the base folder.
                          */
-                        if (new File(Settings.getBasePath(), classToPath(fullClassName)).exists()) {
-                            return new ImportWrapper(new ImportDeclaration(fullClassName, false, false), false);
+                        CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullClassName);
+                        if (target != null) {
+                            ImportWrapper wrapper =  new ImportWrapper(imp, false);
+                            for(TypeDeclaration<?> type : target.getTypes()) {
+                                if (type.getNameAsString().equals(className)) {
+                                    wrapper.setType(type);
+                                }
+                            }
+                            return wrapper;
                         }
                         CompilationUnit cu2 = AntikytheraRunTime.getCompilationUnit(impName);
                         if (cu2 != null && imp.isStatic()) {
@@ -494,7 +501,9 @@ public class AbstractCompiler {
                                     f -> f.getVariable(0).getNameAsString().equals(className)
                             );
                             if (field.isPresent()) {
-                                return new ImportWrapper(imp);
+                                ImportWrapper wrapper = new ImportWrapper(imp);
+                                wrapper.setField(field.get());
+                                return wrapper;
                             }
                         }
                     }
