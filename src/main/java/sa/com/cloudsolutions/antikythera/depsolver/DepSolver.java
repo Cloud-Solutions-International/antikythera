@@ -171,45 +171,22 @@ public class DepSolver {
         if (scope.isNameExpr()) {
             NameExpr expr = scope.asNameExpr();
             Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
-            if(fd.isPresent()) {
-                /*
-                 * We have found a matching field declaration, next up we need to find the
-                 * CompilationUnit. If the cu is absent that means the class comes from a
-                 * compiled binary and we can just include the whole thing as a dependency.
-                 *
-                 * The other side of the coin is a lot harder. If we have a cu, we need to
-                 * find the corresponding class declaration for the field and then go
-                 * looking in it for the method of interest.
-                 */
-                String fqname = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                        fd.get().getElementType().toString());
-                if (fqname != null) {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fqname);
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                    }
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                    if (cu != null) {
-                        String cname = fd.get().getElementType().asClassOrInterfaceType().getNameAsString();
-                        TypeDeclaration<?> otherDecl = AbstractCompiler.getMatchingClass(cu, cname);
-                        if (otherDecl != null && otherDecl.isClassOrInterfaceDeclaration()) {
-                            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                                    mce, otherDecl.asClassOrInterfaceDeclaration());
-                            if (md.isPresent()) {
-                                Graph.createGraphNode(md.get());
-                            } else {
-                                System.out.println("bada");
-                            }
-                        }
-                    }
-                }
-                /*
-                 * Now we mark the field declaration as part of the source code to preserve from
-                 * current class.
-                 */
-                node.addField(fd.get());
 
-                for(AnnotationExpr ann : fd.get().getAnnotations()) {
+            Type field = null;
+
+            if (fd.isPresent()) {
+                field = fd.get().getElementType();
+            }
+            else {
+                field = names.get(expr.getNameAsString());
+            }
+
+
+            if(field != null) {
+
+               // node.addField(field);
+
+                for(AnnotationExpr ann : field.getAnnotations()) {
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
                     if (imp != null) {
                         node.getDestination().addImport(imp.getImport());
@@ -420,6 +397,8 @@ public class DepSolver {
                                 }
                             }
                         }
+                    } else if(arg.isMethodCallExpr()) {
+                        visit(arg.asMethodCallExpr(), node);
                     }
                 }
 
