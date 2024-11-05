@@ -15,9 +15,12 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.VarType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import io.restassured.specification.Argument;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -259,18 +262,10 @@ public class DepSolver {
          */
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
-            String className = imp.getNameAsString();
-            CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(className);
-            if (compilationUnit != null) {
-                /*
-                 * The presence of a compilation unit indicates that this class is available as
-                 * source code. Therefore it becomes part of the dependency graph of classes that
-                 * we are trying to extract.
-                 */
-                TypeDeclaration<?> cls = AbstractCompiler.getMatchingClass(compilationUnit, className);
-                if(cls != null) {
-                    Graph.createGraphNode(cls);
-                }
+
+            TypeDeclaration<?> decl = imp.getType();
+            if (decl != null) {
+                Graph.createGraphNode(decl);
             }
             node.getDestination().addImport(imp.getImport());
         }
@@ -337,38 +332,38 @@ public class DepSolver {
     private class VariableVisitor extends VoidVisitorAdapter<GraphNode> {
 
         @Override
-        public void visit(VariableDeclarator vd, GraphNode node) {
-            names.put(vd.getNameAsString(), vd.getType());
-
-            solveType(vd.getType(), node);
-            super.visit(vd, node);
-        }
-
-        @Override
-        public void visit(final NameExpr n, final GraphNode node) {
-            if (Character.isUpperCase(n.getNameAsString().charAt(0))) {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                    try {
-                        if (imp.getField() != null) {
-                            Graph.createGraphNode(imp.getField());
-                        }
-                        if (imp.getType() != null) {
-                            Graph.createGraphNode(imp.getType());
-                        }
-                    } catch (AntikytheraException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-            super.visit(n, node);
-        }
-
         public void visit(final Parameter n, GraphNode node) {
             names.put(n.getNameAsString(), n.getType());
 
             solveType(n.getType(), node);
+            super.visit(n, node);
+        }
+
+        @Override
+        public void visit(final VariableDeclarationExpr n, GraphNode node) {
+            for(VariableDeclarator vd : n.getVariables()) {
+                names.put(vd.getNameAsString(), vd.getType());
+                solveType(vd.getType(), node);
+                Optional<Expression> init = vd.getInitializer();
+                if (init.isPresent()) {
+                    if (init.get().isNameExpr()) {
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), init.get().asNameExpr().getNameAsString());
+                        if (imp != null) {
+                            try {
+                                node.getDestination().addImport(imp.getImport());
+                                if (imp.getType() != null) {
+                                    Graph.createGraphNode(imp.getType());
+                                }
+                                if (imp.getField() != null) {
+                                    Graph.createGraphNode(imp.getField());
+                                }
+                            } catch (AntikytheraException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    }
+                }
+            }
             super.visit(n, node);
         }
     }
@@ -379,6 +374,10 @@ public class DepSolver {
             for (ImportWrapper imp : imports) {
                 try {
                     searchClass(node, imp);
+                    FieldDeclaration fieldDeclaration = imp.getField();
+                    if (fieldDeclaration != null) {
+                        Graph.createGraphNode(fieldDeclaration);
+                    }
                 } catch (AntikytheraException e) {
                     throw new DepsolverException(e);
                 }
@@ -390,9 +389,7 @@ public class DepSolver {
 
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
-            if(mce.toString().contains("REJECT_WITH_INTERVENTION")) {
-                System.out.println("aa");
-            }
+
             Optional<Expression> scope = mce.getScope();
             try {
                 if(scope.isPresent()) {
@@ -409,11 +406,19 @@ public class DepSolver {
                     }
                 }
 
-                for(Expression arg : mce.getArguments()) {
-                    if (arg.isNameExpr()) {
-                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
-                        if (imp != null) {
-                            node.getDestination().addImport(imp.getImport());
+                for (Expression arg : mce.getArguments()) {
+                    if(arg.isFieldAccessExpr()) {
+                        resolveField(node, arg);
+                    }
+                    else if(arg.isNameExpr()) {
+                        if (!names.containsKey(arg.toString())) {
+                            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
+                            if (imp != null) {
+                                node.getDestination().addImport(imp.getImport());
+                                if (imp.getField() != null) {
+                                    Graph.createGraphNode(imp.getField());
+                                }
+                            }
                         }
                     }
                 }

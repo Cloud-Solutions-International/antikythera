@@ -424,7 +424,10 @@ public class GraphNode {
     public String toString() {
         if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
             if (node instanceof MethodDeclaration md) {
-                return enclosingType.getFullyQualifiedName().get().toString() + ":" + md.getNameAsString();
+                return enclosingType.getFullyQualifiedName().get().toString() + "#" + md.getNameAsString();
+            }
+            if (node instanceof FieldDeclaration fd) {
+                return enclosingType.getFullyQualifiedName().get().toString() + "." + fd.getVariable(0).toString();
             }
             return enclosingType.getFullyQualifiedName().get().toString();
         }

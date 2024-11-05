@@ -450,11 +450,41 @@ public class AbstractCompiler {
                 /*
                  * last part of the import matches the class name
                  */
-                return new ImportWrapper(imp);
+                ImportWrapper wrapper = new ImportWrapper(imp);
+                if (!imp.isStatic()) {
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                    if (target != null) {
+                        TypeDeclaration<?> p = getMatchingClass(target, imp.getName().getIdentifier());
+                        setTypeAndField(className, p, wrapper, target);
+                    }
+                }
+                else if (imp.getName().getQualifier().isPresent()){
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().asString());
+                    if (target != null) {
+                        TypeDeclaration<?> p = getPublicClass(target);
+                        setTypeAndField(className, p, wrapper, target);
+                    }
+                }
+                return wrapper;
             }
         }
 
         return null;
+    }
+
+    private static void setTypeAndField(String className, TypeDeclaration<?> p, ImportWrapper wrapper, CompilationUnit target) {
+        if (p != null) {
+            wrapper.setType(p);
+        }
+
+        Optional<FieldDeclaration> field = target.findFirst(FieldDeclaration.class,
+                f -> f.getVariable(0).getNameAsString().equals(className)
+        );
+        if (field.isPresent()) {
+            wrapper.setField(field.get());
+
+        }
+
     }
 
     private static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
