@@ -244,7 +244,7 @@ public class GraphNode {
                     }
                 }
             }
-            field.accept(new AnnotationVisitor(), this);
+
             addField(field);
         }
     }
@@ -435,6 +435,7 @@ public class GraphNode {
     }
 
     public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {
+        fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
             typeDeclaration.addMember(fieldDeclaration);

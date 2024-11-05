@@ -15,6 +15,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
+import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
@@ -138,6 +139,16 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             );
             if (imp2 != null) {
                 node.getDestination().addImport(imp2.getImport());
+                try {
+                    if(imp2.getField() != null) {
+                        Graph.createGraphNode(imp2.getField());
+                    }
+                    else if(imp2.getType() != null) {
+                        Graph.createGraphNode(imp2.getType());
+                    }
+                } catch (AntikytheraException e) {
+                    throw new GeneratorException(e);
+                }
             }
         }
     }

@@ -12,6 +12,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
@@ -137,7 +138,6 @@ public class DepSolver {
 
                 names.clear();
                 md.accept(new VariableVisitor(), node);
-
                 md.accept(new Visitor(), node);
             }
         }
@@ -153,56 +153,6 @@ public class DepSolver {
         if (node.getEnclosingType() != null && node.getNode() instanceof ConstructorDeclaration cd) {
             searchMethodParameters(node, cd.getParameters());
             cd.accept(new Visitor(), node);
-        }
-    }
-
-    /**
-     * Handles calling an external method.
-     * An external method will typically have a field, a local variable or a method parameter as
-     * scope. If the scope is a field, that will be preserved.
-     * @param node a graph node that represents a method in the code.
-     * @param scope the scope of the method call.
-     * @param mce the method call expression
-     * @throws AntikytheraException
-     */
-    private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
-        TypeDeclaration<?> cdecl = node.getEnclosingType();
-
-        if (scope.isNameExpr()) {
-            NameExpr expr = scope.asNameExpr();
-            Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
-
-            Type field = null;
-
-            if (fd.isPresent()) {
-                field = fd.get().getElementType();
-            }
-            else {
-                field = names.get(expr.getNameAsString());
-            }
-
-
-            if(field != null) {
-
-               // node.addField(field);
-
-                for(AnnotationExpr ann : field.getAnnotations()) {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                    }
-                }
-
-            }
-            else {
-                /*
-                 * Can be either a call related to a local or a static call
-                 */
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                }
-            }
         }
     }
 
@@ -363,7 +313,6 @@ public class DepSolver {
     }
 
     private class Visitor extends AnnotationVisitor {
-
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
 
@@ -371,6 +320,9 @@ public class DepSolver {
             try {
                 if(scope.isPresent()) {
                      externalMethod(node, scope.get(), mce);
+                     scope.get().accept(new VariableVisitor(), node);
+                     scope.get().accept(new Visitor(), node);
+
                 }
                 else {
                     if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
@@ -424,6 +376,9 @@ public class DepSolver {
                 else if(arg.isMethodCallExpr()) {
                     Optional<Expression> scope = arg.asMethodCallExpr().getScope();
                     if (scope.isPresent()) {
+                        scope.get().accept(new VariableVisitor(), node);
+                        scope.get().accept(new Visitor(), node);
+
                         if (scope.get().isNameExpr()) {
                             ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(),
                                     scope.get().asNameExpr().getNameAsString());
@@ -468,6 +423,60 @@ public class DepSolver {
             }
             super.visit(oce, node);
         }
+
+        /**
+         * Handles calling an external method.
+         * An external method will typically have a field, a local variable or a method parameter as
+         * scope. If the scope is a field, that will be preserved.
+         * @param node a graph node that represents a method in the code.
+         * @param scope the scope of the method call.
+         * @param mce the method call expression
+         * @throws AntikytheraException
+         */
+        private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
+            TypeDeclaration<?> cdecl = node.getEnclosingType();
+
+            if (scope.isNameExpr()) {
+
+                NameExpr expr = scope.asNameExpr();
+                Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
+
+                Type field = null;
+
+                if (fd.isPresent()) {
+                    field = fd.get().getElementType();
+                    node.addField(fd.get());
+
+                }
+                else {
+                    field = names.get(expr.getNameAsString());
+                }
+
+
+                if(field != null) {
+                    for(AnnotationExpr ann : field.getAnnotations()) {
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                        if (imp != null) {
+                            node.getDestination().addImport(imp.getImport());
+                        }
+                    }
+
+                }
+                else {
+                    /*
+                     * Can be either a call related to a local or a static call
+                     */
+                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
+                    if (imp != null) {
+                        node.getDestination().addImport(imp.getImport());
+                    }
+                }
+            }
+            else if (scope.isFieldAccessExpr()) {
+                resolveField(node, scope);
+            }
+        }
+
     }
 
 
