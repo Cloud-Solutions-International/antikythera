@@ -325,7 +325,9 @@ public class GraphNode {
     }
 
     /**
-     * Adds the type arguments to the graph
+     * Adds the type arguments to the graph.
+     * Will make multpile calls to the searchType method which will result in the imports
+     * being eventually added.
      * @param ifc interface or class
 
      * @throws AntikytheraException if the types cannot be fully resolved.
@@ -354,14 +356,25 @@ public class GraphNode {
         ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, name);
         if (imp != null) {
             destination.addImport(imp.getNameAsString());
-        }
-        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, name);
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
 
-        if (cu != null) {
-            TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
-            if (t != null) {
-                Graph.createGraphNode(t);
+            FieldDeclaration field = imp.getField();
+            if (field != null) {
+                Graph.createGraphNode(field);
+            }
+            TypeDeclaration<?> type = imp.getType();
+            if (type != null) {
+                Graph.createGraphNode(type);
+            }
+        }
+        else {
+            String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, name);
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+
+            if (cu != null) {
+                TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
+                if (t != null) {
+                    Graph.createGraphNode(t);
+                }
             }
         }
     }

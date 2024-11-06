@@ -12,16 +12,13 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.type.VarType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import io.restassured.specification.Argument;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -97,6 +94,17 @@ public class DepSolver {
      * @throws AntikytheraException if any of the code inspections fails.
      */
     private void dfs() throws AntikytheraException {
+        /*
+         * Operates in three stages.
+         *
+         * First up will try to identify if the node is a field in the class being studied. In that
+         * case it will be added to the node
+         *
+         * The second search we will check if the node is a method, here we will check all the
+         * parameters in the method call as well as the return type.
+         *
+         * Thirdly it will do the same sort of thing for constructors.
+         */
         while (! stack.isEmpty()) {
             GraphNode node = stack.pollLast();
 
@@ -111,17 +119,19 @@ public class DepSolver {
     }
 
     /**
-     * Search in methods.
+     * Check if he node is a method and add it to the class.
+     *
      * The return type, all the locals declared inside the method and arguments are searchable.
-     * There maybe decorators for the method or some of the arguments. These need to be searched as
-     * well.
+     * There maybe decorators for the method or some of the arguments. Seperate graph nodes will
+     * be created for all of these things and pushed onto the stack.
+     *
      * @param node A graph node that represents a method in the code.
      */
     private void methodSearch(GraphNode node) throws AntikytheraException {
         if (node.getEnclosingType() != null) {
 
             String className = node.getEnclosingType().getNameAsString();
-            Optional<ClassOrInterfaceDeclaration> c = node.getDestination().findFirst(ClassOrInterfaceDeclaration.class,
+            Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
                     t -> t.getNameAsString().equals(className));
 
             if (node.getNode() instanceof MethodDeclaration md) {
@@ -198,6 +208,18 @@ public class DepSolver {
         }
     }
 
+    /**
+     * Checks if the node is a field and adds it to the class or enum.
+     *
+     * Also adds all the imports for the field itself as well as the direct annotations.
+     * Identifying the initializer is not the responsibility of this method but that of the
+     * visitor. Similarly, if there are arguments to the initializer these are also identified
+     * and the imports are added by the visitor.
+     * @param node the graph node that is being inspected.
+     *             It may or may not be a field. If it is a field, it will be added to the class
+     *             along with the required imports.
+     * @throws AntikytheraException if the dependencies cannot be resolved.
+     */
     private void fieldSearch(GraphNode node) throws AntikytheraException {
         if(node.getNode() instanceof FieldDeclaration fd) {
             for(AnnotationExpr ann : fd.getAnnotations()) {
@@ -288,6 +310,10 @@ public class DepSolver {
                                 throw new RuntimeException(e);
                             }
                         }
+
+                    }
+                    else {
+                        System.out.println("Bada");
                     }
                 }
             }
@@ -315,14 +341,10 @@ public class DepSolver {
     private class Visitor extends AnnotationVisitor {
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
-
             Optional<Expression> scope = mce.getScope();
             try {
                 if(scope.isPresent()) {
                      externalMethod(node, scope.get(), mce);
-                     scope.get().accept(new VariableVisitor(), node);
-                     scope.get().accept(new Visitor(), node);
-
                 }
                 else {
                     if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
@@ -376,8 +398,6 @@ public class DepSolver {
                 else if(arg.isMethodCallExpr()) {
                     Optional<Expression> scope = arg.asMethodCallExpr().getScope();
                     if (scope.isPresent()) {
-                        scope.get().accept(new VariableVisitor(), node);
-                        scope.get().accept(new Visitor(), node);
 
                         if (scope.get().isNameExpr()) {
                             ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(),
