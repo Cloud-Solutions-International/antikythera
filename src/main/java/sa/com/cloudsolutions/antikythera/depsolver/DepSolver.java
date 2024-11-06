@@ -277,9 +277,16 @@ public class DepSolver {
         }
     }
 
-
+    /**
+     * Processes variable declarations.
+     * This visitor is intended to be used before the Visitor class. It will identify the variables
+     * so that resolving the scope of the method calls becomes a lot easier.
+     */
     private class VariableVisitor extends VoidVisitorAdapter<GraphNode> {
 
+        /**
+         * Deals with parameters in method declarations.
+         */
         @Override
         public void visit(final Parameter n, GraphNode node) {
             names.put(n.getNameAsString(), n.getType());
@@ -474,6 +481,18 @@ public class DepSolver {
 
 
                 if(field != null) {
+                    if (field.isClassOrInterfaceType()) {
+                        ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
+                        if (im != null && im.getType() != null) {
+                            AbstractCompiler.findMethodDeclaration(mce, im.getType()).ifPresent(md -> {
+                                try {
+                                    Graph.createGraphNode(md);
+                                } catch (AntikytheraException e) {
+                                    throw new DepsolverException(e);
+                                }
+                            });
+                        }
+                    }
                     for(AnnotationExpr ann : field.getAnnotations()) {
                         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
                         if (imp != null) {

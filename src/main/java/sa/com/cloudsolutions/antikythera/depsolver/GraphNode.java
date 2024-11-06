@@ -73,7 +73,7 @@ public class GraphNode {
 
     /**
      * Creates a new GraphNode
-     * but it will not really be ready for use until you call the buildNode method
+     * However it will not really be ready for use until you call the buildNode method
      * @param node an AST Node
      * @throws AntikytheraException if something cannot be resolved.
      */
