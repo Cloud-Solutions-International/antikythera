@@ -483,15 +483,7 @@ public class DepSolver {
                 if(field != null) {
                     if (field.isClassOrInterfaceType()) {
                         ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
-                        if (im != null && im.getType() != null) {
-                            AbstractCompiler.findMethodDeclaration(mce, im.getType()).ifPresent(md -> {
-                                try {
-                                    Graph.createGraphNode(md);
-                                } catch (AntikytheraException e) {
-                                    throw new DepsolverException(e);
-                                }
-                            });
-                        }
+                        pushField(node, mce, im);
                     }
                     for(AnnotationExpr ann : field.getAnnotations()) {
                         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
@@ -503,11 +495,20 @@ public class DepSolver {
                 }
                 else {
                     /*
-                     * Can be either a call related to a local or a static call
+                     * Can be either a call related to a local or a static call.
+                     * when the import is not null, that means this is still an external method call.
                      */
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
-                    if (imp != null) {
+                    if(imp != null) {
                         node.getDestination().addImport(imp.getImport());
+
+                        if (imp.getType() != null) {
+                            try {
+                                Graph.createGraphNode(imp.getType());
+                            } catch (AntikytheraException e) {
+                                throw new DepsolverException(e);
+                            }
+                        }
                     }
                 }
             }
@@ -516,6 +517,20 @@ public class DepSolver {
             }
         }
 
+        private static void pushField(GraphNode node, Expression mce, ImportWrapper im) {
+            if (im != null && im.getType() != null) {
+                node.getDestination().addImport(im.getImport());
+                if (mce.isMethodCallExpr()) {
+                    AbstractCompiler.findMethodDeclaration(mce.asMethodCallExpr(), im.getType()).ifPresent(md -> {
+                        try {
+                            Graph.createGraphNode(md);
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    });
+                }
+            }
+        }
     }
 
 
