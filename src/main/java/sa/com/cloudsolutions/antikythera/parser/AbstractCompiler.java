@@ -549,62 +549,31 @@ public class AbstractCompiler {
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
                                                                     TypeDeclaration<?> decl) {
         List<MethodDeclaration> methods = decl.findAll(MethodDeclaration.class, md -> md.getNameAsString().equals(methodCall.getNameAsString()));
-        if (methods.isEmpty()) {
-            return Optional.empty();
-        }
         if (methods.size() == 1) {
             return Optional.of(methods.get(0));
         }
-        return findMethodDeclaration(methodCall, methods);
-    }
 
-
-    static Optional<String> describeType(Expression arg) {
-        try {
-            ResolvedType argType = arg.calculateResolvedType();
-            return Optional.of(argType.describe());
-        } catch (Exception e) {
-            try {
-                ResolvedType argType = symbolResolver.calculateType(arg);
-                return Optional.of(argType.describe());
-            } catch (UnsolvedSymbolException ex) {
-                Optional<ClassOrInterfaceDeclaration> cdecl = arg.findAncestor(ClassOrInterfaceDeclaration.class);
-                if (cdecl.isPresent()) {
-                    Optional<String> fqn = cdecl.get().getFullyQualifiedName();
-                    if(fqn.isPresent()) {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn.get());
-                        if (cu != null) {
-                            ImportWrapper imp = findImport(cu, arg.toString());
-                            if (imp != null) {
-                                if (imp.getImport().isStatic() && imp.getImport().isAsterisk() && !imp.getNameAsString().endsWith(arg.toString())) {
-                                    CompilationUnit other = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-                                    if (other != null) {
-                                        Optional<FieldDeclaration> f = other.findFirst(FieldDeclaration.class,
-                                                field -> field.getVariable(0).getNameAsString().equals(arg.toString())
-                                        );
-                                        if (f.isPresent()) {
-                                            FieldDeclaration field = f.get();
-                                            return Optional.of(field.getVariable(0).getType().asString());
-                                        }
-                                    }
-                                }
-                            }
-                            if (arg.isNameExpr()) {
-                                String className = findFullyQualifiedName(cu, arg.asNameExpr().getNameAsString());
-                                if (className != null) {
-                                    return Optional.of(className);
-                                }
-                            }
-                        }
-                        else {
-                            return Optional.of(arg.toString());
+        if (methods.isEmpty() && decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                if (cdecl.findCompilationUnit().isPresent()) {
+                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = getMatchingClass(cu, extended.getNameAsString());
+                        Optional<MethodDeclaration> method = findMethodDeclaration(methodCall, p);
+                        if (method.isPresent()) {
+                            return method;
                         }
                     }
                 }
-                return Optional.empty();
             }
         }
+
+        return findMethodDeclaration(methodCall, methods);
+
     }
+
 
     /**
      * Find the method declaration matching the given method call expression
