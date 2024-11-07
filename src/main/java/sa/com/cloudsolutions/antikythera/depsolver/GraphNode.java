@@ -451,11 +451,13 @@ public class GraphNode {
     }
 
     public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {
+
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
-            typeDeclaration.addMember(fieldDeclaration);
-            Graph.createGraphNode(fieldDeclaration);
+            typeDeclaration.addMember(fieldDeclaration.clone());
+
+            //Graph.createGraphNode(fieldDeclaration);
 
             ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, variable.getTypeAsString());
             if (imp != null) {
