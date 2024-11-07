@@ -319,9 +319,6 @@ public class DepSolver {
                         }
 
                     }
-                    else {
-                        System.out.println("Bada");
-                    }
                 }
             }
             super.visit(n, node);
@@ -505,6 +502,13 @@ public class DepSolver {
                         if (imp.getType() != null) {
                             try {
                                 Graph.createGraphNode(imp.getType());
+                            } catch (AntikytheraException e) {
+                                throw new DepsolverException(e);
+                            }
+                        }
+                        if (imp.getField() != null) {
+                            try {
+                                Graph.createGraphNode(imp.getField());
                             } catch (AntikytheraException e) {
                                 throw new DepsolverException(e);
                             }

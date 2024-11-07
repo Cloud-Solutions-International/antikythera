@@ -77,15 +77,10 @@ public class Graph {
                 }
             }
         }
+
+
         g.buildNode();
-        if (g.isVisited() && n instanceof ClassOrInterfaceDeclaration || n instanceof EnumDeclaration) {
-            g.setVisited(false);
-            DepSolver.push(g);
-        }
-        if (!g.isVisited()) {
-            nodes.put(g.hashCode(), g);
-            DepSolver.push(g);
-        }
+        DepSolver.push(g);
 
         return g;
     }

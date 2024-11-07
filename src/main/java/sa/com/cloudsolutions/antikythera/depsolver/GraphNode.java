@@ -141,7 +141,10 @@ public class GraphNode {
                 typeDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
                 typeDeclaration.getAnnotationByName("JsonInclude").isPresent() ||
                 typeDeclaration.getAnnotationByName("MappedSuperclass").isPresent() ||
-                typeDeclaration.getAnnotationByName("Data").isPresent()) {
+                typeDeclaration.getAnnotationByName("Data").isPresent() ||
+                (typeDeclaration.getAnnotationByName("Setter").isPresent()
+                        && typeDeclaration.getAnnotationByName("Getter").isPresent())) {
+
             copyFields();
             copyConstructors();
         }
@@ -380,7 +383,7 @@ public class GraphNode {
     }
 
     public boolean isVisited() {
-        return visited;
+        return typeDeclaration != null && typeDeclaration.findFirst(node.getClass(), n -> n.equals(node)).isPresent();
     }
 
     public void setVisited(boolean visited) {
