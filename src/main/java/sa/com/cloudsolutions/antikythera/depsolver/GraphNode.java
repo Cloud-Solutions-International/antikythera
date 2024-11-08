@@ -9,6 +9,7 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -101,10 +102,11 @@ public class GraphNode {
     }
 
     public static GraphNode graphNodeFactory(Node node) throws AntikytheraException {
-        GraphNode g = Graph.getNodes().get(node.hashCode());
+        GraphNode tmp = new GraphNode(node);
+        GraphNode g = Graph.getNodes().get(tmp.hashCode());
         if (g == null) {
-            g = new GraphNode(node);
-            Graph.getNodes().put(node.hashCode(), g);
+            Graph.getNodes().put(tmp.hashCode(), tmp);
+            return tmp;
         }
         return g;
     }
@@ -145,8 +147,9 @@ public class GraphNode {
                 (typeDeclaration.getAnnotationByName("Setter").isPresent()
                         && typeDeclaration.getAnnotationByName("Getter").isPresent())) {
 
-            copyFields();
             copyConstructors();
+            copyFields();
+
         }
 
     }
@@ -204,7 +207,7 @@ public class GraphNode {
             }
             if (!matched) {
                 target.addMember(constructor);
-                //Graph.createGraphNode(cdecl);
+                Graph.createGraphNode(cdecl);
             }
         }
     }
@@ -410,9 +413,13 @@ public class GraphNode {
         return enclosingType;
     }
 
+    /**
+     * OVerride the hashcode method to do our own.
+     * @return
+     */
     @Override
     public int hashCode() {
-        return node.hashCode();
+        return toString().hashCode();
     }
 
     @Override
@@ -438,16 +445,28 @@ public class GraphNode {
 
     @Override
     public String toString() {
-        if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
-            if (node instanceof MethodDeclaration md) {
-                return enclosingType.getFullyQualifiedName().get().toString() + "#" + md.getNameAsString();
-            }
-            if (node instanceof FieldDeclaration fd) {
-                return enclosingType.getFullyQualifiedName().get().toString() + "." + fd.getVariable(0).toString();
-            }
-            return enclosingType.getFullyQualifiedName().get().toString();
+        StringBuilder b = new StringBuilder();
+        if(compilationUnit != null && compilationUnit.getPackageDeclaration().isPresent()) {
+            b.append(compilationUnit.getPackageDeclaration().get().getNameAsString());
         }
-        return super.toString();
+        b.append(".");
+        if(enclosingType != null) {
+            b.append(enclosingType.getNameAsString());
+        }
+
+        if(node instanceof  MethodDeclaration md) {
+            b.append("#");
+            b.append(md.getSignature().toString());
+        }
+        else if(node instanceof FieldDeclaration fd) {
+            b.append(".");
+            b.append(fd.getVariable(0).getNameAsString());
+        }
+        else if(node instanceof ConstructorDeclaration cd) {
+            b.append("@");
+            b.append(cd.getSignature().toString());
+        }
+        return b.toString();
     }
 
     public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {

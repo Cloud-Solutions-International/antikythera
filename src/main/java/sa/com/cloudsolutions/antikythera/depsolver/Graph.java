@@ -51,6 +51,7 @@ public class Graph {
                      * may not have been considered
                      */
                     if (g.getDestination() == null) {
+
                         CompilationUnit destination = dependencies.get(fqn);
                         g.setDestination(destination);
                         g.setTypeDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
@@ -81,7 +82,6 @@ public class Graph {
 
         g.buildNode();
         DepSolver.push(g);
-
         return g;
     }
 

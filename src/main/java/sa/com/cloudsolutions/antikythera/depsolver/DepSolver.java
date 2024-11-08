@@ -241,6 +241,12 @@ public class DepSolver {
                 .sorted(Comparator.comparing(f -> f.getVariable(0).getNameAsString()))
                 .toList();
 
+        List<ConstructorDeclaration> constructors = classOrInterface.getMembers().stream()
+                .filter(ConstructorDeclaration.class::isInstance)
+                .map(ConstructorDeclaration.class::cast)
+                .sorted(Comparator.comparing(ConstructorDeclaration::getNameAsString))
+                .toList();
+
         List<MethodDeclaration> methods = classOrInterface.getMembers().stream()
                 .filter(MethodDeclaration.class::isInstance)
                 .map(MethodDeclaration.class::cast)
@@ -252,6 +258,7 @@ public class DepSolver {
 
         // Add sorted fields and methods back
         classOrInterface.getMembers().addAll(fields);
+        classOrInterface.getMembers().addAll(constructors);
         classOrInterface.getMembers().addAll(methods);
     }
 
