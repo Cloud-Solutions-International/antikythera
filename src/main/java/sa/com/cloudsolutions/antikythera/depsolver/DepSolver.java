@@ -18,7 +18,10 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
+import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -363,6 +366,29 @@ public class DepSolver {
     }
 
     private class Visitor extends AnnotationVisitor {
+
+        @Override
+        public void visit(CatchClause n, GraphNode node) {
+
+            Parameter param = n.getParameter();
+            if (param.getType().isUnionType()) {
+                UnionType ut = param.getType().asUnionType();
+                for(Type t : ut.getElements()) {
+                    if (t.isClassOrInterfaceType()) {
+                        inspectClass(node, t.asClassOrInterfaceType());
+                    }
+                }
+            }
+            else {
+                Type t = param.getType();
+                if (t.isClassOrInterfaceType()) {
+                    ClassOrInterfaceType ct = t.asClassOrInterfaceType();
+                    inspectClass(node, ct);
+                }
+            }
+            super.visit(n, node);
+        }
+
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
             Optional<Expression> scope = mce.getScope();
@@ -581,6 +607,20 @@ public class DepSolver {
                             throw new DepsolverException(e);
                         }
                     });
+                }
+            }
+        }
+    }
+
+    private static void inspectClass(GraphNode node, ClassOrInterfaceType ct) {
+        ImportWrapper wrapper = AbstractCompiler.findImport(node.getCompilationUnit(), ct.getNameAsString());
+        if (wrapper != null) {
+            node.getDestination().addImport(wrapper.getImport());
+            if(wrapper.getType() != null) {
+                try {
+                    Graph.createGraphNode(wrapper.getType());
+                } catch (AntikytheraException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
