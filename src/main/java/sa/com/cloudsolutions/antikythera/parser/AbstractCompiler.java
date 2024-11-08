@@ -297,10 +297,31 @@ public class AbstractCompiler {
     }
 
     public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
-        return findMatchingConstructor(cu.findAll(ConstructorDeclaration.class), oce.getArguments());
+        Optional<NodeList<Type>> typeArguments = oce.getTypeArguments();
+        List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
+
+        if (typeArguments.isPresent()) {
+            for (ConstructorDeclaration construct : constructors) {
+                NodeList<Type> arguments = typeArguments.get();
+                for (int i =0 ; i < construct.getParameters().size(); i++) {
+                    Parameter param = construct.getParameter(i);
+                    if (param.getType().equals(arguments.get(i))
+                            || param.getType().toString().equals("java.lang.Object")
+                            || arguments.get(i).equals(Reflect.primitiveToWrapper(param.getType().toString()))
+                    )
+                    {
+                        return Optional.of(construct);
+                    }
+                }
+            }
+        }
+
+        return findMatchingConstructor(constructors, oce.getArguments());
     }
 
     private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
+
+
         for (ConstructorDeclaration constructor : constructors) {
             ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
             if (resolvedConstructor.getNumberOfParams() == arguments.size()) {

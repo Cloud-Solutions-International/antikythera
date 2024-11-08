@@ -147,11 +147,8 @@ public class GraphNode {
                 (typeDeclaration.getAnnotationByName("Setter").isPresent()
                         && typeDeclaration.getAnnotationByName("Getter").isPresent())) {
 
-            copyConstructors();
             copyFields();
-
         }
-
     }
 
     private void inherit() throws AntikytheraException {
@@ -187,27 +184,6 @@ public class GraphNode {
                         addTypeArguments(ifc);
                     }
                 }
-            }
-        }
-    }
-
-    /**
-     * Copy constructors to the target
-     * @throws AntikytheraException if the graph node cannot be created.
-     */
-    private void copyConstructors() throws AntikytheraException {
-        for (ConstructorDeclaration cdecl : enclosingType.asClassOrInterfaceDeclaration().getConstructors()) {
-            ClassOrInterfaceDeclaration target = typeDeclaration.asClassOrInterfaceDeclaration();
-            ConstructorDeclaration constructor = cdecl.clone();
-            boolean matched = false;
-            for (ConstructorDeclaration old : target.getConstructors()) {
-                if (old.getParameters().equals(constructor.getParameters())) {
-                    matched = true;
-                }
-            }
-            if (!matched) {
-                target.addMember(constructor);
-                Graph.createGraphNode(cdecl);
             }
         }
     }

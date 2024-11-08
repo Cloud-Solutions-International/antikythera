@@ -16,6 +16,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -161,7 +162,17 @@ public class DepSolver {
      */
     private void constructorSearch(GraphNode node) throws AntikytheraException {
         if (node.getEnclosingType() != null && node.getNode() instanceof ConstructorDeclaration cd) {
+            String className = node.getEnclosingType().getNameAsString();
+            Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
+                    t -> t.getNameAsString().equals(className));
+
+            if (c.isPresent()) {
+                node.getTypeDeclaration().addMember(cd);
+            }
             searchMethodParameters(node, cd.getParameters());
+
+            names.clear();
+            cd.accept(new VariableVisitor(), node);
             cd.accept(new Visitor(), node);
         }
     }
@@ -332,7 +343,7 @@ public class DepSolver {
         }
     }
 
-    private void solveType(Type vd, GraphNode node) {
+    private List<ImportWrapper> solveType(Type vd, GraphNode node) {
         if (vd.isClassOrInterfaceType()) {
             List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
             for (ImportWrapper imp : imports) {
@@ -346,7 +357,9 @@ public class DepSolver {
                     throw new DepsolverException(e);
                 }
             }
+            return imports;
         }
+        return List.of();
     }
 
     private class Visitor extends AnnotationVisitor {
@@ -401,15 +414,16 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-            solveType(oce.getType(), node);
+
+            List<ImportWrapper> imports = solveType(oce.getType(), node);
             for(Expression arg : oce.getArguments()) {
                 if(arg.isFieldAccessExpr()) {
                     resolveField(node, arg);
                 }
                 else if(arg.isMethodCallExpr()) {
                     Optional<Expression> scope = arg.asMethodCallExpr().getScope();
-                    if (scope.isPresent()) {
 
+                    if (scope.isPresent()) {
                         if (scope.get().isNameExpr()) {
                             ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(),
                                     scope.get().asNameExpr().getNameAsString());
@@ -452,6 +466,20 @@ public class DepSolver {
                     }
                 }
             }
+
+            if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
+                for (ImportWrapper imp : imports) {
+                    if(imp.getType() != null) {
+                        for (ConstructorDeclaration cdecl : imp.getType().getConstructors()) {
+                            try {
+                                Graph.createGraphNode(cdecl);
+                            } catch (AntikytheraException e) {
+                                throw new DepsolverException(e);
+                            }
+                        }
+                    }
+                }
+            }
             super.visit(oce, node);
         }
 
@@ -464,7 +492,7 @@ public class DepSolver {
          * @param mce the method call expression
          * @throws AntikytheraException
          */
-        private void externalMethod(GraphNode node, Expression scope, MethodCallExpr mce) throws AntikytheraException {
+        private void externalMethod(GraphNode node, Expression scope, Expression mce) throws AntikytheraException {
             TypeDeclaration<?> cdecl = node.getEnclosingType();
 
             if (scope.isNameExpr()) {
