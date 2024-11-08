@@ -600,13 +600,20 @@ public class DepSolver {
             if (im != null && im.getType() != null) {
                 node.getDestination().addImport(im.getImport());
                 if (mce.isMethodCallExpr()) {
-                    AbstractCompiler.findMethodDeclaration(mce.asMethodCallExpr(), im.getType()).ifPresent(md -> {
+                    Optional<NodeList<Type>> typeArgs = mce.asMethodCallExpr().getTypeArguments();
+                    if (typeArgs.isEmpty()) {
+                        NodeList<Type> ta = new NodeList<>();
+
+                    }
+
+                    Optional<MethodDeclaration> omd = AbstractCompiler.findMethodDeclaration(mce.asMethodCallExpr(), im.getType());
+                    if(omd.isPresent()) {
                         try {
-                            Graph.createGraphNode(md);
+                            Graph.createGraphNode(omd.get());
                         } catch (AntikytheraException e) {
                             throw new DepsolverException(e);
                         }
-                    });
+                    }
                 }
             }
         }
