@@ -465,6 +465,20 @@ public class DepSolver {
                         }
                     }
                 }
+                else if(arg.isNameExpr()) {
+
+                        List<FieldDeclaration> fields = node.getEnclosingType().getFields();
+                        for (FieldDeclaration fd : fields) {
+                            if (fd.getVariable(0).getNameAsString().equals(arg.asNameExpr().getNameAsString())) {
+                                try {
+                                    Graph.createGraphNode(fd);
+                                } catch (AntikytheraException e) {
+                                    throw new DepsolverException(e);
+                                }
+                            }
+                        }
+
+                }
             }
 
             if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
