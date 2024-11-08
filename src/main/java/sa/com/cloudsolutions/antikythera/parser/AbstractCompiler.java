@@ -273,6 +273,9 @@ public class AbstractCompiler {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
                 return type;
             }
+            if (type.isEnumDeclaration() && type.asEnumDeclaration().isPublic()) {
+                return type;
+            }
         }
         return null;
     }
@@ -482,7 +485,7 @@ public class AbstractCompiler {
 
                 }
                 else if (imp.getName().getQualifier().isPresent()){
-                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().asString());
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                     if (target != null) {
                         TypeDeclaration<?> p = getPublicClass(target);
                         setTypeAndField(className, p, wrapper, target);
