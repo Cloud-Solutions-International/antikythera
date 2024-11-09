@@ -4,6 +4,7 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DepSolverTest extends TestHelper {
@@ -66,7 +68,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsImports() throws AntikytheraException {
-        FieldDeclaration field = StaticJavaParser.parseBodyDeclaration("private java.util.List<String> names;").asFieldDeclaration();
+        FieldDeclaration field = classDecl.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
         field.addAnnotation("Data");
@@ -75,7 +77,18 @@ class DepSolverTest extends TestHelper {
         depSolver.fieldSearch(node);
 
         assertTrue(cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.lombok.Data")),
-                "Import for java.util.List should be added.");
+                "Import for lombok should be added.");
+    }
+
+    @Test
+    void testMethodSearch() throws AntikytheraException {
+        MethodDeclaration md = classDecl.getMethodsByName("getName").getFirst();
+        node.setNode(md);
+
+        depSolver.methodSearch(node);
+        MethodDeclaration m = classDecl.getMethodsByName("getName").getFirst();
+        assertNotNull(m, "method should be added to the class.");
+
     }
 
     class PersonCompiler extends AbstractCompiler {
