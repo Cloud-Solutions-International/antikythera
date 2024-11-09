@@ -447,8 +447,6 @@ public class GraphNode {
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
             typeDeclaration.addMember(fieldDeclaration.clone());
 
-            //Graph.createGraphNode(fieldDeclaration);
-
             ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, variable.getTypeAsString());
             if (imp != null) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());

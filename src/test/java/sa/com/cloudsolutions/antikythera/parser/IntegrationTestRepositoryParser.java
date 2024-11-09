@@ -27,6 +27,7 @@ public class IntegrationTestRepositoryParser {
     @BeforeAll
     public static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
+        AbstractCompiler.preProcess();
     }
 
     @Test

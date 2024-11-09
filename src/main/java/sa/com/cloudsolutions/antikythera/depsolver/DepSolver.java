@@ -234,17 +234,9 @@ public class DepSolver {
      *             along with the required imports.
      * @throws AntikytheraException if the dependencies cannot be resolved.
      */
-    private void fieldSearch(GraphNode node) throws AntikytheraException {
+     void fieldSearch(GraphNode node) throws AntikytheraException {
         if(node.getNode() instanceof FieldDeclaration fd) {
-            for(AnnotationExpr ann : fd.getAnnotations()) {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                }
-            }
-            if(node.getTypeDeclaration().getFieldByName(fd.getVariable(0).getNameAsString()).isEmpty()) {
-                node.addField(fd);
-            }
+            node.addField(fd);
         }
     }
 
