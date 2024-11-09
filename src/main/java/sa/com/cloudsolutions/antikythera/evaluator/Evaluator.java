@@ -13,8 +13,6 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.symbolsolver.reflectionmodel.ReflectionMethodDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -51,7 +49,6 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -308,7 +305,7 @@ public class Evaluator {
                     field.setAccessible(true);
                     return new Variable(field.get(null));
                 } else {
-                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingClass(dep, fae.getScope().toString());
+                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
                     if (typeDeclaration != null) {
                         Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
 
@@ -547,7 +544,7 @@ public class Evaluator {
         }
 
         if (dependant != null) {
-            TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(dependant, type.getNameAsString());
+            TypeDeclaration<?> match = AbstractCompiler.getMatchingType(dependant, type.getNameAsString());
             if (match != null) {
                 Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
                 annonymousOverrides(type, oce, eval);
@@ -585,7 +582,7 @@ public class Evaluator {
              * Merge the anon class stuff into the parent
              */
             eval.cu = eval.cu.clone();
-            match = AbstractCompiler.getMatchingClass(eval.cu, type.getNameAsString());
+            match = AbstractCompiler.getMatchingType(eval.cu, type.getNameAsString());
             for(BodyDeclaration<?> body : anonymousClassBody.get()) {
                 if (body.isMethodDeclaration() && match != null) {
                     MethodDeclaration md = body.asMethodDeclaration();
@@ -1123,7 +1120,7 @@ public class Evaluator {
      */
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
 
-        TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
+        TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
         if (decl != null) {
             Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCall, decl);

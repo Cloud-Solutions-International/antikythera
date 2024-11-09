@@ -73,12 +73,12 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                         TypeDeclaration<?> t = null;
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
                         if (cu != null) {
-                            t = AbstractCompiler.getMatchingClass(cu, imp2.getName().getIdentifier());
+                            t = AbstractCompiler.getMatchingType(cu, imp2.getName().getIdentifier());
                         }
                         else {
                             cu = AntikytheraRunTime.getCompilationUnit(imp2.getName().getQualifier().get().toString());
                             if (cu != null) {
-                                t = AbstractCompiler.getMatchingClass(cu, imp2.getName().getQualifier().get().getIdentifier());
+                                t = AbstractCompiler.getMatchingType(cu, imp2.getName().getQualifier().get().getIdentifier());
                             }
                         }
                         if(t != null) {

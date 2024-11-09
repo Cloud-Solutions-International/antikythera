@@ -17,7 +17,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
@@ -39,7 +38,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -47,14 +45,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
-
-import javax.swing.text.html.Option;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -266,9 +261,10 @@ public class AbstractCompiler {
     /**
      * Get the public class in a compilation unit
      * @param cu the compilation unit
-     * @return the public class
+     * @return the public class, enum or interface that is held in the compilation unit if any.
+     *      when no public type is found null is returned.
      */
-    public static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
+    public static TypeDeclaration<?> getPublicType(CompilationUnit cu) {
         for (var type : cu.getTypes()) {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
                 return type;
@@ -286,7 +282,7 @@ public class AbstractCompiler {
      * @param className the name of the class to find
      * @return the type declaration or null if no match is found
      */
-    public static TypeDeclaration<?> getMatchingClass(CompilationUnit cu, String className) {
+    public static TypeDeclaration<?> getMatchingType(CompilationUnit cu, String className) {
         for (var type : cu.getTypes()) {
             if (type.getNameAsString().equals(className)) {
                 return type;
@@ -299,6 +295,12 @@ public class AbstractCompiler {
         return null;
     }
 
+    /**
+     * Given an ObjectCreationExpr, will find the corresponding constructor declaration
+     * @param cu compilation unit holding the declaration
+     * @param oce object creation expression in any class
+     * @return An optional of the constructor declaration
+     */
     public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
         Optional<NodeList<Type>> typeArguments = oce.getTypeArguments();
         List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
@@ -478,7 +480,7 @@ public class AbstractCompiler {
                 if (!imp.isStatic()) {
                     CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                     if (target != null) {
-                        TypeDeclaration<?> p = getMatchingClass(target, imp.getName().getIdentifier());
+                        TypeDeclaration<?> p = getMatchingType(target, imp.getName().getIdentifier());
                         wrapper.setExternal(false);
                         setTypeAndField(className, p, wrapper, target);
                     }
@@ -487,7 +489,7 @@ public class AbstractCompiler {
                 else if (imp.getName().getQualifier().isPresent()){
                     CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                     if (target != null) {
-                        TypeDeclaration<?> p = getPublicClass(target);
+                        TypeDeclaration<?> p = getPublicType(target);
                         setTypeAndField(className, p, wrapper, target);
                         wrapper.setExternal(false);
                     }
@@ -584,7 +586,7 @@ public class AbstractCompiler {
                     String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
-                        TypeDeclaration<?> p = getMatchingClass(cu, extended.getNameAsString());
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
                         Optional<MethodDeclaration> method = findMethodDeclaration(methodCall, p);
                         if (method.isPresent()) {
                             return method;

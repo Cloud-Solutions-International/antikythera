@@ -111,7 +111,7 @@ public class DTOHandler extends ClassProcessor {
             }
 
             if (method != null) {
-                var variable = classToInstanceName(getPublicClass(cu));
+                var variable = classToInstanceName(getPublicType(cu));
                 method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
             }
 
@@ -318,7 +318,7 @@ public class DTOHandler extends ClassProcessor {
                 // handle custom getters and setters
 
                 String fieldName = firstVariable.getNameAsString();
-                TypeDeclaration<?> cdecl = getPublicClass(cu);
+                TypeDeclaration<?> cdecl = getPublicType(cu);
                 String className = cdecl.getNameAsString();
                 Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
@@ -401,7 +401,7 @@ public class DTOHandler extends ClassProcessor {
      * @param field
      */
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
-        TypeDeclaration<?> cdecl = AbstractCompiler.getPublicClass(cu);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getPublicType(cu);
 
         if (!field.isStatic()) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");

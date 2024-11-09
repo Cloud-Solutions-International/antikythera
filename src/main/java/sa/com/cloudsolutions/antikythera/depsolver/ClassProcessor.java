@@ -546,7 +546,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @throws IOException
      */
     protected void compileDependencies() throws IOException {
-        Optional<String> fullyQualifiedName = getPublicClass(cu).getFullyQualifiedName();
+        Optional<String> fullyQualifiedName = getPublicType(cu).getFullyQualifiedName();
         if (fullyQualifiedName.isPresent()) {
             Set<ClassDependency> deps = dependencies.get(fullyQualifiedName.get());
             if (deps != null) {

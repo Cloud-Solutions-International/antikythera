@@ -115,7 +115,7 @@ public class RestControllerParser extends ClassProcessor {
     private void processRestController(PackageDeclaration pd) throws IOException {
         expandWildCards(cu);
 
-        TypeDeclaration<?> type = getPublicClass(cu);
+        TypeDeclaration<?> type = getPublicType(cu);
 
         evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
         evaluator.setOnTest(true);
@@ -372,7 +372,7 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path from the RequestMapping Annotation or an empty string
      */
     private String getCommonPath() {
-        for (var classAnnotation : getPublicClass(cu).getAnnotations()) {
+        for (var classAnnotation : getPublicType(cu).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();

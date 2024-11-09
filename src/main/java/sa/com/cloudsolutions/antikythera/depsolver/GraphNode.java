@@ -9,7 +9,6 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -26,12 +25,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
-import javax.swing.text.html.Option;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Primary purpose to encapsulate the AST node.
@@ -238,20 +233,20 @@ public class GraphNode {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
             if (imp.isStatic()) {
                 if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
                     fieldInitializer(t, initializer);
                 }
                 else {
                     cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
                     if (cu != null) {
-                        TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getQualifier().get().getIdentifier());
+                        TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getQualifier().get().getIdentifier());
                         fieldInitializer(t, initializer);
                     }
                 }
             }
             else {
                 if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getName().getIdentifier());
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
                     Graph.createGraphNode(t);
                 }
             }
@@ -353,7 +348,7 @@ public class GraphNode {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
 
             if (cu != null) {
-                TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, typeArg.asString());
+                TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, typeArg.asString());
                 if (t != null) {
                     Graph.createGraphNode(t);
                 }
@@ -458,7 +453,7 @@ public class GraphNode {
             if (imp != null) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                 if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingClass(cu, imp.getImport().getName().getIdentifier());
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getImport().getName().getIdentifier());
                     if (t != null) {
                         Graph.createGraphNode(t);
                     }
