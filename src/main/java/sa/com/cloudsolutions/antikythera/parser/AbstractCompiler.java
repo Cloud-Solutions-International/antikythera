@@ -518,7 +518,6 @@ public class AbstractCompiler {
         );
         if (field.isPresent()) {
             wrapper.setField(field.get());
-
         }
 
     }

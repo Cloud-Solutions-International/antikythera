@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -24,7 +23,7 @@ class DepSolverTest extends TestHelper {
     private DepSolver depSolver;
     private GraphNode node;
     private CompilationUnit cu;
-    private ClassOrInterfaceDeclaration classDecl;
+    private ClassOrInterfaceDeclaration sourceClass;
 
     @BeforeAll
     public static void setup() throws IOException {
@@ -37,13 +36,14 @@ class DepSolverTest extends TestHelper {
         depSolver = new DepSolver();
         PersonCompiler p = new PersonCompiler();
         cu = p.getCompilationUnit();
-        classDecl = p.getCompilationUnit().getClassByName("Person").orElseThrow();
-        node = Graph.createGraphNode(classDecl); // Use the Graph.createGraphNode method to create GraphNode
+        sourceClass = p.getCompilationUnit().getClassByName("Person").orElseThrow();
+        node = Graph.createGraphNode(sourceClass); // Use the Graph.createGraphNode method to create GraphNode
+        depSolver.reset();
     }
 
     @Test
     void testFieldSearchAddsFieldToClass() throws AntikytheraException {
-        FieldDeclaration field = classDecl.getFieldByName("name").orElseThrow();
+        FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
         depSolver.fieldSearch(node);
@@ -54,13 +54,13 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsAnnotations() throws AntikytheraException {
-        FieldDeclaration field = classDecl.getFieldByName("name").orElseThrow();
+        FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
         field.addAnnotation("Deprecated");
 
         depSolver.fieldSearch(node);
 
-        Optional<FieldDeclaration> addedField = classDecl.getFieldByName("name");
+        Optional<FieldDeclaration> addedField = sourceClass.getFieldByName("name");
         assertTrue(addedField.isPresent(), "Field should be added to the class.");
         assertTrue(addedField.get().getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Deprecated")),
                 "Field should have the Deprecated annotation.");
@@ -68,7 +68,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsImports() throws AntikytheraException {
-        FieldDeclaration field = classDecl.getFieldByName("name").orElseThrow();
+        FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
         field.addAnnotation("Data");
@@ -76,22 +76,32 @@ class DepSolverTest extends TestHelper {
 
         depSolver.fieldSearch(node);
 
-        assertTrue(cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.lombok.Data")),
+        assertTrue(node.getDestination().getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.lombok.Data")),
                 "Import for lombok should be added.");
     }
 
     @Test
     void testMethodSearch() throws AntikytheraException {
-        MethodDeclaration md = classDecl.getMethodsByName("getName").getFirst();
+        MethodDeclaration md = sourceClass.getMethodsByName("getName").getFirst();
         node.setNode(md);
 
         depSolver.methodSearch(node);
-        MethodDeclaration m = classDecl.getMethodsByName("getName").getFirst();
+        MethodDeclaration m = node.getTypeDeclaration().getMethodsByName("getName").getFirst();
         assertNotNull(m, "method should be added to the class.");
 
     }
 
-    class PersonCompiler extends AbstractCompiler {
+    @Test
+    void testSetter() throws AntikytheraException {
+        MethodDeclaration md = sourceClass.getMethodsByName("setId").get(0);
+        node.setNode(md);
+
+        depSolver.methodSearch(node);
+        MethodDeclaration m = node.getTypeDeclaration().getMethodsByName("setId").getFirst();
+        assertNotNull(m, "method should be added to the class.");
+    }
+
+    static class PersonCompiler extends AbstractCompiler {
         protected PersonCompiler() throws IOException {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Person.java");
             cu = getJavaParser().parse(file).getResult().get();

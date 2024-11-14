@@ -291,6 +291,13 @@ public class DepSolver {
         }
     }
 
+    public void reset() {
+         stack.clear();
+         names.clear();
+         Graph.getDependencies().clear();
+         Graph.getNodes().clear();
+    }
+
     /**
      * Processes variable declarations.
      * This visitor is intended to be used before the Visitor class. It will identify the variables
