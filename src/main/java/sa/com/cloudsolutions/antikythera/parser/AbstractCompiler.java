@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -305,23 +306,30 @@ public class AbstractCompiler {
         Optional<NodeList<Type>> typeArguments = oce.getTypeArguments();
         List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
 
-        if (typeArguments.isPresent()) {
-            for (ConstructorDeclaration construct : constructors) {
-                NodeList<Type> arguments = typeArguments.get();
-                for (int i =0 ; i < construct.getParameters().size(); i++) {
-                    Parameter param = construct.getParameter(i);
-                    if (param.getType().equals(arguments.get(i))
-                            || param.getType().toString().equals("java.lang.Object")
-                            || arguments.get(i).equals(Reflect.primitiveToWrapper(param.getType().toString()))
-                    )
-                    {
-                        return Optional.of(construct);
-                    }
+
+        for (ConstructorDeclaration construct : constructors) {
+            if (typeArguments.isPresent()) {
+                Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), construct);
+                if (callable.isPresent()) {
+                    return Optional.of(construct);
                 }
             }
         }
 
         return findMatchingConstructor(constructors, oce.getArguments());
+    }
+
+    public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
+        for (int i = 0; i < construct.getParameters().size(); i++) {
+            Parameter param = construct.getParameter(i);
+            if (param.getType().equals(arguments.get(i))
+                    || param.getType().toString().equals("java.lang.Object")
+                    || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString()))
+            ) {
+                return Optional.of(construct);
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
@@ -574,7 +582,8 @@ public class AbstractCompiler {
 
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
                                                                     TypeDeclaration<?> decl) {
-        List<MethodDeclaration> methods = decl.findAll(MethodDeclaration.class, md -> md.getNameAsString().equals(methodCall.getNameAsString()));
+        List<MethodDeclaration> methods = decl.getMethodsByName(methodCall.getNameAsString());
+
         if (methods.size() == 1) {
             return Optional.of(methods.get(0));
         }
@@ -617,16 +626,9 @@ public class AbstractCompiler {
                 }
 
                 if (typeArguments.isPresent()) {
-                    NodeList<Type> arguments = typeArguments.get();
-                    for (int i =0 ; i < method.getParameters().size(); i++) {
-                        Parameter param = method.getParameter(i);
-                        if (param.getType().equals(arguments.get(i))
-                                || param.getType().toString().equals("java.lang.Object")
-                                || arguments.get(i).equals(Reflect.primitiveToWrapper(param.getType().toString()))
-                        )
-                        {
-                            return Optional.of(method);
-                        }
+                    Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), method);
+                    if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
+                        return Optional.of(md);
                     }
                 }
             }
