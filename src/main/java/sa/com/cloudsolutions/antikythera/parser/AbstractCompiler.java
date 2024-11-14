@@ -493,7 +493,7 @@ public class AbstractCompiler {
 
                 }
                 else if (imp.getName().getQualifier().isPresent()){
-                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
                     if (target != null) {
                         TypeDeclaration<?> p = getPublicType(target);
                         setTypeAndField(className, p, wrapper, target);

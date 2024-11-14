@@ -38,11 +38,13 @@ public class GraphNode {
     private final CompilationUnit compilationUnit;
     /**
      * This is the enclosing class for the original node.
+     * Our objective is to copy things from here to the typeDeclaration below
      */
     private TypeDeclaration<?> enclosingType;
 
     /**
      * This is the class declaration that is the target.
+     * We will copy things from the enclosingType to here.
      */
     private TypeDeclaration<?> typeDeclaration;
 
@@ -146,6 +148,9 @@ public class GraphNode {
         }
     }
 
+    /*
+     * Handles implementations and extensions
+     */
     private void inherit() throws AntikytheraException {
         ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
 
@@ -380,13 +385,13 @@ public class GraphNode {
         return compilationUnit;
     }
 
-    public TypeDeclaration getEnclosingType() {
+    public TypeDeclaration<?> getEnclosingType() {
         return enclosingType;
     }
 
     /**
-     * OVerride the hashcode method to do our own.
-     * @return
+     * Override the hashcode method to do our own.
+     * @return the generated hashcode for the instance
      */
     @Override
     public int hashCode() {

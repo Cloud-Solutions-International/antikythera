@@ -540,60 +540,83 @@ public class DepSolver {
             TypeDeclaration<?> cdecl = node.getEnclosingType();
 
             if (scope.isNameExpr()) {
-
-                NameExpr expr = scope.asNameExpr();
-                Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
-
-                Type field = null;
-
-                if (fd.isPresent()) {
-                    field = fd.get().getElementType();
-                    node.addField(fd.get());
-
-                } else {
-                    field = names.get(expr.getNameAsString());
-                }
-
-
-                if (field != null) {
-                    if (field.isClassOrInterfaceType()) {
-                        ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
-                        pushField(node, mce, im);
-                    }
-                    for (AnnotationExpr ann : field.getAnnotations()) {
-                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
-                        if (imp != null) {
-                            node.getDestination().addImport(imp.getImport());
-                        }
-                    }
-
-                } else {
-                    /*
-                     * Can be either a call related to a local or a static call.
-                     * when the import is not null, that means this is still an external method call.
-                     */
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-
-                        if (imp.getType() != null) {
-                            try {
-                                Graph.createGraphNode(imp.getType());
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        }
-                        if (imp.getField() != null) {
-                            try {
-                                Graph.createGraphNode(imp.getField());
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        }
-                    }
-                }
+                externalViaName(node, scope, mce, cdecl);
             } else if (scope.isFieldAccessExpr()) {
                 resolveField(node, scope);
+            } else if (scope.isMethodCallExpr()) {
+                Optional<Expression> v = scope.asMethodCallExpr().getScope();
+                if (v.isPresent()) {
+                    Expression expr = v.get();
+                    if (expr.isNameExpr()) {
+                        Type t = names.get(expr.asNameExpr().getNameAsString());
+                        if (t != null && t.isClassOrInterfaceType()) {
+                            ClassOrInterfaceType ct = t.asClassOrInterfaceType();
+                            String fullyQualifiedName = ct.getName().getIdentifier() + "." + ct.getName().toString();
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                            if (cu != null) {
+                                TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, ct.getNameAsString());
+                                if (td != null) {
+                                    // todo finish this
+                                }
+                            }
+                            // todo finish this
+                        }
+                    }
+                }
+            }
+        }
+
+        private void externalViaName(GraphNode node, Expression scope, MethodCallExpr mce, TypeDeclaration<?> cdecl) throws AntikytheraException {
+            NameExpr expr = scope.asNameExpr();
+            Optional<FieldDeclaration> fd = cdecl.getFieldByName(expr.getNameAsString());
+
+            Type field = null;
+
+            if (fd.isPresent()) {
+                field = fd.get().getElementType();
+                node.addField(fd.get());
+
+            } else {
+                field = names.get(expr.getNameAsString());
+            }
+
+
+            if (field != null) {
+                if (field.isClassOrInterfaceType()) {
+                    ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
+                    pushField(node, mce, im);
+                }
+                for (AnnotationExpr ann : field.getAnnotations()) {
+                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
+                    if (imp != null) {
+                        node.getDestination().addImport(imp.getImport());
+                    }
+                }
+
+            } else {
+                /*
+                 * Can be either a call related to a local or a static call.
+                 * when the import is not null, that means this is still an external method call.
+                 */
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp.getImport());
+
+                    if (imp.getType() != null) {
+                        try {
+                            Graph.createGraphNode(imp.getType());
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    }
+                    if (imp.getField() != null) {
+                        try {
+                            Graph.createGraphNode(imp.getField());
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    }
+                }
             }
         }
 
@@ -602,12 +625,6 @@ public class DepSolver {
                 if (im.getType() != null) {
                     node.getDestination().addImport(im.getImport());
                     if (mce.isMethodCallExpr()) {
-                        Optional<NodeList<Type>> typeArgs = mce.asMethodCallExpr().getTypeArguments();
-                        if (typeArgs.isEmpty()) {
-                            NodeList<Type> ta = new NodeList<>();
-
-                        }
-
                         Optional<MethodDeclaration> omd = AbstractCompiler.findMethodDeclaration(mce.asMethodCallExpr(), im.getType());
                         if (omd.isPresent()) {
                             try {
@@ -621,11 +638,7 @@ public class DepSolver {
             } else if (mce.hasScope()){
                 node.getDestination().getPackageDeclaration().ifPresentOrElse(
                         p -> {
-                            String className = p.getNameAsString() + "." + mce.getScope().get().asNameExpr().getNameAsString();
-                            CompilationUnit cu = Graph.getDependencies().get(className);
-                            if (cu != null) {
-                                // abandoned may not be needed.
-                            }
+
                         },
                         () -> {
                             if (im != null) {
