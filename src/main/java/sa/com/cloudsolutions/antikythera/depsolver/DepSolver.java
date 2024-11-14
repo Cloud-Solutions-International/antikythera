@@ -403,7 +403,7 @@ public class DepSolver {
 
                 for (Expression arg : mce.getArguments()) {
                     if (arg.isFieldAccessExpr()) {
-                        resolveField(node, arg);
+                        resolveField(node, arg.asFieldAccessExpr());
                     } else if (arg.isNameExpr()) {
                         if (!names.containsKey(arg.toString())) {
                             ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
@@ -450,7 +450,7 @@ public class DepSolver {
             List<ImportWrapper> imports = solveType(oce.getType(), node);
             for (Expression arg : oce.getArguments()) {
                 if (arg.isFieldAccessExpr()) {
-                    resolveField(node, arg);
+                    resolveField(node, arg.asFieldAccessExpr());
                 } else if (arg.isMethodCallExpr()) {
                     Optional<Expression> scope = arg.asMethodCallExpr().getScope();
 
@@ -491,7 +491,7 @@ public class DepSolver {
                                 }
                             }
                         } else if (scope.get().isFieldAccessExpr()) {
-                            resolveField(node, scope.get());
+                            resolveField(node, scope.get().asFieldAccessExpr());
                         }
                     }
                 } else if (arg.isNameExpr()) {
@@ -542,25 +542,29 @@ public class DepSolver {
             if (scope.isNameExpr()) {
                 externalViaName(node, scope, mce, cdecl);
             } else if (scope.isFieldAccessExpr()) {
-                resolveField(node, scope);
+                resolveField(node, scope.asFieldAccessExpr());
             } else if (scope.isMethodCallExpr()) {
-                Optional<Expression> v = scope.asMethodCallExpr().getScope();
-                if (v.isPresent()) {
-                    Expression expr = v.get();
-                    if (expr.isNameExpr()) {
-                        Type t = names.get(expr.asNameExpr().getNameAsString());
-                        if (t != null && t.isClassOrInterfaceType()) {
-                            ClassOrInterfaceType ct = t.asClassOrInterfaceType();
-                            String fullyQualifiedName = ct.getName().getIdentifier() + "." + ct.getName().toString();
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                            if (cu != null) {
-                                TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, ct.getNameAsString());
-                                if (td != null) {
-                                    // todo finish this
-                                }
+                chainedMethodCall(scope);
+            }
+        }
+
+        private void chainedMethodCall(Expression scope) {
+            Optional<Expression> v = scope.asMethodCallExpr().getScope();
+            if (v.isPresent()) {
+                Expression expr = v.get();
+                if (expr.isNameExpr()) {
+                    Type t = names.get(expr.asNameExpr().getNameAsString());
+                    if (t != null && t.isClassOrInterfaceType()) {
+                        ClassOrInterfaceType ct = t.asClassOrInterfaceType();
+                        String fullyQualifiedName = ct.getName().getIdentifier() + "." + ct.getName().toString();
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                        if (cu != null) {
+                            TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, ct.getNameAsString());
+                            if (td != null) {
+                                // todo finish this
                             }
-                            // todo finish this
                         }
+                        // todo finish this
                     }
                 }
             }

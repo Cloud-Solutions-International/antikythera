@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
@@ -28,7 +29,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
         }
         if (n.getMemberValue() != null) {
             if (n.getMemberValue().isFieldAccessExpr()) {
-                resolveField(node, n.getMemberValue());
+                resolveField(node, n.getMemberValue().asFieldAccessExpr());
             }
             else if (n.getMemberValue().isNameExpr()) {
                 ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
@@ -60,7 +61,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
         for(MemberValuePair pair : n.getPairs()) {
             Expression value = pair.getValue();
             if (value.isFieldAccessExpr()) {
-                resolveField(node, value);
+                resolveField(node, value.asFieldAccessExpr());
             }
             else if (value.isNameExpr()) {
                 ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
@@ -105,9 +106,9 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
 
     private static void annotationArray(GraphNode node, Expression value) {
         ArrayInitializerExpr aie = value.asArrayInitializerExpr();
-        for (Expression e : aie.getValues()) {
-            if (e.isAnnotationExpr()) {
-                AnnotationExpr anne = e.asAnnotationExpr();
+        for (Expression expr : aie.getValues()) {
+            if (expr.isAnnotationExpr()) {
+                AnnotationExpr anne = expr.asAnnotationExpr();
                 String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), anne.getName().toString());
                 if (fqName != null) {
                     node.getDestination().addImport(fqName);
@@ -125,13 +126,13 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                     }
                 }
             }
-            else if(e.isFieldAccessExpr()) {
-                resolveField(node, e);
+            else if(expr.isFieldAccessExpr()) {
+                resolveField(node, expr.asFieldAccessExpr());
             }
         }
     }
 
-    protected static void resolveField(GraphNode node, Expression value) {
+    protected static void resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
@@ -140,12 +141,25 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             if (imp2 != null) {
                 node.getDestination().addImport(imp2.getImport());
                 try {
+                    if(imp2.getType() != null) {
+                        Graph.createGraphNode(imp2.getType());
+                    }
                     if(imp2.getField() != null) {
                         Graph.createGraphNode(imp2.getField());
                     }
-                    else if(imp2.getType() != null) {
-                        Graph.createGraphNode(imp2.getType());
+                    else {
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                        if (cu != null) {
+                            TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString());
+                            if (t != null) {
+                                FieldDeclaration f = t.getFieldByName(value.getNameAsString()).orElse(null);
+                                if (f != null) {
+                                    Graph.createGraphNode(f);
+                                }
+                            }
+                        }
                     }
+
                 } catch (AntikytheraException e) {
                     throw new GeneratorException(e);
                 }
