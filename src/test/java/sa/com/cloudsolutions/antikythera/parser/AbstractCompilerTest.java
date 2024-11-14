@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
@@ -38,6 +40,7 @@ class AbstractCompilerTest {
     static void setUp() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @Test
@@ -106,6 +109,43 @@ class AbstractCompilerTest {
         } finally {
             Files.delete(tempFilePath);
         }
+    }
+
+    @Test
+    void testGetPublicClass() {
+        CompilationUnit cu = StaticJavaParser.parse("""
+            public class TempController {
+                public class TempDto {
+                }
+            }
+        """ + "\n");
+        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testGetPublicEnum() {
+        CompilationUnit cu = StaticJavaParser.parse("public class TempController {}\n");
+        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testGetPublicNull() {
+        CompilationUnit cu = StaticJavaParser.parse("class TempController {}\n");
+        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
+        assertNull(result);
+    }
+
+    @Test
+    void testWildCardImport()  {
+
+        CompilationUnit cu = StaticJavaParser.parse("""
+                import java.util.*;
+                import sa.com.cloudsolutions.antikythera.evaluator.*;
+                class TempController {}\n""");
+        assertNotNull(AbstractCompiler.findWildcardImport(cu, "List"));
+        assertNotNull(AbstractCompiler.findWildcardImport(cu, "Loops"));
     }
 
     @Test

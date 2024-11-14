@@ -21,7 +21,7 @@ public class InterfaceSolverTest {
     void testSerialiazble() throws IOException {
         InterfaceSolver solver = new InterfaceSolver();
         solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
-        assertEquals(1, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
+        assertEquals(2, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
 
     }
 

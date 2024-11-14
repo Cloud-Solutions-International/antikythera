@@ -306,7 +306,6 @@ public class AbstractCompiler {
         Optional<NodeList<Type>> typeArguments = oce.getTypeArguments();
         List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
 
-
         for (ConstructorDeclaration construct : constructors) {
             if (typeArguments.isPresent()) {
                 Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), construct);
@@ -524,7 +523,7 @@ public class AbstractCompiler {
 
     }
 
-    private static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
+     static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
             if (imp.isAsterisk() && !className.contains("\\.")) {
                 String impName = imp.getNameAsString();
