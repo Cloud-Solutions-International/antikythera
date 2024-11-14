@@ -333,7 +333,6 @@ public class AbstractCompiler {
 
     private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
 
-
         for (ConstructorDeclaration constructor : constructors) {
             ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
             if (resolvedConstructor.getNumberOfParams() == arguments.size()) {
@@ -578,14 +577,27 @@ public class AbstractCompiler {
         return null;
     }
 
+    /**
+     * Find the MethodDeclaration that matches the given MethodCallExpression
+     * @param methodCall to search for
+     * @param decl the type declaration that is expected to contain the method declaration
+     * @return an optional of the found method declaration.
+     */
     public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
                                                                     TypeDeclaration<?> decl) {
         List<MethodDeclaration> methods = decl.getMethodsByName(methodCall.getNameAsString());
 
+        /*
+         * If there's only one method matching the name in the type declaration, we just return it.
+         */
         if (methods.size() == 1) {
-            return Optional.of(methods.get(0));
+            return Optional.of(methods.getFirst());
         }
 
+        /*
+         * There are no method delaration at all in the type declaration, that means we must search
+         * the extended types.
+         */
         if (methods.isEmpty() && decl.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
             for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
@@ -603,6 +615,9 @@ public class AbstractCompiler {
             }
         }
 
+        /*
+         * The final attempt will be to compare the types of the arguments to the param types.
+         */
         return findMethodDeclaration(methodCall, methods);
 
     }
@@ -614,22 +629,42 @@ public class AbstractCompiler {
      * @param methods the list of method declarations to search from
      * @return the method declaration or empty if not found
      */
-    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+    private static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
         Optional<NodeList<Type>> typeArguments = methodCall.getTypeArguments();
 
-        for (MethodDeclaration method : methods) {
-            if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
+        int matchCount = 0;
+        int matchIndex = -1;
+
+        for (int i = 0 ; i < methods.size(); i++) {
+            MethodDeclaration method = methods.get(i);
+            if (method.getParameters().size() == methodCall.getArguments().size()
+                    && method.getNameAsString().equals(methodCall.getNameAsString())) {
+
+                /*
+                 * No argument method call matches a no parameter method declaration
+                 */
                 if(method.getParameters().isEmpty() && typeArguments.isEmpty()) {
                     return Optional.of(method);
                 }
 
                 if (typeArguments.isPresent()) {
+                    /*
+                     * We can do an exact match only if type arguments are present.
+                     */
                     Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), method);
                     if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
                         return Optional.of(md);
                     }
                 }
+                else if (methodCall.getArguments().size() == method.getParameters().size()) {
+                    matchCount++;
+                    matchIndex = i;
+                }
             }
+        }
+
+        if (matchCount == 1 ) {
+            return Optional.of(methods.get(matchIndex));
         }
         return Optional.empty();
     }

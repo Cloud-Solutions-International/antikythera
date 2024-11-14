@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -16,7 +15,6 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.stmt.CatchClause;
@@ -393,16 +391,14 @@ public class DepSolver {
             Optional<Expression> scope = mce.getScope();
             try {
                 if (scope.isPresent()) {
-                    externalMethod(node, scope.get(), mce);
-                } else {
-                    if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
-                        Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                                mce, node.getEnclosingType().asClassOrInterfaceDeclaration()
-                        );
-                        if (md.isPresent()) {
-                            Graph.createGraphNode(md.get());
-                        }
+                    if (scope.get().isThisExpr()) {
+                        localCall(mce, node);
                     }
+                    else {
+                        externalMethod(node, scope.get(), mce);
+                    }
+                } else {
+                    localCall(mce, node);
                 }
 
                 for (Expression arg : mce.getArguments()) {
@@ -429,6 +425,17 @@ public class DepSolver {
             }
 
             super.visit(mce, node);
+        }
+
+        private static void localCall(MethodCallExpr mce, GraphNode node) throws AntikytheraException {
+            if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
+                Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
+                        mce, node.getEnclosingType().asClassOrInterfaceDeclaration()
+                );
+                if (md.isPresent()) {
+                    Graph.createGraphNode(md.get());
+                }
+            }
         }
 
         /**

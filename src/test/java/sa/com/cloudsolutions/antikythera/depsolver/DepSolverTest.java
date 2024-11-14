@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,16 +30,19 @@ class DepSolverTest extends TestHelper {
     public static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @BeforeEach
     public void each() throws Exception {
         depSolver = new DepSolver();
+        depSolver.reset();
+
         PersonCompiler p = new PersonCompiler();
         cu = p.getCompilationUnit();
         sourceClass = p.getCompilationUnit().getClassByName("Person").orElseThrow();
         node = Graph.createGraphNode(sourceClass); // Use the Graph.createGraphNode method to create GraphNode
-        depSolver.reset();
+
     }
 
     @Test
@@ -93,12 +97,15 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testSetter() throws AntikytheraException {
-        MethodDeclaration md = sourceClass.getMethodsByName("setId").get(0);
+        MethodDeclaration md = sourceClass.getMethodsByName("setId").get(1);
         node.setNode(md);
 
         depSolver.methodSearch(node);
         MethodDeclaration m = node.getTypeDeclaration().getMethodsByName("setId").getFirst();
         assertNotNull(m, "method should be added to the class.");
+        assertEquals(1, m.getParameters().size());
+        assertEquals("String", m.getParameter(0).getTypeAsString());
+        assertTrue(Graph.getDependencies().containsKey("sa.com.cloudsolutions.antikythera.evaluator.IPerson"));
     }
 
     static class PersonCompiler extends AbstractCompiler {
