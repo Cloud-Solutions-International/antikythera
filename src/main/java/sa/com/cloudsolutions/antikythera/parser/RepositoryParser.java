@@ -184,7 +184,7 @@ public class RepositoryParser extends ClassProcessor {
                         Optional<NodeList<Type>> t = parent.getTypeArguments();
                         if (t.isPresent()) {
                             entityType = t.get().get(0);
-                            entityCu = findEntity(entityType);
+                            entityCu = findEntity(cu, entityType);
                             table = findTableName(entityCu);
                         }
                         break;
@@ -412,11 +412,29 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Find and parse the given entity.
+     *
+     * @param cu
+     * @param entity a type representing the entity
+     * @return a compilation unit
+     * @throws FileNotFoundException if the entity cannot be found in the AUT
+     */
+    public static CompilationUnit findEntity(CompilationUnit cu, Type entity) throws IOException {
+
+        String nameAsString = AbstractCompiler.findFullyQualifiedName(cu, entity.asClassOrInterfaceType().getNameAsString());
+        ClassProcessor processor = new ClassProcessor();
+        processor.compile(AbstractCompiler.classToPath(nameAsString));
+        return processor.getCompilationUnit();
+    }
+
+    /**
+     * Find and parse the given entity.
+     *
      * @param entity a type representing the entity
      * @return a compilation unit
      * @throws FileNotFoundException if the entity cannot be found in the AUT
      */
     public static CompilationUnit findEntity(Type entity) throws IOException {
+
         String nameAsString = entity.asClassOrInterfaceType().resolve().describe();
         ClassProcessor processor = new ClassProcessor();
         processor.compile(AbstractCompiler.classToPath(nameAsString));
@@ -498,7 +516,7 @@ public class RepositoryParser extends ClassProcessor {
         rql.setIsNative(isNative);
         rql.setEntityType(entityType);
         rql.setTable(table);
-        rql.setQuery(query);
+        rql.setQuery(md.findCompilationUnit().get(), query);
         return rql;
     }
 
