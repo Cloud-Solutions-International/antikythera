@@ -372,6 +372,9 @@ public class AbstractCompiler {
          */
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
+            if (imp.getImport().isAsterisk()) {
+                return imp.getNameAsString() + "." + className;
+            }
             return imp.getNameAsString();
         }
 
