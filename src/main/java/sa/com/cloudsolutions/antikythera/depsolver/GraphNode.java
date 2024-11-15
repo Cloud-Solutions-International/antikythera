@@ -328,38 +328,13 @@ public class GraphNode {
      * Search for the type and put it on the stack.
      * This method is only intended to be called by addTypeArguments
      * @param typeArg the class or interface type that we are looking for
-     * @throws AntikytheraException on type resolution errors.
      */
-    private void searchType(Type typeArg) throws AntikytheraException {
+    private void searchType(Type typeArg)  {
         String name = typeArg.isClassOrInterfaceType()
                 ? typeArg.asClassOrInterfaceType().getNameAsString()
                 : typeArg.toString();
 
-        ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, name);
-        if (imp != null) {
-            destination.addImport(imp.getNameAsString());
-
-            FieldDeclaration field = imp.getField();
-            if (field != null) {
-                Graph.createGraphNode(field);
-            }
-            TypeDeclaration<?> type = imp.getType();
-            if (type != null) {
-                Graph.createGraphNode(type);
-            }
-        }
-        else {
-            // todo this enhancement needs to be copied to the addImport method in depsolver
-            String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, name);
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-
-            if (cu != null) {
-                TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, typeArg.asString());
-                if (t != null) {
-                    Graph.createGraphNode(t);
-                }
-            }
-        }
+        DepSolver.addImport(this, name);
     }
 
     public boolean isVisited() {
@@ -446,24 +421,14 @@ public class GraphNode {
         return b.toString();
     }
 
-    public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {
+    public void addField(FieldDeclaration fieldDeclaration)  {
 
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
             typeDeclaration.addMember(fieldDeclaration.clone());
 
-            ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, variable.getTypeAsString());
-            if (imp != null) {
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-                if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getImport().getName().getIdentifier());
-                    if (t != null) {
-                        Graph.createGraphNode(t);
-                    }
-                }
-                destination.addImport(imp.getImport());
-            }
+            DepSolver.addImport(this, variable.getTypeAsString());
         }
     }
 }

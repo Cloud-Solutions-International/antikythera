@@ -597,20 +597,30 @@ public class DepSolver {
         }
     }
 
-    private static void addImport(GraphNode node, String name) {
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), name );
-        if (imp != null) {
-            node.getDestination().addImport(imp.getImport());
-            try {
+    public static void addImport(GraphNode node, String name) {
+        try {
+            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), name);
+            if (imp != null) {
+                node.getDestination().addImport(imp.getImport());
                 if (imp.getType() != null) {
                     Graph.createGraphNode(imp.getType());
                 }
                 if (imp.getField() != null) {
                     Graph.createGraphNode(imp.getField());
                 }
-            } catch (AntikytheraException e) {
-                throw new DepsolverException(e);
+            } else {
+                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+
+                if (cu != null) {
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, name);
+                    if (t != null) {
+                        Graph.createGraphNode(t);
+                    }
+                }
             }
+        } catch (AntikytheraException e) {
+            throw new DepsolverException(e);
         }
     }
 
