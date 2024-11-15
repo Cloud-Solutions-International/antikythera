@@ -32,6 +32,7 @@ import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -588,6 +589,15 @@ public class DepSolver {
             if (field != null) {
                 if (field.isClassOrInterfaceType()) {
                     ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
+                    if (im != null && im.getType() != null) {
+                        AbstractCompiler.findMethodDeclaration(mce, im.getType()).ifPresent(md -> {
+                            try {
+                                Graph.createGraphNode(md);
+                            } catch (AntikytheraException e) {
+                                throw new DepsolverException(e);
+                            }
+                        });
+                    }
                     pushField(node, mce, im);
                 }
                 for (AnnotationExpr ann : field.getAnnotations()) {
