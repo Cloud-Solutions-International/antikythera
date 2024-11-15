@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -132,27 +133,13 @@ public class DepSolver {
      * @param node A graph node that represents a method in the code.
      */
      void methodSearch(GraphNode node) throws AntikytheraException {
-        if (node.getEnclosingType() != null) {
+        if (node.getEnclosingType() != null && node.getNode() instanceof MethodDeclaration md) {
+            callableSearch(node, md);
 
-            String className = node.getEnclosingType().getNameAsString();
-            Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
-                    t -> t.getNameAsString().equals(className));
-
-            if (node.getNode() instanceof MethodDeclaration md) {
-                if (c.isPresent()) {
-                    node.getTypeDeclaration().addMember(md);
-                }
-
-                searchMethodParameters(node, md.getParameters());
-                Type returnType = md.getType();
-                String returns = md.getTypeAsString();
-                if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                    node.addTypeArguments(returnType.asClassOrInterfaceType());
-                }
-
-                names.clear();
-                md.accept(new VariableVisitor(), node);
-                md.accept(new Visitor(), node);
+            Type returnType = md.getType();
+            String returns = md.getTypeAsString();
+            if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
+                node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
         }
     }
@@ -165,19 +152,23 @@ public class DepSolver {
      */
     private void constructorSearch(GraphNode node) throws AntikytheraException {
         if (node.getEnclosingType() != null && node.getNode() instanceof ConstructorDeclaration cd) {
-            String className = node.getEnclosingType().getNameAsString();
-            Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
-                    t -> t.getNameAsString().equals(className));
-
-            if (c.isPresent()) {
-                node.getTypeDeclaration().addMember(cd);
-            }
-            searchMethodParameters(node, cd.getParameters());
-
-            names.clear();
-            cd.accept(new VariableVisitor(), node);
-            cd.accept(new Visitor(), node);
+            callableSearch(node, cd);
         }
+    }
+
+    private void callableSearch(GraphNode node, CallableDeclaration<?> cd) throws AntikytheraException {
+        String className = node.getEnclosingType().getNameAsString();
+        Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
+                t -> t.getNameAsString().equals(className));
+
+        if (c.isPresent()) {
+            node.getTypeDeclaration().addMember(cd);
+        }
+        searchMethodParameters(node, cd.getParameters());
+
+        names.clear();
+        cd.accept(new VariableVisitor(), node);
+        cd.accept(new Visitor(), node);
     }
 
     /**

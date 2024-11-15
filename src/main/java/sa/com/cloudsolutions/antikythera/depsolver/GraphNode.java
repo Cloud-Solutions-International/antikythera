@@ -349,6 +349,7 @@ public class GraphNode {
             }
         }
         else {
+            // todo this enhancement needs to be copied to the addImport method in depsolver
             String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(compilationUnit, name);
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
 
