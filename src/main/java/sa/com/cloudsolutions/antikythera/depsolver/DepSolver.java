@@ -202,6 +202,7 @@ public class DepSolver {
 
     /**
      * Search for an outgoing edge to another class
+     * @Deprecated
      * @param node the current node
      * @param imp the import declaration for the other class.
      * @throws AntikytheraException
@@ -218,7 +219,6 @@ public class DepSolver {
             if (decl != null) {
                 Graph.createGraphNode(decl);
             }
-            node.getDestination().addImport(imp.getImport());
         }
     }
 
@@ -323,21 +323,7 @@ public class DepSolver {
                 Optional<Expression> init = vd.getInitializer();
                 if (init.isPresent()) {
                     if (init.get().isNameExpr()) {
-                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), init.get().asNameExpr().getNameAsString());
-                        if (imp != null) {
-                            try {
-                                node.getDestination().addImport(imp.getImport());
-                                if (imp.getType() != null) {
-                                    Graph.createGraphNode(imp.getType());
-                                }
-                                if (imp.getField() != null) {
-                                    Graph.createGraphNode(imp.getField());
-                                }
-                            } catch (AntikytheraException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-
+                        addImport(node, init.get().asNameExpr().getNameAsString());
                     }
                 }
             }
@@ -374,14 +360,14 @@ public class DepSolver {
                 UnionType ut = param.getType().asUnionType();
                 for (Type t : ut.getElements()) {
                     if (t.isClassOrInterfaceType()) {
-                        inspectClass(node, t.asClassOrInterfaceType());
+                        addImport(node, t.asClassOrInterfaceType().getNameAsString());
                     }
                 }
             } else {
                 Type t = param.getType();
                 if (t.isClassOrInterfaceType()) {
                     ClassOrInterfaceType ct = t.asClassOrInterfaceType();
-                    inspectClass(node, ct);
+                    addImport(node, ct.getNameAsString());
                 }
             }
             super.visit(n, node);
@@ -407,13 +393,7 @@ public class DepSolver {
                         resolveField(node, arg.asFieldAccessExpr());
                     } else if (arg.isNameExpr()) {
                         if (!names.containsKey(arg.toString())) {
-                            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), arg.asNameExpr().getNameAsString());
-                            if (imp != null) {
-                                node.getDestination().addImport(imp.getImport());
-                                if (imp.getField() != null) {
-                                    Graph.createGraphNode(imp.getField());
-                                }
-                            }
+                            addImport(node, arg.asNameExpr().getNameAsString());
                         }
                     } else if (arg.isMethodCallExpr()) {
                         visit(arg.asMethodCallExpr(), node);
@@ -589,36 +569,13 @@ public class DepSolver {
                     pushField(node, mce, im);
                 }
                 for (AnnotationExpr ann : field.getAnnotations()) {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), ann.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                    }
+                    addImport(node, ann.getNameAsString());
                 }
-
             } else {
                 /*
                  * Can be either a call related to a local or a static call.
-                 * when the import is not null, that means this is still an external method call.
                  */
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), expr.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-
-                    if (imp.getType() != null) {
-                        try {
-                            Graph.createGraphNode(imp.getType());
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    }
-                    if (imp.getField() != null) {
-                        try {
-                            Graph.createGraphNode(imp.getField());
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    }
-                }
+                addImport(node, expr.getNameAsString());
             }
         }
 
@@ -649,20 +606,22 @@ public class DepSolver {
         }
     }
 
-    private static void inspectClass(GraphNode node, ClassOrInterfaceType ct) {
-        ImportWrapper wrapper = AbstractCompiler.findImport(node.getCompilationUnit(), ct.getNameAsString());
-        if (wrapper != null) {
-            node.getDestination().addImport(wrapper.getImport());
-            if(wrapper.getType() != null) {
-                try {
-                    Graph.createGraphNode(wrapper.getType());
-                } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
+    private static void addImport(GraphNode node, String name) {
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), name );
+        if (imp != null) {
+            node.getDestination().addImport(imp.getImport());
+            try {
+                if (imp.getType() != null) {
+                    Graph.createGraphNode(imp.getType());
                 }
+                if (imp.getField() != null) {
+                    Graph.createGraphNode(imp.getField());
+                }
+            } catch (AntikytheraException e) {
+                throw new DepsolverException(e);
             }
         }
     }
-
 
     public static void main(String[] args) throws IOException, AntikytheraException {
         File yamlFile = new File(Settings.class.getClassLoader().getResource("depsolver.yml").getFile());
