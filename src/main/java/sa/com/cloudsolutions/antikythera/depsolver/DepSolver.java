@@ -393,13 +393,13 @@ public class DepSolver {
             try {
                 if (scope.isPresent()) {
                     if (scope.get().isThisExpr()) {
-                        localCall(mce, node);
+                        copyMethod(mce, node.getEnclosingType());
                     }
                     else {
                         externalMethod(node, scope.get(), mce);
                     }
                 } else {
-                    localCall(mce, node);
+                    copyMethod(mce, node.getEnclosingType());
                 }
 
                 for (Expression arg : mce.getArguments()) {
@@ -428,14 +428,12 @@ public class DepSolver {
             super.visit(mce, node);
         }
 
-        private static void localCall(MethodCallExpr mce, GraphNode node) throws AntikytheraException {
-            if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
-                Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                        mce, node.getEnclosingType().asClassOrInterfaceDeclaration()
-                );
-                if (md.isPresent()) {
-                    Graph.createGraphNode(md.get());
-                }
+        private static void copyMethod(MethodCallExpr mce, TypeDeclaration<?> cdecl) throws AntikytheraException {
+            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
+                    mce, cdecl
+            );
+            if (md.isPresent()) {
+                Graph.createGraphNode(md.get());
             }
         }
 
@@ -461,35 +459,27 @@ public class DepSolver {
                                     scope.get().asNameExpr().getNameAsString());
                             try {
                                 searchClass(node, imp);
+
+                                /*
+                                 * We need to find the method declaration and then add it to the stack.
+                                 * First step is to find the CompilationUnit. We cannot rely on using the
+                                 * import declaration as the other class maybe in the same package and may
+                                 * not have an import.
+                                 */
+                                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                                        AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                                                scope.get().asNameExpr().getNameAsString()));
+
+                                if (cu != null) {
+                                    Optional<ClassOrInterfaceDeclaration> cdecl = cu.findFirst(ClassOrInterfaceDeclaration.class,
+                                            c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
+
+                                    if (cdecl.isPresent()) {
+                                        copyMethod(arg.asMethodCallExpr(), cdecl.get());
+                                    }
+                                }
                             } catch (AntikytheraException e) {
                                 throw new DepsolverException(e);
-                            }
-
-                            /*
-                             * We need to find the method declaration and then add it to the stack.
-                             * First step is to find the CompilationUnit. We cannot rely on using the
-                             * import declaration as the other class maybe in the same package and may
-                             * not have an import.
-                             */
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
-                                    AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                                            scope.get().asNameExpr().getNameAsString()));
-
-                            if (cu != null) {
-                                Optional<ClassOrInterfaceDeclaration> cdecl = cu.findFirst(ClassOrInterfaceDeclaration.class,
-                                        c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
-
-                                if (cdecl.isPresent()) {
-                                    AbstractCompiler.findMethodDeclaration(
-                                            arg.asMethodCallExpr(), cdecl.get()
-                                    ).ifPresent(md -> {
-                                        try {
-                                            Graph.createGraphNode(md);
-                                        } catch (AntikytheraException e) {
-                                            throw new DepsolverException(e);
-                                        }
-                                    });
-                                }
                             }
                         } else if (scope.get().isFieldAccessExpr()) {
                             resolveField(node, scope.get().asFieldAccessExpr());
@@ -590,13 +580,11 @@ public class DepSolver {
                 if (field.isClassOrInterfaceType()) {
                     ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
                     if (im != null && im.getType() != null) {
-                        AbstractCompiler.findMethodDeclaration(mce, im.getType()).ifPresent(md -> {
-                            try {
-                                Graph.createGraphNode(md);
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        });
+                        try {
+                            copyMethod(mce, im.getType());
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
                     }
                     pushField(node, mce, im);
                 }
@@ -639,13 +627,10 @@ public class DepSolver {
                 if (im.getType() != null) {
                     node.getDestination().addImport(im.getImport());
                     if (mce.isMethodCallExpr()) {
-                        Optional<MethodDeclaration> omd = AbstractCompiler.findMethodDeclaration(mce.asMethodCallExpr(), im.getType());
-                        if (omd.isPresent()) {
-                            try {
-                                Graph.createGraphNode(omd.get());
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
+                        try {
+                            copyMethod(mce, im.getType());
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
                         }
                     }
                 }
