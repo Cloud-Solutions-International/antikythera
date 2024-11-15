@@ -143,21 +143,25 @@ public class DepSolver {
             }
 
             if (md.getAnnotationByName("Override").isPresent()) {
-                TypeDeclaration<?> td = node.getTypeDeclaration();
-                if (td.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = td.asClassOrInterfaceDeclaration();
-                    for(ClassOrInterfaceType parent : cdecl.getImplementedTypes()) {
-                        String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), parent.getNameAsString());
-                        if (fqName != null) {
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqName);
-                            if (cu != null) {
-                                TypeDeclaration<?> parentType = AbstractCompiler.getMatchingType(cu, parent.getNameAsString());
-                                if (parentType != null) {
-                                    for (MethodDeclaration pmd : parentType.getMethodsByName(md.getNameAsString())) {
-                                        if(pmd.getParameters().size() == md.getParameters().size()) {
-                                            Graph.createGraphNode(pmd);
-                                        }
-                                    }
+                findParentMethods(node, md);
+            }
+        }
+    }
+
+    private static void findParentMethods(GraphNode node, MethodDeclaration md) throws AntikytheraException {
+        TypeDeclaration<?> td = node.getTypeDeclaration();
+        if (td.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = td.asClassOrInterfaceDeclaration();
+            for(ClassOrInterfaceType parent : cdecl.getImplementedTypes()) {
+                String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), parent.getNameAsString());
+                if (fqName != null) {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqName);
+                    if (cu != null) {
+                        TypeDeclaration<?> parentType = AbstractCompiler.getMatchingType(cu, parent.getNameAsString());
+                        if (parentType != null) {
+                            for (MethodDeclaration pmd : parentType.getMethodsByName(md.getNameAsString())) {
+                                if(pmd.getParameters().size() == md.getParameters().size()) {
+                                    Graph.createGraphNode(pmd);
                                 }
                             }
                         }
