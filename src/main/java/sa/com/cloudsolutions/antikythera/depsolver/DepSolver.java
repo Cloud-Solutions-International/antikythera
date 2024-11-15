@@ -141,6 +141,29 @@ public class DepSolver {
             if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
+
+            if (md.getAnnotationByName("Override").isPresent()) {
+                TypeDeclaration<?> td = node.getTypeDeclaration();
+                if (td.isClassOrInterfaceDeclaration()) {
+                    ClassOrInterfaceDeclaration cdecl = td.asClassOrInterfaceDeclaration();
+                    for(ClassOrInterfaceType parent : cdecl.getImplementedTypes()) {
+                        String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), parent.getNameAsString());
+                        if (fqName != null) {
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqName);
+                            if (cu != null) {
+                                TypeDeclaration<?> parentType = AbstractCompiler.getMatchingType(cu, parent.getNameAsString());
+                                if (parentType != null) {
+                                    for (MethodDeclaration pmd : parentType.getMethodsByName(md.getNameAsString())) {
+                                        if(pmd.getParameters().size() == md.getParameters().size()) {
+                                            Graph.createGraphNode(pmd);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -468,7 +491,6 @@ public class DepSolver {
                             }
                         }
                     }
-
                 }
             }
 
