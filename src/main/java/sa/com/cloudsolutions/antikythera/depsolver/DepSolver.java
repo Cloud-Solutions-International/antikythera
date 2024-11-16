@@ -418,6 +418,25 @@ public class DepSolver {
                     if (t != null) {
                         types.add(t);
                     }
+                    else if (node.getEnclosingType().isClassOrInterfaceDeclaration()){
+                        ClassOrInterfaceDeclaration cdecl = node.getTypeDeclaration().asClassOrInterfaceDeclaration();
+                        Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
+
+                        if (fd.isPresent()) {
+                            Type field = fd.get().getElementType();
+                            node.addField(fd.get());
+
+                            if (field != null) {
+                                for (AnnotationExpr ann : field.getAnnotations()) {
+                                    addImport(node, ann.getNameAsString());
+                                }
+                            }
+                            addImport(node, field.getElementType().asString());
+                        }
+                        else {
+                            addImport(node, arg.asNameExpr().getNameAsString());
+                        }
+                    }
                 }
                 else if (arg.isLiteralExpr()) {
                     types.add(AbstractCompiler.convertLiteralToType(arg.asLiteralExpr()));
