@@ -25,7 +25,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import io.restassured.specification.Argument;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -34,11 +33,11 @@ import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -399,11 +398,8 @@ public class DepSolver {
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
             try {
-                if (mce.getTypeArguments().isEmpty()) {
-                    solveTypeArguments(node, mce);
-                }
-                chainedMethodCall(node, mce);
-
+                MCEWrapper mceWrapper = solveArgumentTypes(node, mce);
+                chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
                 e.printStackTrace();
                 throw new DepsolverException("aa");
@@ -412,8 +408,10 @@ public class DepSolver {
             super.visit(mce, node);
         }
 
-        private void solveTypeArguments(GraphNode node, MethodCallExpr mce) throws AntikytheraException {
+        private MCEWrapper solveArgumentTypes(GraphNode node, MethodCallExpr mce) throws AntikytheraException {
+            MCEWrapper mw = new MCEWrapper();
             NodeList<Type> types = new NodeList<>();
+
             for(Expression arg : mce.getArguments()) {
                 if (arg.isNameExpr()) {
                     Type t = names.get(arg.asNameExpr().getNameAsString());
@@ -435,12 +433,18 @@ public class DepSolver {
                     }
                 }
                 else if (arg.isMethodCallExpr()) {
-                    chainedMethodCall(node, arg.asMethodCallExpr());
+                    chainedMethodCall(node, solveArgumentTypes(node, arg.asMethodCallExpr()));
                 }
                 else {
                     System.out.println("bada");
                 }
             }
+            if (types.size() == mce.getArguments().size()) {
+                mw.setArgumentTypes(types);
+            }
+
+            mw.setMethodCallExpr(mce);
+            return mw;
         }
 
         private Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae) {
@@ -473,12 +477,12 @@ public class DepSolver {
             return Optional.empty();
         }
 
-        private GraphNode copyMethod(MethodCallExpr mce, GraphNode node) throws AntikytheraException {
+        private GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) throws AntikytheraException {
             TypeDeclaration<?> cdecl = node.getEnclosingType();
             Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(
-                    mce, cdecl
+                    mceWrapper, cdecl
             );
-            for (Expression arg : mce.getArguments()) {
+            for (Expression arg : mceWrapper.getMethodCallExpr().getArguments()) {
                 if (arg.isFieldAccessExpr()) {
                     resolveField(node, arg.asFieldAccessExpr());
                 } else if (arg.isNameExpr()) {
@@ -533,7 +537,7 @@ public class DepSolver {
                                             c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
 
                                     if (cdecl.isPresent()) {
-                                        copyMethod(arg.asMethodCallExpr(), node);
+                                        copyMethod(solveArgumentTypes(node, arg.asMethodCallExpr()), node);
                                     }
                                 }
                             } catch (AntikytheraException e) {
@@ -592,24 +596,25 @@ public class DepSolver {
             } else if (scope.isFieldAccessExpr()) {
                 resolveField(node, scope.asFieldAccessExpr());
             } else if (scope.isMethodCallExpr()) {
-                chainedMethodCall(node, mce);
+                chainedMethodCall(node, solveArgumentTypes(node, mce));
             }
         }
 
-        private void chainedMethodCall(GraphNode node, Expression expr) throws AntikytheraException {
-            LinkedList<Expression> chain = Evaluator.findScopeChain(expr);
+        private void chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
+            LinkedList<Expression> chain = Evaluator.findScopeChain(mceWrapper.getMethodCallExpr());
 
             if (chain.isEmpty()) {
-                copyMethod(expr.asMethodCallExpr(), node);
+                copyMethod(mceWrapper, node);
             }
             else {
-                evaluateScopeChain(node, chain);
+                GraphNode gn = evaluateScopeChain(node, chain);
+                if (gn != null) {
+                    copyMethod(mceWrapper, node);
+                }
             }
-
-            copyMethod(expr.asMethodCallExpr(), node);
         }
 
-        private void evaluateScopeChain(GraphNode node, LinkedList<Expression> chain) {
+        private GraphNode evaluateScopeChain(GraphNode node, LinkedList<Expression> chain) {
             GraphNode gn = node;
             while (!chain.isEmpty() && gn != null) {
                 Expression expr = chain.pollLast();
@@ -618,7 +623,7 @@ public class DepSolver {
                 }
                 else if (expr.isMethodCallExpr()) {
                     try {
-                        gn = copyMethod(expr.asMethodCallExpr(), gn);
+                        gn = copyMethod(solveArgumentTypes(node, expr.asMethodCallExpr()), gn);
                     } catch (AntikytheraException e) {
                         throw new DepsolverException(e);
                     }
@@ -630,28 +635,25 @@ public class DepSolver {
                     if (!names.containsKey(expr.toString())) {
                         Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
-                        Type field = null;
-
                         if (fd.isPresent()) {
-                            field = fd.get().getElementType();
+                            Type field = fd.get().getElementType();
                             node.addField(fd.get());
-                        } else {
-                            field = names.get(nameExpr.getNameAsString());
-                        }
 
-                        if (field != null) {
-                            for (AnnotationExpr ann : field.getAnnotations()) {
-                                addImport(node, ann.getNameAsString());
+                            if (field != null) {
+                                for (AnnotationExpr ann : field.getAnnotations()) {
+                                    addImport(node, ann.getNameAsString());
+                                }
                             }
-                        } else {
-                            /*
-                             * Can be either a call related to a local or a static call.
-                             */
-                            addImport(node, nameExpr.getNameAsString());
+                            gn = addImport(node, field.getElementType().asString());
+                        }
+                        else {
+                            gn = addImport(node, nameExpr.getNameAsString());
                         }
                     }
                 }
             }
+
+            return gn;
         }
 
         @Deprecated
@@ -675,7 +677,7 @@ public class DepSolver {
                     ImportWrapper im = AbstractCompiler.findImport(node.getCompilationUnit(), field.asClassOrInterfaceType().getNameAsString());
                     if (im != null && im.getType() != null) {
                         try {
-                            copyMethod(mce, Graph.createGraphNode(im.getType()));
+                            copyMethod(solveArgumentTypes(node, mce), Graph.createGraphNode(im.getType()));
                         } catch (AntikytheraException e) {
                             throw new DepsolverException(e);
                         }
@@ -699,7 +701,7 @@ public class DepSolver {
                     node.getDestination().addImport(im.getImport());
                     if (mce.isMethodCallExpr()) {
                         try {
-                            copyMethod(mce, Graph.createGraphNode(im.getType()));
+                            copyMethod(solveArgumentTypes(node, mce), Graph.createGraphNode(im.getType()));
                         } catch (AntikytheraException e) {
                             throw new DepsolverException(e);
                         }
@@ -720,13 +722,14 @@ public class DepSolver {
         }
     }
 
-    public static void addImport(GraphNode node, String name) {
+    public static GraphNode addImport(GraphNode node, String name) {
+        GraphNode returnValue = null;
         try {
             ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), name);
             if (imp != null) {
                 node.getDestination().addImport(imp.getImport());
                 if (imp.getType() != null) {
-                    Graph.createGraphNode(imp.getType());
+                    returnValue = Graph.createGraphNode(imp.getType());
                 }
                 if (imp.getField() != null) {
                     Graph.createGraphNode(imp.getField());
@@ -738,13 +741,14 @@ public class DepSolver {
                 if (cu != null) {
                     TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, name);
                     if (t != null) {
-                        Graph.createGraphNode(t);
+                        returnValue = Graph.createGraphNode(t);
                     }
                 }
             }
         } catch (AntikytheraException e) {
             throw new DepsolverException(e);
         }
+        return returnValue;
     }
 
     public static void main(String[] args) throws IOException, AntikytheraException {

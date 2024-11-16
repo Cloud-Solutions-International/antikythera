@@ -580,6 +580,21 @@ public class AbstractCompiler {
         return null;
     }
 
+    public static Optional<MethodDeclaration> findMethodDeclaration(MCEWrapper methodCall,
+                                                                    TypeDeclaration<?> decl) {
+        if (methodCall.getArgumentTypes() == null || methodCall.getArgumentTypes().isEmpty()) {
+            return findMethodDeclaration(methodCall.getMethodCallExpr(), decl);
+        }
+
+        for (MethodDeclaration method : decl.getMethodsByName(methodCall.getMethodCallExpr().getNameAsString())) {
+            Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
+            if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
+                return Optional.of(md);
+            }
+        }
+        return Optional.empty();
+    }
+
     /**
      * Find the MethodDeclaration that matches the given MethodCallExpression
      * @param methodCall to search for
@@ -646,20 +661,11 @@ public class AbstractCompiler {
                 /*
                  * No argument method call matches a no parameter method declaration
                  */
-                if(method.getParameters().isEmpty() && typeArguments.isEmpty()) {
+                if(method.getParameters().isEmpty()) {
                     return Optional.of(method);
                 }
 
-                if (typeArguments.isPresent()) {
-                    /*
-                     * We can do an exact match only if type arguments are present.
-                     */
-                    Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), method);
-                    if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
-                        return Optional.of(md);
-                    }
-                }
-                else if (methodCall.getArguments().size() == method.getParameters().size()) {
+                if (methodCall.getArguments().size() == method.getParameters().size()) {
                     matchCount++;
                     matchIndex = i;
                 }
