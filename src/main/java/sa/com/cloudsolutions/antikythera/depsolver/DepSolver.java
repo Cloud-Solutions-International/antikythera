@@ -609,7 +609,7 @@ public class DepSolver {
             else {
                 GraphNode gn = evaluateScopeChain(node, chain);
                 if (gn != null) {
-                    copyMethod(mceWrapper, node);
+                    copyMethod(mceWrapper, gn);
                 }
             }
         }
