@@ -23,4 +23,9 @@ public class MCEWrapper {
     public void setMethodCallExpr(MethodCallExpr methodCallExpr) {
         this.methodCallExpr = methodCallExpr;
     }
+
+    @Override
+    public String toString() {
+        return methodCallExpr.toString();
+    }
 }

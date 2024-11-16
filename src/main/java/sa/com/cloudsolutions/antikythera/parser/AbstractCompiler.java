@@ -592,6 +592,24 @@ public class AbstractCompiler {
                 return Optional.of(md);
             }
         }
+
+        if (decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                if (cdecl.findCompilationUnit().isPresent()) {
+                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                        Optional<MethodDeclaration> method = findMethodDeclaration(methodCall, p);
+                        if (method.isPresent()) {
+                            return method;
+                        }
+                    }
+                }
+            }
+        }
         return Optional.empty();
     }
 

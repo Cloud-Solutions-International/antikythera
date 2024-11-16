@@ -623,7 +623,7 @@ public class DepSolver {
                 }
                 else if (expr.isMethodCallExpr()) {
                     try {
-                        gn = copyMethod(solveArgumentTypes(node, expr.asMethodCallExpr()), gn);
+                        gn = copyMethod(solveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
                     } catch (AntikytheraException e) {
                         throw new DepsolverException(e);
                     }
@@ -631,24 +631,27 @@ public class DepSolver {
                 else if (expr.isNameExpr()) {
                     NameExpr nameExpr = expr.asNameExpr();
                     TypeDeclaration<?> cdecl = gn.getEnclosingType();
-
-                    if (!names.containsKey(expr.toString())) {
+                    Type t = names.get(expr.toString());
+                    if (t == null) {
                         Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
                         if (fd.isPresent()) {
                             Type field = fd.get().getElementType();
-                            node.addField(fd.get());
+                            gn.addField(fd.get());
 
                             if (field != null) {
                                 for (AnnotationExpr ann : field.getAnnotations()) {
-                                    addImport(node, ann.getNameAsString());
+                                    addImport(gn, ann.getNameAsString());
                                 }
                             }
-                            gn = addImport(node, field.getElementType().asString());
+                            gn = addImport(gn, field.getElementType().asString());
                         }
                         else {
-                            gn = addImport(node, nameExpr.getNameAsString());
+                            gn = addImport(gn, nameExpr.getNameAsString());
                         }
+                    }
+                    else {
+                        gn = addImport(gn, t.asString());
                     }
                 }
             }
