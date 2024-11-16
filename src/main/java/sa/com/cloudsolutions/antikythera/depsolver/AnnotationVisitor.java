@@ -132,7 +132,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
         }
     }
 
-    protected static void resolveField(GraphNode node, FieldAccessExpr value) {
+    protected static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
@@ -154,7 +154,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                             if (t != null) {
                                 FieldDeclaration f = t.getFieldByName(value.getNameAsString()).orElse(null);
                                 if (f != null) {
-                                    Graph.createGraphNode(f);
+                                    return Graph.createGraphNode(f);
                                 }
                             }
                         }
@@ -165,5 +165,6 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 }
             }
         }
+        return null;
     }
 }
