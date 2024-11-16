@@ -13,18 +13,22 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
+import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import io.restassured.specification.Argument;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
@@ -33,6 +37,7 @@ import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -393,6 +398,9 @@ public class DepSolver {
 
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
+            if (mce.getTypeArguments().isEmpty()) {
+                solveTypeArguments(mce);
+            }
             Optional<Expression> scope = mce.getScope();
             try {
                 if (scope.isPresent()) {
@@ -424,6 +432,67 @@ public class DepSolver {
             }
 
             super.visit(mce, node);
+        }
+
+        private void solveTypeArguments(GraphNode node, MethodCallExpr mce) throws AntikytheraException {
+            NodeList<Type> types = new NodeList<>();
+            for(Expression arg : mce.getArguments()) {
+                if (arg.isNameExpr()) {
+                    Type t = names.get(arg.asNameExpr().getNameAsString());
+                    if (t != null) {
+                        types.add(t);
+                    }
+                }
+                else if (arg.isLiteralExpr()) {
+                    types.add(AbstractCompiler.convertLiteralToType(arg.asLiteralExpr()));
+                }
+                else if (arg.isFieldAccessExpr()) {
+                    FieldAccessExpr fae = arg.asFieldAccessExpr();
+                    Expression scope = fae.getScope();
+                    if (scope.isNameExpr()) {
+                        resolveScopedNameExpression(scope, fae).ifPresent(types::add);
+                    }
+                    else {
+                        System.out.println("bada");
+                    }
+                }
+                else if (arg.isMethodCallExpr()) {
+                    chainedMethodCall(node, arg.asMethodCallExpr());
+                }
+                else {
+                    System.out.println("bada");
+                }
+            }
+        }
+
+        private Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae) {
+            Type t = names.get(scope.asNameExpr().getNameAsString());
+            if (t != null) {
+                return Optional.of(t);
+            }
+            else {
+                ImportWrapper imp = AbstractCompiler.findImport(scope.findCompilationUnit().get(), scope.asNameExpr().getNameAsString());
+                if (imp != null) {
+                    if (imp.isExternal()) {
+                        try {
+                            Class<?> c = Class.forName(imp.getNameAsString());
+                            Field f = c.getField(fae.getNameAsString());
+                            ClassOrInterfaceType ct = new ClassOrInterfaceType(null, f.getType().getTypeName());
+                            return Optional.of(ct);
+
+                        } catch (ReflectiveOperationException e) {
+                            System.err.println(e.getMessage());
+                        }
+                    }
+                    else {
+                        System.out.println(imp);
+                    }
+                }
+                else {
+                    System.out.println("Bada");
+                }
+            }
+            return Optional.empty();
         }
 
         private static void copyMethod(MethodCallExpr mce, TypeDeclaration<?> cdecl) throws AntikytheraException {
@@ -532,29 +601,18 @@ public class DepSolver {
             } else if (scope.isFieldAccessExpr()) {
                 resolveField(node, scope.asFieldAccessExpr());
             } else if (scope.isMethodCallExpr()) {
-                chainedMethodCall(scope);
+                chainedMethodCall(node, mce);
             }
         }
 
-        private void chainedMethodCall(Expression scope) {
-            Optional<Expression> v = scope.asMethodCallExpr().getScope();
-            if (v.isPresent()) {
-                Expression expr = v.get();
-                if (expr.isNameExpr()) {
-                    Type t = names.get(expr.asNameExpr().getNameAsString());
-                    if (t != null && t.isClassOrInterfaceType()) {
-                        ClassOrInterfaceType ct = t.asClassOrInterfaceType();
-                        String fullyQualifiedName = ct.getName().getIdentifier() + "." + ct.getName().toString();
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                        if (cu != null) {
-                            TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, ct.getNameAsString());
-                            if (td != null) {
-                                // todo finish this
-                            }
-                        }
-                        // todo finish this
-                    }
-                }
+        private void chainedMethodCall(GraphNode node, Expression expr) throws AntikytheraException {
+            LinkedList<Expression> chain = Evaluator.findScopeChain(expr);
+
+            if (chain.isEmpty()) {
+                copyMethod(expr.asMethodCallExpr(), node.getEnclosingType());
+            }
+            else {
+
             }
         }
 
