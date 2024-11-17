@@ -50,6 +50,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public class DepSolver {
     /**
@@ -586,7 +587,19 @@ public class DepSolver {
             );
 
             if (md.isPresent()) {
-                return Graph.createGraphNode(md.get());
+                CallableDeclaration<?> method = md.get();
+
+                if (method.isAbstract() ) {
+                    Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
+
+                    if (!parent.get().isInterface()) {
+                        Optional<CallableDeclaration<?>> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
+                        if (overRides.isPresent()) {
+                            Graph.createGraphNode(overRides.get());
+                        }
+                    }
+                }
+                return Graph.createGraphNode(method);
             }
             else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
                 Type t = lombokSolver(mce, decl, node);

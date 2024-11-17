@@ -632,7 +632,12 @@ public class AbstractCompiler {
 
 
     public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
-                                                                      TypeDeclaration<?> decl) {
+                                                                         TypeDeclaration<?> decl) {
+        return findMethodDeclaration(methodCall, decl, true);
+    }
+
+    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+                                                                         TypeDeclaration<?> decl, boolean overRides) {
 
         if (methodCall.getMethodCallExpr() instanceof MethodCallExpr mce) {
             int found = -1;
@@ -653,21 +658,10 @@ public class AbstractCompiler {
                 }
             }
 
-            if (decl.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-
-                for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                    if (cdecl.findCompilationUnit().isPresent()) {
-                        String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                        if (cu != null) {
-                            TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                            Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
-                            if (method.isPresent()) {
-                                return method;
-                            }
-                        }
-                    }
+            if (overRides) {
+                Optional<CallableDeclaration<?>> method = findCallableInParent(methodCall, decl);
+                if (method.isPresent()) {
+                    return method;
                 }
             }
 
@@ -676,6 +670,27 @@ public class AbstractCompiler {
             }
         }
 
+        return Optional.empty();
+    }
+
+    private static Optional<CallableDeclaration<?>> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
+        if (decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                if (cdecl.findCompilationUnit().isPresent()) {
+                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
+                        if (method.isPresent()) {
+                            return method;
+                        }
+                    }
+                }
+            }
+        }
         return Optional.empty();
     }
 

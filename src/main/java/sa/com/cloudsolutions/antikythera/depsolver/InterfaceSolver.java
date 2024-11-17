@@ -51,6 +51,13 @@ public class InterfaceSolver extends AbstractCompiler {
                         AntikytheraRunTime.addImplementation(interfaceName, t.getFullyQualifiedName().get());
                     }
                 }
+
+                for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
+                    String parentName = AbstractCompiler.findFullyQualifiedName(cu, parent.getNameAsString());
+                    if (parentName != null) {
+                        AntikytheraRunTime.addSubClass(parentName, t.getFullyQualifiedName().get());
+                    }
+                }
             }
         }
         return b;

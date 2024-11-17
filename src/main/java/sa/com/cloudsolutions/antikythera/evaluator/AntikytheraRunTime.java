@@ -37,6 +37,11 @@ public class AntikytheraRunTime {
     protected static final Map<String, Set<String>> interfaces = new HashMap<>();
 
     /**
+     * Stores parent classes as keys and child classes as values.
+     */
+    protected static final Map<String, Set<String>> extensions = new HashMap<>();
+
+    /**
      * Stores the fields that have been autowired.
      * While there should not be cyclic dependencies the reality is that they do exist in the wild.
      * Additionally due to the way that transactions work in spring boot, you often find classes
@@ -152,6 +157,16 @@ public class AntikytheraRunTime {
         stack.clear();
         resolved.clear();
         interfaces.clear();
+        extensions.clear();
+    }
+
+    public static void addSubClass(String parent, String child) {
+        Set<String> s = extensions.computeIfAbsent(parent, k -> new HashSet<>());
+        s.add(child);
+    }
+
+    public static Set<String> findSubClasses(String parent) {
+        return interfaces.getOrDefault(parent, new HashSet<>());
     }
 
     public static void addImplementation(String iface, String impl) {
