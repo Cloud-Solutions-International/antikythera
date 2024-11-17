@@ -469,11 +469,12 @@ public class DepSolver {
                 types.add(t);
             }
             else if (node.getEnclosingType().isClassOrInterfaceDeclaration()){
-                ClassOrInterfaceDeclaration cdecl = node.getTypeDeclaration().asClassOrInterfaceDeclaration();
+                ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
                 Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
 
                 if (fd.isPresent()) {
                     Type field = fd.get().getElementType();
+                    types.add(field);
                     node.addField(fd.get());
 
                     if (field != null) {
@@ -604,74 +605,19 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-
             List<ImportWrapper> imports = solveType(oce.getType(), node);
-            for (Expression arg : oce.getArguments()) {
-                if (arg.isFieldAccessExpr()) {
-                    resolveField(node, arg.asFieldAccessExpr());
-                } else if (arg.isMethodCallExpr()) {
-                    Optional<Expression> scope = arg.asMethodCallExpr().getScope();
-
-                    if (scope.isPresent()) {
-                        if (scope.get().isNameExpr()) {
-                            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(),
-                                    scope.get().asNameExpr().getNameAsString());
-                            try {
-                                searchClass(node, imp);
-
-                                /*
-                                 * We need to find the method declaration and then add it to the stack.
-                                 * First step is to find the CompilationUnit. We cannot rely on using the
-                                 * import declaration as the other class maybe in the same package and may
-                                 * not have an import.
-                                 */
-                                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
-                                        AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
-                                                scope.get().asNameExpr().getNameAsString()));
-
-                                if (cu != null) {
-                                    Optional<ClassOrInterfaceDeclaration> cdecl = cu.findFirst(ClassOrInterfaceDeclaration.class,
-                                            c -> c.getNameAsString().equals(scope.get().asNameExpr().getNameAsString()));
-
-                                    if (cdecl.isPresent()) {
-                                        copyMethod(solveArgumentTypes(node, arg.asMethodCallExpr()), node);
-                                    }
-                                }
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        } else if (scope.get().isFieldAccessExpr()) {
-                            resolveField(node, scope.get().asFieldAccessExpr());
-                        }
-                    }
-                } else if (arg.isNameExpr()) {
-
-                    List<FieldDeclaration> fields = node.getEnclosingType().getFields();
-                    for (FieldDeclaration fd : fields) {
-                        if (fd.getVariable(0).getNameAsString().equals(arg.asNameExpr().getNameAsString())) {
-                            try {
-                                Graph.createGraphNode(fd);
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        }
-                    }
-                }
+            for (ImportWrapper imp : imports) {
+                node.getDestination().addImport(imp.getImport());
+            }
+            try {
+                MCEWrapper mceWrapper = solveArgumentTypes(node, oce);
+                chainedMethodCall(node, mceWrapper);
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new DepsolverException(e.getMessage());
             }
 
-            if (node.getEnclosingType().isClassOrInterfaceDeclaration()) {
-                for (ImportWrapper imp : imports) {
-                    if (imp.getType() != null) {
-                        for (ConstructorDeclaration cdecl : imp.getType().getConstructors()) {
-                            try {
-                                Graph.createGraphNode(cdecl);
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        }
-                    }
-                }
-            }
+
             super.visit(oce, node);
         }
 
@@ -690,9 +636,14 @@ public class DepSolver {
                     }
                 }
             }
-            else {
-                copyMethod(mceWrapper, node);
-                return node;
+            else if (mceWrapper.getMethodCallExpr() instanceof ObjectCreationExpr oce) {
+                if (oce.getType().isClassOrInterfaceType()) {
+                    GraphNode gn = addImport(node, oce.getType().asClassOrInterfaceType().getNameAsString());
+                    if (gn != null) {
+                        copyMethod(mceWrapper, gn);
+                        return gn;
+                    }
+                }
             }
             return null;
         }
