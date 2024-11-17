@@ -455,7 +455,12 @@ public class GraphNode {
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
             typeDeclaration.addMember(fieldDeclaration.clone());
 
-            DepSolver.addImport(this, variable.getTypeAsString());
+            if (variable.getType().isClassOrInterfaceType()) {
+                addTypeArguments(variable.getType().asClassOrInterfaceType());
+            }
+            else {
+                DepSolver.addImport(this, variable.getTypeAsString());
+            }
         }
         initializeField(fieldDeclaration);
     }
