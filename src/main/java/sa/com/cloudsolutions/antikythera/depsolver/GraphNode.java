@@ -14,6 +14,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
@@ -286,26 +287,48 @@ public class GraphNode {
                     ArrayInitializerExpr aie = expr.asArrayInitializerExpr();
                     for (Expression e : aie.getValues()) {
                         if (e.isAnnotationExpr()) {
-                            AnnotationExpr anne = e.asAnnotationExpr();
-                            fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, anne.getName().toString());
-                            if (fqName != null) {
-                                destination.addImport(fqName);
-                            }
-                            if (anne.isNormalAnnotationExpr()) {
-                                NormalAnnotationExpr norm = anne.asNormalAnnotationExpr();
-                                for (MemberValuePair value : norm.getPairs()) {
-                                    if (value.getValue().isAnnotationExpr()) {
-                                        AnnotationExpr ae = value.getValue().asAnnotationExpr();
-                                        fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ae.getName().toString());
-                                        if (fqName != null) {
-                                            destination.addImport(fqName);
-                                        }
-                                    }
-                                }
-                            }
+                            nestedAnnotation(e);
+                        }
+                        else if (e.isFieldAccessExpr()) {
+                            annotationFieldAccess(e);
                         }
                     }
                 }
+                else if (expr.isFieldAccessExpr()) {
+                    annotationFieldAccess(expr);
+                }
+            }
+        }
+    }
+
+    private void nestedAnnotation(Expression e) {
+        String fqName;
+        AnnotationExpr anne = e.asAnnotationExpr();
+        fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, anne.getName().toString());
+        if (fqName != null) {
+            destination.addImport(fqName);
+        }
+        if (anne.isNormalAnnotationExpr()) {
+            NormalAnnotationExpr norm = anne.asNormalAnnotationExpr();
+            for (MemberValuePair value : norm.getPairs()) {
+                if (value.getValue().isAnnotationExpr()) {
+                    AnnotationExpr ae = value.getValue().asAnnotationExpr();
+                    fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ae.getName().toString());
+                    if (fqName != null) {
+                        destination.addImport(fqName);
+                    }
+                }
+            }
+        }
+    }
+
+    private void annotationFieldAccess(Expression expr) {
+        FieldAccessExpr fae = expr.asFieldAccessExpr();
+        Expression scope = fae.getScope();
+        if (scope.isNameExpr()) {
+            ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, scope.asNameExpr().getNameAsString());
+            if (imp != null) {
+                destination.addImport(imp.getImport());
             }
         }
     }
@@ -395,7 +418,7 @@ public class GraphNode {
         this.destination = destination;
     }
 
-    public void setTypeDeclaration(ClassOrInterfaceDeclaration typeDeclaration) {
+    public void setTypeDeclaration(TypeDeclaration<?> typeDeclaration) {
         this.typeDeclaration = typeDeclaration;
     }
 

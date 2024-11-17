@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -64,11 +65,16 @@ public class Graph {
 
                     if (g.getDestination() == null) {
                         g.setDestination(new CompilationUnit());
-                        ClassOrInterfaceDeclaration target = g.getDestination().addClass(cdecl.getNameAsString());
-                        target.setModifiers(cdecl.getModifiers());
-
+                        TypeDeclaration<?> target;
+                        if (cdecl.isAnnotationDeclaration()) {
+                            target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
+                        }
+                        else {
+                            target = g.getDestination().addClass(cdecl.getNameAsString());
+                            target.setModifiers(cdecl.getModifiers());
+                        }
                         Optional<JavadocComment> comment = cdecl.getJavadocComment();
-                        if(comment.isPresent()) {
+                        if (comment.isPresent()) {
                             target.setJavadocComment(comment.get());
                         }
                         g.setTypeDeclaration(target);
