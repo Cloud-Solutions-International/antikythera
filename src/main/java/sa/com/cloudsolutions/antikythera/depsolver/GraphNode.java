@@ -282,36 +282,44 @@ public class GraphNode {
             }
 
             if (ann.isSingleMemberAnnotationExpr()) {
-                Expression expr = ann.asSingleMemberAnnotationExpr().getMemberValue();
-                if (expr.isArrayInitializerExpr()) {
-                    ArrayInitializerExpr aie = expr.asArrayInitializerExpr();
-                    for (Expression e : aie.getValues()) {
-                        if (e.isAnnotationExpr()) {
-                            nestedAnnotation(e);
-                        }
-                        else if (e.isFieldAccessExpr()) {
-                            annotationFieldAccess(e);
-                        }
-                    }
-                }
-                else if (expr.isFieldAccessExpr()) {
-                    annotationFieldAccess(expr);
-                }
+                singleMemeberAnnotation(ann);
             }
             else if (ann.isNormalAnnotationExpr()) {
-                NormalAnnotationExpr norm = ann.asNormalAnnotationExpr();
-                for (MemberValuePair value : norm.getPairs()) {
-                    if (value.getValue().isAnnotationExpr()) {
-                        nestedAnnotation(value.getValue());
-                    }
-                    else if (value.getValue().isFieldAccessExpr()) {
-                        annotationFieldAccess(value.getValue());
-                    }
-                    else if (value.getValue().isClassExpr()) {
-                        ClassOrInterfaceType ct = value.getValue().asClassExpr().getType().asClassOrInterfaceType();
-                        addTypeArguments(ct);
-                    }
+                normalAnnotation(ann);
+            }
+        }
+    }
+
+    private void singleMemeberAnnotation(AnnotationExpr ann) {
+        Expression expr = ann.asSingleMemberAnnotationExpr().getMemberValue();
+        if (expr.isArrayInitializerExpr()) {
+            ArrayInitializerExpr aie = expr.asArrayInitializerExpr();
+            for (Expression e : aie.getValues()) {
+                if (e.isAnnotationExpr()) {
+                    nestedAnnotation(e);
                 }
+                else if (e.isFieldAccessExpr()) {
+                    annotationFieldAccess(e);
+                }
+            }
+        }
+        else if (expr.isFieldAccessExpr()) {
+            annotationFieldAccess(expr);
+        }
+    }
+
+    private void normalAnnotation(AnnotationExpr ann) throws AntikytheraException {
+        NormalAnnotationExpr norm = ann.asNormalAnnotationExpr();
+        for (MemberValuePair value : norm.getPairs()) {
+            if (value.getValue().isAnnotationExpr()) {
+                nestedAnnotation(value.getValue());
+            }
+            else if (value.getValue().isFieldAccessExpr()) {
+                annotationFieldAccess(value.getValue());
+            }
+            else if (value.getValue().isClassExpr()) {
+                ClassOrInterfaceType ct = value.getValue().asClassExpr().getType().asClassOrInterfaceType();
+                addTypeArguments(ct);
             }
         }
     }

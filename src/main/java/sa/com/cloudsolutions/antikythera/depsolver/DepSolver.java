@@ -20,12 +20,14 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.SuperExpr;
 import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -395,9 +397,35 @@ public class DepSolver {
     }
 
     private class Visitor extends AnnotationVisitor {
+
+        @Override
+        public void visit(ExplicitConstructorInvocationStmt n, GraphNode node) {
+            if (node.getNode() instanceof ConstructorDeclaration cd && node.getEnclosingType().isClassOrInterfaceDeclaration()) {
+                for (ClassOrInterfaceType cdecl : node.getEnclosingType().asClassOrInterfaceDeclaration().getExtendedTypes()) {
+                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), cdecl.getNameAsString());
+                    if (fullyQualifiedName != null) {
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                        if (cu != null) {
+                            TypeDeclaration<?> cid = AbstractCompiler.getMatchingType(cu, cdecl.getNameAsString());
+                            if (cid != null) {
+                                for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
+                                    if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
+                                        try {
+                                            Graph.createGraphNode(constructorDeclaration);
+                                        } catch (AntikytheraException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         @Override
         public void visit(CatchClause n, GraphNode node) {
-
             Parameter param = n.getParameter();
             if (param.getType().isUnionType()) {
                 UnionType ut = param.getType().asUnionType();
