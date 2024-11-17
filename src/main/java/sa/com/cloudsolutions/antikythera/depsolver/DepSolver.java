@@ -265,11 +265,24 @@ public class DepSolver {
     }
 
     private void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
-        List<FieldDeclaration> fields = classOrInterface.getMembers().stream()
-                .filter(FieldDeclaration.class::isInstance)
-                .map(FieldDeclaration.class::cast)
-                .sorted(Comparator.comparing(f -> f.getVariable(0).getNameAsString()))
-                .toList();
+        List<FieldDeclaration> fields;
+
+        if (! (classOrInterface.getAnnotationByName("NoArgsConstructor").isPresent()
+                || classOrInterface.getAnnotationByName("AllArgsConstructor").isPresent()
+                || classOrInterface.getAnnotationByName("data").isPresent())) {
+
+            fields = classOrInterface.getMembers().stream()
+                    .filter(FieldDeclaration.class::isInstance)
+                    .map(FieldDeclaration.class::cast)
+                    .sorted(Comparator.comparing(f -> f.getVariable(0).getNameAsString()))
+                    .toList();
+        }
+        else {
+            fields = classOrInterface.getMembers().stream()
+                    .filter(FieldDeclaration.class::isInstance)
+                    .map(FieldDeclaration.class::cast)
+                    .toList();
+        }
 
         List<ConstructorDeclaration> constructors = classOrInterface.getMembers().stream()
                 .filter(ConstructorDeclaration.class::isInstance)
@@ -299,6 +312,7 @@ public class DepSolver {
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
+
             List<ImportDeclaration> list = new ArrayList<>(cu.getImports());
             cu.getImports().clear();
             list.sort(Comparator.comparing(NodeWithName::getNameAsString));
