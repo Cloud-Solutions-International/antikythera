@@ -49,6 +49,13 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
+            if (!imp.isExternal() && imp.getType() != null) {
+                try {
+                    Graph.createGraphNode(imp.getType());
+                } catch (AntikytheraException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
         super.visit(n, node);
     }

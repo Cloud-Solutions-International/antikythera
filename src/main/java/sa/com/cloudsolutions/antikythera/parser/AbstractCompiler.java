@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -787,10 +788,14 @@ public class AbstractCompiler {
         }
     }
 
-    public static ClassOrInterfaceDeclaration getEnclosingClassOrInterface(Node n) {
+    public static TypeDeclaration<?> getEnclosingClassOrInterface(Node n) {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
             return cdecl;
         }
+        if (n instanceof AnnotationDeclaration ad) {
+            return ad;
+        }
+
         Optional<Node> parent = n.getParentNode();
         if (parent.isPresent()) {
             return getEnclosingClassOrInterface(parent.get());

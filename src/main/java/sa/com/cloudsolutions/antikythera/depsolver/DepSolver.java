@@ -427,7 +427,10 @@ public class DepSolver {
                     FieldAccessExpr fae = arg.asFieldAccessExpr();
                     Expression scope = fae.getScope();
                     if (scope.isNameExpr()) {
-                        resolveScopedNameExpression(scope, fae, node).ifPresent(types::add);
+                        Optional<Type> t = resolveScopedNameExpression(scope, fae, node);
+                        if (t.isPresent()) {
+                            types.add(t.get());
+                        }
                     }
                     else {
                         System.out.println("bada");
@@ -576,7 +579,15 @@ public class DepSolver {
                 if (t != null && t.isClassOrInterfaceType()) {
                     return addImport(node, t.asClassOrInterfaceType().getNameAsString());
                 }
+                else {
+                    // desperate measure hack
+                    // todo remove this
+                    for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
+                        Graph.createGraphNode(method);
+                    }
+                }
             }
+
             return null;
         }
 
@@ -689,7 +700,7 @@ public class DepSolver {
         } catch (ReflectiveOperationException e) {
             System.err.println(e.getMessage());
         }
-        return null;
+        return Optional.empty();
     }
 
     public static GraphNode addImport(GraphNode node, String name) {

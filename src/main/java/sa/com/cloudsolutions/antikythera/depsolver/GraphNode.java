@@ -273,7 +273,7 @@ public class GraphNode {
     }
 
     private void processClassAnnotations() {
-        for (AnnotationExpr ann : enclosingType.asClassOrInterfaceDeclaration().getAnnotations()) {
+        for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
             String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
             if (fqName != null) {
