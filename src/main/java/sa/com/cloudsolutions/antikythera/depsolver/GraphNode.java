@@ -273,7 +273,7 @@ public class GraphNode {
         }
     }
 
-    private void processClassAnnotations() {
+    private void processClassAnnotations() throws AntikytheraException {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
             String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
@@ -296,6 +296,21 @@ public class GraphNode {
                 }
                 else if (expr.isFieldAccessExpr()) {
                     annotationFieldAccess(expr);
+                }
+            }
+            else if (ann.isNormalAnnotationExpr()) {
+                NormalAnnotationExpr norm = ann.asNormalAnnotationExpr();
+                for (MemberValuePair value : norm.getPairs()) {
+                    if (value.getValue().isAnnotationExpr()) {
+                        nestedAnnotation(value.getValue());
+                    }
+                    else if (value.getValue().isFieldAccessExpr()) {
+                        annotationFieldAccess(value.getValue());
+                    }
+                    else if (value.getValue().isClassExpr()) {
+                        ClassOrInterfaceType ct = value.getValue().asClassExpr().getType().asClassOrInterfaceType();
+                        addTypeArguments(ct);
+                    }
                 }
             }
         }
