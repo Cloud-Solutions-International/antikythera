@@ -463,7 +463,7 @@ public class DepSolver {
             return mw;
         }
 
-        private void argumentAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) {
+        private void argumentAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
             Type t = names.get(arg.asNameExpr().getNameAsString());
             if (t != null) {
                 types.add(t);
@@ -697,7 +697,7 @@ public class DepSolver {
             return null;
         }
 
-        private GraphNode evaluateScopeChain(GraphNode node, LinkedList<Expression> chain) {
+        private GraphNode evaluateScopeChain(GraphNode node, LinkedList<Expression> chain) throws AntikytheraException {
             GraphNode gn = node;
             while (!chain.isEmpty() && gn != null) {
                 Expression expr = chain.pollLast();

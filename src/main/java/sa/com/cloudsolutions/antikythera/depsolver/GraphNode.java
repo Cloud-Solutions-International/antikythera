@@ -200,34 +200,38 @@ public class GraphNode {
                     }
                 }
             }
-            Optional<Expression> init = field.getVariables().get(0).getInitializer();
-            if (init.isPresent()) {
-                Expression initializer = init.get();
-                if (initializer.isObjectCreationExpr()) {
-                    ObjectCreationExpr oce = initializer.asObjectCreationExpr();
-                    List<ImportWrapper> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
-                    for(ImportWrapper imp : imports) {
-                        destination.getImports().add(imp.getImport());
+            initializeField(field);
+
+            addField(field);
+        }
+    }
+
+    private void initializeField(FieldDeclaration field) throws AntikytheraException {
+        Optional<Expression> init = field.getVariables().get(0).getInitializer();
+        if (init.isPresent()) {
+            Expression initializer = init.get();
+            if (initializer.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = initializer.asObjectCreationExpr();
+                List<ImportWrapper> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
+                for(ImportWrapper imp : imports) {
+                    destination.getImports().add(imp.getImport());
+                }
+            }
+            else if(initializer.isNameExpr()) {
+                setupFieldInitializer(initializer);
+            }
+            else if(initializer.isMethodCallExpr()) {
+                MethodCallExpr mce = initializer.asMethodCallExpr();
+                Optional<Expression> scope = mce.getScope();
+                if (scope.isPresent()) {
+                    if (scope.get().isNameExpr()) {
+                        setupFieldInitializer(scope.get());
                     }
-                }
-                else if(initializer.isNameExpr()) {
-                    setupFieldInitializer(initializer);
-                }
-                else if(initializer.isMethodCallExpr()) {
-                    MethodCallExpr mce = initializer.asMethodCallExpr();
-                    Optional<Expression> scope = mce.getScope();
-                    if (scope.isPresent()) {
-                        if (scope.get().isNameExpr()) {
-                            setupFieldInitializer(scope.get());
-                        }
-                        else if (scope.get().isFieldAccessExpr()) {
-                            setupFieldInitializer(scope.get().asFieldAccessExpr().getScope().asNameExpr());
-                        }
+                    else if (scope.get().isFieldAccessExpr()) {
+                        setupFieldInitializer(scope.get().asFieldAccessExpr().getScope().asNameExpr());
                     }
                 }
             }
-
-            addField(field);
         }
     }
 
@@ -421,7 +425,7 @@ public class GraphNode {
         return b.toString();
     }
 
-    public void addField(FieldDeclaration fieldDeclaration)  {
+    public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {
 
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);
@@ -430,5 +434,6 @@ public class GraphNode {
 
             DepSolver.addImport(this, variable.getTypeAsString());
         }
+        initializeField(fieldDeclaration);
     }
 }
