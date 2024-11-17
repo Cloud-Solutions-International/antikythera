@@ -18,6 +18,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.stmt.CatchClause;
@@ -402,17 +403,19 @@ public class DepSolver {
                 chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
                 e.printStackTrace();
-                throw new DepsolverException("aa");
+                throw new DepsolverException(e.getMessage());
             }
 
             super.visit(mce, node);
         }
 
-        private MCEWrapper solveArgumentTypes(GraphNode node, MethodCallExpr mce) throws AntikytheraException {
+        private MCEWrapper solveArgumentTypes(GraphNode node, NodeWithArguments<?> mce) throws AntikytheraException {
             MCEWrapper mw = new MCEWrapper();
             NodeList<Type> types = new NodeList<>();
 
-            for(Expression arg : mce.getArguments()) {
+            NodeList<Expression> arguments = mce.getArguments();
+
+            for(Expression arg : arguments) {
                 if (arg.isNameExpr()) {
                     Type t = names.get(arg.asNameExpr().getNameAsString());
                     if (t != null) {
@@ -452,18 +455,62 @@ public class DepSolver {
                     }
                 }
                 else if (arg.isMethodCallExpr()) {
-                    chainedMethodCall(node, solveArgumentTypes(node, arg.asMethodCallExpr()));
+                    wrapCallable(node, arg.asMethodCallExpr(), types);
+                }
+                else if (arg.isObjectCreationExpr()) {
+                    wrapCallable(node, arg.asObjectCreationExpr(), types);
                 }
                 else {
                     System.out.println("bada");
                 }
             }
-            if (types.size() == mce.getArguments().size()) {
+            if (types.size() == arguments.size()) {
                 mw.setArgumentTypes(types);
             }
 
             mw.setMethodCallExpr(mce);
             return mw;
+        }
+
+        private void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) throws AntikytheraException {
+            if (arg instanceof NodeWithName<?> argMethodCall) {
+                MCEWrapper wrap = solveArgumentTypes(node, arg);
+                GraphNode gn = chainedMethodCall(node, wrap);
+                if (gn != null) {
+                    if (gn.getNode() instanceof MethodDeclaration md) {
+                        Type t = md.getType();
+                        if (t.isClassOrInterfaceType()) {
+                            addImport(node, t.asClassOrInterfaceType().getNameAsString());
+                        }
+                        types.add(md.getType());
+                    } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
+                        Optional<MethodDeclaration> omd = AbstractCompiler.findMethodDeclaration(wrap, cid);
+                        if (omd.isPresent()) {
+                            MethodDeclaration md = omd.get();
+                            Type t = md.getType();
+                            if (t.isClassOrInterfaceType()) {
+                                addImport(gn, t.asClassOrInterfaceType().getNameAsString());
+                            }
+                            types.add(md.getType());
+                        } else {
+                            if (argMethodCall.getNameAsString().startsWith("get") &&
+                                    cid.getAnnotationByName("Data").isPresent() ||
+                                    cid.getAnnotationByName("Getter").isPresent()
+                            ) {
+                                String field = argMethodCall.getNameAsString().substring(3);
+                                Optional<FieldDeclaration> fd = cid.getFieldByName(ClassProcessor.classToInstanceName(field));
+                                if (fd.isPresent()) {
+                                    Type t = fd.get().getElementType();
+                                    if (t.isClassOrInterfaceType()) {
+                                        addImport(gn, t.asClassOrInterfaceType().getNameAsString());
+                                    }
+                                    types.add(t);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         private Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae) {
@@ -619,18 +666,26 @@ public class DepSolver {
             }
         }
 
-        private void chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
-            LinkedList<Expression> chain = Evaluator.findScopeChain(mceWrapper.getMethodCallExpr());
+        private GraphNode chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
+            if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce) {
+                LinkedList<Expression> chain = Evaluator.findScopeChain(mce);
 
-            if (chain.isEmpty()) {
-                copyMethod(mceWrapper, node);
-            }
-            else {
-                GraphNode gn = evaluateScopeChain(node, chain);
-                if (gn != null) {
-                    copyMethod(mceWrapper, gn);
+                if (chain.isEmpty()) {
+                    copyMethod(mceWrapper, node);
+                    return node;
+                } else {
+                    GraphNode gn = evaluateScopeChain(node, chain);
+                    if (gn != null) {
+                        copyMethod(mceWrapper, gn);
+                        return gn;
+                    }
                 }
             }
+            else {
+                copyMethod(mceWrapper, node);
+                return node;
+            }
+            return null;
         }
 
         private GraphNode evaluateScopeChain(GraphNode node, LinkedList<Expression> chain) {

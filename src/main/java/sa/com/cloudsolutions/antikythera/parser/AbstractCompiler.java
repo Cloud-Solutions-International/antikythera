@@ -319,13 +319,15 @@ public class AbstractCompiler {
     }
 
     public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
-        for (int i = 0; i < construct.getParameters().size(); i++) {
-            Parameter param = construct.getParameter(i);
-            if (param.getType().equals(arguments.get(i))
-                    || param.getType().toString().equals("java.lang.Object")
-                    || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString()))
-            ) {
-                return Optional.of(construct);
+        if (construct.getParameters().size() == arguments.size()) {
+            for (int i = 0; i < construct.getParameters().size(); i++) {
+                Parameter param = construct.getParameter(i);
+                if (param.getType().equals(arguments.get(i))
+                        || param.getType().toString().equals("java.lang.Object")
+                        || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString()))
+                ) {
+                    return Optional.of(construct);
+                }
             }
         }
         return Optional.empty();
@@ -582,11 +584,8 @@ public class AbstractCompiler {
 
     public static Optional<MethodDeclaration> findMethodDeclaration(MCEWrapper methodCall,
                                                                     TypeDeclaration<?> decl) {
-        if (methodCall.getArgumentTypes() == null || methodCall.getArgumentTypes().isEmpty()) {
-            return findMethodDeclaration(methodCall.getMethodCallExpr(), decl);
-        }
 
-        for (MethodDeclaration method : decl.getMethodsByName(methodCall.getMethodCallExpr().getNameAsString())) {
+        for (MethodDeclaration method : decl.getMethodsByName(methodCall.getMethodName())) {
             Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
             if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
                 return Optional.of(md);
@@ -631,7 +630,7 @@ public class AbstractCompiler {
         }
 
         /*
-         * There are no method delaration at all in the type declaration, that means we must search
+         * There are no method declaration at all in the type declaration, that means we must search
          * the extended types.
          */
         if (methods.isEmpty() && decl.isClassOrInterfaceDeclaration()) {
