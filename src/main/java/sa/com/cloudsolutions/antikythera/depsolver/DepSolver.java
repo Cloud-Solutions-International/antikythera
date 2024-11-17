@@ -17,8 +17,10 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
@@ -42,6 +44,7 @@ import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -459,7 +462,7 @@ public class DepSolver {
                     wrapCallable(node, arg.asObjectCreationExpr(), types);
                 }
                 else if (arg.isMethodReferenceExpr()) {
-                    // seems no action needed.
+                    argumentAsMethodReference(node, arg);
                 }
                 else if (arg.isConditionalExpr()) {
                     ConditionalExpr ce = arg.asConditionalExpr();
@@ -480,6 +483,23 @@ public class DepSolver {
 
             mw.setMethodCallExpr(mce);
             return mw;
+        }
+
+        private void argumentAsMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
+            MethodReferenceExpr mre = arg.asMethodReferenceExpr();
+            Expression scope = mre.getScope();
+            if (scope.isNameExpr()) {
+                addImport(node, scope.asNameExpr().getNameAsString());
+            }
+            else if (scope.isThisExpr()) {
+                for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
+                    Graph.createGraphNode(m);
+                }
+            }
+            else if (scope.isTypeExpr()) {
+                TypeExpr te = scope.asTypeExpr();
+                addImport(node, te.getType().asString());
+            }
         }
 
         private void argumentAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {

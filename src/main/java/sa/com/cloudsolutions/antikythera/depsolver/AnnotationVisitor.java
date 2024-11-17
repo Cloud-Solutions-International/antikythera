@@ -46,7 +46,8 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
 
     @Override
     public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
+        String[] fullName = n.getNameAsString().split("\\.");
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fullName[0]);
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
             if (!imp.isExternal() && imp.getType() != null) {
