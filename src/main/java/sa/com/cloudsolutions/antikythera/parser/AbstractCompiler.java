@@ -327,9 +327,13 @@ public class AbstractCompiler {
                         || param.getType().toString().equals("java.lang.Object")
                         || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString()))
                 ) {
-                    return Optional.of(construct);
+
+                }
+                else {
+                    return Optional.empty();
                 }
             }
+            return Optional.of(construct);
         }
         return Optional.empty();
     }
