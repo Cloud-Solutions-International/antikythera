@@ -554,15 +554,8 @@ public class DepSolver {
                 if (imp != null) {
                     node.getDestination().addImport(imp.getImport());
                     if (imp.isExternal()) {
-                        try {
-                            Class<?> c = Class.forName(imp.getNameAsString());
-                            Field f = c.getField(fae.getNameAsString());
-                            ClassOrInterfaceType ct = new ClassOrInterfaceType(null, f.getType().getTypeName());
-                            return Optional.of(ct);
-
-                        } catch (ReflectiveOperationException e) {
-                            System.err.println(e.getMessage());
-                        }
+                        Optional<Type> ct = getExternalType(fae, imp);
+                        return ct;
                     }
                 }
             }
@@ -574,17 +567,7 @@ public class DepSolver {
             Optional<CallableDeclaration<?>> md = AbstractCompiler.findCallableDeclaration(
                     mceWrapper, cdecl
             );
-            for (Expression arg : mceWrapper.getMethodCallExpr().getArguments()) {
-                if (arg.isFieldAccessExpr()) {
-                    resolveField(node, arg.asFieldAccessExpr());
-                } else if (arg.isNameExpr()) {
-                    if (!names.containsKey(arg.toString())) {
-                        addImport(node, arg.asNameExpr().getNameAsString());
-                    }
-                } else if (arg.isMethodCallExpr()) {
-                    visit(arg.asMethodCallExpr(), node);
-                }
-            }
+
             if (md.isPresent()) {
                 return Graph.createGraphNode(md.get());
             }
@@ -694,6 +677,19 @@ public class DepSolver {
             return gn;
         }
 
+    }
+
+    private static Optional<Type> getExternalType(NodeWithSimpleName<?> fae, ImportWrapper imp) {
+        try {
+            Class<?> c = Class.forName(imp.getNameAsString());
+            Field f = c.getField(fae.getNameAsString());
+            ClassOrInterfaceType ct = new ClassOrInterfaceType(null, f.getType().getTypeName());
+            return Optional.of(ct);
+
+        } catch (ReflectiveOperationException e) {
+            System.err.println(e.getMessage());
+        }
+        return null;
     }
 
     public static GraphNode addImport(GraphNode node, String name) {
