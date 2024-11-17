@@ -585,11 +585,19 @@ public class AbstractCompiler {
 
     public static Optional<CallableDeclaration<?>> findConstructorDeclaration(MCEWrapper methodCall,
                                                                     TypeDeclaration<?> decl) {
-
-        for (ConstructorDeclaration constructor : decl.getConstructors()) {
+        int found = -1;
+        int occurs = 0;
+        List<ConstructorDeclaration> constructors = decl.getConstructors();
+        for (int i =0 ; i < constructors.size() ; i++) {
+            ConstructorDeclaration constructor = constructors.get(i);
             Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), constructor);
-            if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
+            if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
                 return Optional.of(md);
+            }
+            if (methodCall.getArgumentTypes() != null &&
+                    constructor.getParameters().size() == methodCall.getArgumentTypes().size()) {
+                found = i;
+                occurs++;
             }
         }
 
@@ -610,6 +618,10 @@ public class AbstractCompiler {
                 }
             }
         }
+
+        if (found != -1 && occurs == 1) {
+            return Optional.of(constructors.get(found));
+        }
         return Optional.empty();
     }
 
@@ -617,10 +629,7 @@ public class AbstractCompiler {
     public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
                                                                       TypeDeclaration<?> decl) {
 
-
         if (methodCall.getMethodCallExpr() instanceof MethodCallExpr mce) {
-
-
             int found = -1;
             int occurs = 0;
             List<MethodDeclaration> methodsByName = decl.getMethodsByName(methodCall.getMethodName());
