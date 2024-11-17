@@ -28,7 +28,10 @@ public class MCEWrapper {
 
     @Override
     public String toString() {
-        return methodCallExpr.toString();
+        if (methodCallExpr != null) {
+            return methodCallExpr.toString();
+        }
+        return "";
     }
 
     public String getMethodName() {

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -162,6 +163,21 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
 
                 } catch (AntikytheraException e) {
                     throw new GeneratorException(e);
+                }
+            }
+            else {
+                // this maybe a field in the node
+                TypeDeclaration<?> decl = node.getEnclosingType();
+                if (decl != null && decl.isClassOrInterfaceDeclaration()) {
+                    ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+                    FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
+                    if (f != null) {
+                        try {
+                            return Graph.createGraphNode(f);
+                        } catch (AntikytheraException e) {
+                            throw new GeneratorException(e);
+                        }
+                    }
                 }
             }
         }

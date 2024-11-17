@@ -582,11 +582,12 @@ public class AbstractCompiler {
         return null;
     }
 
-    public static Optional<MethodDeclaration> findMethodDeclaration(MCEWrapper methodCall,
+
+    public static Optional<CallableDeclaration<?>> findConstructorDeclaration(MCEWrapper methodCall,
                                                                     TypeDeclaration<?> decl) {
 
-        for (MethodDeclaration method : decl.getMethodsByName(methodCall.getMethodName())) {
-            Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
+        for (ConstructorDeclaration constructor : decl.getConstructors()) {
+            Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), constructor);
             if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
                 return Optional.of(md);
             }
@@ -601,7 +602,7 @@ public class AbstractCompiler {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
                         TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                        Optional<MethodDeclaration> method = findMethodDeclaration(methodCall, p);
+                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
                         if (method.isPresent()) {
                             return method;
                         }
@@ -611,6 +612,68 @@ public class AbstractCompiler {
         }
         return Optional.empty();
     }
+
+
+    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+                                                                      TypeDeclaration<?> decl) {
+
+
+        if (methodCall.getMethodCallExpr() instanceof MethodCallExpr mce) {
+
+
+            int found = -1;
+            int occurs = 0;
+            List<MethodDeclaration> methodsByName = decl.getMethodsByName(methodCall.getMethodName());
+
+            for (int i = 0; i < methodsByName.size(); i++) {
+                MethodDeclaration method = methodsByName.get(i);
+                if (methodCall.getArgumentTypes() != null) {
+                    Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
+                    if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
+                        return Optional.of(md);
+                    }
+                }
+                if (method.getParameters().size() == mce.getArguments().size()) {
+                    found = i;
+                    occurs++;
+                }
+            }
+
+            if (decl.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+
+                for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                    if (cdecl.findCompilationUnit().isPresent()) {
+                        String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                        if (cu != null) {
+                            TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                            Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
+                            if (method.isPresent()) {
+                                return method;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (found != -1 && occurs == 1) {
+                return Optional.of(methodsByName.get(found));
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    public static Optional<CallableDeclaration<?>> findCallableDeclaration(MCEWrapper methodCall,
+                                                                      TypeDeclaration<?> decl) {
+        if(methodCall.getMethodCallExpr() instanceof MethodCallExpr) {
+            return findMethodDeclaration(methodCall, decl);
+        }
+
+        return findConstructorDeclaration(methodCall, decl);
+    }
+
 
     /**
      * Find the MethodDeclaration that matches the given MethodCallExpression
