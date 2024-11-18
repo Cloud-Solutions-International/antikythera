@@ -377,10 +377,14 @@ public class GraphNode {
             for (Type typeArg : typeArguments.get()) {
                 if (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().getTypeArguments().isPresent())
                 {
-                    for(Type t : typeArg.asClassOrInterfaceType().getTypeArguments().get()) {
+                    ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
+                    for(Type t : ctype.getTypeArguments().get()) {
                         searchType(t);
                     }
-                    DepSolver.addImport(this, typeArg.asClassOrInterfaceType().getNameAsString());
+                    if (ctype.getScope().isPresent()) {
+                        DepSolver.addImport(this, ctype.getScope().get().getNameAsString());
+                    }
+                    DepSolver.addImport(this, ctype.getNameAsString());
                 }
                 else {
                     searchType(typeArg);
