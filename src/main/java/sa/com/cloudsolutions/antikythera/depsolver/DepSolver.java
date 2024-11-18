@@ -12,6 +12,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
@@ -28,6 +29,7 @@ import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -467,6 +469,17 @@ public class DepSolver {
         }
 
         @Override
+        public void visit(ExpressionStmt n, GraphNode arg) {
+            if (n.getExpression().isAssignExpr()) {
+                Expression expr = n.getExpression().asAssignExpr().getValue();
+                if (expr.isNameExpr()) {
+                    addImport(arg, expr.asNameExpr().getNameAsString());
+                }
+            }
+            super.visit(n, arg);
+        }
+
+        @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
             try {
                 MCEWrapper mceWrapper = solveArgumentTypes(node, mce);
@@ -771,33 +784,55 @@ public class DepSolver {
                     }
                 }
                 else if (expr.isNameExpr()) {
-                    NameExpr nameExpr = expr.asNameExpr();
-                    TypeDeclaration<?> cdecl = gn.getEnclosingType();
-                    Type t = names.get(expr.toString());
-                    if (t == null) {
-                        Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
-
-                        if (fd.isPresent()) {
-                            Type field = fd.get().getElementType();
-                            gn.addField(fd.get());
-
-                            if (field != null) {
-                                for (AnnotationExpr ann : field.getAnnotations()) {
-                                    addImport(gn, ann.getNameAsString());
-                                }
-                            }
-                            gn = addImport(gn, field.getElementType().asString());
-                        }
-                        else {
-                            gn = addImport(gn, nameExpr.getNameAsString());
-                        }
-                    }
-                    else {
-                        gn = addImport(gn, t.asString());
-                    }
+                    gn = evaluateNameExpr(expr, gn);
                 }
             }
 
+            return gn;
+        }
+
+        private GraphNode evaluateNameExpr(Expression expr, GraphNode gn) throws AntikytheraException {
+            NameExpr nameExpr = expr.asNameExpr();
+            TypeDeclaration<?> cdecl = gn.getEnclosingType();
+            Type t = names.get(expr.toString());
+            if (t == null) {
+                Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
+
+                if (fd.isPresent()) {
+                    Type field = fd.get().getElementType();
+                    gn.addField(fd.get());
+
+                    if (field != null) {
+                        for (AnnotationExpr ann : field.getAnnotations()) {
+                            addImport(gn, ann.getNameAsString());
+                        }
+                    }
+                    Type elementType = field.getElementType();
+                    if (elementType.isClassOrInterfaceType()) {
+                        Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
+                        if (types.isPresent()) {
+                            for (Type type : types.get()) {
+                                if (type.isClassOrInterfaceType()) {
+                                    addImport(gn, type.asClassOrInterfaceType().getNameAsString());
+                                }
+                            }
+
+                        }
+                    }
+                    if (elementType.isClassOrInterfaceType()) {
+                        gn = addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
+                    }
+                    else {
+                        gn = addImport(gn, elementType.toString());
+                    }
+                }
+                else {
+                    gn = addImport(gn, nameExpr.getName().toString());
+                }
+            }
+            else {
+                gn = addImport(gn, t.asString());
+            }
             return gn;
         }
 
