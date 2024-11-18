@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -12,16 +13,15 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SuperExpr;
 import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
@@ -30,7 +30,7 @@ import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
-import com.github.javaparser.ast.stmt.ThrowStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnionType;
@@ -48,7 +48,6 @@ import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -59,7 +58,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 public class DepSolver {
     /**
@@ -499,58 +497,7 @@ public class DepSolver {
             NodeList<Expression> arguments = mce.getArguments();
 
             for(Expression arg : arguments) {
-                if (arg.isNameExpr()) {
-                    argumentAsNameExpr(node, arg, types);
-                }
-                else if (arg.isLiteralExpr()) {
-                    types.add(AbstractCompiler.convertLiteralToType(arg.asLiteralExpr()));
-                }
-                else if (arg.isFieldAccessExpr()) {
-                    FieldAccessExpr fae = arg.asFieldAccessExpr();
-                    Expression scope = fae.getScope();
-                    if (scope.isNameExpr()) {
-                        Optional<Type> t = resolveScopedNameExpression(scope, fae, node);
-                        if (t.isPresent()) {
-                            types.add(t.get());
-                        }
-                    }
-                    else {
-                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
-                        if (imp != null) {
-                            node.getDestination().addImport(imp.getImport());
-                            if (imp.isExternal()) {
-                                Optional<Type> ct = getExternalType(fae, imp);
-                                if (ct.isPresent()) {
-                                    types.add(ct.get());
-                                }
-                            }
-                        }
-                    }
-                }
-                else if (arg.isMethodCallExpr()) {
-                    wrapCallable(node, arg.asMethodCallExpr(), types);
-                }
-                else if (arg.isObjectCreationExpr()) {
-                    wrapCallable(node, arg.asObjectCreationExpr(), types);
-                }
-                else if (arg.isMethodReferenceExpr()) {
-                    argumentAsMethodReference(node, arg);
-                }
-                else if (arg.isConditionalExpr()) {
-                    ConditionalExpr ce = arg.asConditionalExpr();
-                    if (ce.getThenExpr().isNameExpr()) {
-                        argumentAsNameExpr(node, ce.getThenExpr(), types);
-                    }
-                    if (ce.getElseExpr().isNameExpr()) {
-                        argumentAsNameExpr(node, ce.getElseExpr(), types);
-                    }
-                }
-                else if (arg.isAssignExpr()) {
-                    System.out.println(arg);
-                }
-                else {
-                    // seems other types dont need special handling they are caught else where
-                }
+                processExpression(node, arg, types);
             }
             if (types.size() == arguments.size()) {
                 mw.setArgumentTypes(types);
@@ -560,7 +507,62 @@ public class DepSolver {
             return mw;
         }
 
-        private void argumentAsMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
+        private void processExpression(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
+            if (expr.isNameExpr()) {
+                expressionAsNameExpr(node, expr, types);
+            }
+            else if (expr.isLiteralExpr()) {
+                types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
+            }
+            else if (expr.isFieldAccessExpr()) {
+                FieldAccessExpr fae = expr.asFieldAccessExpr();
+                Expression scope = fae.getScope();
+                if (scope.isNameExpr()) {
+                    Optional<Type> t = resolveScopedNameExpression(scope, fae, node);
+                    if (t.isPresent()) {
+                        types.add(t.get());
+                    }
+                }
+                else {
+                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+                    if (imp != null) {
+                        node.getDestination().addImport(imp.getImport());
+                        if (imp.isExternal()) {
+                            Optional<Type> ct = getExternalType(fae, imp);
+                            if (ct.isPresent()) {
+                                types.add(ct.get());
+                            }
+                        }
+                    }
+                }
+            }
+            else if (expr.isMethodCallExpr()) {
+                wrapCallable(node, expr.asMethodCallExpr(), types);
+            }
+            else if (expr.isObjectCreationExpr()) {
+                wrapCallable(node, expr.asObjectCreationExpr(), types);
+            }
+            else if (expr.isMethodReferenceExpr()) {
+                expressionAsMethodReference(node, expr);
+            }
+            else if (expr.isConditionalExpr()) {
+                ConditionalExpr ce = expr.asConditionalExpr();
+                if (ce.getThenExpr().isNameExpr()) {
+                    expressionAsNameExpr(node, ce.getThenExpr(), types);
+                }
+                if (ce.getElseExpr().isNameExpr()) {
+                    expressionAsNameExpr(node, ce.getElseExpr(), types);
+                }
+            }
+            else if (expr.isAssignExpr()) {
+                System.out.println(expr);
+            }
+            else {
+                // seems other types dont need special handling they are caught else where
+            }
+        }
+
+        private void expressionAsMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
             MethodReferenceExpr mre = arg.asMethodReferenceExpr();
             Expression scope = mre.getScope();
             if (scope.isNameExpr()) {
@@ -577,7 +579,7 @@ public class DepSolver {
             }
         }
 
-        private void argumentAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
+        private void expressionAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
             Type t = names.get(arg.asNameExpr().getNameAsString());
             if (t != null) {
                 types.add(t);
@@ -671,6 +673,21 @@ public class DepSolver {
                         Optional<Type> ct = getExternalType(fae, imp);
                         return ct;
                     }
+                    if (imp.getField() != null && !imp.getImport().isAsterisk()) {
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
+                        if (cu != null) {
+                            TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
+                            if (td != null) {
+                                td.getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
+                                    try {
+                                        Graph.createGraphNode(fd);
+                                    } catch (AntikytheraException e) {
+                                        throw new DepsolverException(e);
+                                    }
+                                });
+                            }
+                        }
+                    }
                 }
             }
             return Optional.empty();
@@ -715,6 +732,31 @@ public class DepSolver {
             }
 
             return null;
+        }
+
+        @Override
+        public void visit(BinaryExpr n, GraphNode node) {
+            Optional<Node> parent = n.getParentNode();
+            if (parent.isPresent() && !(parent.get() instanceof IfStmt || parent.get() instanceof ConditionalExpr)) {
+                Expression left = n.getLeft();
+                Expression right = n.getRight();
+                try {
+                    processExpression(node, left, new NodeList<>());
+                    processExpression(node, right, new NodeList<>());
+                } catch (AntikytheraException e) {
+                    throw new DepsolverException(e);
+                }
+            }
+            super.visit(n, node);
+        }
+
+        @Override
+        public void visit(CastExpr n, GraphNode node) {
+            Type t = n.getType();
+            if (t.isClassOrInterfaceType()) {
+                addImport(node, t.asClassOrInterfaceType().getNameAsString());
+            }
+            super.visit(n, node);
         }
 
         /**
