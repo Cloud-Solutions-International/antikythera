@@ -31,6 +31,7 @@ import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnionType;
@@ -387,7 +388,14 @@ public class DepSolver {
         public void visit(final VariableDeclarationExpr n, GraphNode node) {
             for(VariableDeclarator vd : n.getVariables()) {
                 names.put(vd.getNameAsString(), vd.getType());
-                solveType(vd.getType(), node);
+                try {
+                    if (vd.getType().isClassOrInterfaceType()) {
+                        node.addTypeArguments(vd.getType().asClassOrInterfaceType());
+                    }
+                } catch (AntikytheraException e) {
+                    throw new DepsolverException(e);
+                }
+
                 Optional<Expression> init = vd.getInitializer();
                 if (init.isPresent()) {
                     if (init.get().isNameExpr()) {
@@ -399,6 +407,13 @@ public class DepSolver {
         }
     }
 
+    /**
+     * See if this can be replaced with addTypeArguments of GraphNode
+     * @param vd
+     * @param node
+     * @return
+     */
+    @Deprecated
     private List<ImportWrapper> solveType(Type vd, GraphNode node) {
         if (vd.isClassOrInterfaceType()) {
             List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
@@ -475,6 +490,19 @@ public class DepSolver {
                 }
             }
             super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(ReturnStmt n, GraphNode node) {
+            n.getExpression().ifPresent(e -> {
+                try {
+                    processExpression(node, e, new NodeList<>());
+                } catch (AntikytheraException ex) {
+                    throw new DepsolverException(ex);
+                }
+            });
+
+            super.visit(n, node);
         }
 
         @Override
