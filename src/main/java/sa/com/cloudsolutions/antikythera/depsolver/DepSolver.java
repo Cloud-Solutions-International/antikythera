@@ -868,7 +868,9 @@ public class DepSolver {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                     if (cu != null) {
                         TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, name);
-                        Graph.createGraphNode(td);
+                        if (td != null) {
+                            Graph.createGraphNode(td);
+                        }
                     }
                 }
             } else {

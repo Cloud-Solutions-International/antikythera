@@ -99,6 +99,12 @@ public class GraphNode {
         }
     }
 
+    /**
+     * Create s new GraphNode from the AST node or returns the previously created one.
+     * @param node AST node
+     * @return a GraphNode
+     * @throws AntikytheraException if the node cannot be processed.
+     */
     public static GraphNode graphNodeFactory(Node node) throws AntikytheraException {
         GraphNode tmp = new GraphNode(node);
         GraphNode g = Graph.getNodes().get(tmp.hashCode());

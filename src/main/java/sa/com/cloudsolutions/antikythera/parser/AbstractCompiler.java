@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -579,6 +580,14 @@ public class AbstractCompiler {
                                 wrapper.setField(field.get());
                                 return wrapper;
                             }
+
+                            Optional<EnumConstantDeclaration> ec = cu2.findFirst(EnumConstantDeclaration.class,
+                                    f -> f.getNameAsString().equals(className)
+                            );
+                            if (ec.isPresent()) {
+                                ImportWrapper wrapper = new ImportWrapper(imp);
+                                return wrapper;
+                            }
                         }
                     }
                 }
@@ -814,15 +823,13 @@ public class AbstractCompiler {
         if (n instanceof AnnotationDeclaration ad) {
             return ad;
         }
-
-        Optional<Node> parent = n.getParentNode();
-        if (parent.isPresent()) {
-            return getEnclosingClassOrInterface(parent.get());
+        if (n != null) {
+            Optional<Node> parent = n.getParentNode();
+            if (parent.isPresent()) {
+                return getEnclosingClassOrInterface(parent.get());
+            }
         }
-
-        else {
-            return null;
-        }
+        return null;
     }
 
     public static Type convertLiteralToType(LiteralExpr literal) {
