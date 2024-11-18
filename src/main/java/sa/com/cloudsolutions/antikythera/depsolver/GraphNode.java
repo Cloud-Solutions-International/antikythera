@@ -283,10 +283,7 @@ public class GraphNode {
     private void processClassAnnotations() throws AntikytheraException {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
-            String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ann.getName().toString());
-            if (fqName != null) {
-                destination.addImport(fqName);
-            }
+            DepSolver.addImport(this, ann.getNameAsString());
 
             if (ann.isSingleMemberAnnotationExpr()) {
                 singleMemeberAnnotation(ann);

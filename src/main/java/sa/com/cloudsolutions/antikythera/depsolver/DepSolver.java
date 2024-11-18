@@ -828,6 +828,14 @@ public class DepSolver {
                 if (imp.getField() != null) {
                     Graph.createGraphNode(imp.getField());
                 }
+                else if (imp.getImport().isAsterisk() && !imp.isExternal())
+                {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
+                    if (cu != null) {
+                        TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, name);
+                        Graph.createGraphNode(td);
+                    }
+                }
             } else {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);

@@ -481,14 +481,14 @@ public class AbstractCompiler {
 
     private static ImportWrapper findNonWildcardImport(CompilationUnit cu, String className) {
         for (ImportDeclaration imp : cu.getImports()) {
-            if (imp.getNameAsString().equals(className)) {
+            if (imp.getNameAsString().equals(className) && !imp.isAsterisk()) {
                 /*
                  * Easy one straight-up match involving a fully qualified name as className
                  */
                 return new ImportWrapper(imp);
             }
 
-            if (className.equals(imp.getName().getIdentifier())) {
+            if (className.equals(imp.getName().getIdentifier()) && !imp.isAsterisk()) {
                 /*
                  * last part of the import matches the class name
                  */
