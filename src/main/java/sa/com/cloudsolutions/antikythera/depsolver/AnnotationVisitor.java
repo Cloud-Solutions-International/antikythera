@@ -40,6 +40,12 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                     node.getDestination().addImport(imp2.getImport());
                 }
             }
+            else if (n.getMemberValue().isBinaryExpr()) {
+                annotationBinaryExpr(node, n.getMemberValue());
+            }
+            else if (n.getMemberValue().isArrayInitializerExpr()) {
+                annotationArray(node, n.getMemberValue());
+            }
         }
         super.visit(n, node);
     }
@@ -73,27 +79,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 resolveField(node, value.asFieldAccessExpr());
             }
             else if (value.isBinaryExpr()) {
-                Expression left = value.asBinaryExpr().getLeft();
-                if (left.isFieldAccessExpr()) {
-                    resolveField(node, left.asFieldAccessExpr());
-                }
-                else if (left.isNameExpr()) {
-                    node.getEnclosingType().getFieldByName(left.asNameExpr().getNameAsString()).ifPresentOrElse(
-                            f -> {
-                                try {
-                                    node.addField(f);
-                                } catch (AntikytheraException e) {
-                                    throw new DepsolverException(e);
-                                }
-                            },
-                            () -> annotationNameExpression(node, left)
-                    );
-                }
-
-                Expression right = value.asBinaryExpr().getRight();
-                if (right.isFieldAccessExpr()) {
-                    resolveField(node, right.asFieldAccessExpr());
-                }
+                annotationBinaryExpr(node, value);
             }
             else if (value.isNameExpr()) {
                 annotationNameExpression(node, value);
@@ -103,6 +89,30 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             }
         }
         super.visit(n, node);
+    }
+
+    private static void annotationBinaryExpr(GraphNode node, Expression value) {
+        Expression left = value.asBinaryExpr().getLeft();
+        if (left.isFieldAccessExpr()) {
+            resolveField(node, left.asFieldAccessExpr());
+        }
+        else if (left.isNameExpr()) {
+            node.getEnclosingType().getFieldByName(left.asNameExpr().getNameAsString()).ifPresentOrElse(
+                    f -> {
+                        try {
+                            node.addField(f);
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    },
+                    () -> annotationNameExpression(node, left)
+            );
+        }
+
+        Expression right = value.asBinaryExpr().getRight();
+        if (right.isFieldAccessExpr()) {
+            resolveField(node, right.asFieldAccessExpr());
+        }
     }
 
     private static void annotationNameExpression(GraphNode node, Expression value) {

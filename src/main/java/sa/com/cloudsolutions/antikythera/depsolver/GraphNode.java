@@ -375,7 +375,16 @@ public class GraphNode {
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
         if (typeArguments.isPresent()) {
             for (Type typeArg : typeArguments.get()) {
-                searchType(typeArg);
+                if (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().getTypeArguments().isPresent())
+                {
+                    for(Type t : typeArg.asClassOrInterfaceType().getTypeArguments().get()) {
+                        searchType(t);
+                    }
+                    DepSolver.addImport(this, typeArg.asClassOrInterfaceType().getNameAsString());
+                }
+                else {
+                    searchType(typeArg);
+                }
             }
         }
         searchType(ifc);
