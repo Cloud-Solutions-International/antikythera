@@ -63,24 +63,7 @@ public class Graph {
                      * We have not previously processed this class.
                      */
 
-                    if (g.getDestination() == null) {
-                        g.setDestination(new CompilationUnit());
-                        TypeDeclaration<?> target;
-                        if (cdecl.isAnnotationDeclaration()) {
-                            target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
-                        }
-                        else {
-                            target = g.getDestination().addClass(cdecl.getNameAsString());
-                            target.setModifiers(cdecl.getModifiers());
-                        }
-                        Optional<JavadocComment> comment = cdecl.getJavadocComment();
-                        if (comment.isPresent()) {
-                            target.setJavadocComment(comment.get());
-                        }
-                        g.setTypeDeclaration(target);
-                    }
-
-                    dependencies.put(fqn, g.getDestination());
+                    unseenType(g, cdecl, fqn);
                 }
             }
         }
@@ -89,6 +72,30 @@ public class Graph {
         g.buildNode();
         DepSolver.push(g);
         return g;
+    }
+
+    private static void unseenType(GraphNode g, TypeDeclaration<?> cdecl, String fqn) {
+        if (g.getDestination() == null) {
+            g.setDestination(new CompilationUnit());
+            TypeDeclaration<?> target;
+            if (cdecl.isAnnotationDeclaration()) {
+                target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
+            }
+            else {
+                target = g.getDestination().addClass(cdecl.getNameAsString());
+                target.setModifiers(cdecl.getModifiers());
+                if (cdecl.isClassOrInterfaceDeclaration()) {
+                    target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
+                }
+            }
+            Optional<JavadocComment> comment = cdecl.getJavadocComment();
+            if (comment.isPresent()) {
+                target.setJavadocComment(comment.get());
+            }
+            g.setTypeDeclaration(target);
+        }
+
+        dependencies.put(fqn, g.getDestination());
     }
 
 
