@@ -146,6 +146,13 @@ public class GraphNode {
                         && typeDeclaration.getAnnotationByName("Getter").isPresent())) {
 
             copyFields();
+            copyConstructors();
+        }
+    }
+
+    private void copyConstructors() throws AntikytheraException {
+        for (ConstructorDeclaration constructor : enclosingType.asClassOrInterfaceDeclaration().getConstructors()) {
+            Graph.createGraphNode(constructor);
         }
     }
 

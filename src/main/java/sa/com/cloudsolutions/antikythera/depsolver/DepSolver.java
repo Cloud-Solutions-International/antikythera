@@ -161,17 +161,21 @@ public class DepSolver {
             }
 
             if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
-                ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
-                for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().get())) {
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(t);
-                    if (cu != null) {
-                        TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
-                        if (td != null) {
-                            for (MethodDeclaration m : td.getMethodsByName(md.getNameAsString())) {
-                                if (m.getParameters().size() == md.getParameters().size()) {
-                                    Graph.createGraphNode(m);
-                                }
-                            }
+                findImplementations(node, md);
+            }
+        }
+    }
+
+    private static void findImplementations(GraphNode node, MethodDeclaration md) throws AntikytheraException {
+        ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
+        for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().get())) {
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(t);
+            if (cu != null) {
+                TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
+                if (td != null) {
+                    for (MethodDeclaration m : td.getMethodsByName(md.getNameAsString())) {
+                        if (m.getParameters().size() == md.getParameters().size()) {
+                            Graph.createGraphNode(m);
                         }
                     }
                 }
@@ -221,6 +225,7 @@ public class DepSolver {
 
         if (c.isPresent()) {
             node.getTypeDeclaration().addMember(cd);
+
         }
         searchMethodParameters(node, cd.getParameters());
 
@@ -497,7 +502,16 @@ public class DepSolver {
                         }
                     }
                     else {
-                        System.out.println("bada");
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+                        if (imp != null) {
+                            node.getDestination().addImport(imp.getImport());
+                            if (imp.isExternal()) {
+                                Optional<Type> ct = getExternalType(fae, imp);
+                                if (ct.isPresent()) {
+                                    types.add(ct.get());
+                                }
+                            }
+                        }
                     }
                 }
                 else if (arg.isMethodCallExpr()) {
@@ -517,6 +531,9 @@ public class DepSolver {
                     if (ce.getElseExpr().isNameExpr()) {
                         argumentAsNameExpr(node, ce.getElseExpr(), types);
                     }
+                }
+                else if (arg.isAssignExpr()) {
+                    System.out.println(arg);
                 }
                 else {
                     // seems other types dont need special handling they are caught else where

@@ -72,45 +72,72 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             if (value.isFieldAccessExpr()) {
                 resolveField(node, value.asFieldAccessExpr());
             }
-            else if (value.isNameExpr()) {
-                ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                        value.asNameExpr().getNameAsString()
-                );
-                if (iw2 != null) {
-                    ImportDeclaration imp2 = iw2.getImport();
-                    node.getDestination().addImport(imp2);
-                    if (imp2.isStatic()) {
-                        TypeDeclaration<?> t = null;
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                        if (cu != null) {
-                            t = AbstractCompiler.getMatchingType(cu, imp2.getName().getIdentifier());
-                        }
-                        else {
-                            cu = AntikytheraRunTime.getCompilationUnit(imp2.getName().getQualifier().get().toString());
-                            if (cu != null) {
-                                t = AbstractCompiler.getMatchingType(cu, imp2.getName().getQualifier().get().getIdentifier());
-                            }
-                        }
-                        if(t != null) {
-                            FieldDeclaration f = t.getFieldByName(value.asNameExpr().getNameAsString()).orElse(null);
-                            if (f != null) {
-
+            else if (value.isBinaryExpr()) {
+                Expression left = value.asBinaryExpr().getLeft();
+                if (left.isFieldAccessExpr()) {
+                    resolveField(node, left.asFieldAccessExpr());
+                }
+                else if (left.isNameExpr()) {
+                    node.getEnclosingType().getFieldByName(left.asNameExpr().getNameAsString()).ifPresentOrElse(
+                            f -> {
                                 try {
-                                    Graph.createGraphNode(f);
-
+                                    node.addField(f);
                                 } catch (AntikytheraException e) {
                                     throw new DepsolverException(e);
                                 }
-                            }
-                        }
-                    }
+                            },
+                            () -> annotationNameExpression(node, left)
+                    );
                 }
+
+                Expression right = value.asBinaryExpr().getRight();
+                if (right.isFieldAccessExpr()) {
+                    resolveField(node, right.asFieldAccessExpr());
+                }
+            }
+            else if (value.isNameExpr()) {
+                annotationNameExpression(node, value);
             }
             else if (value.isArrayInitializerExpr()) {
                 annotationArray(node, value);
             }
         }
         super.visit(n, node);
+    }
+
+    private static void annotationNameExpression(GraphNode node, Expression value) {
+        ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                value.asNameExpr().getNameAsString()
+        );
+        if (iw2 != null) {
+            ImportDeclaration imp2 = iw2.getImport();
+            node.getDestination().addImport(imp2);
+            if (imp2.isStatic()) {
+                TypeDeclaration<?> t = null;
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                if (cu != null) {
+                    t = AbstractCompiler.getMatchingType(cu, imp2.getName().getIdentifier());
+                }
+                else {
+                    cu = AntikytheraRunTime.getCompilationUnit(imp2.getName().getQualifier().get().toString());
+                    if (cu != null) {
+                        t = AbstractCompiler.getMatchingType(cu, imp2.getName().getQualifier().get().getIdentifier());
+                    }
+                }
+                if(t != null) {
+                    FieldDeclaration f = t.getFieldByName(value.asNameExpr().getNameAsString()).orElse(null);
+                    if (f != null) {
+
+                        try {
+                            Graph.createGraphNode(f);
+
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static void annotationArray(GraphNode node, Expression value) {
