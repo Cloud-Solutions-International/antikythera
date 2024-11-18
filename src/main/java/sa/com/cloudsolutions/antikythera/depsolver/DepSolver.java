@@ -159,6 +159,23 @@ public class DepSolver {
             if (md.getAnnotationByName("Override").isPresent()) {
                 findParentMethods(node, md);
             }
+
+            if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
+                ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
+                for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().get())) {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(t);
+                    if (cu != null) {
+                        TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
+                        if (td != null) {
+                            for (MethodDeclaration m : td.getMethodsByName(md.getNameAsString())) {
+                                if (m.getParameters().size() == md.getParameters().size()) {
+                                    Graph.createGraphNode(m);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -631,38 +648,38 @@ public class DepSolver {
 
         private GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) throws AntikytheraException {
             TypeDeclaration<?> cdecl = node.getEnclosingType();
-            Optional<CallableDeclaration<?>> md = AbstractCompiler.findCallableDeclaration(
-                    mceWrapper, cdecl
-            );
+            if (cdecl != null) {
+                Optional<CallableDeclaration<?>> md = AbstractCompiler.findCallableDeclaration(
+                        mceWrapper, cdecl
+                );
 
-            if (md.isPresent()) {
-                CallableDeclaration<?> method = md.get();
-                for (Type ex : method.getThrownExceptions()) {
-                    addImport(node, ex.asString());
-                }
+                if (md.isPresent()) {
+                    CallableDeclaration<?> method = md.get();
+                    for (Type ex : method.getThrownExceptions()) {
+                        addImport(node, ex.asString());
+                    }
 
-                if (method.isAbstract() ) {
-                    Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
+                    if (method.isAbstract()) {
+                        Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
 
-                    if (!parent.get().isInterface()) {
-                        Optional<CallableDeclaration<?>> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
-                        if (overRides.isPresent()) {
-                            Graph.createGraphNode(overRides.get());
+                        if (!parent.get().isInterface()) {
+                            Optional<CallableDeclaration<?>> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
+                            if (overRides.isPresent()) {
+                                Graph.createGraphNode(overRides.get());
+                            }
                         }
                     }
-                }
-                return Graph.createGraphNode(method);
-            }
-            else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
-                Type t = lombokSolver(mce, decl, node);
-                if (t != null && t.isClassOrInterfaceType()) {
-                    return addImport(node, t.asClassOrInterfaceType().getNameAsString());
-                }
-                else {
-                    // desperate measure hack
-                    // todo remove this
-                    for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
-                        Graph.createGraphNode(method);
+                    return Graph.createGraphNode(method);
+                } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
+                    Type t = lombokSolver(mce, decl, node);
+                    if (t != null && t.isClassOrInterfaceType()) {
+                        return addImport(node, t.asClassOrInterfaceType().getNameAsString());
+                    } else {
+                        // desperate measure hack
+                        // todo remove this
+                        for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
+                            Graph.createGraphNode(method);
+                        }
                     }
                 }
             }
