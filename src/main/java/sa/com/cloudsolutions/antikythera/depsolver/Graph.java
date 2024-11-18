@@ -2,9 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.comments.JavadocComment;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -63,7 +61,8 @@ public class Graph {
                      * We have not previously processed this class.
                      */
 
-                    unseenType(g, cdecl, fqn);
+                    unseenType(g, cdecl);
+                    dependencies.put(fqn, g.getDestination());
                 }
             }
         }
@@ -74,7 +73,12 @@ public class Graph {
         return g;
     }
 
-    private static void unseenType(GraphNode g, TypeDeclaration<?> cdecl, String fqn) {
+    /**
+     * Handle processing a graph node for an AST node that has not been seen before.
+     * @param g the graph node
+     * @param cdecl TypeDeclaration of the node
+     */
+    private static void unseenType(GraphNode g, TypeDeclaration<?> cdecl) {
         if (g.getDestination() == null) {
             g.setDestination(new CompilationUnit());
             TypeDeclaration<?> target;
@@ -94,8 +98,6 @@ public class Graph {
             }
             g.setTypeDeclaration(target);
         }
-
-        dependencies.put(fqn, g.getDestination());
     }
 
 

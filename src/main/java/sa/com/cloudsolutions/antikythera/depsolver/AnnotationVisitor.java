@@ -21,6 +21,9 @@ import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+/**
+ * Visitor to help r
+ */
 public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     @Override
     public void visit(final SingleMemberAnnotationExpr n, final GraphNode node) {
@@ -211,18 +214,25 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 }
             }
             else {
-                // this maybe a field in the node
-                TypeDeclaration<?> decl = node.getEnclosingType();
-                if (decl != null && decl.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-                    FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
-                    if (f != null) {
-                        try {
-                            return Graph.createGraphNode(f);
-                        } catch (AntikytheraException e) {
-                            throw new GeneratorException(e);
-                        }
-                    }
+                return  resolveThisField(node, value);
+            }
+        }
+        else if (scope.isThisExpr()) {
+            return  resolveThisField(node, value);
+        }
+        return null;
+    }
+
+    private static GraphNode resolveThisField(GraphNode node, FieldAccessExpr value) {
+        TypeDeclaration<?> decl = node.getEnclosingType();
+        if (decl != null && decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+            FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
+            if (f != null) {
+                try {
+                    return Graph.createGraphNode(f);
+                } catch (AntikytheraException e) {
+                    throw new GeneratorException(e);
                 }
             }
         }
