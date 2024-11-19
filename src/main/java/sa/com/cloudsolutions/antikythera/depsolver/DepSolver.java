@@ -587,13 +587,18 @@ public class DepSolver {
                 }
             }
             else {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                    if (imp.isExternal()) {
-                        Optional<Type> ct = getExternalType(fae, imp);
-                        if (ct.isPresent()) {
-                            types.add(ct.get());
+                if (scope.isFieldAccessExpr()) {
+                    expressionAsFieldAccess(node, scope, types);
+                }
+                    else {
+                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+                    if (imp != null) {
+                        node.getDestination().addImport(imp.getImport());
+                        if (imp.isExternal()) {
+                            Optional<Type> ct = getExternalType(fae, imp);
+                            if (ct.isPresent()) {
+                                types.add(ct.get());
+                            }
                         }
                     }
                 }
