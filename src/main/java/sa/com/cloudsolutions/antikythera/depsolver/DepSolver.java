@@ -711,18 +711,33 @@ public class DepSolver {
                         Optional<Type> ct = getExternalType(fae, imp);
                         return ct;
                     }
-                    if (imp.getField() == null && !imp.getImport().isAsterisk()) {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
-                        if (cu != null) {
-                            TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
-                            if (td != null) {
-                                td.getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
+                    if (imp.getField() == null ) {
+                        if (imp.getImport().isAsterisk()) {
+                            String fqName = imp.getImport().getNameAsString() + "." + scope.asNameExpr().getNameAsString();
+                            TypeDeclaration<?> td = imp.getType();
+                            if (td.isClassOrInterfaceDeclaration()) {
+                                td.asClassOrInterfaceDeclaration().getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
                                     try {
                                         Graph.createGraphNode(fd);
                                     } catch (AntikytheraException e) {
                                         throw new DepsolverException(e);
                                     }
                                 });
+                            }
+                        }
+                        else {
+                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
+                            if (cu != null) {
+                                TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
+                                if (td != null) {
+                                    td.getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
+                                        try {
+                                            Graph.createGraphNode(fd);
+                                        } catch (AntikytheraException e) {
+                                            throw new DepsolverException(e);
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
