@@ -246,6 +246,14 @@ public class GraphNode {
                     }
                     else if (scope.get().isFieldAccessExpr()) {
                         setupFieldInitializer(scope.get().asFieldAccessExpr().getScope().asNameExpr());
+                    } if (scope.get().isMethodCallExpr()) {
+                        MethodCallExpr m = scope.get().asMethodCallExpr();
+                        if (m.getScope().isPresent() && m.getScope().get().isNameExpr()) {
+                            DepSolver.addImport(this, m.getScope().get().asNameExpr().getNameAsString());
+                        }
+                        else {
+                            DepSolver.addImport(this, m.getNameAsString());
+                        }
                     }
                 }
             }
