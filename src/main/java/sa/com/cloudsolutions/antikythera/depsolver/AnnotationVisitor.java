@@ -13,6 +13,7 @@ import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -20,6 +21,8 @@ import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
+
+import java.util.Optional;
 
 /**
  * Visitor to help r
@@ -184,6 +187,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     protected static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
+            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(scope.asNameExpr().getNameAsString());
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                     scope.asNameExpr().getNameAsString()
             );
@@ -214,7 +218,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 }
             }
             else {
-                return  resolveThisField(node, value);
+                return resolveThisField(node, value);
             }
         }
         else if (scope.isThisExpr()) {
@@ -230,7 +234,20 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
             if (f != null) {
                 try {
-                    return Graph.createGraphNode(f);
+                    node.addField(f);
+                    Type t = f.getElementType();
+                    String fqname = AbstractCompiler.findFullyQualifiedName(
+                            node.getCompilationUnit(), t.asClassOrInterfaceType().getNameAsString()
+                    );
+                    if (fqname != null) {
+                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
+                        if (cu != null) {
+                            TypeDeclaration<?> p = AbstractCompiler.getPublicType(cu);
+                            if (p != null) {
+                                return Graph.createGraphNode(p);
+                            }
+                        }
+                    }
                 } catch (AntikytheraException e) {
                     throw new GeneratorException(e);
                 }

@@ -543,26 +543,7 @@ public class DepSolver {
                 types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
             }
             else if (expr.isFieldAccessExpr()) {
-                FieldAccessExpr fae = expr.asFieldAccessExpr();
-                Expression scope = fae.getScope();
-                if (scope.isNameExpr()) {
-                    Optional<Type> t = resolveScopedNameExpression(scope, fae, node);
-                    if (t.isPresent()) {
-                        types.add(t.get());
-                    }
-                }
-                else {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                        if (imp.isExternal()) {
-                            Optional<Type> ct = getExternalType(fae, imp);
-                            if (ct.isPresent()) {
-                                types.add(ct.get());
-                            }
-                        }
-                    }
-                }
+                expressionAsFieldAccess(node, expr, types);
             }
             else if (expr.isMethodCallExpr()) {
                 wrapCallable(node, expr.asMethodCallExpr(), types);
@@ -587,6 +568,29 @@ public class DepSolver {
             }
             else {
                 // seems other types dont need special handling they are caught else where
+            }
+        }
+
+        private void expressionAsFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) {
+            FieldAccessExpr fae = expr.asFieldAccessExpr();
+            Expression scope = fae.getScope();
+            if (scope.isNameExpr()) {
+                Optional<Type> t = resolveScopedNameExpression(scope, fae, node);
+                if (t.isPresent()) {
+                    types.add(t.get());
+                }
+            }
+            else {
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp.getImport());
+                    if (imp.isExternal()) {
+                        Optional<Type> ct = getExternalType(fae, imp);
+                        if (ct.isPresent()) {
+                            types.add(ct.get());
+                        }
+                    }
+                }
             }
         }
 
@@ -701,7 +705,7 @@ public class DepSolver {
                         Optional<Type> ct = getExternalType(fae, imp);
                         return ct;
                     }
-                    if (imp.getField() != null && !imp.getImport().isAsterisk()) {
+                    if (imp.getField() == null && !imp.getImport().isAsterisk()) {
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                         if (cu != null) {
                             TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
