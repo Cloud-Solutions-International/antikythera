@@ -392,6 +392,12 @@ public class DepSolver {
                     if (vd.getType().isClassOrInterfaceType()) {
                         node.addTypeArguments(vd.getType().asClassOrInterfaceType());
                     }
+                    else if (vd.getType().isArrayType()) {
+                        Type t = vd.getType().asArrayType().getComponentType();
+                        if (t.isClassOrInterfaceType()) {
+                            node.addTypeArguments(t.asClassOrInterfaceType());
+                        }
+                    }
                 } catch (AntikytheraException e) {
                     throw new DepsolverException(e);
                 }
@@ -754,10 +760,19 @@ public class DepSolver {
                     if (t != null && t.isClassOrInterfaceType()) {
                         return addImport(node, t.asClassOrInterfaceType().getNameAsString());
                     } else {
-                        // desperate measure hack
-                        // todo remove this
-                        for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
-                            Graph.createGraphNode(method);
+                        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
+                        if (imp != null) {
+                            if (imp.getMethodDeclaration() != null) {
+                                node.getDestination().addImport(imp.getImport());
+                                Graph.createGraphNode(imp.getMethodDeclaration());
+                            }
+                        }
+                        else {
+                            // desperate measure hack
+                            // todo remove this
+                            for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
+                                Graph.createGraphNode(method);
+                            }
                         }
                     }
                 }

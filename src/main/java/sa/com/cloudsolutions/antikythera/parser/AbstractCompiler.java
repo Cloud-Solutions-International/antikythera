@@ -529,6 +529,12 @@ public class AbstractCompiler {
         if (field.isPresent()) {
             wrapper.setField(field.get());
         }
+        Optional<MethodDeclaration> methodDeclaration = target.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals(className)
+        );
+        if (methodDeclaration.isPresent()) {
+            wrapper.setMethodDeclaration(methodDeclaration.get());
+        }
 
     }
 
