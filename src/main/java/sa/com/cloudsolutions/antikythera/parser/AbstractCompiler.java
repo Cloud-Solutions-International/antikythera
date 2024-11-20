@@ -15,6 +15,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
@@ -595,7 +596,17 @@ public class AbstractCompiler {
                                 return wrapper;
                             }
                         }
+                        else {
+                            String path = AbstractCompiler.classToPath(fullClassName);
+                            Path sourcePath = Paths.get(Settings.getBasePath(), path);
+                            if (sourcePath.toFile().exists()) {
+                                ImportDeclaration i = new ImportDeclaration(fullClassName, false, false);
+                                ImportWrapper wrap = new ImportWrapper(i);
+                                return wrap;
+                            }
+                        }
                     }
+
                 }
             }
         }
@@ -815,10 +826,12 @@ public class AbstractCompiler {
                     .filter(path -> path.toString().endsWith(SUFFIX))
                     .map(Path::toFile)
                     .toList();
+
             for (File javaFile : javaFiles) {
                 InterfaceSolver solver = new InterfaceSolver();
                 solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
             }
+
         }
     }
 
