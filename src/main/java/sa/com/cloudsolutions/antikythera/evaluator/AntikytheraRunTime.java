@@ -166,7 +166,7 @@ public class AntikytheraRunTime {
     }
 
     public static Set<String> findSubClasses(String parent) {
-        return interfaces.getOrDefault(parent, new HashSet<>());
+        return extensions.getOrDefault(parent, new HashSet<>());
     }
 
     public static void addImplementation(String iface, String impl) {

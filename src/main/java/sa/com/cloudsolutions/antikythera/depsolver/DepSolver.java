@@ -226,13 +226,40 @@ public class DepSolver {
 
         if (c.isPresent()) {
             node.getTypeDeclaration().addMember(cd);
-
+            if (cd.isAbstract() && node.getEnclosingType().getFullyQualifiedName().isPresent()) {
+                methodOverrides(cd, node.getEnclosingType().getFullyQualifiedName().get());
+            }
         }
         searchMethodParameters(node, cd.getParameters());
 
         names.clear();
         cd.accept(new VariableVisitor(), node);
         cd.accept(new Visitor(), node);
+    }
+
+    private static void methodOverrides(CallableDeclaration<?> cd, String className) throws AntikytheraException {
+
+        for (String s : AntikytheraRunTime.findSubClasses(className)) {
+            addOverRide(cd, s);
+        }
+
+        for (String s : AntikytheraRunTime.findImplementations(className)) {
+            addOverRide(cd, s);
+        }
+    }
+
+    private static void addOverRide(CallableDeclaration<?> cd, String s) throws AntikytheraException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(s);
+        if (cu != null) {
+            TypeDeclaration<?> parent = cu.findFirst(TypeDeclaration.class, td -> td.isPublic()).orElse(null);
+            if (parent != null) {
+                for (MethodDeclaration md : parent.getMethodsByName(cd.getNameAsString())) {
+                    if (md.getParameters().size() == cd.getParameters().size()) {
+                        Graph.createGraphNode(md);
+                    }
+                }
+            }
+        }
     }
 
     /**
