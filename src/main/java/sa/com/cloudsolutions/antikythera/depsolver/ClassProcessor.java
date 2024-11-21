@@ -1,4 +1,4 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -29,6 +29,7 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -72,7 +73,7 @@ public class ClassProcessor extends AbstractCompiler {
      * The key in this map is the fully qualified class. The values will be the other types it
      * refers to.
      */
-    protected static final Map<String, Set<Dependency>> dependencies = new HashMap<>();
+    protected static final Map<String, Set<ClassDependency>> dependencies = new HashMap<>();
 
     static final Set<String> copied = new HashSet<>();
 
@@ -80,7 +81,7 @@ public class ClassProcessor extends AbstractCompiler {
      * A collection of all imports encountered in a class.
      * This maybe a huge list because sometimes we find wild card imports.
      */
-    final Set<ImportDeclaration> allImports = new HashSet<>();
+    protected final Set<ImportDeclaration> allImports = new HashSet<>();
 
     /**
      * This is a collection of imports that we want to preserve.
@@ -105,7 +106,7 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param nameAsString a fully qualified class name
      */
-    protected void copyDependency(String nameAsString, Dependency dependency) throws IOException {
+    protected void copyDependency(String nameAsString, ClassDependency dependency) throws IOException {
         if (dependency.isExternal() || nameAsString.startsWith("java.")
                 || AntikytheraRunTime.isInterface(nameAsString)
                 || nameAsString.startsWith("org.springframework")) {
@@ -161,7 +162,7 @@ public class ClassProcessor extends AbstractCompiler {
      *
      * @param type the type to resolve
      */
-    void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
+    protected void solveTypeDependencies(TypeDeclaration<?> from, Type type) {
         if (type.isClassOrInterfaceType()) {
             if (type.asClassOrInterfaceType().isBoxedType()) {
                 solveConstant(from, type);
@@ -202,7 +203,7 @@ public class ClassProcessor extends AbstractCompiler {
                             String pkg = className.substring(0, index);
                             CompilationUnit depCu = getCompilationUnit(pkg);
                             if (depCu != null) {
-                                Dependency dep = new Dependency(from, pkg);
+                                ClassDependency dep = new ClassDependency(from, pkg);
                                 addEdge(from.getFullyQualifiedName().orElse(null), dep);
                             }
                         }
@@ -260,7 +261,7 @@ public class ClassProcessor extends AbstractCompiler {
              */
             cu.getPackageDeclaration().ifPresent(pkg -> {
                 String className = pkg.getNameAsString() + "." + mainType;
-                Dependency dep = new Dependency(from, className);
+                ClassDependency dep = new ClassDependency(from, className);
                 addEdge(from.getFullyQualifiedName().get(), dep);
             });
         }
@@ -357,14 +358,14 @@ public class ClassProcessor extends AbstractCompiler {
                         if (init.isFieldAccessExpr()) {
                             FieldAccessExpr fae = init.asFieldAccessExpr();
                             ResolvedValueDeclaration rfd = fae.resolve();
-                            addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, rfd.getType().describe()));
+                            addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, rfd.getType().describe()));
 
                         }
                         else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
                                 !init.isMethodCallExpr() && !init.isLiteralExpr()) {
                             JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
                             ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
-                            addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, declaringType.getQualifiedName()));
+                            addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, declaringType.getQualifiedName()));
                             return true;
                         }
                     }
@@ -376,7 +377,7 @@ public class ClassProcessor extends AbstractCompiler {
             }
             String description = typeArg.resolve().describe();
             if (!description.startsWith("java.")) {
-                Dependency dependency = new Dependency(from, description);
+                ClassDependency dependency = new ClassDependency(from, description);
                 for (var jarSolver : jarSolvers) {
                     if (jarSolver.getKnownClasses().contains(description)) {
                         dependency.setExternal(true);
@@ -388,7 +389,7 @@ public class ClassProcessor extends AbstractCompiler {
         } catch (UnsolvedSymbolException e) {
             ImportDeclaration decl = resolveImport(typeArg.asClassOrInterfaceType().getNameAsString());
             if (decl != null && !decl.getNameAsString().startsWith("java.")) {
-                addEdge(from.getFullyQualifiedName().orElse(null), new Dependency(from, decl.getNameAsString()));
+                addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, decl.getNameAsString()));
                 return true;
             }
             logger.debug("Unresolvable {}", typeArg);
@@ -396,7 +397,7 @@ public class ClassProcessor extends AbstractCompiler {
         return false;
     }
 
-    protected void addEdge(String fromName, Dependency dependency) {
+    protected void addEdge(String fromName, ClassDependency dependency) {
         dependencies.computeIfAbsent(fromName, k -> new HashSet<>()).add(dependency);
     }
 
@@ -466,22 +467,22 @@ public class ClassProcessor extends AbstractCompiler {
     }
 
     protected void copyDependencies() throws IOException {
-        List<Map.Entry<String, Dependency>> toCopy = new ArrayList<>();
+        List<Map.Entry<String, ClassDependency>> toCopy = new ArrayList<>();
 
         for (TypeDeclaration<?> declaration : cu.getTypes()) {
             Optional<String> fullyQualifiedName = declaration.getFullyQualifiedName();
             if (fullyQualifiedName.isPresent()) {
-                Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
+                Set<ClassDependency> deps = dependencies.get(fullyQualifiedName.get());
 
                 if (deps != null) {
-                    for (Dependency dependency : deps) {
+                    for (ClassDependency dependency : deps) {
                         toCopy.add(new AbstractMap.SimpleEntry<>(fullyQualifiedName.get(), dependency));
                     }
                 }
             }
         }
 
-        for (Map.Entry<String, Dependency> entry : toCopy) {
+        for (Map.Entry<String, ClassDependency> entry : toCopy) {
             copyDependency(entry.getKey(), entry.getValue());
         }
     }
@@ -489,7 +490,7 @@ public class ClassProcessor extends AbstractCompiler {
     protected void addEdgeFromImport(TypeDeclaration<?> fromType, ClassOrInterfaceType ext, ImportDeclaration imp) {
         if (imp != null) {
             keepImports.add(imp);
-            Dependency dep = new Dependency(fromType, imp.getNameAsString());
+            ClassDependency dep = new ClassDependency(fromType, imp.getNameAsString());
             addEdge(fromType.getFullyQualifiedName().get(), dep);
         }
         else {
@@ -498,7 +499,7 @@ public class ClassProcessor extends AbstractCompiler {
              */
             cu.getPackageDeclaration().ifPresent(pkg -> {
                 String className = pkg.getNameAsString() + "." + ext.getNameAsString();
-                Dependency dep = new Dependency(fromType, className);
+                ClassDependency dep = new ClassDependency(fromType, className);
                 addEdge(fromType.getFullyQualifiedName().get(), dep);
             });
         }
@@ -545,11 +546,11 @@ public class ClassProcessor extends AbstractCompiler {
      * @throws IOException
      */
     protected void compileDependencies() throws IOException {
-        Optional<String> fullyQualifiedName = getPublicClass(cu).getFullyQualifiedName();
+        Optional<String> fullyQualifiedName = getPublicType(cu).getFullyQualifiedName();
         if (fullyQualifiedName.isPresent()) {
-            Set<Dependency> deps = dependencies.get(fullyQualifiedName.get());
+            Set<ClassDependency> deps = dependencies.get(fullyQualifiedName.get());
             if (deps != null) {
-                for (Dependency dep : deps) {
+                for (ClassDependency dep : deps) {
                     ClassProcessor cp = new ClassProcessor();
                     cp.compile(AbstractCompiler.classToPath(dep.getTo()));
                 }
@@ -617,4 +618,6 @@ public class ClassProcessor extends AbstractCompiler {
     private ModifierVisitor createTypeCollector() {
         return new TypeCollector();
     }
+
+
 }

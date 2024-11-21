@@ -1,9 +1,11 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -48,6 +50,31 @@ public class InterfaceSolver extends AbstractCompiler {
                          * we can make use of one of the implementing classes.
                          */
                         AntikytheraRunTime.addImplementation(interfaceName, t.getFullyQualifiedName().get());
+                        /*
+                         * Some interfaces have their own parent interface and this class will have to be
+                         * identified as an implement of that parent as well.
+                         */
+                        CompilationUnit interfaceCu = AntikytheraRunTime.getCompilationUnit(interfaceName);
+                        if (interfaceCu != null) {
+                            for (TypeDeclaration<?> ifaceType : interfaceCu.getTypes()) {
+                                if (ifaceType.isClassOrInterfaceDeclaration()) {
+                                    ClassOrInterfaceDeclaration ifaceDecl = ifaceType.asClassOrInterfaceDeclaration();
+                                    for (ClassOrInterfaceType parent : ifaceDecl.getExtendedTypes()) {
+                                        String parentName = AbstractCompiler.findFullyQualifiedName(interfaceCu, parent.getNameAsString());
+                                        if (parentName != null) {
+                                            AntikytheraRunTime.addImplementation(parentName, t.getFullyQualifiedName().get());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
+                    String parentName = AbstractCompiler.findFullyQualifiedName(cu, parent.getNameAsString());
+                    if (parentName != null) {
+                        AntikytheraRunTime.addSubClass(parentName, t.getFullyQualifiedName().get());
                     }
                 }
             }

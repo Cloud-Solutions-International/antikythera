@@ -27,12 +27,14 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassDependency;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
-import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
+import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends ClassProcessor {
@@ -113,7 +115,7 @@ public class RestControllerParser extends ClassProcessor {
     private void processRestController(PackageDeclaration pd) throws IOException {
         expandWildCards(cu);
 
-        TypeDeclaration<?> type = getPublicClass(cu);
+        TypeDeclaration<?> type = getPublicType(cu);
 
         evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
         evaluator.setOnTest(true);
@@ -167,7 +169,7 @@ public class RestControllerParser extends ClassProcessor {
                 boolean found = false;
                 var deps = dependencies.get(type.getFullyQualifiedName().get());
                 if(deps != null) {
-                    for (Dependency dependency : deps) {
+                    for (ClassDependency dependency : deps) {
                         if (dependency.getTo().equals(name)) {
                             found = true;
                             break;
@@ -180,7 +182,7 @@ public class RestControllerParser extends ClassProcessor {
             }
         }
 
-        ProjectGenerator.getInstance().writeFilesToTest(
+        Antikythera.getInstance().writeFilesToTest(
                 pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 
@@ -370,7 +372,7 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path from the RequestMapping Annotation or an empty string
      */
     private String getCommonPath() {
-        for (var classAnnotation : getPublicClass(cu).getAnnotations()) {
+        for (var classAnnotation : getPublicType(cu).getAnnotations()) {
             if (classAnnotation.getName().asString().equals("RequestMapping")) {
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();

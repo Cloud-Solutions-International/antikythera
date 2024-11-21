@@ -1,4 +1,4 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.stmt.Statement;
@@ -27,7 +27,8 @@ import com.github.javaparser.ast.visitor.Visitable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.generator.ProjectGenerator;
+import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -110,7 +111,7 @@ public class DTOHandler extends ClassProcessor {
             }
 
             if (method != null) {
-                var variable = classToInstanceName(getPublicClass(cu));
+                var variable = classToInstanceName(getPublicType(cu));
                 method.getBody().get().addStatement(new ReturnStmt(new NameExpr(variable)));
             }
 
@@ -119,7 +120,7 @@ public class DTOHandler extends ClassProcessor {
             if (! (AntikytheraRunTime.isServiceClass(className) || AntikytheraRunTime.isInterface(className)
                     || AntikytheraRunTime.isControllerClass(className)
                     || AntikytheraRunTime.isComponentClass(className) || AbstractCompiler.shouldSkip(className))) {
-                ProjectGenerator.getInstance().writeFile(relativePath, cu.toString());
+                CopyUtils.writeFile(relativePath, cu.toString());
             }
 
             /*
@@ -158,7 +159,7 @@ public class DTOHandler extends ClassProcessor {
                     if (className.startsWith("java")) {
                         continue;
                     }
-                    Dependency dependency = new Dependency(typeDeclaration, className);
+                    ClassDependency dependency = new ClassDependency(typeDeclaration, className);
                     dependency.setExtension(true);
                     addEdge(className, dependency);
                 }
@@ -317,7 +318,7 @@ public class DTOHandler extends ClassProcessor {
                 // handle custom getters and setters
 
                 String fieldName = firstVariable.getNameAsString();
-                TypeDeclaration<?> cdecl = getPublicClass(cu);
+                TypeDeclaration<?> cdecl = getPublicType(cu);
                 String className = cdecl.getNameAsString();
                 Map<String, String> methodNames = Settings.loadCustomMethodNames(className, fieldName);
 
@@ -400,7 +401,7 @@ public class DTOHandler extends ClassProcessor {
      * @param field
      */
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
-        TypeDeclaration<?> cdecl = AbstractCompiler.getPublicClass(cu);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getPublicType(cu);
 
         if (!field.isStatic()) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
@@ -504,4 +505,5 @@ public class DTOHandler extends ClassProcessor {
     public void setCompilationUnit(CompilationUnit cu) {
         this.cu = cu;
     }
+
 }

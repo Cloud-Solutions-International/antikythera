@@ -1,9 +1,10 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,7 +21,7 @@ public class InterfaceSolverTest {
     void testSerialiazble() throws IOException {
         InterfaceSolver solver = new InterfaceSolver();
         solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
-        assertEquals(1, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
+        assertEquals(2, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
 
     }
 
