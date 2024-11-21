@@ -14,8 +14,8 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
@@ -325,13 +325,10 @@ public class AbstractCompiler {
         if (arguments != null && construct.getParameters().size() == arguments.size()) {
             for (int i = 0; i < construct.getParameters().size(); i++) {
                 Parameter param = construct.getParameter(i);
-                if (param.getType().equals(arguments.get(i))
+                if (! (param.getType().equals(arguments.get(i))
                         || param.getType().toString().equals("java.lang.Object")
-                        || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString()))
+                        || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString())))
                 ) {
-
-                }
-                else {
                     return Optional.empty();
                 }
             }
@@ -490,7 +487,8 @@ public class AbstractCompiler {
                 return new ImportWrapper(imp);
             }
 
-            if (className.equals(imp.getName().getIdentifier()) && !imp.isAsterisk()) {
+            Name importName = imp.getName();
+            if (className.equals(importName.getIdentifier()) && !imp.isAsterisk()) {
                 /*
                  * last part of the import matches the class name
                  */
@@ -498,14 +496,14 @@ public class AbstractCompiler {
                 if (!imp.isStatic()) {
                     CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                     if (target != null) {
-                        TypeDeclaration<?> p = getMatchingType(target, imp.getName().getIdentifier());
+                        TypeDeclaration<?> p = getMatchingType(target, importName.getIdentifier());
                         wrapper.setExternal(false);
                         setTypeAndField(className, p, wrapper, target);
                     }
 
                 }
-                else if (imp.getName().getQualifier().isPresent()){
-                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
+                else if (importName.getQualifier().isPresent()){
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(importName.getQualifier().get().toString());
                     if (target != null) {
                         TypeDeclaration<?> p = getPublicType(target);
                         setTypeAndField(className, p, wrapper, target);
@@ -567,47 +565,51 @@ public class AbstractCompiler {
                          * end of the wildcard import and see if the corresponding file can be
                          * located on the base folder.
                          */
-                        CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullClassName);
-                        if (target != null) {
-                            ImportWrapper wrapper =  new ImportWrapper(imp, false);
-                            for(TypeDeclaration<?> type : target.getTypes()) {
-                                if (type.getNameAsString().equals(className)) {
-                                    wrapper.setType(type);
-                                }
-                            }
-                            return wrapper;
-                        }
-                        CompilationUnit cu2 = AntikytheraRunTime.getCompilationUnit(impName);
-                        if (cu2 != null && imp.isStatic()) {
-                            Optional<FieldDeclaration> field =  cu2.findFirst(FieldDeclaration.class,
-                                    f -> f.getVariable(0).getNameAsString().equals(className)
-                            );
-                            if (field.isPresent()) {
-                                ImportWrapper wrapper = new ImportWrapper(imp);
-                                wrapper.setField(field.get());
-                                return wrapper;
-                            }
-
-                            Optional<EnumConstantDeclaration> ec = cu2.findFirst(EnumConstantDeclaration.class,
-                                    f -> f.getNameAsString().equals(className)
-                            );
-                            if (ec.isPresent()) {
-                                ImportWrapper wrapper = new ImportWrapper(imp);
-                                return wrapper;
-                            }
-                        }
-                        else {
-                            String path = AbstractCompiler.classToPath(fullClassName);
-                            Path sourcePath = Paths.get(Settings.getBasePath(), path);
-                            if (sourcePath.toFile().exists()) {
-                                ImportDeclaration i = new ImportDeclaration(fullClassName, false, false);
-                                ImportWrapper wrap = new ImportWrapper(i);
-                                return wrap;
-                            }
-                        }
+                        ImportWrapper wrapper = fakeImport(className, imp, fullClassName, impName);
+                        if (wrapper != null) return wrapper;
                     }
 
                 }
+            }
+        }
+        return null;
+    }
+
+    private static ImportWrapper fakeImport(String className, ImportDeclaration imp, String fullClassName, String impName) {
+        CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullClassName);
+        if (target != null) {
+            ImportWrapper wrapper =  new ImportWrapper(imp, false);
+            for(TypeDeclaration<?> type : target.getTypes()) {
+                if (type.getNameAsString().equals(className)) {
+                    wrapper.setType(type);
+                }
+            }
+            return wrapper;
+        }
+        CompilationUnit cu2 = AntikytheraRunTime.getCompilationUnit(impName);
+        if (cu2 != null && imp.isStatic()) {
+            Optional<FieldDeclaration> field =  cu2.findFirst(FieldDeclaration.class,
+                    f -> f.getVariable(0).getNameAsString().equals(className)
+            );
+            if (field.isPresent()) {
+                ImportWrapper wrapper = new ImportWrapper(imp);
+                wrapper.setField(field.get());
+                return wrapper;
+            }
+
+            Optional<EnumConstantDeclaration> ec = cu2.findFirst(EnumConstantDeclaration.class,
+                    f -> f.getNameAsString().equals(className)
+            );
+            if (ec.isPresent()) {
+                return new ImportWrapper(imp);
+            }
+        }
+        else {
+            String path = AbstractCompiler.classToPath(fullClassName);
+            Path sourcePath = Paths.get(Settings.getBasePath(), path);
+            if (sourcePath.toFile().exists()) {
+                ImportDeclaration i = new ImportDeclaration(fullClassName, false, false);
+                return new ImportWrapper(i);
             }
         }
         return null;
@@ -783,8 +785,6 @@ public class AbstractCompiler {
      * @return the method declaration or empty if not found
      */
     private static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
-        Optional<NodeList<Type>> typeArguments = methodCall.getTypeArguments();
-
         int matchCount = 0;
         int matchIndex = -1;
 

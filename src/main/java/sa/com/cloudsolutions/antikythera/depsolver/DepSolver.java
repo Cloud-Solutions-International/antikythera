@@ -544,7 +544,6 @@ public class DepSolver {
                 MCEWrapper mceWrapper = solveArgumentTypes(node, mce);
                 chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
-                e.printStackTrace();
                 throw new DepsolverException(e.getMessage());
             }
 
@@ -597,7 +596,7 @@ public class DepSolver {
                 }
             }
             else if (expr.isAssignExpr()) {
-                System.out.println(expr);
+                System.out.println("Assign " + expr);
             }
             else {
                 // seems other types dont need special handling they are caught else where
@@ -617,7 +616,7 @@ public class DepSolver {
                 if (scope.isFieldAccessExpr()) {
                     expressionAsFieldAccess(node, scope, types);
                 }
-                    else {
+                else {
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
                     if (imp != null) {
                         node.getDestination().addImport(imp.getImport());
