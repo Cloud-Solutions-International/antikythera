@@ -334,13 +334,19 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     private static void bindParameters(QueryMethodArgument arg, PreparedStatement prep, int i) throws SQLException {
-        String name = arg.getVariable().getClazz().getName();
-        switch (name) {
-            case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
-            case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
-            case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
-            case "java.lang.Boolean" ->
-                    prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+        Class<?> clazz = arg.getVariable().getClazz();
+        if (clazz == null) {
+            prep.setNull(i + 1, java.sql.Types.NULL);
+
+        }
+        else {
+            String name = clazz.getName();
+            switch (name) {
+                case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
+                case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
+                case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
+                case "java.lang.Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+            }
         }
     }
 

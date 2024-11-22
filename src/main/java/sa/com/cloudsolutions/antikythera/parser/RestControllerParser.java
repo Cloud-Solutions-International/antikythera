@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassDependency;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -205,6 +206,7 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
+                evaluator.setArgumentGenerator(new NullArgumentGenerator());
                 evaluator.reset();
                 evaluator.resetColors();
                 AntikytheraRunTime.reset();
@@ -261,7 +263,7 @@ public class RestControllerParser extends ClassProcessor {
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
             evaluatorUnsupported = false;
-            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
                 return;
             }
             if (md.isPublic()) {
