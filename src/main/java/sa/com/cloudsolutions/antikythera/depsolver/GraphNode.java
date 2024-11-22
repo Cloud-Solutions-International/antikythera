@@ -379,7 +379,7 @@ public class GraphNode {
 
     /**
      * Adds the type arguments to the graph.
-     * Will make multpile calls to the searchType method which will result in the imports
+     * Will make multiple calls to the searchType method which will result in the imports
      * being eventually added.
      * @param ifc interface or class
 
