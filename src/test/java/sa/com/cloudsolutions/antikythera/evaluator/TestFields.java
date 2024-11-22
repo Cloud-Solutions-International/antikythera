@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 
 import java.io.File;
 import java.io.IOException;

@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -12,8 +13,6 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.symbolsolver.reflectionmodel.ReflectionMethodDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -42,14 +41,14 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.parser.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -58,8 +57,6 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
-
-import static java.lang.reflect.AccessibleObject.setAccessible;
 
 
 /**
@@ -85,7 +82,7 @@ public class Evaluator {
      * The fully qualified name of the class for which we created this evaluator.
      */
     private final String className;
-    protected final CompilationUnit cu;
+    protected CompilationUnit cu;
 
     /**
      * The most recent return value that was encountered.
@@ -214,22 +211,6 @@ public class Evaluator {
         return null;
     }
 
-    Method evaluateMethodReference(Expression expr) {
-        MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
-        ResolvedMethodDeclaration resolvedMethod = mexpr.resolve();
-        if(resolvedMethod instanceof ReflectionMethodDeclaration md) {
-            try {
-                Field f =  md.getClass().getDeclaredField("method");
-                f.setAccessible(true);
-                return (Method) f.get(md);
-            } catch (NoSuchFieldException|IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-
-        }
-        return null;
-    }
-
     /**
      * Create an array using reflection
      * @param arrayInitializerExpr the ArrayInitializerExpr which describes how the array will be build
@@ -324,7 +305,7 @@ public class Evaluator {
                     field.setAccessible(true);
                     return new Variable(field.get(null));
                 } else {
-                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingClass(dep, fae.getScope().toString());
+                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
                     if (typeDeclaration != null) {
                         Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
 
@@ -556,16 +537,17 @@ public class Evaluator {
             dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
         }
         else {
-            ImportDeclaration importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
+            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
             if (importDeclaration != null) {
                 dependant = AntikytheraRunTime.getCompilationUnit(importDeclaration.getNameAsString());
             }
         }
+
         if (dependant != null) {
-            TypeDeclaration<?> match = AbstractCompiler.getMatchingClass(dependant, type.getNameAsString());
+            TypeDeclaration<?> match = AbstractCompiler.getMatchingType(dependant, type.getNameAsString());
             if (match != null) {
                 Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
-
+                annonymousOverrides(type, oce, eval);
                 List<ConstructorDeclaration> constructors = dependant.findAll(ConstructorDeclaration.class);
                 if (constructors.isEmpty()) {
                     return new Variable(eval);
@@ -592,6 +574,35 @@ public class Evaluator {
         return null;
     }
 
+    private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
+        TypeDeclaration<?> match;
+        Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
+        if (anonymousClassBody.isPresent()) {
+            /*
+             * Merge the anon class stuff into the parent
+             */
+            eval.cu = eval.cu.clone();
+            match = AbstractCompiler.getMatchingType(eval.cu, type.getNameAsString());
+            for(BodyDeclaration<?> body : anonymousClassBody.get()) {
+                if (body.isMethodDeclaration() && match != null) {
+                    MethodDeclaration md = body.asMethodDeclaration();
+                    MethodDeclaration replace = null;
+                    for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
+                        if (method.getNameAsString().equals(md.getNameAsString())) {
+                            replace = method;
+                            break;
+                        }
+                    }
+                    if (replace != null) {
+                        replace.replace(md);
+                    }
+                    else {
+                        match.addMember(md);
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Create a new object using reflection.
@@ -617,7 +628,7 @@ public class Evaluator {
                 }
             }
             else {
-                ImportDeclaration importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
+                ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
                 if (importDeclaration != null) {
                     resolvedClass = importDeclaration.getNameAsString();
                 }
@@ -627,7 +638,7 @@ public class Evaluator {
             try {
                 clazz = Class.forName(resolvedClass);
             } catch (ClassNotFoundException cnf) {
-                clazz = AbstractCompiler.loadClass(resolvedClass); // Replace with your class name
+                clazz = AbstractCompiler.loadClass(resolvedClass);
             }
 
             Class<?> outer = clazz.getEnclosingClass();
@@ -791,12 +802,20 @@ public class Evaluator {
             return null;
         }
 
-        Variable variable = null;
         LinkedList<Expression> chain = findScopeChain(methodCall);
+
         if (chain.isEmpty()) {
             return executeLocalMethod(methodCall);
         }
 
+        Variable variable = evaluateScopeChain(chain);
+
+        return evaluateMethodCall(variable, methodCall);
+
+    }
+
+    private Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException, AntikytheraException {
+        Variable variable = null;
         while(!chain.isEmpty()) {
             Expression expr2 = chain.pollLast();
             if (expr2.isNameExpr()) {
@@ -829,10 +848,21 @@ public class Evaluator {
             else if (expr2.isLiteralExpr()) {
                 variable = evaluateLiteral(expr2);
             }
+            else if (expr2.isTypeExpr()) {
+                /*
+                 * todo  : fix this hack.
+                 *  currently only supports System related stuff.
+                 */
+                String s = expr2.toString();
+                variable = new Variable(switch (s) {
+                    case "System.out" -> System.out;
+                    case "System.err" -> System.err;
+                    case "System.in" -> System.in;
+                    default -> throw new IllegalArgumentException("Unexpected value: " + s);
+                });
+            }
         }
-
-        return evaluateMethodCall(variable, methodCall);
-
+        return variable;
     }
 
     /**
@@ -845,7 +875,7 @@ public class Evaluator {
      * @param expr
      * @return
      */
-    protected LinkedList<Expression> findScopeChain(Expression expr) {
+    public static LinkedList<Expression> findScopeChain(Expression expr) {
         LinkedList<Expression> chain = new LinkedList<>();
         while (true) {
             if (expr.isMethodCallExpr()) {
@@ -861,6 +891,11 @@ public class Evaluator {
                 FieldAccessExpr mce = expr.asFieldAccessExpr();
                 chain.addLast(mce.getScope());
                 expr = mce.getScope();
+            }
+            else if (expr.isMethodReferenceExpr()) {
+                MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
+                chain.addLast(mexpr.getScope());
+                expr = mexpr.getScope();
             }
             else {
                 break;
@@ -905,36 +940,12 @@ public class Evaluator {
                 NodeList<Expression> arguments = methodCall.getArguments();
                 if(arguments.isNonEmpty())
                 {
-
-                    if(arguments.get(0).isMethodReferenceExpr()) {
-                        Expression rfCall = arguments.get(0).asMethodReferenceExpr();
-                        Expression scope = rfCall.asMethodReferenceExpr().getScope();
-                        if (scope.isFieldAccessExpr()) {
-                            FieldAccessExpr fieldAccess = scope.asFieldAccessExpr();
-                            String className = fieldAccess.getScope().toString();
-                            String fieldName = fieldAccess.getNameAsString();
-
-                            Class<?> clazz = Class.forName(className);
-                            Field field = clazz.getField(fieldName);
-                            if (Modifier.isStatic(field.getModifiers())) {
-                                return null;
-                            }
-                        }
-                        Method m = evaluateMethodReference(arguments.get(0));
-
-                        Class<?> declaringClass = m.getDeclaringClass();
-                        Object instance = declaringClass.getDeclaredConstructor().newInstance();
-                        if(v.getValue() instanceof Collection<?> c) {
-                            for (Object o : c) {
-                                if (instance != null) {
-                                    m.invoke(instance, o);
-                                }
-                                else {
-                                    m.invoke(o);
-                                }
-                            }
-                            return null;
-                        }
+                    Expression argument = arguments.get(0);
+                    if(argument.isMethodReferenceExpr()) {
+                        return evaluateMethodReference(v, arguments);
+                    }
+                    else if (argument.isLambdaExpr()) {
+                        return evaluateLambda(v, arguments);
                     }
                 }
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
@@ -956,6 +967,53 @@ public class Evaluator {
         } catch (ReflectiveOperationException ex) {
             throw new EvaluatorException("Error evaluating method call", ex);
         }
+    }
+
+    private Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException, AntikytheraException {
+        MethodReferenceExpr rfCall = arguments.get(0).asMethodReferenceExpr();
+        LinkedList<Expression> chain = findScopeChain(rfCall);
+
+        if (chain.isEmpty()) {
+            return null;
+        }
+
+        Variable variable = evaluateScopeChain(chain);
+        if (v.getValue() instanceof Collection<?> c) {
+            Method m = Reflect.findMethod(variable.getClazz(), rfCall.getIdentifier(), new Class[]{c.getClass()});
+            if (m != null) {
+                for(Object o : c) {
+                    m.invoke(variable.getValue(), o);
+                }
+            }
+        }
+        returnValue = new Variable(null);
+        return null;
+
+    }
+
+    private Variable evaluateLambda(Variable v, NodeList<Expression> arguments) throws AntikytheraException, ReflectiveOperationException {
+        LambdaExpr lambda = arguments.get(0).asLambdaExpr();
+        MethodDeclaration md = new MethodDeclaration();
+        if(lambda.getBody().isBlockStmt()) {
+            md.setBody(lambda.getBody().asBlockStmt());
+        }
+        else {
+            BlockStmt blockStmt = new BlockStmt();
+            blockStmt.addStatement(lambda.getBody());
+            md.setBody(blockStmt);
+        }
+
+        md.addParameter(lambda.getParameter(0));
+
+        if (v.getValue() instanceof Collection<?> c) {
+            Evaluator eval = new Evaluator("lambda");
+            for (Object o : c) {
+                AntikytheraRunTime.push(new Variable(o));
+                eval.executeMethod(md);
+            }
+        }
+        returnValue = new Variable(null);
+        return null;
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException, EvaluatorException {
@@ -995,13 +1053,10 @@ public class Evaluator {
      */
      Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-        try {
-            Optional<Node> n = methodCall.resolve().toAst();
-            if (n.isPresent() && n.get() instanceof MethodDeclaration md) {
-                return executeMethod(md);
-            }
-        } catch (IllegalStateException ise) {
-            return executeSource(methodCall);
+
+        Optional<MethodDeclaration> n = AbstractCompiler.findMethodDeclaration(methodCall, cu.getType(0).asClassOrInterfaceDeclaration());
+        if (n.isPresent()) {
+            return executeMethod(n.get());
         }
 
         return null;
@@ -1065,10 +1120,10 @@ public class Evaluator {
      */
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
 
-        TypeDeclaration<?> decl = AbstractCompiler.getMatchingClass(cu,
+        TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
         if (decl != null) {
-            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCall, decl.getMethods());
+            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCall, decl);
             if (md.isPresent()) {
                 return executeMethod(md.get());
             }
@@ -1493,7 +1548,7 @@ public class Evaluator {
 
         } else if(stmt.isSwitchStmt()) {
             SwitchStmt switchExpr = stmt.asSwitchStmt();
-            System.out.println("bada");
+            System.out.println("switch missing");
         } else if(stmt.isWhileStmt()) {
             /*
              * Old fashioned while statement

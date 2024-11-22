@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
@@ -35,9 +37,10 @@ class AbstractCompilerTest {
     private final String BASE_PATH = (String) Settings.getProperty(Constants.BASE_PATH);
 
     @BeforeAll
-    static void setUp() throws IOException, ReflectiveOperationException {
+    static void setUp() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @Test
@@ -54,95 +57,6 @@ class AbstractCompilerTest {
         assertEquals("com.cloud.api.generator.AbstractCompilerTest", AbstractCompiler.pathToClass(path));
         assertEquals("com.cloud.api.generator.AbstractCompilerTest.javaxxx",
                 AbstractCompiler.pathToClass(path + "xxx"));
-    }
-
-    //    Tests for getFields() method
-    @Test
-    void getFieldsReturnsEmptyMapWhenClassNotFound() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-                public class TempClass {
-                }
-            """.getBytes());
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        try (FileInputStream in = new FileInputStream(tempFilePath.toFile())) {
-            CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-            AbstractCompiler compiler = new AbstractCompiler();
-            Map<String, FieldDeclaration> fields = compiler.getFields(cu, "NonExistentClass");
-            assertTrue(fields.isEmpty());
-        } finally {
-            Files.delete(tempFilePath);
-        }
-    }
-
-    @Test
-    void getFieldsReturnsMapWithFieldNamesAndTypes() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-                public class TempClass {
-                    private Long id;
-                    private String name;
-                    private String description;
-                }
-            """.getBytes());
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        try (FileInputStream in = new FileInputStream(tempFilePath.toFile())) {
-            CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-            AbstractCompiler compiler = new AbstractCompiler();
-            Map<String, FieldDeclaration> fields = compiler.getFields(cu, "TempClass");
-            assertFalse(fields.isEmpty());
-            assertEquals(fields.size(), 3);
-            assertTrue(fields.containsKey("id"));
-            assertEquals(fields.get("id").toString(), "private Long id;");
-            assertTrue(fields.containsKey("name"));
-            assertEquals(fields.get("name").toString(), "private String name;");
-            assertTrue(fields.containsKey("description"));
-            assertEquals(fields.get("description").toString(), "private String description;");
-        } finally {
-            Files.delete(tempFilePath);
-        }
-    }
-
-    @Test
-    void getFieldsReturnsEmptyMapForClassWithoutFields() throws IOException {
-        Path tempFilePath = Files.createTempFile("TempClass", ".java");
-        Files.write(tempFilePath, """
-                public class TempClass {
-                }
-            """.getBytes());
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
-        combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(tempFilePath.getParent()));
-        JavaSymbolSolver symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
-        JavaParser javaParser = new JavaParser(parserConfiguration);
-
-        try (FileInputStream in = new FileInputStream(tempFilePath.toFile())) {
-            CompilationUnit cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-
-            AbstractCompiler compiler = new AbstractCompiler();
-            Map<String, FieldDeclaration> fields = compiler.getFields(cu, "TempClass");
-            assertTrue(fields.isEmpty());
-        } finally {
-            Files.delete(tempFilePath);
-        }
     }
 
     // Tests for compile() method
@@ -198,6 +112,43 @@ class AbstractCompilerTest {
     }
 
     @Test
+    void testGetPublicClass() {
+        CompilationUnit cu = StaticJavaParser.parse("""
+            public class TempController {
+                public class TempDto {
+                }
+            }
+        """ + "\n");
+        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testGetPublicEnum() {
+        CompilationUnit cu = StaticJavaParser.parse("public class TempController {}\n");
+        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testGetPublicNull() {
+        CompilationUnit cu = StaticJavaParser.parse("class TempController {}\n");
+        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
+        assertNull(result);
+    }
+
+    @Test
+    void testWildCardImport()  {
+
+        CompilationUnit cu = StaticJavaParser.parse("""
+                import java.util.*;
+                import sa.com.cloudsolutions.antikythera.evaluator.*;
+                class TempController {}\n""");
+        assertNotNull(AbstractCompiler.findWildcardImport(cu, "List"));
+        assertNotNull(AbstractCompiler.findWildcardImport(cu, "Loops"));
+    }
+
+    @Test
     void testFindFullyQualifiedName() {
         CompilationUnit cu = new CompilationUnit();
         cu.setPackageDeclaration(new PackageDeclaration().setName("sa.com.cloudsolutions.antikythera.parser"));
@@ -214,8 +165,9 @@ class AbstractCompilerTest {
         result = AbstractCompiler.findFullyQualifiedName(cu, "Integer");
         assertEquals("java.lang.Integer", result);
 
-        result = AbstractCompiler.findFullyQualifiedName(cu, "DTOHandlerTest");
-        assertEquals("sa.com.cloudsolutions.antikythera.parser.DTOHandlerTest", result);
-
+        result = AbstractCompiler.findFullyQualifiedName(cu, "ClassProcessorTest");
+        assertEquals("sa.com.cloudsolutions.antikythera.parser.ClassProcessorTest", result);
     }
+
+
 }

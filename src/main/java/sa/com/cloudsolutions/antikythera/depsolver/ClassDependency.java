@@ -1,9 +1,8 @@
-package sa.com.cloudsolutions.antikythera.parser;
+package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.Type;
 
-public class Dependency {
+public class ClassDependency {
     private TypeDeclaration<?> from;
     private String to;
     private boolean returnType;
@@ -12,14 +11,14 @@ public class Dependency {
     private boolean external;
     private boolean extension;
 
-    public Dependency(TypeDeclaration<?> from, String to, boolean returnType, boolean isParameter) {
+    public ClassDependency(TypeDeclaration<?> from, String to, boolean returnType, boolean isParameter) {
         this.from = from;
         this.to = to;
         this.returnType = returnType;
         this.parameter = isParameter;
     }
 
-    public Dependency(TypeDeclaration<?> from, String to) {
+    public ClassDependency(TypeDeclaration<?> from, String to) {
         this(from, to, false, false);
     }
 
@@ -86,7 +85,7 @@ public class Dependency {
 
     @Override
     public boolean equals(Object obj) {
-        if(obj instanceof Dependency other) {
+        if(obj instanceof ClassDependency other) {
             return from.getFullyQualifiedName().equals(other.from.getFullyQualifiedName()) && to.equals(other.to);
         }
 

@@ -12,6 +12,16 @@ public class Anon {
             public void setName(String name) {
 
             }
+
+            @Override
+            public void setId(int id) {
+
+            }
+
+            @Override
+            public void setId(String id) {
+
+            }
         };
 
         System.out.println(p.getName());

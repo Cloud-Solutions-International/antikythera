@@ -1,15 +1,26 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.AnnotationDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
@@ -17,7 +28,6 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
@@ -32,22 +42,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
+import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
-
-import javax.swing.text.html.Option;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -82,16 +88,11 @@ public class AbstractCompiler {
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
-
-            try {
-                setupParser();
-            } catch (ReflectiveOperationException e) {
-                logger.error("Could not load custom jar files");
-            }
+            setupParser();
         }
     }
 
-    protected static void setupParser() throws IOException, ReflectiveOperationException {
+    protected static void setupParser() throws IOException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
@@ -104,7 +105,7 @@ public class AbstractCompiler {
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
-            urls[i] = new URL("file:///" + jarFile);
+            urls[i] = Paths.get(jarFile).toUri().toURL();
         }
         loader = new URLClassLoader(urls);
 
@@ -151,10 +152,9 @@ public class AbstractCompiler {
         return loader.loadClass(resolvedClass);
     }
 
-    public static void reset() throws ReflectiveOperationException, IOException {
+    public static void reset() throws IOException {
         setupParser();
     }
-
 
     /**
      * Creates a compilation unit from the source code at the relative path.
@@ -187,30 +187,6 @@ public class AbstractCompiler {
         return false;
     }
 
-    /**
-     * Build a map of all the fields in a class by field name.
-     * Warning: Most of the time you should use a Visitor instead of this method
-     *
-     * @param cu Compilation unit
-     * @param className the name of the class that we are searching for in the compilation unit
-     * @return a collection of fields in this class
-     */
-    public static Map<String, FieldDeclaration> getFields(CompilationUnit cu, String className) {
-        Map<String, FieldDeclaration> fields = new HashMap<>();
-        for (var type : cu.getTypes()) {
-            if(type.getNameAsString().equals(className)) {
-                for (var member : type.getMembers()) {
-                    if (member.isFieldDeclaration()) {
-                        FieldDeclaration field = member.asFieldDeclaration();
-                        for (var variable : field.getVariables()) {
-                            fields.put(variable.getNameAsString(), field);
-                        }
-                    }
-                }
-            }
-        }
-        return fields;
-    }
 
     /**
      * Get the name of the parameter for a rest controller
@@ -289,11 +265,15 @@ public class AbstractCompiler {
     /**
      * Get the public class in a compilation unit
      * @param cu the compilation unit
-     * @return the public class
+     * @return the public class, enum or interface that is held in the compilation unit if any.
+     *      when no public type is found null is returned.
      */
-    protected static TypeDeclaration<?> getPublicClass(CompilationUnit cu) {
+    public static TypeDeclaration<?> getPublicType(CompilationUnit cu) {
         for (var type : cu.getTypes()) {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
+                return type;
+            }
+            if (type.isEnumDeclaration() && type.asEnumDeclaration().isPublic()) {
                 return type;
             }
         }
@@ -306,26 +286,59 @@ public class AbstractCompiler {
      * @param className the name of the class to find
      * @return the type declaration or null if no match is found
      */
-    public static TypeDeclaration<?> getMatchingClass(CompilationUnit cu, String className) {
+    public static TypeDeclaration<?> getMatchingType(CompilationUnit cu, String className) {
         for (var type : cu.getTypes()) {
             if (type.getNameAsString().equals(className)) {
+                return type;
+            }
+            Optional<String> fullyQualifiedName = type.getFullyQualifiedName();
+            if (fullyQualifiedName.isPresent() && fullyQualifiedName.get().equals(className)) {
                 return type;
             }
         }
         return null;
     }
 
-    protected static TypeDeclaration<?> getMatchingClass(String fullyQualifiedClassName) {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedClassName);
-        String[] parts = fullyQualifiedClassName.split(".");
-        return getMatchingClass(cu, parts[parts.length - 1]);
+    /**
+     * Given an ObjectCreationExpr, will find the corresponding constructor declaration
+     * @param cu compilation unit holding the declaration
+     * @param oce object creation expression in any class
+     * @return An optional of the constructor declaration
+     */
+    public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
+        Optional<NodeList<Type>> typeArguments = oce.getTypeArguments();
+        List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
+
+        for (ConstructorDeclaration construct : constructors) {
+            if (typeArguments.isPresent()) {
+                Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), construct);
+                if (callable.isPresent()) {
+                    return Optional.of(construct);
+                }
+            }
+        }
+
+        return findMatchingConstructor(constructors, oce.getArguments());
     }
 
-    public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
-        return findMatchingConstructor(cu.findAll(ConstructorDeclaration.class), oce.getArguments());
+    public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
+        if (arguments != null && construct.getParameters().size() == arguments.size()) {
+            for (int i = 0; i < construct.getParameters().size(); i++) {
+                Parameter param = construct.getParameter(i);
+                if (! (param.getType().equals(arguments.get(i))
+                        || param.getType().toString().equals("java.lang.Object")
+                        || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString())))
+                ) {
+                    return Optional.empty();
+                }
+            }
+            return Optional.of(construct);
+        }
+        return Optional.empty();
     }
 
     private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
+
         for (ConstructorDeclaration constructor : constructors) {
             ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
             if (resolvedConstructor.getNumberOfParams() == arguments.size()) {
@@ -348,13 +361,14 @@ public class AbstractCompiler {
 
     /**
      * Finds the fully qualified classname given the short name of a class.
-     * @param cu
-     * @param className
-     * @return
+     * @param cu Compilation unit where the classname name was discovered
+     * @param className to find the fully qualified name for. If the class name is a already a
+     *                  fully qualified name the same will be returned.
+     * @return the fully qualified name of the class.
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
         /*
-         * The strategy is three fold. First check if there exists an import that ends with the
+         * The strategy is threefold. First check if there exists an import that ends with the
          * short class name as it's last component. Our preprocessing would have already replaced
          * all the wild card imports with individual imports.
          * If we are unable to find a match, we will check for the existence of a file in the same
@@ -362,8 +376,11 @@ public class AbstractCompiler {
          * Lastly, if we will try to invoke Class.forName to see if the class can be located in
          * any jar file that we have loaded.
          */
-        ImportDeclaration imp = findImport(cu, className);
+        ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
+            if (imp.getImport().isAsterisk()) {
+                return imp.getNameAsString() + "." + className;
+            }
             return imp.getNameAsString();
         }
 
@@ -391,7 +408,6 @@ public class AbstractCompiler {
              * Once again ignore the exception. We don't have the class in the lang package
              * but it can probably still be found in the same package as the current CU
              */
-
         }
 
         try {
@@ -406,53 +422,299 @@ public class AbstractCompiler {
         }
     }
 
+    public static List<ImportWrapper> findImport(CompilationUnit cu, Type t) {
+        List<ImportWrapper> imports = new ArrayList<>();
+        if (t.isClassOrInterfaceType()) {
+            ClassOrInterfaceType ctype = t.asClassOrInterfaceType();
+            Optional<NodeList<Type>> typeArguments = ctype.getTypeArguments();
+            if (typeArguments.isPresent()) {
+                for (Type type : typeArguments.get()) {
+                    ImportWrapper imp = findImport(cu, type.asString());
+                    if(imp != null) {
+                        imports.add(imp);
+                    }
+                }
+            }
+            ImportWrapper imp = findImport(cu, ctype.getNameAsString());
+            if (imp != null) {
+                imports.add(imp);
+            }
+        }
+        else {
+            ImportWrapper imp = findImport(cu, t.asString());
+            if (imp != null) {
+                imports.add(imp);
+            }
+        }
+        return imports;
+    }
+
     /**
      * Finds an import statement corresponding to the class name in the compilation unit
      * @param cu The Compilation unit
      * @param className the class to search for
      * @return the import declaration or null if not found
      */
-    public static ImportDeclaration findImport(CompilationUnit cu, String className) {
-        for (ImportDeclaration imp : cu.getImports()) {
-            if (imp.getNameAsString().equals(className)) {
-                return imp;
-            }
-            String[] parts = imp.getNameAsString().split("\\.");
-            if (parts.length > 0 && className.equals(parts[parts.length - 1])) {
-                return imp;
+    public static ImportWrapper findImport(CompilationUnit cu, String className) {
+        ImportWrapper imp = findNonWildcardImport(cu, className);
+        if (imp != null) {
+            return imp;
+        }
+        imp = findWildcardImport(cu, className);
+        if (imp != null) {
+            return imp;
+        }
+
+        /*
+         * We are still not done, there's one more thing we can do. Check the extra_exports section
+         * which is used precisely for situations where we have a nearly impossible import to
+         * resolve
+         */
+        for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
+            if (e.toString().endsWith(className)) {
+                return new ImportWrapper(new ImportDeclaration(e.toString(), false, false), true);
             }
         }
         return null;
     }
 
-    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
-                                                                    ClassOrInterfaceDeclaration decl) {
-        return findMethodDeclaration(methodCall, decl.getMethods());
+    private static ImportWrapper findNonWildcardImport(CompilationUnit cu, String className) {
+        for (ImportDeclaration imp : cu.getImports()) {
+            if (imp.getNameAsString().equals(className) && !imp.isAsterisk()) {
+                /*
+                 * Easy one straight-up match involving a fully qualified name as className
+                 */
+                return new ImportWrapper(imp);
+            }
+
+            Name importName = imp.getName();
+            if (className.equals(importName.getIdentifier()) && !imp.isAsterisk()) {
+                /*
+                 * last part of the import matches the class name
+                 */
+                ImportWrapper wrapper = new ImportWrapper(imp);
+                if (!imp.isStatic()) {
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+                    if (target != null) {
+                        TypeDeclaration<?> p = getMatchingType(target, importName.getIdentifier());
+                        wrapper.setExternal(false);
+                        setTypeAndField(className, p, wrapper, target);
+                    }
+
+                }
+                else if (importName.getQualifier().isPresent()){
+                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(importName.getQualifier().get().toString());
+                    if (target != null) {
+                        TypeDeclaration<?> p = getPublicType(target);
+                        setTypeAndField(className, p, wrapper, target);
+                        wrapper.setExternal(false);
+                    }
+                }
+                return wrapper;
+            }
+        }
+
+        return null;
+    }
+
+    private static void setTypeAndField(String className, TypeDeclaration<?> p, ImportWrapper wrapper, CompilationUnit target) {
+        if (p != null) {
+            wrapper.setType(p);
+        }
+
+        Optional<FieldDeclaration> field = target.findFirst(FieldDeclaration.class,
+                f -> f.getVariable(0).getNameAsString().equals(className)
+        );
+        if (field.isPresent()) {
+            wrapper.setField(field.get());
+        }
+        Optional<MethodDeclaration> methodDeclaration = target.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals(className)
+        );
+        if (methodDeclaration.isPresent()) {
+            wrapper.setMethodDeclaration(methodDeclaration.get());
+        }
+
+    }
+
+     static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
+        for (ImportDeclaration imp : cu.getImports()) {
+            if (imp.isAsterisk() && !className.contains("\\.")) {
+                String impName = imp.getNameAsString();
+
+                String fullClassName = impName + "." + className;
+                try {
+                    Class.forName(fullClassName);
+                    /*
+                     * Wild card import. Append the class name to the end and load the class,
+                     * we are on this line because it has worked so this is the correct import.
+                     */
+                    return new ImportWrapper(imp, true);
+                } catch (ClassNotFoundException e) {
+                    try {
+                        AbstractCompiler.loadClass(fullClassName);
+                        /*
+                         * We are here because the previous attempt at class forname was
+                         * unsuccessfully simply because the class had not been loaded.
+                         * Here we have loaded it, which obviously means it's there
+                         */
+                        return new ImportWrapper(imp, true);
+                    } catch (ClassNotFoundException ex) {
+                        /*
+                         * There's one more thing that we can try, append the class name to the
+                         * end of the wildcard import and see if the corresponding file can be
+                         * located on the base folder.
+                         */
+                        ImportWrapper wrapper = fakeImport(className, imp, fullClassName, impName);
+                        if (wrapper != null) return wrapper;
+                    }
+
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ImportWrapper fakeImport(String className, ImportDeclaration imp, String fullClassName, String impName) {
+        CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullClassName);
+        if (target != null) {
+            ImportWrapper wrapper =  new ImportWrapper(imp, false);
+            for(TypeDeclaration<?> type : target.getTypes()) {
+                if (type.getNameAsString().equals(className)) {
+                    wrapper.setType(type);
+                }
+            }
+            return wrapper;
+        }
+        CompilationUnit cu2 = AntikytheraRunTime.getCompilationUnit(impName);
+        if (cu2 != null && imp.isStatic()) {
+            Optional<FieldDeclaration> field =  cu2.findFirst(FieldDeclaration.class,
+                    f -> f.getVariable(0).getNameAsString().equals(className)
+            );
+            if (field.isPresent()) {
+                ImportWrapper wrapper = new ImportWrapper(imp);
+                wrapper.setField(field.get());
+                return wrapper;
+            }
+
+            Optional<EnumConstantDeclaration> ec = cu2.findFirst(EnumConstantDeclaration.class,
+                    f -> f.getNameAsString().equals(className)
+            );
+            if (ec.isPresent()) {
+                return new ImportWrapper(imp);
+            }
+        }
+        else {
+            String path = AbstractCompiler.classToPath(fullClassName);
+            Path sourcePath = Paths.get(Settings.getBasePath(), path);
+            if (sourcePath.toFile().exists()) {
+                ImportDeclaration i = new ImportDeclaration(fullClassName, false, false);
+                return new ImportWrapper(i);
+            }
+        }
+        return null;
     }
 
 
-    /**
-     * Find the method declaration matching the given method call expression
-     * @param methodCall the method call exppression
-     * @param methods the list of method declarations to search from
-     * @return the method declaration or empty if not found
-     */
-    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
-        for (MethodDeclaration method : methods) {
-            if (method.getParameters().size() == methodCall.getArguments().size() && method.getNameAsString().equals(methodCall.getNameAsString())) {
-                if(method.getParameters().isEmpty()) {
-                    return Optional.of(method);
+    public static Optional<CallableDeclaration<?>> findConstructorDeclaration(MCEWrapper methodCall,
+                                                                    TypeDeclaration<?> decl) {
+        int found = -1;
+        int occurs = 0;
+        List<ConstructorDeclaration> constructors = decl.getConstructors();
+        for (int i =0 ; i < constructors.size() ; i++) {
+            ConstructorDeclaration constructor = constructors.get(i);
+            Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), constructor);
+            if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
+                return Optional.of(md);
+            }
+            if (methodCall.getArgumentTypes() != null &&
+                    constructor.getParameters().size() == methodCall.getArgumentTypes().size()) {
+                found = i;
+                occurs++;
+            }
+        }
+
+        if (decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                if (cdecl.findCompilationUnit().isPresent()) {
+                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
+                        if (method.isPresent()) {
+                            return method;
+                        }
+                    }
                 }
-                for (int i =0 ; i < method.getParameters().size(); i++) {
-                    ResolvedType argType = methodCall.getArguments().get(i).calculateResolvedType();
-                    ResolvedType paramType = method.getParameter(i).getType().resolve();
-                    if (argType.describe().equals(paramType.describe())
-                            || paramType.describe().equals("java.lang.Object")
-                            || paramType.describe().equals(Reflect.primitiveToWrapper(argType.describe()))
-                            || argType.describe().equals(Reflect.primitiveToWrapper(paramType.describe()))
-                    )
-                    {
-                        return Optional.of(method);
+            }
+        }
+
+        if (found != -1 && occurs == 1) {
+            return Optional.of(constructors.get(found));
+        }
+        return Optional.empty();
+    }
+
+
+    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+                                                                         TypeDeclaration<?> decl) {
+        return findMethodDeclaration(methodCall, decl, true);
+    }
+
+    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+                                                                         TypeDeclaration<?> decl, boolean overRides) {
+
+        if (methodCall.getMethodCallExpr() instanceof MethodCallExpr mce) {
+            int found = -1;
+            int occurs = 0;
+            List<MethodDeclaration> methodsByName = decl.getMethodsByName(methodCall.getMethodName());
+
+            for (int i = 0; i < methodsByName.size(); i++) {
+                MethodDeclaration method = methodsByName.get(i);
+                if (methodCall.getArgumentTypes() != null) {
+                    Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
+                    if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
+                        return Optional.of(md);
+                    }
+                }
+                if (method.getParameters().size() == mce.getArguments().size()) {
+                    found = i;
+                    occurs++;
+                }
+            }
+
+            if (overRides) {
+                Optional<CallableDeclaration<?>> method = findCallableInParent(methodCall, decl);
+                if (method.isPresent()) {
+                    return method;
+                }
+            }
+
+            if (found != -1 && occurs == 1) {
+                return Optional.of(methodsByName.get(found));
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private static Optional<CallableDeclaration<?>> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
+        if (decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                if (cdecl.findCompilationUnit().isPresent()) {
+                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
+                        if (method.isPresent()) {
+                            return method;
+                        }
                     }
                 }
             }
@@ -460,25 +722,150 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    public static Optional<CallableDeclaration<?>> findCallableDeclaration(MCEWrapper methodCall,
+                                                                      TypeDeclaration<?> decl) {
+        if(methodCall.getMethodCallExpr() instanceof MethodCallExpr) {
+            return findMethodDeclaration(methodCall, decl);
+        }
+
+        return findConstructorDeclaration(methodCall, decl);
+    }
+
+
+    /**
+     * Find the MethodDeclaration that matches the given MethodCallExpression
+     * @param methodCall to search for
+     * @param decl the type declaration that is expected to contain the method declaration
+     * @return an optional of the found method declaration.
+     */
+    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
+                                                                    TypeDeclaration<?> decl) {
+        List<MethodDeclaration> methods = decl.getMethodsByName(methodCall.getNameAsString());
+
+        /*
+         * If there's only one method matching the name in the type declaration, we just return it.
+         */
+        if (methods.size() == 1) {
+            return Optional.of(methods.getFirst());
+        }
+
+        /*
+         * There are no method declaration at all in the type declaration, that means we must search
+         * the extended types.
+         */
+        if (methods.isEmpty() && decl.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                if (cdecl.findCompilationUnit().isPresent()) {
+                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                        Optional<MethodDeclaration> method = findMethodDeclaration(methodCall, p);
+                        if (method.isPresent()) {
+                            return method;
+                        }
+                    }
+                }
+            }
+        }
+
+        /*
+         * The final attempt will be to compare the types of the arguments to the param types.
+         */
+        return findMethodDeclaration(methodCall, methods);
+
+    }
+
+
+    /**
+     * Find the method declaration matching the given method call expression
+     * @param methodCall the method call expression
+     * @param methods the list of method declarations to search from
+     * @return the method declaration or empty if not found
+     */
+    private static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
+        int matchCount = 0;
+        int matchIndex = -1;
+
+        for (int i = 0 ; i < methods.size(); i++) {
+            MethodDeclaration method = methods.get(i);
+            if (method.getParameters().size() == methodCall.getArguments().size()
+                    && method.getNameAsString().equals(methodCall.getNameAsString())) {
+
+                /*
+                 * No argument method call matches a no parameter method declaration
+                 */
+                if(method.getParameters().isEmpty()) {
+                    return Optional.of(method);
+                }
+
+                if (methodCall.getArguments().size() == method.getParameters().size()) {
+                    matchCount++;
+                    matchIndex = i;
+                }
+            }
+        }
+
+        if (matchCount == 1 ) {
+            return Optional.of(methods.get(matchIndex));
+        }
+        return Optional.empty();
+    }
 
     /**
      * Precompile all the java files in the base folder.
      * While doing so we will try to determine what interfaces are implemented by each class.
      *
-     * @throws IOException
+     * @throws IOException when the files cannot be precompiled.
      */
     public static void preProcess() throws IOException {
-        List<File> javaFiles = Files.walk(Paths.get(Settings.getBasePath()))
-                .filter(Files::isRegularFile)
-                .filter(path -> path.toString().endsWith(SUFFIX))
-                .map(Path::toFile)
-                .toList();
+        try (var paths = Files.walk(Paths.get(Settings.getBasePath()))) {
+            List<File> javaFiles = paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(SUFFIX))
+                    .map(Path::toFile)
+                    .toList();
 
-        for (File javaFile : javaFiles) {
-            InterfaceSolver solver = new InterfaceSolver();
-            solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+            for (File javaFile : javaFiles) {
+                InterfaceSolver solver = new InterfaceSolver();
+                solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+            }
+
         }
     }
 
+    public static TypeDeclaration<?> getEnclosingClassOrInterface(Node n) {
+        if (n instanceof ClassOrInterfaceDeclaration cdecl) {
+            return cdecl;
+        }
+        if (n instanceof AnnotationDeclaration ad) {
+            return ad;
+        }
+        if (n != null) {
+            Optional<Node> parent = n.getParentNode();
+            if (parent.isPresent()) {
+                return getEnclosingClassOrInterface(parent.get());
+            }
+        }
+        return null;
+    }
 
+    public static Type convertLiteralToType(LiteralExpr literal) {
+        if (literal.isBooleanLiteralExpr()) {
+            return PrimitiveType.booleanType();
+        } else if (literal.isCharLiteralExpr()) {
+            return PrimitiveType.charType();
+        } else if (literal.isDoubleLiteralExpr()) {
+            return PrimitiveType.doubleType();
+        } else if (literal.isIntegerLiteralExpr()) {
+            return PrimitiveType.intType();
+        } else if (literal.isLongLiteralExpr()) {
+            return PrimitiveType.longType();
+        } else if (literal.isStringLiteralExpr()) {
+            return new ClassOrInterfaceType(null, "String");
+        } else {
+            return new UnknownType();
+        }
+    }
 }

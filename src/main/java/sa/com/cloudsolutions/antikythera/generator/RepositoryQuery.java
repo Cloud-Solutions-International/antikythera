@@ -331,7 +331,7 @@ public class RepositoryQuery {
                                     }
                                 }
 
-                                other = RepositoryParser.findEntity(member.getElementType());
+                                other = RepositoryParser.findEntity(member.findCompilationUnit().get(), member.getElementType());
 
                                 String tableName = RepositoryParser.findTableName(other);
                                 if(RepositoryParser.isOracle()) {
@@ -390,15 +390,15 @@ public class RepositoryQuery {
         this.table = table;
     }
 
-    public void setQuery(String query) {
+    public void setQuery(CompilationUnit cu, String query) {
         this.originalQuery = query;
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
             this.simplifiedStatement = CCJSqlParserUtil.parse(query);
 
-            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
-            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(entityType));
+            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(cu, entityType));
+            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(cu, entityType));
 
             if (simplifiedStatement instanceof PlainSelect ps) {
                 simplifyWhereClause(ps.getWhere());

@@ -19,11 +19,11 @@ import java.util.Comparator;
 class ProjectGeneratorTest {
 
     private Path tempDir;
-    private ProjectGenerator generator;
+    private Antikythera generator;
 
     @BeforeEach
     void setUp() throws IOException {
-        generator = ProjectGenerator.getInstance();
+        generator = Antikythera.getInstance();
         tempDir = Files.createTempDirectory("testOutput");
 
     }
@@ -38,8 +38,8 @@ class ProjectGeneratorTest {
 
     @Test
     void getInstanceReturnsSameInstance() throws IOException {
-        ProjectGenerator instance1 = ProjectGenerator.getInstance();
-        ProjectGenerator instance2 = ProjectGenerator.getInstance();
+        Antikythera instance1 = Antikythera.getInstance();
+        Antikythera instance2 = Antikythera.getInstance();
         assertSame(instance1, instance2);
     }
 
@@ -53,7 +53,7 @@ class ProjectGeneratorTest {
         if (file.exists()) {
             Files.delete(file.toPath());
         }
-        generator.writeFile(relativePath, content);
+        CopyUtils.writeFile(relativePath, content);
         assertTrue(file.exists());
         assertEquals(content, Files.readString(file.toPath()));
     }

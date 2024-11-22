@@ -35,4 +35,20 @@ public class Person implements IPerson {
     public String getAddress() {
         return address;
     }
+
+    public static Person personBuilder() {
+        Person p = new Person("Hornblower");
+        p.setId("200");
+        return p;
+    }
+
+    @Override
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    @Override
+    public void setId(String id) {
+        this.setId(Integer.parseInt(id));
+    }
 }

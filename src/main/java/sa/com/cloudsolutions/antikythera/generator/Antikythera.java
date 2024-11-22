@@ -1,9 +1,5 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -15,7 +11,6 @@ import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.parser.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
 import java.io.*;
@@ -30,10 +25,9 @@ import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-public class ProjectGenerator {
-    private static final Logger logger = LoggerFactory.getLogger(ProjectGenerator.class);
+public class Antikythera {
+    private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
 
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
@@ -45,38 +39,24 @@ public class ProjectGenerator {
     private final String controllers;
     private final String outputPath;
 
-    private static ProjectGenerator instance;
+    private static Antikythera instance;
 
-
-    private ProjectGenerator() {
+    private Antikythera() {
         basePath = Settings.getProperty(Constants.BASE_PATH).toString();
         basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
         controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
     }
 
-    public static ProjectGenerator getInstance() throws IOException {
+    public static Antikythera getInstance() throws IOException {
         if (instance == null) {
             Settings.loadConfigMap();
 
-            instance = new ProjectGenerator();
+            instance = new Antikythera();
         }
         return instance;
     }
 
-    private void createMavenProjectStructure(String basePackage, String path) throws IOException {
-        String basePackagePath = basePackage.replace(".", File.separator);
-        String[] directories = {
-                path + File.separator + SRC + File.separator + "main" + File.separator + "java" + File.separator + basePackagePath,
-                path + File.separator + SRC + File.separator + "main" + File.separator + "resources",
-                path + File.separator + SRC + File.separator + "test" + File.separator + "java" + File.separator + basePackagePath,
-                path + File.separator + SRC + File.separator + "test" + File.separator + "resources"
-        };
-
-        for (String dir : directories) {
-            Files.  createDirectories(Paths.get(dir));
-        }
-    }
 
     /**
      * Copy template file to the specified path
@@ -213,7 +193,7 @@ public class ProjectGenerator {
      * @throws EvaluatorException if evaluating java expressions in the AUT code fails.
      */
     public void generate() throws IOException, XmlPullParserException, EvaluatorException {
-        createMavenProjectStructure(basePackage, outputPath);
+        CopyUtils.createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
 
         AbstractCompiler.preProcess();
@@ -230,17 +210,6 @@ public class ProjectGenerator {
         }
     }
 
-    public void writeFile(String relativePath, String content) throws IOException {
-        String filePath = outputPath + File.separator + SRC + File.separator + "main" + File.separator + "java" +
-                File.separator + relativePath;
-        File file = new File(filePath);
-        File parentDir = file.getParentFile();
-        Files.createDirectories(parentDir.toPath());
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(content);
-        }
-    }
-
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
         String filePath = outputPath + File.separator + SRC + File.separator + "test" + File.separator + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
@@ -253,7 +222,7 @@ public class ProjectGenerator {
     }
 
     public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
-        ProjectGenerator.getInstance().generate();
+        Antikythera.getInstance().generate();
         RestControllerParser.Stats stats = RestControllerParser.getStats();
 
         logger.info("Processed {} controllers", stats.getControllers());
