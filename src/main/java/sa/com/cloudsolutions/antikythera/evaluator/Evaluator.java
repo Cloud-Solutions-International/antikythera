@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -13,6 +14,8 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
+import org.aspectj.weaver.ast.Call;
+import org.checkerframework.checker.units.qual.N;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -43,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -336,15 +340,20 @@ public class Evaluator {
 
     private static Variable evaluateLiteral(Expression expr) throws EvaluatorException {
         if (expr.isBooleanLiteralExpr()) {
-            return new Variable(expr.asBooleanLiteralExpr().getValue());
+            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
+                    expr.asBooleanLiteralExpr().getValue());
         } else if (expr.isDoubleLiteralExpr()) {
-            return new Variable(Double.parseDouble(expr.asDoubleLiteralExpr().getValue()));
+            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
+                    Double.parseDouble(expr.asDoubleLiteralExpr().getValue()));
         } else if (expr.isIntegerLiteralExpr()) {
-            return new Variable(Integer.parseInt(expr.asIntegerLiteralExpr().getValue()));
+            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
+                    Integer.parseInt(expr.asIntegerLiteralExpr().getValue()));
         } else if (expr.isStringLiteralExpr()) {
-            return new Variable(expr.asStringLiteralExpr().getValue());
+            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
+                    expr.asStringLiteralExpr().getValue());
         } else if (expr.isCharLiteralExpr()) {
-            return new Variable(expr.asCharLiteralExpr().getValue());
+            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
+                    expr.asCharLiteralExpr().getValue());
         } else if (expr.isLongLiteralExpr()) {
             String value = expr.asLongLiteralExpr().getValue();
             if (value.endsWith("L")) {
@@ -529,48 +538,39 @@ public class Evaluator {
      * @param oce the object creation expression.
      */
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
-        Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
-        CompilationUnit dependant = null;
-        if (res.isPresent()) {
-            ResolvedType resolved = type.resolve();
-            String resolvedClass = resolved.describe();
-            dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-        }
-        else {
-            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
-            if (importDeclaration != null) {
-                dependant = AntikytheraRunTime.getCompilationUnit(importDeclaration.getNameAsString());
-            }
-        }
-
-        if (dependant != null) {
-            TypeDeclaration<?> match = AbstractCompiler.getMatchingType(dependant, type.getNameAsString());
-            if (match != null) {
-                Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
-                annonymousOverrides(type, oce, eval);
-                List<ConstructorDeclaration> constructors = dependant.findAll(ConstructorDeclaration.class);
-                if (constructors.isEmpty()) {
-                    return new Variable(eval);
-                }
-
-                Optional<ConstructorDeclaration> matchingConstructor = AbstractCompiler.findMatchingConstructor(dependant, oce);
-                if (matchingConstructor.isPresent()) {
-                    ConstructorDeclaration constructor = matchingConstructor.get();
-                    for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
-                        /*
-                         * Push method arguments
-                         */
-                        AntikytheraRunTime.push(evaluateExpression(oce.getArguments().get(i)));
-                    }
-                    eval.executeConstructor(constructor);
-                    return new Variable(eval);
-                }
-                /*
-                 * No matching constructor found but in evals the default does not show up. So let's roll
-                 */
+        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, oce);
+        if (match != null) {
+            Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
+            annonymousOverrides(type, oce, eval);
+            List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
+            if (constructors.isEmpty()) {
                 return new Variable(eval);
             }
+            MCEWrapper mce = new MCEWrapper(oce);
+            NodeList<Type> argTypes = new NodeList<>();
+            mce.setArgumentTypes(argTypes);
+
+            for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+                /*
+                 * Push method arguments
+                 */
+                Variable variable = evaluateExpression(oce.getArguments().get(i));
+                argTypes.add(variable.getType());
+                AntikytheraRunTime.push(variable);
+            }
+
+            Optional<CallableDeclaration<?>> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
+
+            if (matchingConstructor.isPresent()) {
+                eval.executeConstructor(matchingConstructor.get());
+                return new Variable(eval);
+            }
+            /*
+             * No matching constructor found but in evals the default does not show up. So let's roll
+             */
+            return new Variable(eval);
         }
+
         return null;
     }
 
@@ -1433,35 +1433,36 @@ public class Evaluator {
      * @throws AntikytheraException
      * @throws ReflectiveOperationException
      */
-    public void executeConstructor(ConstructorDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        List<Statement> statements = md.getBody().getStatements();
-        NodeList<Parameter> parameters = md.getParameters();
+    public void executeConstructor(CallableDeclaration<?> md) throws AntikytheraException, ReflectiveOperationException {
+        if (md instanceof ConstructorDeclaration cd) {
+            List<Statement> statements = cd.getBody().getStatements();
+            NodeList<Parameter> parameters = md.getParameters();
 
-        returnValue = null;
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Parameter p = parameters.get(i);
+            returnValue = null;
+            for (int i = parameters.size() - 1; i >= 0; i--) {
+                Parameter p = parameters.get(i);
 
-            /*
-             * Our implementation differs from a standard Expression Evaluation engine in that we do not
-             * throw an exception if the stack is empty.
-             *
-             * The primary purpose of this is to generate tests. Those tests are sometimes generated for
-             * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
-             * allow the developer to make a few manual edits that's more than enougn.
-             */
-            if (AntikytheraRunTime.isEmptyStack()) {
-                logger.warn("Stack is empty");
+                /*
+                 * Our implementation differs from a standard Expression Evaluation engine in that we do not
+                 * throw an exception if the stack is empty.
+                 *
+                 * The primary purpose of this is to generate tests. Those tests are sometimes generated for
+                 * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
+                 * allow the developer to make a few manual edits that's more than enougn.
+                 */
+                if (AntikytheraRunTime.isEmptyStack()) {
+                    logger.warn("Stack is empty");
+                } else {
+                    setLocal(cd.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
+                }
             }
-            else {
-                setLocal(md.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
+
+            executeBlock(statements);
+
+            if (!AntikytheraRunTime.isEmptyStack()) {
+                AntikytheraRunTime.pop();
+
             }
-        }
-
-        executeBlock(statements);
-
-        if (!AntikytheraRunTime.isEmptyStack()) {
-            AntikytheraRunTime.pop();
-
         }
     }
 

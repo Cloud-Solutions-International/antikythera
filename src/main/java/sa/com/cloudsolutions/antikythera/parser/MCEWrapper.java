@@ -3,12 +3,18 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
-import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
 
 public class MCEWrapper {
     NodeWithArguments<?> methodCallExpr;
     NodeList<Type> argumentTypes;
+
+    public MCEWrapper() {
+    }
+
+    public MCEWrapper(NodeWithArguments<?> oce) {
+        this.methodCallExpr = oce;
+    }
 
     public NodeList<Type> getArgumentTypes() {
         return argumentTypes;

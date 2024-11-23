@@ -219,6 +219,7 @@ public class AbstractCompiler {
      * In other words we are catching it here and giving you null
      * @param node the node to resolve
      * @return an optional of the resolved type
+     * @Deprecated
      */
     public static Optional<ResolvedType> resolveTypeSafely(ClassOrInterfaceType node) {
         Optional<CompilationUnit> compilationUnit = node.findCompilationUnit();
@@ -231,6 +232,29 @@ public class AbstractCompiler {
             }
         }
         return Optional.empty();
+    }
+
+    public static TypeDeclaration<?> resolveTypeSafely(ClassOrInterfaceType type, Node context) {
+
+        Optional<CompilationUnit> compilationUnit = context.findCompilationUnit();
+        if (compilationUnit.isPresent()) {
+            CompilationUnit cu = compilationUnit.get();
+            ImportWrapper wrapper = findImport(cu, type.getNameAsString());
+            if (wrapper != null) {
+                return wrapper.getType();
+            }
+
+            String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
+            String fileName = packageName + "." + type.getNameAsString() + SUFFIX;
+            if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
+                CompilationUnit other = AntikytheraRunTime.getCompilationUnit(fileName.replace(".java",""));
+                if (other != null) {
+                    return getMatchingType(other, type.getNameAsString());
+                }
+            }
+        }
+
+        return null;
     }
 
     public static String absolutePathToClassName(String abs) {

@@ -744,7 +744,7 @@ public class DepSolver {
                     }
                     if (imp.getField() == null ) {
                         if (imp.getImport().isAsterisk()) {
-                            String fqName = imp.getImport().getNameAsString() + "." + scope.asNameExpr().getNameAsString();
+
                             TypeDeclaration<?> td = imp.getType();
                             if (td.isClassOrInterfaceDeclaration()) {
                                 td.asClassOrInterfaceDeclaration().getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
