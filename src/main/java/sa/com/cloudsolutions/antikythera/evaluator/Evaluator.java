@@ -197,7 +197,6 @@ public class Evaluator {
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
-
             /*
              * Array Initializersions are tricky
              */
@@ -339,33 +338,25 @@ public class Evaluator {
     }
 
     private static Variable evaluateLiteral(Expression expr) throws EvaluatorException {
-        if (expr.isBooleanLiteralExpr()) {
-            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
-                    expr.asBooleanLiteralExpr().getValue());
-        } else if (expr.isDoubleLiteralExpr()) {
-            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
-                    Double.parseDouble(expr.asDoubleLiteralExpr().getValue()));
-        } else if (expr.isIntegerLiteralExpr()) {
-            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
-                    Integer.parseInt(expr.asIntegerLiteralExpr().getValue()));
-        } else if (expr.isStringLiteralExpr()) {
-            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
-                    expr.asStringLiteralExpr().getValue());
-        } else if (expr.isCharLiteralExpr()) {
-            return new Variable(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()),
-                    expr.asCharLiteralExpr().getValue());
-        } else if (expr.isLongLiteralExpr()) {
-            String value = expr.asLongLiteralExpr().getValue();
-            if (value.endsWith("L")) {
-                return new Variable(Long.parseLong(value.replaceFirst("L","")));
+        return switch (expr) {
+            case BooleanLiteralExpr booleanLiteralExpr ->
+                new Variable(AbstractCompiler.convertLiteralToType(booleanLiteralExpr), booleanLiteralExpr.getValue());
+            case DoubleLiteralExpr doubleLiteralExpr ->
+                new Variable(AbstractCompiler.convertLiteralToType(doubleLiteralExpr), Double.parseDouble(doubleLiteralExpr.getValue()));
+            case IntegerLiteralExpr integerLiteralExpr ->
+                new Variable(AbstractCompiler.convertLiteralToType(integerLiteralExpr), Integer.parseInt(integerLiteralExpr.getValue()));
+            case StringLiteralExpr stringLiteralExpr ->
+                new Variable(AbstractCompiler.convertLiteralToType(stringLiteralExpr), stringLiteralExpr.getValue());
+            case CharLiteralExpr charLiteralExpr ->
+                new Variable(AbstractCompiler.convertLiteralToType(charLiteralExpr), charLiteralExpr.getValue());
+            case LongLiteralExpr longLiteralExpr -> {
+                String value = longLiteralExpr.getValue();
+                yield new Variable(Long.parseLong(value.endsWith("L") ? value.replaceFirst("L", "") : value));
             }
-            else {
-                return new Variable(Long.parseLong(value));
-            }
-        } else if (expr.isNullLiteralExpr()) {
-            return new Variable(null);
-        }
-        throw new EvaluatorException("Unknown literal expression %s".formatted(expr));
+            case NullLiteralExpr nullLiteralExpr ->
+                new Variable(null);
+            default -> throw new EvaluatorException("Unknown literal expression %s".formatted(expr));
+        };
     }
 
     private Variable evaluateAssignment(Expression expr) throws AntikytheraException, ReflectiveOperationException {
@@ -614,25 +605,12 @@ public class Evaluator {
      */
     private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
         try {
-            Optional<ResolvedType> res = AbstractCompiler.resolveTypeSafely(type);
             String resolvedClass = null;
-            if (res.isPresent()) {
-                ResolvedType resolved = type.resolve();
-                resolvedClass = resolved.describe();
+            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
+            if (importDeclaration != null) {
+                resolvedClass = importDeclaration.getNameAsString();
+            }
 
-                if (resolved.isReferenceType()) {
-                    var typeDecl = resolved.asReferenceType().getTypeDeclaration();
-                    if (typeDecl.isPresent() && typeDecl.get().getClassName().contains(".")) {
-                        resolvedClass = resolvedClass.replaceFirst("\\.([^\\.]+)$", "\\$$1");
-                    }
-                }
-            }
-            else {
-                ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
-                if (importDeclaration != null) {
-                    resolvedClass = importDeclaration.getNameAsString();
-                }
-            }
 
             Class<?> clazz;
             try {
@@ -1719,6 +1697,10 @@ public class Evaluator {
     }
 
     public void setupFields(CompilationUnit cu)  {
+        cu.accept(new ControllerFieldVisitor(), null);
+    }
+
+    public void setupFields()  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
