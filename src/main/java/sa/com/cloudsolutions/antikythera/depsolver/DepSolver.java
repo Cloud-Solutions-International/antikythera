@@ -603,7 +603,7 @@ public class DepSolver {
             }
         }
 
-        private void expressionAsFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) {
+        private void expressionAsFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
             FieldAccessExpr fae = expr.asFieldAccessExpr();
             Expression scope = fae.getScope();
             if (scope.isNameExpr()) {
@@ -729,7 +729,7 @@ public class DepSolver {
             return null;
         }
 
-        private Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae, GraphNode node) {
+        private Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae, GraphNode node) throws AntikytheraException {
             Type t = names.get(scope.asNameExpr().getNameAsString());
             if (t != null) {
                 return Optional.of(t);
@@ -739,42 +739,33 @@ public class DepSolver {
                 if (imp != null) {
                     node.getDestination().addImport(imp.getImport());
                     if (imp.isExternal()) {
-                        Optional<Type> ct = getExternalType(fae, imp);
-                        return ct;
+                        return getExternalType(fae, imp);
                     }
                     if (imp.getField() == null ) {
                         if (imp.getImport().isAsterisk()) {
-                            String fqName = imp.getImport().getNameAsString() + "." + scope.asNameExpr().getNameAsString();
                             TypeDeclaration<?> td = imp.getType();
-                            if (td.isClassOrInterfaceDeclaration()) {
-                                td.asClassOrInterfaceDeclaration().getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
-                                    try {
-                                        Graph.createGraphNode(fd);
-                                    } catch (AntikytheraException e) {
-                                        throw new DepsolverException(e);
-                                    }
-                                });
-                            }
+                            createFieldNode(fae, td);
                         }
                         else {
                             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                             if (cu != null) {
                                 TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
-                                if (td != null) {
-                                    td.getFieldByName(fae.getNameAsString()).ifPresent(fd -> {
-                                        try {
-                                            Graph.createGraphNode(fd);
-                                        } catch (AntikytheraException e) {
-                                            throw new DepsolverException(e);
-                                        }
-                                    });
-                                }
+                                createFieldNode(fae, td);
                             }
                         }
                     }
                 }
             }
             return Optional.empty();
+        }
+
+        private static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td) throws AntikytheraException {
+            if (td != null) {
+                Optional<FieldDeclaration> fieldByName = td.getFieldByName(fae.getNameAsString());
+                if (fieldByName.isPresent()) {
+                    Graph.createGraphNode(fieldByName.get());
+                }
+            }
         }
 
         private GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) throws AntikytheraException {
@@ -953,8 +944,6 @@ public class DepSolver {
                             }
 
                         }
-                    }
-                    if (elementType.isClassOrInterfaceType()) {
                         gn = addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
                     }
                     else {
