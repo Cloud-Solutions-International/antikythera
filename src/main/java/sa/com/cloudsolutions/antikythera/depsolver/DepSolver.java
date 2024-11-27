@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -323,41 +324,30 @@ public class DepSolver {
     }
 
     private void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
-        List<FieldDeclaration> fields;
+        List<FieldDeclaration> fields = new ArrayList<>();
+        List<ConstructorDeclaration> constructors = new ArrayList<>();
+        List<MethodDeclaration> methods = new ArrayList<>();
 
-        if (! (classOrInterface.getAnnotationByName("NoArgsConstructor").isPresent()
+        for (BodyDeclaration<?> member : classOrInterface.getMembers()) {
+            if (member instanceof FieldDeclaration) {
+                fields.add((FieldDeclaration) member);
+            } else if (member instanceof ConstructorDeclaration) {
+                constructors.add((ConstructorDeclaration) member);
+            } else if (member instanceof MethodDeclaration) {
+                methods.add((MethodDeclaration) member);
+            }
+        }
+
+        if (!(classOrInterface.getAnnotationByName("NoArgsConstructor").isPresent()
                 || classOrInterface.getAnnotationByName("AllArgsConstructor").isPresent()
                 || classOrInterface.getAnnotationByName("data").isPresent())) {
-
-            fields = classOrInterface.getMembers().stream()
-                    .filter(FieldDeclaration.class::isInstance)
-                    .map(FieldDeclaration.class::cast)
-                    .sorted(Comparator.comparing(f -> f.getVariable(0).getNameAsString()))
-                    .toList();
-        }
-        else {
-            fields = classOrInterface.getMembers().stream()
-                    .filter(FieldDeclaration.class::isInstance)
-                    .map(FieldDeclaration.class::cast)
-                    .toList();
+            fields.sort(Comparator.comparing(f -> f.getVariable(0).getNameAsString()));
         }
 
-        List<ConstructorDeclaration> constructors = classOrInterface.getMembers().stream()
-                .filter(ConstructorDeclaration.class::isInstance)
-                .map(ConstructorDeclaration.class::cast)
-                .sorted(Comparator.comparing(ConstructorDeclaration::getNameAsString))
-                .toList();
+        constructors.sort(Comparator.comparing(ConstructorDeclaration::getNameAsString));
+        methods.sort(Comparator.comparing(MethodDeclaration::getNameAsString));
 
-        List<MethodDeclaration> methods = classOrInterface.getMembers().stream()
-                .filter(MethodDeclaration.class::isInstance)
-                .map(MethodDeclaration.class::cast)
-                .sorted(Comparator.comparing(MethodDeclaration::getNameAsString))
-                .toList();
-
-        // Clear original members
         classOrInterface.getMembers().clear();
-
-        // Add sorted fields and methods back
         classOrInterface.getMembers().addAll(fields);
         classOrInterface.getMembers().addAll(constructors);
         classOrInterface.getMembers().addAll(methods);
@@ -658,16 +648,16 @@ public class DepSolver {
                 Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
 
                 if (fd.isPresent()) {
-                    Type field = fd.get().getElementType();
-                    types.add(field);
                     node.addField(fd.get());
+                    Type field = fd.get().getElementType();
 
                     if (field != null) {
+                        types.add(field);
+                        addImport(node, field.getElementType().asString());
                         for (AnnotationExpr ann : field.getAnnotations()) {
                             addImport(node, ann.getNameAsString());
                         }
                     }
-                    addImport(node, field.getElementType().asString());
                 }
                 else {
                     addImport(node, arg.asNameExpr().getNameAsString());
@@ -930,22 +920,22 @@ public class DepSolver {
                         for (AnnotationExpr ann : field.getAnnotations()) {
                             addImport(gn, ann.getNameAsString());
                         }
-                    }
-                    Type elementType = field.getElementType();
-                    if (elementType.isClassOrInterfaceType()) {
-                        Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
-                        if (types.isPresent()) {
-                            for (Type type : types.get()) {
-                                if (type.isClassOrInterfaceType()) {
-                                    addImport(gn, type.asClassOrInterfaceType().getNameAsString());
-                                }
-                            }
 
+                        Type elementType = field.getElementType();
+                        if (elementType.isClassOrInterfaceType()) {
+                            Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
+                            if (types.isPresent()) {
+                                for (Type type : types.get()) {
+                                    if (type.isClassOrInterfaceType()) {
+                                        addImport(gn, type.asClassOrInterfaceType().getNameAsString());
+                                    }
+                                }
+
+                            }
+                            gn = addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
+                        } else {
+                            gn = addImport(gn, elementType.toString());
                         }
-                        gn = addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
-                    }
-                    else {
-                        gn = addImport(gn, elementType.toString());
                     }
                 }
                 else {
