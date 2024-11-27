@@ -808,7 +808,9 @@ public class DepSolver {
                             // desperate measure hack
                             // todo remove this
                             for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
-                                Graph.createGraphNode(method);
+                                if (method.getParameters().size() == mce.getArguments().size()) {
+                                    Graph.createGraphNode(method);
+                                }
                             }
                         }
                     }
@@ -903,11 +905,7 @@ public class DepSolver {
                     gn = resolveField(gn, fieldAccessExpr);
                 }
                 else if (expr.isMethodCallExpr()) {
-                    try {
-                        gn = copyMethod(solveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
-                    } catch (AntikytheraException e) {
-                        throw new DepsolverException(e);
-                    }
+                     gn = copyMethod(solveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
                 }
                 else if (expr.isNameExpr()) {
                     gn = evaluateNameExpr(expr, gn);
