@@ -170,22 +170,11 @@ public class GraphNode {
      */
     private void inherit() throws AntikytheraException {
         ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
-
-        if (enclosingDeclaration.isInterface()) {
-            if (typeDeclaration.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+        if (typeDeclaration.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+            if (enclosingDeclaration.isInterface()) {
                 cdecl.setInterface(true);
-
-                if (cdecl.getExtendedTypes().isEmpty()) {
-                    for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
-                        cdecl.addExtendedType(ifc.clone());
-                        addTypeArguments(ifc);
-                    }
-                }
-            }
-        } else {
-            if (typeDeclaration.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+            } else {
                 cdecl.setInterface(false);
 
                 if (cdecl.getImplementedTypes().isEmpty()) {
@@ -194,12 +183,11 @@ public class GraphNode {
                         addTypeArguments(ifc);
                     }
                 }
-
-                if (cdecl.getExtendedTypes().isEmpty()) {
-                    for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
-                        cdecl.addExtendedType(ifc.clone());
-                        addTypeArguments(ifc);
-                    }
+            }
+            if (cdecl.getExtendedTypes().isEmpty()) {
+                for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
+                    cdecl.addExtendedType(ifc.clone());
+                    addTypeArguments(ifc);
                 }
             }
         }
@@ -346,9 +334,8 @@ public class GraphNode {
     }
 
     private void nestedAnnotation(Expression e) {
-        String fqName;
         AnnotationExpr anne = e.asAnnotationExpr();
-        fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, anne.getName().toString());
+        String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, anne.getName().toString());
         if (fqName != null) {
             destination.addImport(fqName);
         }
