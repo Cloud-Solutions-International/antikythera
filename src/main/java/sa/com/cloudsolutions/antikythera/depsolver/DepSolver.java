@@ -1024,6 +1024,10 @@ public class DepSolver {
         if(solver == null) {
             solver = new DepSolver();
         }
+        else {
+            solver.names.clear();
+            DepSolver.stack.clear();
+        }
         return solver;
     }
 

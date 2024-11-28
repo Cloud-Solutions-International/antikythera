@@ -35,7 +35,7 @@ class DepSolverTest extends TestHelper {
 
     @BeforeEach
     public void each() throws Exception {
-        depSolver = new DepSolver();
+        depSolver = DepSolver.createSolver();
         depSolver.reset();
 
         PersonCompiler p = new PersonCompiler();
