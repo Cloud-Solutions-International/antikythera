@@ -640,33 +640,6 @@ public class DepSolver {
             }
         }
 
-        private void expressionAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
-            Type t = names.get(arg.asNameExpr().getNameAsString());
-            if (t != null) {
-                types.add(t);
-            }
-            else if (node.getEnclosingType().isClassOrInterfaceDeclaration()){
-                ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
-                Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
-
-                if (fd.isPresent()) {
-                    node.addField(fd.get());
-                    Type field = fd.get().getElementType();
-
-                    if (field != null) {
-                        types.add(field);
-                        addImport(node, field.getElementType().asString());
-                        for (AnnotationExpr ann : field.getAnnotations()) {
-                            addImport(node, ann.getNameAsString());
-                        }
-                    }
-                }
-                else {
-                    addImport(node, arg.asNameExpr().getNameAsString());
-                }
-            }
-        }
-
         private void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) throws AntikytheraException {
             if (arg instanceof MethodCallExpr argMethodCall) {
                 MCEWrapper wrap = solveArgumentTypes(node, arg);
@@ -952,6 +925,33 @@ public class DepSolver {
 
     }
 
+    private void expressionAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
+        Type t = names.get(arg.asNameExpr().getNameAsString());
+        if (t != null) {
+            types.add(t);
+        }
+        else if (node.getEnclosingType().isClassOrInterfaceDeclaration()){
+            ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
+            Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
+
+            if (fd.isPresent()) {
+                node.addField(fd.get());
+                Type field = fd.get().getElementType();
+
+                if (field != null) {
+                    types.add(field);
+                    addImport(node, field.getElementType().asString());
+                    for (AnnotationExpr ann : field.getAnnotations()) {
+                        addImport(node, ann.getNameAsString());
+                    }
+                }
+            }
+            else {
+                addImport(node, arg.asNameExpr().getNameAsString());
+            }
+        }
+    }
+
     private static Optional<Type> getExternalType(NodeWithSimpleName<?> fae, ImportWrapper imp) {
         try {
             Class<?> c = Class.forName(imp.getNameAsString());
@@ -1015,44 +1015,7 @@ public class DepSolver {
                 initializer.accept(new Visitor(), node);
             }
             else if(initializer.isNameExpr()) {
-                setupFieldInitializer(initializer, node);
-            }
-        }
-    }
-
-    private void setupFieldInitializer(Expression initializer, GraphNode node) throws AntikytheraException {
-        ImportWrapper iw = AbstractCompiler.findImport(node.getCompilationUnit(), initializer.asNameExpr().getNameAsString());
-        if (iw != null) {
-            ImportDeclaration imp = iw.getImport();
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-            if (imp.isStatic()) {
-                if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
-                    fieldInitializer(t, initializer);
-                }
-                else {
-                    cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
-                    if (cu != null) {
-                        TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getQualifier().get().getIdentifier());
-                        fieldInitializer(t, initializer);
-                    }
-                }
-            }
-            else {
-                if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
-                    Graph.createGraphNode(t);
-                }
-            }
-            node.getDestination().addImport(imp);
-        }
-    }
-
-    private void fieldInitializer(TypeDeclaration<?> t, Expression initializer) throws AntikytheraException {
-        if (t != null) {
-            FieldDeclaration f = t.getFieldByName(initializer.asNameExpr().getNameAsString()).orElse(null);
-            if (f != null) {
-                Graph.createGraphNode(f);
+                expressionAsNameExpr(node, initializer, new NodeList<>());
             }
         }
     }
