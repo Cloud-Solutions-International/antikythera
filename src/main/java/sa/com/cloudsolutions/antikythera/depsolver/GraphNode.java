@@ -205,85 +205,12 @@ public class GraphNode {
                     }
                 }
             }
-            initializeField(field);
+            DepSolver.initializeField(field, this);
 
             addField(field);
         }
     }
 
-    private void initializeField(FieldDeclaration field) throws AntikytheraException {
-        Optional<Expression> init = field.getVariables().get(0).getInitializer();
-        if (init.isPresent()) {
-            Expression initializer = init.get();
-            if (initializer.isObjectCreationExpr()) {
-                ObjectCreationExpr oce = initializer.asObjectCreationExpr();
-                List<ImportWrapper> imports = AbstractCompiler.findImport(compilationUnit, oce.getType());
-                for(ImportWrapper imp : imports) {
-                    destination.getImports().add(imp.getImport());
-                }
-            }
-            else if(initializer.isNameExpr()) {
-                setupFieldInitializer(initializer);
-            }
-            else if(initializer.isMethodCallExpr()) {
-                MethodCallExpr mce = initializer.asMethodCallExpr();
-                Optional<Expression> scope = mce.getScope();
-                if (scope.isPresent()) {
-                    if (scope.get().isNameExpr()) {
-                        setupFieldInitializer(scope.get());
-                    }
-                    else if (scope.get().isFieldAccessExpr()) {
-                        setupFieldInitializer(scope.get().asFieldAccessExpr().getScope().asNameExpr());
-                    } if (scope.get().isMethodCallExpr()) {
-                        MethodCallExpr m = scope.get().asMethodCallExpr();
-                        if (m.getScope().isPresent() && m.getScope().get().isNameExpr()) {
-                            DepSolver.addImport(this, m.getScope().get().asNameExpr().getNameAsString());
-                        }
-                        else {
-                            DepSolver.addImport(this, m.getNameAsString());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private void setupFieldInitializer(Expression initializer) throws AntikytheraException {
-        ImportWrapper iw = AbstractCompiler.findImport(compilationUnit, initializer.asNameExpr().getNameAsString());
-        if (iw != null) {
-            ImportDeclaration imp = iw.getImport();
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-            if (imp.isStatic()) {
-                if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
-                    fieldInitializer(t, initializer);
-                }
-                else {
-                    cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
-                    if (cu != null) {
-                        TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getQualifier().get().getIdentifier());
-                        fieldInitializer(t, initializer);
-                    }
-                }
-            }
-            else {
-                if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
-                    Graph.createGraphNode(t);
-                }
-            }
-            destination.addImport(imp);
-        }
-    }
-
-    private void fieldInitializer(TypeDeclaration<?> t, Expression initializer) throws AntikytheraException {
-        if (t != null) {
-            FieldDeclaration f = t.getFieldByName(initializer.asNameExpr().getNameAsString()).orElse(null);
-            if (f != null) {
-                Graph.createGraphNode(f);
-            }
-        }
-    }
 
     private void processClassAnnotations() throws AntikytheraException {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
@@ -506,6 +433,6 @@ public class GraphNode {
                 DepSolver.addImport(this, variable.getTypeAsString());
             }
         }
-        initializeField(fieldDeclaration);
+        DepSolver.initializeField(fieldDeclaration, this);
     }
 }

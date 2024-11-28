@@ -67,7 +67,7 @@ public class DepSolver {
      */
     private static final LinkedList<GraphNode> stack = new LinkedList<>();
 
-    private final Map<String, Type> names = new HashMap<>();
+    private static final Map<String, Type> names = new HashMap<>();
 
     /**
      * Main entry point for the dependency solver
@@ -1000,6 +1000,80 @@ public class DepSolver {
             throw new DepsolverException(e);
         }
         return returnValue;
+    }
+
+    public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {
+        Optional<Expression> init = field.getVariables().get(0).getInitializer();
+        if (init.isPresent()) {
+            Expression initializer = init.get();
+            if (initializer.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = initializer.asObjectCreationExpr();
+                List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), oce.getType());
+                for(ImportWrapper imp : imports) {
+                    node.getDestination().getImports().add(imp.getImport());
+                }
+            }
+            else if(initializer.isNameExpr()) {
+                setupFieldInitializer(initializer, node);
+            }
+            else if(initializer.isMethodCallExpr()) {
+                MethodCallExpr mce = initializer.asMethodCallExpr();
+                Optional<Expression> scope = mce.getScope();
+                if (scope.isPresent()) {
+                    if (scope.get().isNameExpr()) {
+                        setupFieldInitializer(scope.get(), node);
+                    }
+                    else if (scope.get().isFieldAccessExpr()) {
+                        setupFieldInitializer(scope.get().asFieldAccessExpr().getScope().asNameExpr(), node);
+                    } if (scope.get().isMethodCallExpr()) {
+                        MethodCallExpr m = scope.get().asMethodCallExpr();
+                        if (m.getScope().isPresent() && m.getScope().get().isNameExpr()) {
+                            DepSolver.addImport(node, m.getScope().get().asNameExpr().getNameAsString());
+                        }
+                        else {
+                            DepSolver.addImport(node, m.getNameAsString());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static void setupFieldInitializer(Expression initializer, GraphNode node) throws AntikytheraException {
+        ImportWrapper iw = AbstractCompiler.findImport(node.getCompilationUnit(), initializer.asNameExpr().getNameAsString());
+        if (iw != null) {
+            ImportDeclaration imp = iw.getImport();
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
+            if (imp.isStatic()) {
+                if (cu != null) {
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
+                    fieldInitializer(t, initializer);
+                }
+                else {
+                    cu = AntikytheraRunTime.getCompilationUnit(imp.getName().getQualifier().get().toString());
+                    if (cu != null) {
+                        TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getQualifier().get().getIdentifier());
+                        fieldInitializer(t, initializer);
+                    }
+                }
+            }
+            else {
+                if (cu != null) {
+                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, imp.getName().getIdentifier());
+                    Graph.createGraphNode(t);
+                }
+            }
+            node.getDestination().addImport(imp);
+        }
+    }
+
+    private static void fieldInitializer(TypeDeclaration<?> t, Expression initializer) throws AntikytheraException {
+        if (t != null) {
+            FieldDeclaration f = t.getFieldByName(initializer.asNameExpr().getNameAsString()).orElse(null);
+            if (f != null) {
+                Graph.createGraphNode(f);
+            }
+        }
     }
 
     public static void main(String[] args) throws IOException, AntikytheraException {
