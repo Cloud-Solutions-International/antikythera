@@ -135,21 +135,21 @@ public class GraphNode {
 
         compilationUnit.getPackageDeclaration().ifPresent(destination::setPackageDeclaration);
 
-        if (typeDeclaration.getAnnotations().isEmpty()) {
+        if (typeDeclaration.getAnnotations().isEmpty() && !enclosingType.getAnnotations().isEmpty()) {
             processClassAnnotations();
         }
 
         /*
          * If the class is an entity, we will need to preserve all the fields.
          */
-        if (typeDeclaration.getFields().isEmpty() &&
-                (typeDeclaration.getAnnotationByName("Entity").isPresent()) ||
-                typeDeclaration.getAnnotationByName("AllArgsConstructor").isPresent() ||
-                typeDeclaration.getAnnotationByName("JsonInclude").isPresent() ||
-                typeDeclaration.getAnnotationByName("MappedSuperclass").isPresent() ||
-                typeDeclaration.getAnnotationByName("Data").isPresent() ||
-                (typeDeclaration.getAnnotationByName("Setter").isPresent()
-                        && typeDeclaration.getAnnotationByName("Getter").isPresent())) {
+        if (enclosingType.getFields().isEmpty() &&
+                (enclosingType.getAnnotationByName("Entity").isPresent()) ||
+                enclosingType.getAnnotationByName("AllArgsConstructor").isPresent() ||
+                enclosingType.getAnnotationByName("JsonInclude").isPresent() ||
+                enclosingType.getAnnotationByName("MappedSuperclass").isPresent() ||
+                enclosingType.getAnnotationByName("Data").isPresent() ||
+                (enclosingType.getAnnotationByName("Setter").isPresent()
+                        && enclosingType.getAnnotationByName("Getter").isPresent())) {
 
             copyFields();
 
@@ -215,15 +215,17 @@ public class GraphNode {
     private void processClassAnnotations() throws AntikytheraException {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
-            DepSolver.addImport(this, ann.getNameAsString());
+//            DepSolver.addImport(this, ann.getNameAsString());
 
-            if (ann.isSingleMemberAnnotationExpr()) {
-                singleMemeberAnnotation(ann);
-            }
-            else if (ann.isNormalAnnotationExpr()) {
-                normalAnnotation(ann);
-            }
+//            if (this.toString().contains("EhrCommonClientVital")) {
+//                if (ann.isSingleMemberAnnotationExpr()) {
+//                    singleMemeberAnnotation(ann);
+//                } else if (ann.isNormalAnnotationExpr()) {
+//                    normalAnnotation(ann);
+//                }
+//            }
         }
+        enclosingType.accept(new AnnotationVisitor(), this);
     }
 
     private void singleMemeberAnnotation(AnnotationExpr ann) {
