@@ -330,6 +330,7 @@ public class AbstractCompiler {
 
                 if (! (param.getType().equals(arguments.get(i))
                         || param.getType().toString().equals("java.lang.Object")
+                        || arguments.get(i).getElementType().isUnknownType()
                         || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString())))
                 ) {
                     return Optional.empty();
