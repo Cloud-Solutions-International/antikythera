@@ -322,9 +322,12 @@ public class AbstractCompiler {
     }
 
     public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
-        if (arguments != null && construct.getParameters().size() == arguments.size()) {
-            for (int i = 0; i < construct.getParameters().size(); i++) {
+        if (arguments != null &&
+                (construct.getParameters().size() == arguments.size() ||
+                        (construct.getParameters().size() > arguments.size() && construct.getParameter(arguments.size()).isVarArgs() ) )) {
+            for (int i = 0; i < arguments.size(); i++) {
                 Parameter param = construct.getParameter(i);
+
                 if (! (param.getType().equals(arguments.get(i))
                         || param.getType().toString().equals("java.lang.Object")
                         || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString())))
