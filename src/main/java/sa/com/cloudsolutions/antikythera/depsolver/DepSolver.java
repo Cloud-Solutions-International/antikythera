@@ -536,7 +536,7 @@ public class DepSolver {
                 MCEWrapper mceWrapper = solveArgumentTypes(node, mce);
                 chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
-                throw new DepsolverException(e.getMessage());
+                throw new DepsolverException(e);
             }
 
             super.visit(mce, node);
@@ -826,8 +826,7 @@ public class DepSolver {
                 MCEWrapper mceWrapper = solveArgumentTypes(node, oce);
                 chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
-                e.printStackTrace();
-                throw new DepsolverException(e.getMessage());
+                throw new DepsolverException(e);
             }
 
 
