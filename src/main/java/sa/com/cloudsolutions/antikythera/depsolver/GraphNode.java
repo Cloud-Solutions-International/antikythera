@@ -215,82 +215,8 @@ public class GraphNode {
     private void processClassAnnotations() throws AntikytheraException {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
-//            DepSolver.addImport(this, ann.getNameAsString());
-
-//            if (this.toString().contains("EhrCommonClientVital")) {
-//                if (ann.isSingleMemberAnnotationExpr()) {
-//                    singleMemeberAnnotation(ann);
-//                } else if (ann.isNormalAnnotationExpr()) {
-//                    normalAnnotation(ann);
-//                }
-//            }
         }
         enclosingType.accept(new AnnotationVisitor(), this);
-    }
-
-    private void singleMemeberAnnotation(AnnotationExpr ann) {
-        Expression expr = ann.asSingleMemberAnnotationExpr().getMemberValue();
-        if (expr.isArrayInitializerExpr()) {
-            ArrayInitializerExpr aie = expr.asArrayInitializerExpr();
-            for (Expression e : aie.getValues()) {
-                if (e.isAnnotationExpr()) {
-                    nestedAnnotation(e);
-                }
-                else if (e.isFieldAccessExpr()) {
-                    annotationFieldAccess(e);
-                }
-            }
-        }
-        else if (expr.isFieldAccessExpr()) {
-            annotationFieldAccess(expr);
-        }
-    }
-
-    private void normalAnnotation(AnnotationExpr ann) throws AntikytheraException {
-        NormalAnnotationExpr norm = ann.asNormalAnnotationExpr();
-        for (MemberValuePair value : norm.getPairs()) {
-            if (value.getValue().isAnnotationExpr()) {
-                nestedAnnotation(value.getValue());
-            }
-            else if (value.getValue().isFieldAccessExpr()) {
-                annotationFieldAccess(value.getValue());
-            }
-            else if (value.getValue().isClassExpr()) {
-                ClassOrInterfaceType ct = value.getValue().asClassExpr().getType().asClassOrInterfaceType();
-                addTypeArguments(ct);
-            }
-        }
-    }
-
-    private void nestedAnnotation(Expression e) {
-        AnnotationExpr anne = e.asAnnotationExpr();
-        String fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, anne.getName().toString());
-        if (fqName != null) {
-            destination.addImport(fqName);
-        }
-        if (anne.isNormalAnnotationExpr()) {
-            NormalAnnotationExpr norm = anne.asNormalAnnotationExpr();
-            for (MemberValuePair value : norm.getPairs()) {
-                if (value.getValue().isAnnotationExpr()) {
-                    AnnotationExpr ae = value.getValue().asAnnotationExpr();
-                    fqName = AbstractCompiler.findFullyQualifiedName(compilationUnit, ae.getName().toString());
-                    if (fqName != null) {
-                        destination.addImport(fqName);
-                    }
-                }
-            }
-        }
-    }
-
-    private void annotationFieldAccess(Expression expr) {
-        FieldAccessExpr fae = expr.asFieldAccessExpr();
-        Expression scope = fae.getScope();
-        if (scope.isNameExpr()) {
-            ImportWrapper imp = AbstractCompiler.findImport(compilationUnit, scope.asNameExpr().getNameAsString());
-            if (imp != null) {
-                destination.addImport(imp.getImport());
-            }
-        }
     }
 
     /**
