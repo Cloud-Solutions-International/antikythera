@@ -60,22 +60,31 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     @Override
     public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
         String[] fullName = n.getNameAsString().split("\\.");
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fullName[0]);
+        addImport(node, fullName[0]);
+        super.visit(n, node);
+    }
+
+    private static void addImport(GraphNode node, String fullName) {
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fullName);
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
             if (!imp.isExternal() && imp.getType() != null) {
                 try {
                     Graph.createGraphNode(imp.getType());
                 } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
+                    throw new DepsolverException(e);
                 }
             }
         }
-        super.visit(n, node);
     }
 
     @Override
     public void visit(final NormalAnnotationExpr n, final GraphNode node) {
+        normalAnnotationExpr(n, node);
+        super.visit(n, node);
+    }
+
+    private static void normalAnnotationExpr(NormalAnnotationExpr n, GraphNode node) {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
@@ -96,20 +105,9 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             }
             else if (value.isClassExpr()) {
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
-                ImportWrapper wrapper = AbstractCompiler.findImport(node.getCompilationUnit(), ct.getName().toString());
-                if (wrapper != null) {
-                    node.getDestination().addImport(wrapper.getImport());
-                    if (!wrapper.isExternal() && wrapper.getType() != null) {
-                        try {
-                            Graph.createGraphNode(wrapper.getType());
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    }
-                }
+                addImport(node, ct.getName().toString());
             }
         }
-        super.visit(n, node);
     }
 
     private static void annotationBinaryExpr(GraphNode node, Expression value) {
@@ -181,16 +179,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                     node.getDestination().addImport(fqName);
                 }
                 if (anne.isNormalAnnotationExpr()) {
-                    NormalAnnotationExpr norm = anne.asNormalAnnotationExpr();
-                    for (MemberValuePair value2 : norm.getPairs()) {
-                        if (value2.getValue().isAnnotationExpr()) {
-                            AnnotationExpr ae = value2.getValue().asAnnotationExpr();
-                            fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), ae.getName().toString());
-                            if (fqName != null) {
-                                node.getDestination().addImport(fqName);
-                            }
-                        }
-                    }
+                    normalAnnotationExpr(anne.asNormalAnnotationExpr(), node);
                 }
             }
             else if(expr.isFieldAccessExpr()) {
@@ -202,7 +191,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     protected static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
-            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(scope.asNameExpr().getNameAsString());
+
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                     scope.asNameExpr().getNameAsString()
             );

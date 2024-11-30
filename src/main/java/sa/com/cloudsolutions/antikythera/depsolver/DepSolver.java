@@ -1002,6 +1002,7 @@ public class DepSolver {
         }
         return returnValue;
     }
+
     public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {
         solver.initField(field, node);
     }
