@@ -132,10 +132,8 @@ public class Evaluator {
      */
     public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
-        if (value == null) {
-            if(fields.get(name) != null) {
-                return fields.get(name);
-            }
+        if (value == null && fields.get(name) != null) {
+            return fields.get(name);
         }
         return value;
     }
@@ -319,7 +317,7 @@ public class Evaluator {
                 }
             }
             else {
-                logger.warn("Could not resolve {} for field access", fae.getScope().toString());
+                logger.warn("Could not resolve {} for field access", fae.getScope());
             }
         }
         else {
@@ -821,7 +819,7 @@ public class Evaluator {
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());
             }
-            else if(expr2.isFieldAccessExpr()) {
+            else if(expr2.isFieldAccessExpr() && variable != null) {
                 /*
                  * When we get here the getValue should have returned to us a valid field. That means
                  * we will have an evaluator instance as the 'value' in the variable v
@@ -1293,7 +1291,7 @@ public class Evaluator {
                     resolveFieldRepresentedByCode(variable, resolvedClass);
                 }
                 else {
-                    logger.debug("Unsolved " + resolvedClass);
+                    logger.debug("Unsolved {}" , resolvedClass);
                 }
             }
         }

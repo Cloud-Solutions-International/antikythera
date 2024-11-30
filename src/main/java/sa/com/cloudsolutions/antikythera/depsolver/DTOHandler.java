@@ -473,11 +473,11 @@ public class DTOHandler extends ClassProcessor {
      * Given the field name and the class declaration find the name of the setter.
      * People don't apparently always use java beans naming conventions. So we can't blindly use
      * the name of the field to find the setter. That's why we can't rely on lombok either.
-     * @param fieldName
-     * @param cdecl
-     * @return
+     * @param fieldName the name of the field
+     * @param cdecl the class declaration that is supposed to contain the setter
+     * @return the setter name
      */
-    private static String findNameOfSetter(String fieldName, TypeDeclaration cdecl) {
+    private static String findNameOfSetter(String fieldName, TypeDeclaration<?> cdecl) {
         String name = "set" + fieldName;
         if (cdecl.getMethodsByName(name).isEmpty()) {
             name = "set" + capitalize(fieldName);
