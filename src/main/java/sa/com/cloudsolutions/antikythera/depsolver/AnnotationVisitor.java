@@ -21,9 +21,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
-
-import java.util.Optional;
 
 /**
  * Visitor to help r
@@ -65,17 +64,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     }
 
     private static void addImport(GraphNode node, String fullName) {
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fullName);
-        if (imp != null) {
-            node.getDestination().addImport(imp.getImport());
-            if (!imp.isExternal() && imp.getType() != null) {
-                try {
-                    Graph.createGraphNode(imp.getType());
-                } catch (AntikytheraException e) {
-                    throw new DepsolverException(e);
-                }
-            }
-        }
+        ImportUtils.addImport(node, fullName);
     }
 
     @Override
