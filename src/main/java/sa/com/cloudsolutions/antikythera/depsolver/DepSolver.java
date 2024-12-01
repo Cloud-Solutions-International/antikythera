@@ -425,7 +425,7 @@ public class DepSolver {
                 Optional<Expression> init = vd.getInitializer();
                 if (init.isPresent()) {
                     if (init.get().isNameExpr()) {
-                        addImport(node, init.get().asNameExpr().getNameAsString());
+                        ImportUtils.addImport(node, init.get().asNameExpr().getNameAsString());
                     }
                 }
             }
@@ -493,16 +493,10 @@ public class DepSolver {
             if (param.getType().isUnionType()) {
                 UnionType ut = param.getType().asUnionType();
                 for (Type t : ut.getElements()) {
-                    if (t.isClassOrInterfaceType()) {
-                        addImport(node, t.asClassOrInterfaceType().getNameAsString());
-                    }
+                    ImportUtils.addImport(node, param.getType());
                 }
             } else {
-                Type t = param.getType();
-                if (t.isClassOrInterfaceType()) {
-                    ClassOrInterfaceType ct = t.asClassOrInterfaceType();
-                    addImport(node, ct.getNameAsString());
-                }
+                ImportUtils.addImport(node, param.getType());
             }
             super.visit(n, node);
         }
@@ -512,7 +506,7 @@ public class DepSolver {
             if (n.getExpression().isAssignExpr()) {
                 Expression expr = n.getExpression().asAssignExpr().getValue();
                 if (expr.isNameExpr()) {
-                    addImport(arg, expr.asNameExpr().getNameAsString());
+                    ImportUtils.addImport(arg, expr.asNameExpr().getNameAsString());
                 }
             }
             super.visit(n, arg);
@@ -628,7 +622,7 @@ public class DepSolver {
             MethodReferenceExpr mre = arg.asMethodReferenceExpr();
             Expression scope = mre.getScope();
             if (scope.isNameExpr()) {
-                addImport(node, scope.asNameExpr().getNameAsString());
+                ImportUtils.addImport(node, scope.asNameExpr().getNameAsString());
             }
             else if (scope.isThisExpr()) {
                 for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
@@ -636,8 +630,7 @@ public class DepSolver {
                 }
             }
             else if (scope.isTypeExpr()) {
-                TypeExpr te = scope.asTypeExpr();
-                addImport(node, te.getType().asString());
+                ImportUtils.addImport(node, scope.asTypeExpr().getType().asString());
             }
         }
 
@@ -648,23 +641,20 @@ public class DepSolver {
                 if (gn != null) {
                     if (gn.getNode() instanceof MethodDeclaration md) {
                         Type t = md.getType();
-                        if (t.isClassOrInterfaceType()) {
-                            addImport(node, t.asClassOrInterfaceType().getNameAsString());
-                        }
-                        types.add(md.getType());
+                        ImportUtils.addImport(node, t);
+                        types.add(t);
                     } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
                         Optional<CallableDeclaration<?>> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
                         if (omd.isPresent()) {
                             CallableDeclaration<?> cd = omd.get();
                             if (cd instanceof MethodDeclaration md) {
                                 Type t = md.getType();
-                                types.add(md.getType());
-                                if (t.isClassOrInterfaceType()) {
-                                    addImport(gn, t.asClassOrInterfaceType().getNameAsString());
-                                }
+                                types.add(t);
+                                ImportUtils.addImport(node, t);
+
                             }
                             cd.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
-                                addImport(gn, c.getNameAsString());
+                                ImportUtils.addImport(node, c.getNameAsString());
                             });
                         } else {
                             Type t = lombokSolver(argMethodCall, cid, gn);
@@ -686,9 +676,7 @@ public class DepSolver {
                 Optional<FieldDeclaration> fd = cid.getFieldByName(ClassProcessor.classToInstanceName(field));
                 if (fd.isPresent()) {
                     Type t = fd.get().getElementType();
-                    if (t.isClassOrInterfaceType()) {
-                        addImport(gn, t.asClassOrInterfaceType().getNameAsString());
-                    }
+                    ImportUtils.addImport(gn, t);
                     return t;
                 }
             }
@@ -744,7 +732,7 @@ public class DepSolver {
                 if (md.isPresent()) {
                     CallableDeclaration<?> method = md.get();
                     for (Type ex : method.getThrownExceptions()) {
-                        addImport(node, ex.asString());
+                        ImportUtils.addImport(node, ex.asString());
                     }
 
                     if (method.isAbstract()) {
@@ -761,7 +749,8 @@ public class DepSolver {
                 } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
                     Type t = lombokSolver(mce, decl, node);
                     if (t != null && t.isClassOrInterfaceType()) {
-                        return addImport(node, t.asClassOrInterfaceType().getNameAsString());
+                        // TODO come back here
+                        return ImportUtils.addImport(node, t.asClassOrInterfaceType().getNameAsString());
                     } else {
                         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
                         if (imp != null) {
@@ -804,10 +793,7 @@ public class DepSolver {
 
         @Override
         public void visit(CastExpr n, GraphNode node) {
-            Type t = n.getType();
-            if (t.isClassOrInterfaceType()) {
-                addImport(node, t.asClassOrInterfaceType().getNameAsString());
-            }
+            ImportUtils.addImport(node, n.getType());
             super.visit(n, node);
         }
 
@@ -850,13 +836,7 @@ public class DepSolver {
                 }
             }
             else if (mceWrapper.getMethodCallExpr() instanceof ObjectCreationExpr oce) {
-                if (oce.getType().isClassOrInterfaceType()) {
-                    GraphNode gn = addImport(node, oce.getType().asClassOrInterfaceType().getNameAsString());
-                    if (gn != null) {
-                        copyMethod(mceWrapper, gn);
-                        return gn;
-                    }
-                }
+                return ImportUtils.addImport(node, oce.getType());
             }
             return null;
         }
@@ -893,7 +873,7 @@ public class DepSolver {
 
                     if (field != null) {
                         for (AnnotationExpr ann : field.getAnnotations()) {
-                            addImport(gn, ann.getNameAsString());
+                            ImportUtils.addImport(gn, ann.getNameAsString());
                         }
 
                         Type elementType = field.getElementType();
@@ -901,24 +881,23 @@ public class DepSolver {
                             Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
                             if (types.isPresent()) {
                                 for (Type type : types.get()) {
-                                    if (type.isClassOrInterfaceType()) {
-                                        addImport(gn, type.asClassOrInterfaceType().getNameAsString());
-                                    }
+                                    ImportUtils.addImport(gn, type);
                                 }
 
                             }
-                            gn = addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
+                            gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
                         } else {
-                            gn = addImport(gn, elementType.toString());
+                            gn = ImportUtils.addImport(gn, elementType.asString());
+
                         }
                     }
                 }
                 else {
-                    gn = addImport(gn, nameExpr.getName().toString());
+                    gn = ImportUtils.addImport(gn, nameExpr.getName().toString());
                 }
             }
             else {
-                gn = addImport(gn, t.asString());
+                gn = ImportUtils.addImport(gn, t.asString());
             }
             return gn;
         }
@@ -940,14 +919,14 @@ public class DepSolver {
 
                 if (field != null) {
                     types.add(field);
-                    addImport(node, field.getElementType().asString());
+                    ImportUtils.addImport(node, field.getElementType().asString());
                     for (AnnotationExpr ann : field.getAnnotations()) {
-                        addImport(node, ann.getNameAsString());
+                        ImportUtils.addImport(node, ann.getNameAsString());
                     }
                 }
             }
             else {
-                addImport(node, arg.asNameExpr().getNameAsString());
+                ImportUtils.addImport(node, arg.asNameExpr().getNameAsString());
             }
         }
     }
@@ -963,10 +942,6 @@ public class DepSolver {
             System.err.println(e.getMessage());
         }
         return Optional.empty();
-    }
-
-    public static GraphNode addImport(GraphNode node, String name) {
-        return ImportUtils.addImport(node, name);
     }
 
     public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {

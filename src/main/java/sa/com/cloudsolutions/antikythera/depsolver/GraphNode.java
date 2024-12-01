@@ -24,6 +24,7 @@ import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.util.List;
@@ -238,9 +239,9 @@ public class GraphNode {
                         searchType(t);
                     }
                     if (ctype.getScope().isPresent()) {
-                        DepSolver.addImport(this, ctype.getScope().get().getNameAsString());
+                        ImportUtils.addImport(this, ctype.getScope().get().getNameAsString());
                     }
-                    DepSolver.addImport(this, ctype.getNameAsString());
+                    ImportUtils.addImport(this, ctype.getNameAsString());
                 }
                 else {
                     searchType(typeArg);
@@ -260,7 +261,7 @@ public class GraphNode {
                 ? typeArg.asClassOrInterfaceType().getNameAsString()
                 : typeArg.toString();
 
-        DepSolver.addImport(this, name);
+        ImportUtils.addImport(this, name);
     }
 
     public boolean isVisited() {
@@ -358,7 +359,7 @@ public class GraphNode {
                 addTypeArguments(variable.getType().asClassOrInterfaceType());
             }
             else {
-                DepSolver.addImport(this, variable.getTypeAsString());
+                ImportUtils.addImport(this, variable.getTypeAsString());
             }
         }
         DepSolver.initializeField(fieldDeclaration, this);

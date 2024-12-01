@@ -59,12 +59,8 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     @Override
     public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
         String[] fullName = n.getNameAsString().split("\\.");
-        addImport(node, fullName[0]);
+        ImportUtils.addImport(node, fullName[0]);
         super.visit(n, node);
-    }
-
-    private static void addImport(GraphNode node, String fullName) {
-        ImportUtils.addImport(node, fullName);
     }
 
     @Override
@@ -94,7 +90,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             }
             else if (value.isClassExpr()) {
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
-                addImport(node, ct.getName().toString());
+                ImportUtils.addImport(node, ct.getName().toString());
             }
         }
     }
