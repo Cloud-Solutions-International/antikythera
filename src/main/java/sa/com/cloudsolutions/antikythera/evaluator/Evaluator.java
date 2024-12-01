@@ -96,7 +96,7 @@ public class Evaluator {
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
-    private Deque<TryStmt> catching = new LinkedList<>();
+    private final Deque<TryStmt> catching = new LinkedList<>();
 
     static {
         try {
@@ -213,8 +213,8 @@ public class Evaluator {
      * Create an array using reflection
      * @param arrayInitializerExpr the ArrayInitializerExpr which describes how the array will be build
      * @return a Variable which holds the generated array as a value
-     * @throws ReflectiveOperationException
-     * @throws AntikytheraException
+     * @throws ReflectiveOperationException when a reflection method fails
+     * @throws AntikytheraException when a parser operation fails
      */
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
@@ -310,7 +310,7 @@ public class Evaluator {
                         if (fieldDeclaration.isPresent()) {
                             FieldDeclaration field = fieldDeclaration.get();
                             Variable v = new Variable(field.getVariable(0).getType().asString());
-                            v.setValue(field.getVariable(0).getInitializer().get().toString());
+                            field.getVariable(0).getInitializer().ifPresent(f -> v.setValue(f.toString()));
                             return v;
                         }
                     }
@@ -832,7 +832,7 @@ public class Evaluator {
                     variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
                 }
                 else {
-                    if (variable != null && variable.getValue() instanceof Evaluator eval) {
+                    if (variable.getValue() instanceof Evaluator eval) {
                         variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
                     }
                     else {
@@ -1063,10 +1063,10 @@ public class Evaluator {
     /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
-     * @param methodCall
-     * @return
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @param methodCall the method call expression to be execute
+     * @return a Variable containing the result of the method call
+     * @throws AntikytheraException if there are parsing related errors
+     * @throws ReflectiveOperationException if there are reflection related errors
      */
     Variable executeLocalMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
@@ -1111,10 +1111,10 @@ public class Evaluator {
 
     /**
      * Execute a method that is available only in source code format.
-     * @param methodCall
-     * @return
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @param methodCall method call that is present in source code form
+     * @return the result of the method call wrapped in a Variable
+     * @throws AntikytheraException if there are parsing related errors
+     * @throws ReflectiveOperationException if there are reflection related errors
      */
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
 

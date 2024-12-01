@@ -331,12 +331,12 @@ public class DepSolver {
         List<MethodDeclaration> methods = new ArrayList<>();
 
         for (BodyDeclaration<?> member : classOrInterface.getMembers()) {
-            if (member instanceof FieldDeclaration) {
-                fields.add((FieldDeclaration) member);
-            } else if (member instanceof ConstructorDeclaration) {
-                constructors.add((ConstructorDeclaration) member);
-            } else if (member instanceof MethodDeclaration) {
-                methods.add((MethodDeclaration) member);
+            if (member instanceof FieldDeclaration fd) {
+                fields.add(fd);
+            } else if (member instanceof ConstructorDeclaration cd) {
+                constructors.add(cd);
+            } else if (member instanceof MethodDeclaration md) {
+                methods.add(md);
             }
         }
 
