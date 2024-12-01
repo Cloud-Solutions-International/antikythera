@@ -493,10 +493,11 @@ public class DepSolver {
             if (param.getType().isUnionType()) {
                 UnionType ut = param.getType().asUnionType();
                 for (Type t : ut.getElements()) {
-                    ImportUtils.addImport(node, param.getType());
+                    ImportUtils.addImport(node, t);
                 }
             } else {
-                ImportUtils.addImport(node, param.getType());
+                Type t = param.getType();
+                ImportUtils.addImport(node, t);
             }
             super.visit(n, node);
         }
