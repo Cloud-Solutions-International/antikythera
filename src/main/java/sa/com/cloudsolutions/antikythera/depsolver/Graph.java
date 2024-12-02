@@ -93,9 +93,8 @@ public class Graph {
                 }
             }
             Optional<JavadocComment> comment = cdecl.getJavadocComment();
-            if (comment.isPresent()) {
-                target.setJavadocComment(comment.get());
-            }
+            comment.ifPresent(target::setJavadocComment);
+
             g.setTypeDeclaration(target);
         }
     }

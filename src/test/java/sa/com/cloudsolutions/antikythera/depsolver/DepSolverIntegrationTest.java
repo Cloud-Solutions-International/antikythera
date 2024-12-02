@@ -28,7 +28,7 @@ public class DepSolverIntegrationTest {
 
     @Test
     void testEmployee() throws IOException, AntikytheraException {
-        DepSolver depSolver = new DepSolver();
+        DepSolver depSolver = DepSolver.createSolver();
         depSolver.processMethod("sa.com.cloudsolutions.antikythera.evaluator.Employee#simpleAccess");
 
         Map<String, CompilationUnit> dependencies = Graph.getDependencies();

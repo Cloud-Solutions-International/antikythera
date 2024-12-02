@@ -13,6 +13,7 @@ import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -20,9 +21,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
-
-import java.util.Optional;
 
 /**
  * Visitor to help r
@@ -59,22 +59,17 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     @Override
     public void visit(final MarkerAnnotationExpr n, final GraphNode node) {
         String[] fullName = n.getNameAsString().split("\\.");
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fullName[0]);
-        if (imp != null) {
-            node.getDestination().addImport(imp.getImport());
-            if (!imp.isExternal() && imp.getType() != null) {
-                try {
-                    Graph.createGraphNode(imp.getType());
-                } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
+        ImportUtils.addImport(node, fullName[0]);
         super.visit(n, node);
     }
 
     @Override
     public void visit(final NormalAnnotationExpr n, final GraphNode node) {
+        normalAnnotationExpr(n, node);
+        super.visit(n, node);
+    }
+
+    private static void normalAnnotationExpr(NormalAnnotationExpr n, GraphNode node) {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
@@ -93,8 +88,11 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
             else if (value.isArrayInitializerExpr()) {
                 annotationArray(node, value);
             }
+            else if (value.isClassExpr()) {
+                ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
+                ImportUtils.addImport(node, ct.getName().toString());
+            }
         }
-        super.visit(n, node);
     }
 
     private static void annotationBinaryExpr(GraphNode node, Expression value) {
@@ -166,16 +164,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                     node.getDestination().addImport(fqName);
                 }
                 if (anne.isNormalAnnotationExpr()) {
-                    NormalAnnotationExpr norm = anne.asNormalAnnotationExpr();
-                    for (MemberValuePair value2 : norm.getPairs()) {
-                        if (value2.getValue().isAnnotationExpr()) {
-                            AnnotationExpr ae = value2.getValue().asAnnotationExpr();
-                            fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), ae.getName().toString());
-                            if (fqName != null) {
-                                node.getDestination().addImport(fqName);
-                            }
-                        }
-                    }
+                    normalAnnotationExpr(anne.asNormalAnnotationExpr(), node);
                 }
             }
             else if(expr.isFieldAccessExpr()) {
@@ -187,7 +176,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     protected static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
-            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(scope.asNameExpr().getNameAsString());
+
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                     scope.asNameExpr().getNameAsString()
             );

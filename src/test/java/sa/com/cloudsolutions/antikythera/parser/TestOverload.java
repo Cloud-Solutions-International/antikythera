@@ -69,9 +69,6 @@ class TestOverlord extends TestHelper {
         assertNotNull(decl);
 
         MethodCallExpr mce = methodCalls.getFirst();
-        NodeList<Type> typeArguments = new NodeList<>();
-        typeArguments.add(StaticJavaParser.parseType("String"));
-        mce.setTypeArguments(typeArguments);
 
         Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCalls.getFirst(), decl);
         assertTrue(md.isPresent());
