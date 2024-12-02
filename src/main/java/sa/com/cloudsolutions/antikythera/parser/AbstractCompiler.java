@@ -638,22 +638,9 @@ public class AbstractCompiler {
             }
         }
 
-        if (decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-
-            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                if (cdecl.findCompilationUnit().isPresent()) {
-                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                    if (cu != null) {
-                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
-                        if (method.isPresent()) {
-                            return method;
-                        }
-                    }
-                }
-            }
+        Optional<CallableDeclaration<?>> c = findCallableInParent(methodCall, decl);
+        if (c.isPresent()) {
+            return c;
         }
 
         if (found != -1 && occurs == 1) {
