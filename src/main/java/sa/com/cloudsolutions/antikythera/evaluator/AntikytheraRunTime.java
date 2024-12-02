@@ -185,4 +185,13 @@ public class AntikytheraRunTime {
     public static Variable getAutoWire(String className) {
         return autowired.get(className);
     }
+
+    public static Map<String, CompilationUnit> getResolvedClasses() {
+        // iterate through the resolved map and return the classnames and the compation units as a map
+        Map<String, CompilationUnit> resolvedClasses = new HashMap<>();
+        for (Map.Entry<String, ClassInfo> entry : resolved.entrySet()) {
+            resolvedClasses.put(entry.getKey(), entry.getValue().cu);
+        }
+        return resolvedClasses;
+    }
 }

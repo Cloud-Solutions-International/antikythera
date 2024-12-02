@@ -322,11 +322,15 @@ public class AbstractCompiler {
     }
 
     public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
-        if (arguments != null && construct.getParameters().size() == arguments.size()) {
-            for (int i = 0; i < construct.getParameters().size(); i++) {
+        if (arguments != null &&
+                (construct.getParameters().size() == arguments.size() ||
+                        (construct.getParameters().size() > arguments.size() && construct.getParameter(arguments.size()).isVarArgs() ) )) {
+            for (int i = 0; i < arguments.size(); i++) {
                 Parameter param = construct.getParameter(i);
+
                 if (! (param.getType().equals(arguments.get(i))
                         || param.getType().toString().equals("java.lang.Object")
+                        || arguments.get(i).getElementType().isUnknownType()
                         || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString())))
                 ) {
                     return Optional.empty();
@@ -634,22 +638,9 @@ public class AbstractCompiler {
             }
         }
 
-        if (decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-
-            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                if (cdecl.findCompilationUnit().isPresent()) {
-                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                    if (cu != null) {
-                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
-                        if (method.isPresent()) {
-                            return method;
-                        }
-                    }
-                }
-            }
+        Optional<CallableDeclaration<?>> c = findCallableInParent(methodCall, decl);
+        if (c.isPresent()) {
+            return c;
         }
 
         if (found != -1 && occurs == 1) {
