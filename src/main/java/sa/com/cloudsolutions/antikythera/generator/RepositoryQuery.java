@@ -37,6 +37,7 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.io.FileNotFoundException;
@@ -217,7 +218,7 @@ public class RepositoryQuery {
      * @param entity a compilation unit representing the entity.
      * @throws FileNotFoundException
      */
-    void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws IOException {
+    void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws AntikytheraException {
 
         if(stmt instanceof Select) {
             PlainSelect select = ((Select) stmt).getPlainSelect();
@@ -284,7 +285,7 @@ public class RepositoryQuery {
      * @param select the select statement
      * @throws FileNotFoundException if we are unable to find related entities.
      */
-    private void processJoins(CompilationUnit entity, PlainSelect select) throws IOException {
+    private void processJoins(CompilationUnit entity, PlainSelect select) throws AntikytheraException {
         List<CompilationUnit> units = new ArrayList<>();
         units.add(entity);
 
@@ -334,6 +335,9 @@ public class RepositoryQuery {
                                 other = RepositoryParser.findEntity(member.findCompilationUnit().get(), member.getElementType());
 
                                 String tableName = RepositoryParser.findTableName(other);
+                                if (tableName == null || other == null) {
+                                    throw new AntikytheraException("Could not find table name for " +member.getElementType());
+                                }
                                 if(RepositoryParser.isOracle()) {
                                     tableName = tableName.replace("\"","");
                                 }
@@ -405,8 +409,8 @@ public class RepositoryQuery {
             }
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);
-        } catch (IOException e) {
-            logger.debug("{} entity could not be located", entityType);
+        } catch (AntikytheraException e) {
+            logger.debug(e.getMessage());
         }
     }
 

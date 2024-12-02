@@ -418,27 +418,9 @@ public class RepositoryParser extends ClassProcessor {
      * @return a compilation unit
      * @throws FileNotFoundException if the entity cannot be found in the AUT
      */
-    public static CompilationUnit findEntity(CompilationUnit cu, Type entity) throws IOException {
-
+    public static CompilationUnit findEntity(CompilationUnit cu, Type entity) {
         String nameAsString = AbstractCompiler.findFullyQualifiedName(cu, entity.asClassOrInterfaceType().getNameAsString());
-        ClassProcessor processor = new ClassProcessor();
-        processor.compile(AbstractCompiler.classToPath(nameAsString));
-        return processor.getCompilationUnit();
-    }
-
-    /**
-     * Find and parse the given entity.
-     *
-     * @param entity a type representing the entity
-     * @return a compilation unit
-     * @throws FileNotFoundException if the entity cannot be found in the AUT
-     */
-    public static CompilationUnit findEntity(Type entity) throws IOException {
-
-        String nameAsString = entity.asClassOrInterfaceType().resolve().describe();
-        ClassProcessor processor = new ClassProcessor();
-        processor.compile(AbstractCompiler.classToPath(nameAsString));
-        return processor.getCompilationUnit();
+        return AntikytheraRunTime.getCompilationUnit(nameAsString);
     }
 
     /**
