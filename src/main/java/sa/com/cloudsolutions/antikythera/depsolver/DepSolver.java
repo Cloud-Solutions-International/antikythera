@@ -506,9 +506,7 @@ public class DepSolver {
         public void visit(ExpressionStmt n, GraphNode arg) {
             if (n.getExpression().isAssignExpr()) {
                 Expression expr = n.getExpression().asAssignExpr().getValue();
-                if (expr.isNameExpr()) {
-                    ImportUtils.addImport(arg, expr.asNameExpr().getNameAsString());
-                }
+                ImportUtils.addImport(arg, expr);
             }
             super.visit(n, arg);
         }
@@ -750,7 +748,6 @@ public class DepSolver {
                 } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
                     Type t = lombokSolver(mce, decl, node);
                     if (t != null && t.isClassOrInterfaceType()) {
-                        // TODO come back here
                         return ImportUtils.addImport(node, t.asClassOrInterfaceType().getNameAsString());
                     } else {
                         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
@@ -888,7 +885,7 @@ public class DepSolver {
                             }
                             gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
                         } else {
-                            gn = ImportUtils.addImport(gn, elementType.asString());
+                            gn = ImportUtils.addImport(gn, elementType);
 
                         }
                     }

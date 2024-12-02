@@ -236,7 +236,7 @@ public class GraphNode {
                 {
                     ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
                     for(Type t : ctype.getTypeArguments().get()) {
-                        searchType(t);
+                        ImportUtils.addImport(this, t);
                     }
                     if (ctype.getScope().isPresent()) {
                         ImportUtils.addImport(this, ctype.getScope().get().getNameAsString());
@@ -244,24 +244,11 @@ public class GraphNode {
                     ImportUtils.addImport(this, ctype.getNameAsString());
                 }
                 else {
-                    searchType(typeArg);
+                    ImportUtils.addImport(this, typeArg);
                 }
             }
         }
-        searchType(ifc);
-    }
-
-    /**
-     * Search for the type and put it on the stack.
-     * This method is only intended to be called by addTypeArguments
-     * @param typeArg the class or interface type that we are looking for
-     */
-    private void searchType(Type typeArg)  {
-        String name = typeArg.isClassOrInterfaceType()
-                ? typeArg.asClassOrInterfaceType().getNameAsString()
-                : typeArg.toString();
-
-        ImportUtils.addImport(this, name);
+        ImportUtils.addImport(this, ifc);
     }
 
     public boolean isVisited() {
