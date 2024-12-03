@@ -36,7 +36,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
         }
         if (n.getMemberValue() != null) {
             if (n.getMemberValue().isFieldAccessExpr()) {
-                resolveField(node, n.getMemberValue().asFieldAccessExpr());
+                Resolver.resolveField(node, n.getMemberValue().asFieldAccessExpr());
             }
             else if (n.getMemberValue().isNameExpr()) {
                 ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
@@ -47,10 +47,10 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 }
             }
             else if (n.getMemberValue().isBinaryExpr()) {
-                annotationBinaryExpr(node, n.getMemberValue());
+                Resolver.annotationBinaryExpr(node, n.getMemberValue());
             }
             else if (n.getMemberValue().isArrayInitializerExpr()) {
-                annotationArray(node, n.getMemberValue());
+                Resolver.resolveArrayExpr(node, n.getMemberValue());
             }
         }
         super.visit(n, node);
@@ -65,183 +65,8 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
 
     @Override
     public void visit(final NormalAnnotationExpr n, final GraphNode node) {
-        normalAnnotationExpr(n, node);
+        Resolver.normalAnnotationExpr(n, node);
         super.visit(n, node);
     }
 
-    private static void normalAnnotationExpr(NormalAnnotationExpr n, GraphNode node) {
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
-        if (imp != null) {
-            node.getDestination().addImport(imp.getImport());
-        }
-        for(MemberValuePair pair : n.getPairs()) {
-            Expression value = pair.getValue();
-            if (value.isFieldAccessExpr()) {
-                resolveField(node, value.asFieldAccessExpr());
-            }
-            else if (value.isBinaryExpr()) {
-                annotationBinaryExpr(node, value);
-            }
-            else if (value.isNameExpr()) {
-                annotationNameExpression(node, value);
-            }
-            else if (value.isArrayInitializerExpr()) {
-                annotationArray(node, value);
-            }
-            else if (value.isClassExpr()) {
-                ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
-                ImportUtils.addImport(node, ct.getName().toString());
-            }
-        }
-    }
-
-    private static void annotationBinaryExpr(GraphNode node, Expression value) {
-        Expression left = value.asBinaryExpr().getLeft();
-        if (left.isFieldAccessExpr()) {
-            resolveField(node, left.asFieldAccessExpr());
-        }
-        else if (left.isNameExpr()) {
-            node.getEnclosingType().getFieldByName(left.asNameExpr().getNameAsString()).ifPresentOrElse(
-                    f -> {
-                        try {
-                            node.addField(f);
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    },
-                    () -> annotationNameExpression(node, left)
-            );
-        }
-
-        Expression right = value.asBinaryExpr().getRight();
-        if (right.isFieldAccessExpr()) {
-            resolveField(node, right.asFieldAccessExpr());
-        }
-    }
-
-    private static void annotationNameExpression(GraphNode node, Expression value) {
-        ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                value.asNameExpr().getNameAsString()
-        );
-        if (iw2 != null) {
-            ImportDeclaration imp2 = iw2.getImport();
-            node.getDestination().addImport(imp2);
-            if (imp2.isStatic()) {
-                TypeDeclaration<?> t = null;
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                if (cu != null) {
-                    t = AbstractCompiler.getMatchingType(cu, imp2.getName().getIdentifier());
-                }
-                else {
-                    cu = AntikytheraRunTime.getCompilationUnit(imp2.getName().getQualifier().get().toString());
-                    if (cu != null) {
-                        t = AbstractCompiler.getMatchingType(cu, imp2.getName().getQualifier().get().getIdentifier());
-                    }
-                }
-                if(t != null) {
-                    FieldDeclaration f = t.getFieldByName(value.asNameExpr().getNameAsString()).orElse(null);
-                    if (f != null) {
-
-                        try {
-                            Graph.createGraphNode(f);
-
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private static void annotationArray(GraphNode node, Expression value) {
-        ArrayInitializerExpr aie = value.asArrayInitializerExpr();
-        for (Expression expr : aie.getValues()) {
-            if (expr.isAnnotationExpr()) {
-                AnnotationExpr anne = expr.asAnnotationExpr();
-                String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), anne.getName().toString());
-                if (fqName != null) {
-                    node.getDestination().addImport(fqName);
-                }
-                if (anne.isNormalAnnotationExpr()) {
-                    normalAnnotationExpr(anne.asNormalAnnotationExpr(), node);
-                }
-            }
-            else if(expr.isFieldAccessExpr()) {
-                resolveField(node, expr.asFieldAccessExpr());
-            }
-        }
-    }
-
-    protected static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
-        Expression scope = value.asFieldAccessExpr().getScope();
-        if (scope.isNameExpr()) {
-
-            ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                    scope.asNameExpr().getNameAsString()
-            );
-            if (imp2 != null) {
-                node.getDestination().addImport(imp2.getImport());
-                try {
-                    if(imp2.getType() != null) {
-                        Graph.createGraphNode(imp2.getType());
-                    }
-                    if(imp2.getField() != null) {
-                        Graph.createGraphNode(imp2.getField());
-                    }
-                    else {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                        if (cu != null) {
-                            TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString());
-                            if (t != null) {
-                                FieldDeclaration f = t.getFieldByName(value.getNameAsString()).orElse(null);
-                                if (f != null) {
-                                    return Graph.createGraphNode(f);
-                                }
-                            }
-                        }
-                    }
-
-                } catch (AntikytheraException e) {
-                    throw new GeneratorException(e);
-                }
-            }
-            else {
-                return resolveThisField(node, value);
-            }
-        }
-        else if (scope.isThisExpr()) {
-            return  resolveThisField(node, value);
-        }
-        return null;
-    }
-
-    private static GraphNode resolveThisField(GraphNode node, FieldAccessExpr value) {
-        TypeDeclaration<?> decl = node.getEnclosingType();
-        if (decl != null && decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-            FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
-            if (f != null) {
-                try {
-                    node.addField(f);
-                    Type t = f.getElementType();
-                    String fqname = AbstractCompiler.findFullyQualifiedName(
-                            node.getCompilationUnit(), t.asClassOrInterfaceType().getNameAsString()
-                    );
-                    if (fqname != null) {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                        if (cu != null) {
-                            TypeDeclaration<?> p = AbstractCompiler.getPublicType(cu);
-                            if (p != null) {
-                                return Graph.createGraphNode(p);
-                            }
-                        }
-                    }
-                } catch (AntikytheraException e) {
-                    throw new GeneratorException(e);
-                }
-            }
-        }
-        return null;
-    }
 }

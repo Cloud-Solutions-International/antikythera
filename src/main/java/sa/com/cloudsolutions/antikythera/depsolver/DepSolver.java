@@ -845,7 +845,7 @@ public class DepSolver {
                 Expression expr = chain.pollLast();
                 if (expr.isFieldAccessExpr()) {
                     FieldAccessExpr fieldAccessExpr = expr.asFieldAccessExpr();
-                    gn = resolveField(gn, fieldAccessExpr);
+                    gn = Resolver.resolveField(gn, fieldAccessExpr);
                 }
                 else if (expr.isMethodCallExpr()) {
                      gn = copyMethod(solveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
