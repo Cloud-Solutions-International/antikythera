@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -103,15 +102,9 @@ public class Resolver {
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
                         if (cu != null) {
                             TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString());
-                            if (t != null) {
-                                FieldDeclaration f = t.getFieldByName(value.getNameAsString()).orElse(null);
-                                if (f != null) {
-                                    return Graph.createGraphNode(f);
-                                }
-                            }
+                            createFieldNode(value, t);
                         }
                     }
-
                 } catch (AntikytheraException e) {
                     throw new GeneratorException(e);
                 }
@@ -258,10 +251,7 @@ public class Resolver {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
         if (scope.isNameExpr()) {
-            Optional<Type> t = resolveScopedNameExpression(scope, fae, node, null);
-            if (t.isPresent()) {
-                types.add(t.get());
-            }
+            resolveScopedNameExpression(scope, fae, node, null).ifPresent(types::add);
         }
         else {
             if (scope.isFieldAccessExpr()) {
@@ -272,10 +262,7 @@ public class Resolver {
                 if (imp != null) {
                     node.getDestination().addImport(imp.getImport());
                     if (imp.isExternal()) {
-                        Optional<Type> ct = getExternalType(fae, imp);
-                        if (ct.isPresent()) {
-                            types.add(ct.get());
-                        }
+                        getExternalType(fae, imp).ifPresent(types::add);
                     }
                 }
             }
@@ -346,12 +333,10 @@ public class Resolver {
                             for (Type type : types.get()) {
                                 ImportUtils.addImport(gn, type);
                             }
-
                         }
                         gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
                     } else {
                         gn = ImportUtils.addImport(gn, elementType);
-
                     }
                 }
             }
@@ -400,7 +385,7 @@ public class Resolver {
             wrapCallable(node, expr.asObjectCreationExpr(), types);
         }
         else if (expr.isMethodReferenceExpr()) {
-            expressionAsMethodReference(node, expr);
+            resolveMethodReference(node, expr);
         }
         else if (expr.isConditionalExpr()) {
             ConditionalExpr ce = expr.asConditionalExpr();
@@ -419,8 +404,7 @@ public class Resolver {
         }
     }
 
-
-    static void expressionAsMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
+    static void resolveMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
         MethodReferenceExpr mre = arg.asMethodReferenceExpr();
         Expression scope = mre.getScope();
         if (scope.isNameExpr()) {
