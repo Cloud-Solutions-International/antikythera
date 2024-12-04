@@ -561,7 +561,7 @@ public class DepSolver {
                 types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
             }
             else if (expr.isFieldAccessExpr()) {
-                expressionAsFieldAccess(node, expr, types);
+                Resolver.expressionAsFieldAccess(node, expr, types);
             }
             else if (expr.isMethodCallExpr()) {
                 wrapCallable(node, expr.asMethodCallExpr(), types);
@@ -589,33 +589,6 @@ public class DepSolver {
             }
         }
 
-        private void expressionAsFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
-            FieldAccessExpr fae = expr.asFieldAccessExpr();
-            Expression scope = fae.getScope();
-            if (scope.isNameExpr()) {
-                Optional<Type> t = resolveScopedNameExpression(scope, fae, node);
-                if (t.isPresent()) {
-                    types.add(t.get());
-                }
-            }
-            else {
-                if (scope.isFieldAccessExpr()) {
-                    expressionAsFieldAccess(node, scope, types);
-                }
-                else {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                        if (imp.isExternal()) {
-                            Optional<Type> ct = getExternalType(fae, imp);
-                            if (ct.isPresent()) {
-                                types.add(ct.get());
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         private void expressionAsMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
             MethodReferenceExpr mre = arg.asMethodReferenceExpr();
@@ -680,45 +653,6 @@ public class DepSolver {
                 }
             }
             return null;
-        }
-
-        private Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae, GraphNode node) throws AntikytheraException {
-            Type t = names.get(scope.asNameExpr().getNameAsString());
-            if (t != null) {
-                return Optional.of(t);
-            }
-            else {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), scope.asNameExpr().getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                    if (imp.isExternal()) {
-                        return getExternalType(fae, imp);
-                    }
-                    if (imp.getField() == null ) {
-                        if (imp.getImport().isAsterisk()) {
-                            TypeDeclaration<?> td = imp.getType();
-                            createFieldNode(fae, td);
-                        }
-                        else {
-                            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
-                            if (cu != null) {
-                                TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
-                                createFieldNode(fae, td);
-                            }
-                        }
-                    }
-                }
-            }
-            return Optional.empty();
-        }
-
-        private static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td) throws AntikytheraException {
-            if (td != null) {
-                Optional<FieldDeclaration> fieldByName = td.getFieldByName(fae.getNameAsString());
-                if (fieldByName.isPresent()) {
-                    Graph.createGraphNode(fieldByName.get());
-                }
-            }
         }
 
         private GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) throws AntikytheraException {
@@ -927,19 +861,6 @@ public class DepSolver {
                 ImportUtils.addImport(node, arg.asNameExpr().getNameAsString());
             }
         }
-    }
-
-    private static Optional<Type> getExternalType(NodeWithSimpleName<?> fae, ImportWrapper imp) {
-        try {
-            Class<?> c = Class.forName(imp.getNameAsString());
-            Field f = c.getField(fae.getNameAsString());
-            ClassOrInterfaceType ct = new ClassOrInterfaceType(null, f.getType().getTypeName());
-            return Optional.of(ct);
-
-        } catch (ReflectiveOperationException e) {
-            System.err.println(e.getMessage());
-        }
-        return Optional.empty();
     }
 
     public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {

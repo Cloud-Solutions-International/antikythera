@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -11,6 +12,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -20,6 +22,10 @@ import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
+
+import java.lang.reflect.Field;
+import java.util.Map;
+import java.util.Optional;
 
 public class Resolver {
 
@@ -107,7 +113,7 @@ public class Resolver {
                     node.getDestination().addImport(fqName);
                 }
                 if (anne.isNormalAnnotationExpr()) {
-                    normalAnnotationExpr(anne.asNormalAnnotationExpr(), node);
+                    resolveNormalAnnotationExpr(node, anne.asNormalAnnotationExpr());
                 }
             }
             else if(expr.isFieldAccessExpr()) {
@@ -117,7 +123,7 @@ public class Resolver {
     }
 
 
-    static void normalAnnotationExpr(NormalAnnotationExpr n, GraphNode node) {
+    static void resolveNormalAnnotationExpr(GraphNode node, NormalAnnotationExpr n) {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
@@ -128,10 +134,10 @@ public class Resolver {
                 Resolver.resolveField(node, value.asFieldAccessExpr());
             }
             else if (value.isBinaryExpr()) {
-                annotationBinaryExpr(node, value);
+                resolveBinaryExpr(node, value);
             }
             else if (value.isNameExpr()) {
-                annotationNameExpression(node, value);
+                resolveNameExpression(node, value);
             }
             else if (value.isArrayInitializerExpr()) {
                 Resolver.resolveArrayExpr(node, value);
@@ -144,7 +150,7 @@ public class Resolver {
     }
 
 
-    static void annotationBinaryExpr(GraphNode node, Expression value) {
+    static void resolveBinaryExpr(GraphNode node, Expression value) {
         Expression left = value.asBinaryExpr().getLeft();
         if (left.isFieldAccessExpr()) {
             Resolver.resolveField(node, left.asFieldAccessExpr());
@@ -158,7 +164,7 @@ public class Resolver {
                             throw new DepsolverException(e);
                         }
                     },
-                    () -> annotationNameExpression(node, left)
+                    () -> resolveNameExpression(node, left)
             );
         }
 
@@ -168,7 +174,7 @@ public class Resolver {
         }
     }
 
-    private static void annotationNameExpression(GraphNode node, Expression value) {
+    private static void resolveNameExpression(GraphNode node, Expression value) {
         ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                 value.asNameExpr().getNameAsString()
         );
@@ -203,4 +209,88 @@ public class Resolver {
         }
     }
 
+    public static Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae,
+                                                       GraphNode node, final Map<String, Type> names) throws AntikytheraException {
+        if (names != null ) {
+            Type t = names.get(scope.asNameExpr().getNameAsString());
+
+            if (t != null) {
+                return Optional.of(t);
+            }
+        }
+
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), scope.asNameExpr().getNameAsString());
+        if (imp != null) {
+            node.getDestination().addImport(imp.getImport());
+            if (imp.isExternal()) {
+                return getExternalType(fae, imp);
+            }
+            if (imp.getField() == null ) {
+                if (imp.getImport().isAsterisk()) {
+                    TypeDeclaration<?> td = imp.getType();
+                    createFieldNode(fae, td);
+                }
+                else {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
+                    if (cu != null) {
+                        TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
+                        createFieldNode(fae, td);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+
+    static Optional<Type> getExternalType(NodeWithSimpleName<?> fae, ImportWrapper imp) {
+        try {
+            Class<?> c = Class.forName(imp.getNameAsString());
+            Field f = c.getField(fae.getNameAsString());
+            ClassOrInterfaceType ct = new ClassOrInterfaceType(null, f.getType().getTypeName());
+            return Optional.of(ct);
+
+        } catch (ReflectiveOperationException e) {
+            System.err.println(e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+
+    static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td) throws AntikytheraException {
+        if (td != null) {
+            Optional<FieldDeclaration> fieldByName = td.getFieldByName(fae.getNameAsString());
+            if (fieldByName.isPresent()) {
+                Graph.createGraphNode(fieldByName.get());
+            }
+        }
+    }
+
+    public static void expressionAsFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
+        FieldAccessExpr fae = expr.asFieldAccessExpr();
+        Expression scope = fae.getScope();
+        if (scope.isNameExpr()) {
+            Optional<Type> t = resolveScopedNameExpression(scope, fae, node, null);
+            if (t.isPresent()) {
+                types.add(t.get());
+            }
+        }
+        else {
+            if (scope.isFieldAccessExpr()) {
+                expressionAsFieldAccess(node, scope, types);
+            }
+            else {
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp.getImport());
+                    if (imp.isExternal()) {
+                        Optional<Type> ct = getExternalType(fae, imp);
+                        if (ct.isPresent()) {
+                            types.add(ct.get());
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
