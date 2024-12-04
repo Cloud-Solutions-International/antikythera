@@ -40,6 +40,12 @@ import java.util.Optional;
 
 public class Resolver {
 
+    /**
+     * Resolve a field that is accessed through the this. prefix
+     * @param node a graph node representing the current context
+     * @param value the field access expression
+     * @return
+     */
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
         if (decl != null && decl.isClassOrInterfaceDeclaration()) {
@@ -69,7 +75,14 @@ public class Resolver {
         return null;
     }
 
-
+    /**
+     * Resolve a field access expression
+     * If the expression has a this. prefix then the field is resolved from the current class with
+     * help from the resolveThisField method
+     * @param node represents a type
+     * @param value a field access expression
+     * @return
+     */
     public static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isNameExpr()) {
@@ -167,16 +180,7 @@ public class Resolver {
             Resolver.resolveField(node, left.asFieldAccessExpr());
         }
         else if (left.isNameExpr()) {
-            node.getEnclosingType().getFieldByName(left.asNameExpr().getNameAsString()).ifPresentOrElse(
-                    f -> {
-                        try {
-                            node.addField(f);
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    },
-                    () -> resolveNameExpression(node, left)
-            );
+            resolveNameExpression(node, left);
         }
 
         Expression right = value.asBinaryExpr().getRight();
@@ -185,38 +189,11 @@ public class Resolver {
         }
     }
 
-    private static void resolveNameExpression(GraphNode node, Expression value) {
-        ImportWrapper iw2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                value.asNameExpr().getNameAsString()
-        );
-        if (iw2 != null) {
-            ImportDeclaration imp2 = iw2.getImport();
-            node.getDestination().addImport(imp2);
-            if (imp2.isStatic()) {
-                TypeDeclaration<?> t = null;
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                if (cu != null) {
-                    t = AbstractCompiler.getMatchingType(cu, imp2.getName().getIdentifier());
-                }
-                else {
-                    cu = AntikytheraRunTime.getCompilationUnit(imp2.getName().getQualifier().get().toString());
-                    if (cu != null) {
-                        t = AbstractCompiler.getMatchingType(cu, imp2.getName().getQualifier().get().getIdentifier());
-                    }
-                }
-                if(t != null) {
-                    FieldDeclaration f = t.getFieldByName(value.asNameExpr().getNameAsString()).orElse(null);
-                    if (f != null) {
-
-                        try {
-                            Graph.createGraphNode(f);
-
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    }
-                }
-            }
+    private static void resolveNameExpression(GraphNode node, Expression value)  {
+        try {
+            resolveNameExpr(node, value, new NodeList<>());
+        } catch (AntikytheraException e) {
+            throw new DepsolverException(e);
         }
     }
 
@@ -277,7 +254,7 @@ public class Resolver {
         }
     }
 
-    public static void expressionAsFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
+    public static void resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
         if (scope.isNameExpr()) {
@@ -288,7 +265,7 @@ public class Resolver {
         }
         else {
             if (scope.isFieldAccessExpr()) {
-                expressionAsFieldAccess(node, scope, types);
+                resolveFieldAccess(node, scope, types);
             }
             else {
                 ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
@@ -408,13 +385,13 @@ public class Resolver {
 
     static void processExpression(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
         if (expr.isNameExpr()) {
-            expressionAsNameExpr(node, expr, types);
+            resolveNameExpr(node, expr, types);
         }
         else if (expr.isLiteralExpr()) {
             types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
         }
         else if (expr.isFieldAccessExpr()) {
-            Resolver.expressionAsFieldAccess(node, expr, types);
+            Resolver.resolveFieldAccess(node, expr, types);
         }
         else if (expr.isMethodCallExpr()) {
             wrapCallable(node, expr.asMethodCallExpr(), types);
@@ -428,10 +405,10 @@ public class Resolver {
         else if (expr.isConditionalExpr()) {
             ConditionalExpr ce = expr.asConditionalExpr();
             if (ce.getThenExpr().isNameExpr()) {
-                expressionAsNameExpr(node, ce.getThenExpr(), types);
+                resolveNameExpr(node, ce.getThenExpr(), types);
             }
             if (ce.getElseExpr().isNameExpr()) {
-                expressionAsNameExpr(node, ce.getElseExpr(), types);
+                resolveNameExpr(node, ce.getElseExpr(), types);
             }
         }
         else if (expr.isAssignExpr()) {
@@ -561,7 +538,7 @@ public class Resolver {
     }
 
 
-    static void expressionAsNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
+    static void resolveNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
         Type t = DepSolver.getNames().get(arg.asNameExpr().getNameAsString());
         if (t != null) {
             types.add(t);
@@ -587,5 +564,4 @@ public class Resolver {
             }
         }
     }
-
 }

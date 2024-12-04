@@ -19,10 +19,8 @@ import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
@@ -590,7 +588,7 @@ public class DepSolver {
                 initializer.accept(new Visitor(), node);
             }
             else if(initializer.isNameExpr()) {
-                Resolver.expressionAsNameExpr(node, initializer, new NodeList<>());
+                Resolver.resolveNameExpr(node, initializer, new NodeList<>());
             }
         }
     }
