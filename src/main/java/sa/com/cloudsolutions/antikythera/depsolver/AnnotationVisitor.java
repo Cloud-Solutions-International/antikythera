@@ -9,7 +9,7 @@ import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 /**
- * Visitor to help r
+ * Visitor to help process annotations on classes, methods, fields, etc.
  */
 public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
     @Override

@@ -519,7 +519,7 @@ public class DepSolver {
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
             try {
-                MCEWrapper mceWrapper = Resolver.solveArgumentTypes(node, mce);
+                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, mce);
                 Resolver.chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
                 throw new DepsolverException(e);
@@ -563,7 +563,7 @@ public class DepSolver {
                 node.getDestination().addImport(imp.getImport());
             }
             try {
-                MCEWrapper mceWrapper = Resolver.solveArgumentTypes(node, oce);
+                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
                 Resolver.chainedMethodCall(node, mceWrapper);
             } catch (Exception e) {
                 throw new DepsolverException(e);

@@ -8,6 +8,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.ArrayAccessExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -300,7 +301,7 @@ public class Resolver {
                 gn = Resolver.resolveField(gn, fieldAccessExpr);
             }
             else if (expr.isMethodCallExpr()) {
-                gn = copyMethod(solveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
+                gn = copyMethod(resolveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
             }
             else if (expr.isNameExpr()) {
                 gn = evaluateNameExpr(expr, gn);
@@ -350,8 +351,16 @@ public class Resolver {
         return gn;
     }
 
-
-    static MCEWrapper solveArgumentTypes(GraphNode node, NodeWithArguments<?> mce) throws AntikytheraException {
+    /**
+     * Given a method call expression or new object creation expression, resolve the types of the arguments.
+     * @param node a graph node representing the current context
+     * @param mce method call expression or object creation expression
+     * @return a Method Call Wrapper instance that contains the original method call as well as the resolved
+     *              types of the arguments. If the arguments cannot be resolved correctly the arguments field
+     *              in the MCEWrapper will be null.
+     * @throws AntikytheraException if error occurs in type resolution.
+     */
+    public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce) throws AntikytheraException {
         MCEWrapper mw = new MCEWrapper();
         NodeList<Type> types = new NodeList<>();
 
@@ -396,8 +405,17 @@ public class Resolver {
                 resolveNameExpr(node, ce.getElseExpr(), types);
             }
         }
-        else if (expr.isAssignExpr()) {
-            System.out.println("Assign " + expr);
+        else if (expr.isArrayAccessExpr()) {
+            ArrayAccessExpr aae = expr.asArrayAccessExpr();
+            if (aae.getName().isNameExpr()) {
+                resolveNameExpr(node, aae.getName(), types);
+                types.getLast().ifPresent(t -> {
+                    if (t.isArrayType()) {
+                        Type at = types.removeLast();
+                        types.add(at.asArrayType().getComponentType());
+                    }
+                });
+            }
         }
         else {
             // seems other types dont need special handling they are caught else where
@@ -422,7 +440,7 @@ public class Resolver {
 
     static void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) throws AntikytheraException {
         if (arg instanceof MethodCallExpr argMethodCall) {
-            MCEWrapper wrap = solveArgumentTypes(node, arg);
+            MCEWrapper wrap = resolveArgumentTypes(node, arg);
             GraphNode gn = Resolver.chainedMethodCall(node, wrap);
             if (gn != null) {
                 if (gn.getNode() instanceof MethodDeclaration md) {
@@ -520,7 +538,6 @@ public class Resolver {
 
         return null;
     }
-
 
     static void resolveNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
         Type t = DepSolver.getNames().get(arg.asNameExpr().getNameAsString());
