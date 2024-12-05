@@ -33,7 +33,7 @@ public class TestBunches  {
 
     @BeforeAll
     public static void setup() throws IOException {
-        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
