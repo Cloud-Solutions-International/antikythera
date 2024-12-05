@@ -19,6 +19,13 @@ public class MCEWrapper {
      */
     NodeList<Type> argumentTypes;
 
+    public MCEWrapper() {
+    }
+
+    public MCEWrapper(NodeWithArguments<?> oce) {
+        this.methodCallExpr = oce;
+    }
+
     /**
      *
      * @return the argument types maybe null if not properly identified

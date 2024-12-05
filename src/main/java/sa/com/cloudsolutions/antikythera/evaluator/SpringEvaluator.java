@@ -8,7 +8,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.generator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -95,6 +95,7 @@ public class SpringEvaluator extends Evaluator {
 
     private boolean onTest;
 
+    private ArgumentGenerator argumentGenerator;
     /**
      * It is better to use create evaluator
      * @param className the name of the class associated with this evaluator
@@ -106,8 +107,6 @@ public class SpringEvaluator extends Evaluator {
     public static Map<String, RepositoryParser> getRepositories() {
         return repositories;
     }
-
-    public static ArgumentGenerator argumentGenerator;
 
     /**
      * Called by the java parser method visitor.
@@ -209,80 +208,10 @@ public class SpringEvaluator extends Evaluator {
     private void mockURIVariables(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
-            String paramString = String.valueOf(param);
-
-            if (paramString.startsWith("@RequestBody")) {
-                /*
-                 * Request body on the other hand will be more complex and will most likely be a DTO.
-                 */
-                Type t = param.getType();
-                if (t.isClassOrInterfaceType()) {
-                    String fullClassName = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
-                    if (fullClassName.startsWith("java")) {
-                        /*
-                         * However you can't rule out the possibility that this is a Map or a List or even a
-                         * boxed type.
-                         */
-                        if (t.asClassOrInterfaceType().isBoxedType()) {
-                            Variable v = mockParameter(param.getTypeAsString());
-                            /*
-                             * We need to push this variable to the stack so that it can be used later.
-                             */
-                            AntikytheraRunTime.push(v);
-                        }
-                        else {
-                            if (fullClassName.startsWith("java.util")) {
-                                Variable v = Reflect.variableFactory(fullClassName);
-                                /*
-                                 * Pushed to be popped later in the callee
-                                 */
-                                AntikytheraRunTime.push(v);
-                            }
-                            else {
-                                Class<?> clazz = Class.forName(fullClassName);
-                                Variable v = new Variable(clazz.newInstance());
-                                /*
-                                 * PUsh arguments
-                                 */
-                                AntikytheraRunTime.push(v);
-                            }
-                        }
-                    }
-                    else {
-
-                        Evaluator o = new SpringEvaluator(fullClassName);
-                        o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
-                        Variable v = new Variable(o);
-                        /*
-                         * Args to be popped by the callee
-                         */
-                        AntikytheraRunTime.push(v);
-                    }
-                } else {
-                    logger.warn("Unhandled {}", t);
-                }
-            }
-            else {
-                /*
-                 * Request parameters are typically strings or numbers and these are pushed into the stack
-                 * to be popped in the callee
-                 */
-                Variable v = mockParameter(param.getTypeAsString());
-                AntikytheraRunTime.push(v);
-            }
+            argumentGenerator.generateArgument(param);
         }
     }
 
-    private static Variable mockParameter(String typeName) {
-        return new Variable(switch (typeName) {
-            case "Boolean" -> false;
-            case "float", "Float", "double", "Double" -> 0.0;
-            case "Integer", "int" -> 0;
-            case "Long", "long" -> 0L;
-            case "String" -> "Ibuprofen";
-            default -> "0";
-        });
-    }
 
     /**
      * Execute a query on a repository.
@@ -357,25 +286,25 @@ public class SpringEvaluator extends Evaluator {
         String className = t.resolve().describe();
 
         if (!className.startsWith("java.")) {
-            ClassProcessor proc = new ClassProcessor();
-            proc.compile(AbstractCompiler.classToPath(className));
-            CompilationUnit cu = proc.getCompilationUnit();
-            for (var typeDecl : cu.getTypes()) {
-                if (typeDecl.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                    if (cdecl.getNameAsString().equals(shortName)) {
-                        for (var ext : cdecl.getExtendedTypes()) {
-                            if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                /*
-                                 * We have found a repository. Now we need to process it. Afterwards
-                                 * it will be added to the repositories map, to be identified by the
-                                 * field name.
-                                 */
-                                RepositoryParser parser = new RepositoryParser();
-                                parser.compile(AbstractCompiler.classToPath(className));
-                                parser.process();
-                                repositories.put(variable.getNameAsString(), parser);
-                                break;
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
+            if (cu != null) {
+                for (var typeDecl : cu.getTypes()) {
+                    if (typeDecl.isClassOrInterfaceDeclaration()) {
+                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                        if (cdecl.getNameAsString().equals(shortName)) {
+                            for (var ext : cdecl.getExtendedTypes()) {
+                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                                    /*
+                                     * We have found a repository. Now we need to process it. Afterwards
+                                     * it will be added to the repositories map, to be identified by the
+                                     * field name.
+                                     */
+                                    RepositoryParser parser = new RepositoryParser();
+                                    parser.compile(AbstractCompiler.classToPath(className));
+                                    parser.process();
+                                    repositories.put(variable.getNameAsString(), parser);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -436,8 +365,8 @@ public class SpringEvaluator extends Evaluator {
     /**
      * Finally create the tests by calling each of the test generators.
      * There maybe multiple test generators, one of unit tests, one of API tests aec.
-     * @param response
-     * @return
+     * @param response the response from the controller
+     * @return a variable that encloses the response
      */
     private Variable createTests(ControllerResponse response) {
         if (response != null) {
@@ -459,7 +388,7 @@ public class SpringEvaluator extends Evaluator {
      *
      * @param variable a variable declaration statement
      * @param resolvedClass the name of the class that the field is of
-     * @return true if the resolution was successfully
+     * @return true if the resolution was successful
      * @throws AntikytheraException when the field cannot be resolved
      * @throws ReflectiveOperationException if a reflective operation goes wrong
      */
@@ -641,7 +570,6 @@ public class SpringEvaluator extends Evaluator {
                                     logger.info("Could not create class for {}", fullname);
                                 }
                             }
-
                         }
 
                         if (v != null && v.getValue() instanceof Evaluator eval) {
@@ -843,7 +771,7 @@ public class SpringEvaluator extends Evaluator {
     private boolean resultToEntity(Variable variable, ResultSet rs) {
 
         try {
-            if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
+            if (variable.getValue() instanceof Evaluator evaluator && rs.next() && cu != null) {
                 Map<String, Variable> fields = evaluator.getFields();
 
                 for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
@@ -890,7 +818,7 @@ public class SpringEvaluator extends Evaluator {
         while (n != null && !(n instanceof MethodDeclaration)) {
             if (n instanceof ExpressionStmt stmt) {
                 /*
-                 * We have found the expression statement correspoing to this query
+                 * We have found the expression statement corresponding to this query
                  */
                 return lines.get(stmt.hashCode());
             }
@@ -914,6 +842,14 @@ public class SpringEvaluator extends Evaluator {
             return new Variable(response);
         }
         return v;
+    }
+
+    public ArgumentGenerator getArgumentGenerator() {
+        return argumentGenerator;
+    }
+
+    public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
+        this.argumentGenerator = argumentGenerator;
     }
 }
 

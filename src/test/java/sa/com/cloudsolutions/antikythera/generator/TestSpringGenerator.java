@@ -68,12 +68,7 @@ class TestSpringGenerator {
 
         CompilationUnit gen = generator.getCompilationUnit();
         assertEquals(1, gen.getTypes().size());
-        if (annotation.equals("GetMapping")) {
-            assertEquals(3, gen.getType(0).getMethods().size());
-        }
-        else {
-            assertEquals(1, gen.getType(0).getMethods().size());
-        }
+        assertEquals(1, gen.getType(0).getMethods().size());
     }
 
 
@@ -100,12 +95,7 @@ class TestSpringGenerator {
 
         CompilationUnit gen = generator.getCompilationUnit();
         assertEquals(1, gen.getTypes().size());
-        if (annotation.equals("RequestMethod.GET")) {
-            assertEquals(3, gen.getType(0).getMethods().size());
-        }
-        else {
-            assertEquals(1, gen.getType(0).getMethods().size());
-        }
+        assertEquals(1, gen.getType(0).getMethods().size());
     }
 
     @ParameterizedTest

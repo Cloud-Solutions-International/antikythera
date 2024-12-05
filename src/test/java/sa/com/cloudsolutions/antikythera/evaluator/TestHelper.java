@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.ByteArrayOutputStream;
@@ -20,6 +21,7 @@ public class TestHelper {
     public void tearDown() {
         System.setOut(standardOut);
         AntikytheraRunTime.reset();
+        DepSolver.getNames().clear();
     }
 
     @BeforeAll

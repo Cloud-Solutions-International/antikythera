@@ -165,22 +165,8 @@ public class SpringTestGenerator implements  TestGenerator {
         httpWithBody(md, annotation, returnType, "makePut");
     }
 
-
     private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        if (!branched) {
-            state = NULL_STATE;
-            httpWithoutBody(md, annotation, "makeGet", returnType);
-
-            state = DUMMY_STATE;
-            httpWithoutBody(md, annotation, "makeGet", returnType);
-
-            state = ENLIGHTENED_STATE;
-            httpWithoutBody(md, annotation, "makeGet", returnType);
-        }
-        else {
-            state = DUMMY_STATE;
-            httpWithoutBody(md, annotation, "makeGet", returnType);
-        }
+        httpWithoutBody(md, annotation, "makeGet", returnType);
     }
 
     private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call, ControllerResponse response)  {
@@ -197,7 +183,7 @@ public class SpringTestGenerator implements  TestGenerator {
         }
         else {
             /*
-             * Non empty parameters.
+             * Non-empty parameters.
              */
             ControllerRequest request = new ControllerRequest();
             request.setPath(getPath(annotation).replace("\"", ""));
@@ -213,14 +199,7 @@ public class SpringTestGenerator implements  TestGenerator {
                 handleURIVariables(md, request);
             }
 
-            makeGetCall.addArgument(new StringLiteralExpr(request.getPath()));
-            if(!request.getQueryParameters().isEmpty()) {
-                body.addStatement("Map<String, String> queryParams = new HashMap<>();");
-                for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
-                    body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
-                }
-                makeGetCall.addArgument(new NameExpr("queryParams"));
-            }
+            addQueryParams(makeGetCall, request, body);
         }
         VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
         AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
@@ -230,6 +209,17 @@ public class SpringTestGenerator implements  TestGenerator {
         addCheckStatus(testMethod, response);
         gen.getType(0).addMember(testMethod);
 
+    }
+
+    private static void addQueryParams(MethodCallExpr getCall, ControllerRequest request, BlockStmt body) {
+        getCall.addArgument(new StringLiteralExpr(request.getPath()));
+        if(!request.getQueryParameters().isEmpty()) {
+            body.addStatement("Map<String, String> queryParams = new HashMap<>();");
+            for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
+                body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
+            }
+            getCall.addArgument(new NameExpr("queryParams"));
+        }
     }
 
 
@@ -474,14 +464,7 @@ public class SpringTestGenerator implements  TestGenerator {
 
     private void prepareRequest(MethodCallExpr makePost, ControllerRequest request, BlockStmt body) {
         makePost.addArgument(new NameExpr("headers"));
-        makePost.addArgument(new StringLiteralExpr(request.getPath()));
-        if(!request.getQueryParameters().isEmpty()) {
-            body.addStatement("Map<String, String> queryParams = new HashMap<>();");
-            for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
-                body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
-            }
-            makePost.addArgument(new NameExpr("queryParams"));
-        }
+        addQueryParams(makePost, request, body);
     }
 
     private void prepareBody(String e, ClassOrInterfaceType paramClassName, String name, MethodDeclaration testMethod) {

@@ -18,6 +18,7 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// todo in order to make these tests work, need to support multiple paths for base
 public class TestBunches  {
     Evaluator evaluator;
     AbstractCompiler eval;
@@ -28,12 +29,13 @@ public class TestBunches  {
     @AfterEach
     public void tearDown() {
         System.setOut(standardOut);
-        AntikytheraRunTime.reset();
     }
 
     @BeforeAll
     public static void setup() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @BeforeEach
@@ -78,10 +80,10 @@ public class TestBunches  {
 
     class CollectionEvaluator extends AbstractCompiler {
         protected CollectionEvaluator() throws IOException, EvaluatorException {
+
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Bunches");
-            File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Bunches.java");
-            cu = getJavaParser().parse(file).getResult().get();
-            evaluator.setupFields(cu);
+            evaluator.setupFields();
+            cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches");
 
         }
     }
