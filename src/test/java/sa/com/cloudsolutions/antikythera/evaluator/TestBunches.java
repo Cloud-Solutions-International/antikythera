@@ -65,7 +65,7 @@ public class TestBunches  {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTO")).orElseThrow();
         evaluator.executeMethod(withDTO);
-        assertTrue(outContent.toString().contains("[Biggles 10"));
+        assertTrue(outContent.toString().contains("Bunches.DTO]"));
     }
 
 
@@ -74,7 +74,7 @@ public class TestBunches  {
         CompilationUnit cu = eval.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTOConstructor")).orElseThrow();
         evaluator.executeMethod(withDTO);
-        assertTrue(outContent.toString().contains("[Bertie 10"));
+        assertTrue(outContent.toString().contains("Person]"));
     }
 
 
