@@ -14,7 +14,7 @@ public class Variable {
      * that happens you cannot call value.getClass() because it will throw a null pointer exception.
      *
      */
-    private Class clazz;
+    private Class<?> clazz;
 
     /**
      * The value of this variable.

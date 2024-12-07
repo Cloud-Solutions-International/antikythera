@@ -239,8 +239,22 @@ public class AbstractCompiler {
         Optional<CompilationUnit> compilationUnit = context.findCompilationUnit();
         if (compilationUnit.isPresent()) {
             CompilationUnit cu = compilationUnit.get();
+
+            for (TypeDeclaration<?> t : cu.getTypes()) {
+                if (t.getNameAsString().equals(type.getNameAsString())) {
+                    return t;
+                }
+                for (Node child : t.getChildNodes()) {
+                    if (child instanceof ClassOrInterfaceDeclaration cid) {
+                        if (cid.getNameAsString().equals(type.getNameAsString())) {
+                            return cid;
+                        }
+                    }
+                }
+            }
+
             ImportWrapper wrapper = findImport(cu, type.getNameAsString());
-            if (wrapper != null) {
+            if (wrapper != null && wrapper.getType() != null) {
                 return wrapper.getType();
             }
 

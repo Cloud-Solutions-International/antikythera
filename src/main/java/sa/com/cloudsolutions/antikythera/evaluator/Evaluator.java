@@ -86,6 +86,10 @@ public class Evaluator {
      * The fully qualified name of the class for which we created this evaluator.
      */
     private final String className;
+
+    /**
+     * The compilation unit that is being processed by the expression engine
+     */
     protected CompilationUnit cu;
 
     /**
@@ -1752,6 +1756,23 @@ public class Evaluator {
 
     @Override
     public String toString() {
+        if (cu != null) {
+            Optional<MethodDeclaration> md = cu.findFirst(
+                    MethodDeclaration.class, m -> m.getNameAsString().equals("toString"));
+            if (md.isPresent()) {
+
+                try {
+                    Variable saved = returnValue;
+                    executeMethod(md.get());
+                    String result = returnValue.getValue().toString();
+                    returnValue = saved;
+                    return result;
+                } catch (AntikytheraException | ReflectiveOperationException e) {
+                    return hashCode() + " : " + getClassName() + " could not execute toString()";
+                }
+            }
+        }
+
         return hashCode() + " : " + getClassName();
     }
 }
