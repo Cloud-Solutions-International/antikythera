@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
@@ -45,6 +46,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -306,7 +308,7 @@ public class RepositoryQuery {
                         // hence the need to loop through here.
                         for(CompilationUnit unit : units) {
                             String field = parts[1].split(" ")[0];
-                            var x = unit.getType(0).getFieldByName(field);
+                            Optional<FieldDeclaration> x = unit.getType(0).getFieldByName(field);
                             if(x.isPresent()) {
                                 var member = x.get();
                                 String lhs = null;
@@ -332,7 +334,7 @@ public class RepositoryQuery {
                                     }
                                 }
 
-                                other = RepositoryParser.findEntity(member.findCompilationUnit().get(), member.getElementType());
+                                other = RepositoryParser.findEntity(member.getElementType());
 
                                 String tableName = RepositoryParser.findTableName(other);
                                 if (tableName == null || other == null) {
@@ -394,15 +396,15 @@ public class RepositoryQuery {
         this.table = table;
     }
 
-    public void setQuery(CompilationUnit cu, String query) {
+    public void setQuery(String query) {
         this.originalQuery = query;
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
             this.simplifiedStatement = CCJSqlParserUtil.parse(query);
 
-            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(cu, entityType));
-            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(cu, entityType));
+            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
+            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(entityType));
 
             if (simplifiedStatement instanceof PlainSelect ps) {
                 simplifyWhereClause(ps.getWhere());
