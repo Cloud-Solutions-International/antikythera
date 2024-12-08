@@ -213,27 +213,6 @@ public class AbstractCompiler {
         return param.getNameAsString();
     }
 
-    /**
-     * Alternative approach to resolving a class in Java Parser without having to catch exception
-     *
-     * In other words we are catching it here and giving you null
-     * @param node the node to resolve
-     * @return an optional of the resolved type
-     * @Deprecated
-     */
-    public static Optional<ResolvedType> resolveTypeSafely(ClassOrInterfaceType node) {
-        Optional<CompilationUnit> compilationUnit = node.findCompilationUnit();
-        if (compilationUnit.isPresent()) {
-            try {
-                return Optional.of(node.resolve());
-            } catch (Exception e) {
-                // Handle the exception or log it
-                logger.debug("Error resolving type: {}", node);
-            }
-        }
-        return Optional.empty();
-    }
-
     public static TypeDeclaration<?> resolveTypeSafely(ClassOrInterfaceType type, Node context) {
 
         Optional<CompilationUnit> compilationUnit = context.findCompilationUnit();
@@ -337,28 +316,6 @@ public class AbstractCompiler {
         return null;
     }
 
-    /**
-     * Given an ObjectCreationExpr, will find the corresponding constructor declaration
-     * @param cu compilation unit holding the declaration
-     * @param oce object creation expression in any class
-     * @return An optional of the constructor declaration
-     */
-    public static Optional<ConstructorDeclaration> findMatchingConstructor(CompilationUnit cu, ObjectCreationExpr oce) {
-        Optional<NodeList<Type>> typeArguments = oce.getTypeArguments();
-        List<ConstructorDeclaration> constructors = cu.findAll(ConstructorDeclaration.class);
-
-        for (ConstructorDeclaration construct : constructors) {
-            if (typeArguments.isPresent()) {
-                Optional<CallableDeclaration<?>> callable = findCallable(typeArguments.get(), construct);
-                if (callable.isPresent()) {
-                    return Optional.of(construct);
-                }
-            }
-        }
-
-        return findMatchingConstructor(constructors, oce.getArguments());
-    }
-
     public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
         if (arguments != null &&
                 (construct.getParameters().size() == arguments.size() ||
@@ -375,28 +332,6 @@ public class AbstractCompiler {
                 }
             }
             return Optional.of(construct);
-        }
-        return Optional.empty();
-    }
-
-    private static Optional<ConstructorDeclaration> findMatchingConstructor(List<ConstructorDeclaration> constructors, List<Expression> arguments) {
-
-        for (ConstructorDeclaration constructor : constructors) {
-            ResolvedConstructorDeclaration resolvedConstructor = constructor.resolve();
-            if (resolvedConstructor.getNumberOfParams() == arguments.size()) {
-                boolean matched = true;
-                for (int i = 0; i < resolvedConstructor.getNumberOfParams(); i++) {
-                    ResolvedParameterDeclaration p = resolvedConstructor.getParam(i);
-                    ResolvedType argType = arguments.get(i).calculateResolvedType();
-                    if (!p.getType().describe().equals(argType.describe())) {
-                        matched = false;
-                        break;
-                    }
-                }
-                if (matched) {
-                    return Optional.of(constructor);
-                }
-            }
         }
         return Optional.empty();
     }
