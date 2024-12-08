@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DepSolverIntegrationTest {
 
@@ -27,7 +29,7 @@ public class DepSolverIntegrationTest {
     }
 
     @Test
-    void testEmployee() throws IOException, AntikytheraException {
+    void testEmployee() throws AntikytheraException {
         DepSolver depSolver = DepSolver.createSolver();
         depSolver.processMethod("sa.com.cloudsolutions.antikythera.evaluator.Employee#simpleAccess");
 
@@ -36,6 +38,20 @@ public class DepSolverIntegrationTest {
         CompilationUnit cu = dependencies.get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
         assertNotNull(cu);
         assertEquals("java.io.Serializable", cu.getImports().get(0).getNameAsString());
+    }
+
+
+    @Test
+    void testThisPerson() throws AntikytheraException {
+        DepSolver depSolver = DepSolver.createSolver();
+        depSolver.processMethod("sa.com.cloudsolutions.antikythera.evaluator.Employee#thisAccess");
+
+        Map<String, CompilationUnit> dependencies = Graph.getDependencies();
+        assertFalse(dependencies.isEmpty());
+        CompilationUnit cu = dependencies.get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        assertNotNull(cu);
+        assertEquals("java.io.Serializable", cu.getImports().get(0).getNameAsString());
+        assertTrue(cu.findFirst(FieldDeclaration.class, f -> f.getVariables().get(0).getNameAsString().equals("p")).isPresent());
     }
 
 }
