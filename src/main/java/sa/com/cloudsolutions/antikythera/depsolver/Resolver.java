@@ -48,9 +48,9 @@ public class Resolver {
      */
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
-        if (decl != null && decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-            FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
+        if (decl != null) {
+
+            FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
             if (f != null) {
                 try {
                     node.addField(f);
@@ -544,10 +544,9 @@ public class Resolver {
         if (t != null) {
             types.add(t);
         }
-        else if (node.getEnclosingType().isClassOrInterfaceDeclaration()){
-            ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
-            Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
+        else {
 
+            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(arg.asNameExpr().getNameAsString());
             if (fd.isPresent()) {
                 node.addField(fd.get());
                 Type field = fd.get().getElementType();

@@ -21,6 +21,10 @@ public class Employee implements Serializable {
         System.out.println(p.getAddress());
     }
 
+    public void thisAccess() {
+        System.out.println(this.p.getName());
+    }
+
     public void chained() {
         System.out.println(p.name.toUpperCase().contains("horn"));
     }
