@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.sun.xml.bind.v2.schemagen.xmlschema.Import;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -423,21 +424,23 @@ public class RepositoryParser extends ClassProcessor {
      *
      * @param fd FieldDeclaration for which we need to find the compilation unit
      * @return a compilation unit
-     * @throws FileNotFoundException if the entity cannot be found in the AUT
      */
     public static CompilationUnit findEntity(Type fd) {
         Optional<CompilationUnit> cu = fd.findCompilationUnit();
         if (cu.isPresent()) {
-            String nameAsString = AbstractCompiler.findFullyQualifiedName(cu.get(), fd.toString());
-            return AntikytheraRunTime.getCompilationUnit(nameAsString);
+            for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
+                if (wrapper.getType() != null) {
+                    return AntikytheraRunTime.getCompilationUnit(wrapper.getNameAsString());
+                }
+            }
         }
         return null;
     }
 
     /**
-     * Converts the fields in an Entity to snake case whcih is the usual pattern for columns
-     * @param str
-     * @return
+     * Converts the fields in an Entity to snake case which is the usual pattern for columns
+     * @param str A camel cased variable
+     * @return a snake cased variable
      */
     public static String camelToSnake(String str) {
         if(str.equalsIgnoreCase("patientpomr")) {
