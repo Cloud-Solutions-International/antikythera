@@ -19,10 +19,9 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class IntegrationTestRepositoryParser {
+public class ITRepositoryParser {
     @BeforeAll
     public static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
@@ -32,7 +31,7 @@ public class IntegrationTestRepositoryParser {
     @Test
     void testDepartmentRepositoryParser() throws IOException {
         final RepositoryParser tp = new RepositoryParser();
-        tp.preProcess();
+        RepositoryParser.preProcess();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.DepartmentRepository"));
         tp.process();
 
@@ -43,6 +42,7 @@ public class IntegrationTestRepositoryParser {
                 md1 -> md1.getNameAsString().equals("queries2")).get();
 
         md.accept(new VoidVisitorAdapter<Void>() {
+            @Override
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
                 MethodDeclaration md = tp.findMethodDeclaration(n);
