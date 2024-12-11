@@ -234,10 +234,9 @@ public class AbstractCompiler {
                     return t;
                 }
                 for (Node child : t.getChildNodes()) {
-                    if (child instanceof ClassOrInterfaceDeclaration cid) {
-                        if (cid.getNameAsString().equals(type.getNameAsString())) {
-                            return cid;
-                        }
+                    if (child instanceof ClassOrInterfaceDeclaration cid &&
+                            cid.getNameAsString().equals(type.getNameAsString())) {
+                        return cid;
                     }
                 }
             }
@@ -502,19 +501,11 @@ public class AbstractCompiler {
             wrapper.setType(p);
         }
 
-        Optional<FieldDeclaration> field = target.findFirst(FieldDeclaration.class,
-                f -> f.getVariable(0).getNameAsString().equals(className)
-        );
-        if (field.isPresent()) {
-            wrapper.setField(field.get());
-        }
-        Optional<MethodDeclaration> methodDeclaration = target.findFirst(MethodDeclaration.class,
-                f -> f.getNameAsString().equals(className)
-        );
-        if (methodDeclaration.isPresent()) {
-            wrapper.setMethodDeclaration(methodDeclaration.get());
-        }
+        target.findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(className))
+              .ifPresent(wrapper::setField);
 
+        target.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals(className))
+              .ifPresent(wrapper::setMethodDeclaration);
     }
 
      static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
@@ -673,8 +664,9 @@ public class AbstractCompiler {
             ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
 
             for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                if (cdecl.findCompilationUnit().isPresent()) {
-                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+                if (compilationUnit.isPresent()) {
+                    String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
                         TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
