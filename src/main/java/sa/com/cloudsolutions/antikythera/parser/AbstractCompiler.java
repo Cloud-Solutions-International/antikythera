@@ -247,14 +247,7 @@ public class AbstractCompiler {
                 return wrapper.getType();
             }
 
-            String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
-            String fileName = packageName + "." + type.getNameAsString() + SUFFIX;
-            if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
-                CompilationUnit other = AntikytheraRunTime.getCompilationUnit(fileName.replace(".java",""));
-                if (other != null) {
-                    return getMatchingType(other, type.getNameAsString());
-                }
-            }
+            return findInSamePackage(cu, type);
         }
 
         return null;
