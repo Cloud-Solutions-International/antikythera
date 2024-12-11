@@ -42,7 +42,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
+
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -218,7 +218,7 @@ public class RepositoryQuery {
      *
      * @param stmt   the sql statement
      * @param entity a compilation unit representing the entity.
-     * @throws FileNotFoundException
+     * @throws AntikytheraException
      */
     void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
 
@@ -285,7 +285,7 @@ public class RepositoryQuery {
      * query through JDBC.
      * @param entity the primary table or view for the join
      * @param select the select statement
-     * @throws FileNotFoundException if we are unable to find related entities.
+     * @throws AntikytheraException if we are unable to find related entities.
      */
     private void processJoins(TypeWrapper entity, PlainSelect select) throws AntikytheraException {
         List<TypeWrapper> units = new ArrayList<>();

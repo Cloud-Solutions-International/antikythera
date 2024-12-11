@@ -488,7 +488,7 @@ public class Evaluator {
         ClassOrInterfaceType type = oce.getType();
         Variable vx;
 
-        vx = createUsingEvaluator(type, oce);
+        vx = createUsingEvaluator(type, oce, instructionPointer);
 
         if (vx == null) {
             vx = createUsingReflection(type, oce);
@@ -530,8 +530,8 @@ public class Evaluator {
      * @param type the class or interface type that we need to create an instance of
      * @param oce the object creation expression.
      */
-    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
-        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, oce);
+    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws AntikytheraException, ReflectiveOperationException {
+        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
         if (match != null) {
             Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
             annonymousOverrides(type, oce, eval);
