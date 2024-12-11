@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -390,20 +391,14 @@ public class RepositoryParser extends ClassProcessor {
         String table = null;
         if(entity != null) {
             if (entity.getType() != null) {
-                Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
-                if (ann.isPresent()) {
-                    if (ann.get().isNormalAnnotationExpr()) {
-                        for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("name")) {
-                                table = pair.getValue().toString().replace("\"", "");
-                            }
-                        }
-                    } else {
-                        table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+                return getNameFromType(entity, table);
+            }
+            else if (entity.getCls() != null){
+                Class<?> cls = entity.getCls();
+                for (Annotation ann : cls.getAnnotations()) {
+                    if (ann instanceof javax.persistence.Table t) {
+                        table = t.name();
                     }
-                    return table;
-                } else {
-                    return camelToSnake(entity.getType().getNameAsString());
                 }
             }
         }
@@ -411,6 +406,24 @@ public class RepositoryParser extends ClassProcessor {
             logger.warn("Compilation unit is null");
         }
         return table;
+    }
+
+    private static String getNameFromType(TypeWrapper entity, String table) {
+        Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
+        if (ann.isPresent()) {
+            if (ann.get().isNormalAnnotationExpr()) {
+                for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("name")) {
+                        table = pair.getValue().toString().replace("\"", "");
+                    }
+                }
+            } else {
+                table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+            }
+            return table;
+        } else {
+            return camelToSnake(entity.getType().getNameAsString());
+        }
     }
 
     /**
@@ -428,12 +441,12 @@ public class RepositoryParser extends ClassProcessor {
                 }
                 else if(!wrapper.getImport().getNameAsString().startsWith("java.util")) {
                     try {
-                        AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
-                        return new TypeWrapper(
-                            Class.forName(wrapper.getImport().getNameAsString())
-                        );
+                        Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
+                        return new TypeWrapper(cls);
+
                     } catch (ClassNotFoundException e) {
                         // can be ignored, we are trying to check for the existence of the class
+                        logger.debug(e.getMessage());
                     }
                 }
             }
