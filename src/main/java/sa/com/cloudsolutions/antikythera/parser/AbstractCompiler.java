@@ -11,19 +11,14 @@ import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
-import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
-import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -154,6 +149,21 @@ public class AbstractCompiler {
 
     public static void reset() throws IOException {
         setupParser();
+    }
+
+    static TypeDeclaration<?> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
+        String packageName = compilationUnit.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
+        String name = fd.isClassOrInterfaceType() ? fd.asClassOrInterfaceType().getNameAsString() : fd.toString();
+        String fileName = packageName + "." + name + SUFFIX;
+
+        if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
+            CompilationUnit other = AntikytheraRunTime.getCompilationUnit(fileName.replace(SUFFIX,""));
+            if (other != null) {
+                return getMatchingType(other, name);
+
+            }
+        }
+        return null;
     }
 
     /**

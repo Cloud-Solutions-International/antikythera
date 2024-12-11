@@ -220,10 +220,10 @@ public class RepositoryQuery {
      * @param entity a compilation unit representing the entity.
      * @throws FileNotFoundException
      */
-    void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws AntikytheraException {
+    void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
 
-        if(stmt instanceof Select) {
-            PlainSelect select = ((Select) stmt).getPlainSelect();
+        if(stmt instanceof Select sel) {
+            PlainSelect select = sel.getPlainSelect();
 
             List<SelectItem<?>> items = select.getSelectItems();
             if(items.size() == 1 && items.get(0).toString().length() == 1) {
@@ -287,8 +287,8 @@ public class RepositoryQuery {
      * @param select the select statement
      * @throws FileNotFoundException if we are unable to find related entities.
      */
-    private void processJoins(CompilationUnit entity, PlainSelect select) throws AntikytheraException {
-        List<CompilationUnit> units = new ArrayList<>();
+    private void processJoins(TypeWrapper entity, PlainSelect select) throws AntikytheraException {
+        List<TypeWrapper> units = new ArrayList<>();
         units.add(entity);
 
         List<Join> joins = select.getJoins();
@@ -303,12 +303,12 @@ public class RepositoryQuery {
                     // from this we need to extract the dischargeNurseRequest
                     String[] parts = a.toString().split("\\.");
                     if (parts.length == 2) {
-                        CompilationUnit other = null;
+                        TypeWrapper other = null;
                         // the join may happen against any of the tables that we have encountered so far
                         // hence the need to loop through here.
-                        for(CompilationUnit unit : units) {
+                        for(TypeWrapper unit : units) {
                             String field = parts[1].split(" ")[0];
-                            Optional<FieldDeclaration> x = unit.getType(0).getFieldByName(field);
+                            Optional<FieldDeclaration> x = unit.getType().getFieldByName(field);
                             if(x.isPresent()) {
                                 var member = x.get();
                                 String lhs = null;
@@ -354,7 +354,7 @@ public class RepositoryQuery {
                                 if(lhs == null || rhs == null) {
                                     // lets roll with an implicit join for now
                                     // todo fix this by figuring out the join column from other annotations
-                                    for(var column : other.getType(0).getFields()) {
+                                    for(var column : other.getType().getFields()) {
                                         for(var ann : column.getAnnotations()) {
                                             if(ann.getNameAsString().equals("Id")) {
                                                 lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
@@ -403,8 +403,9 @@ public class RepositoryQuery {
             this.statement = CCJSqlParserUtil.parse(query);
             this.simplifiedStatement = CCJSqlParserUtil.parse(query);
 
-            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
-            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(entityType));
+            TypeWrapper entity = RepositoryParser.findEntity(entityType);
+            convertFieldsToSnakeCase(simplifiedStatement, entity);
+            convertFieldsToSnakeCase(statement, entity);
 
             if (simplifiedStatement instanceof PlainSelect ps) {
                 simplifyWhereClause(ps.getWhere());

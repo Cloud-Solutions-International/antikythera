@@ -1,17 +1,26 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.TypeDeclaration;
 
 public class TypeWrapper {
-    CompilationUnit cu;
+    TypeDeclaration<?> type;
     Class<?> cls;
 
-    public CompilationUnit getCu() {
-        return cu;
+    public TypeWrapper(TypeDeclaration<?> type) {
+        this.type = type;
     }
 
-    public void setCu(CompilationUnit cu) {
-        this.cu = cu;
+    public TypeWrapper(Class<?> cls) {
+        this.cls = cls;
+    }
+
+    public TypeDeclaration<?> getType() {
+        return type;
+    }
+
+    public void setCu(TypeDeclaration<?> type) {
+        this.type = type;
     }
 
     public Class<?> getCls() {

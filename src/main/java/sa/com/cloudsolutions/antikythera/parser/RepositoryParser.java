@@ -1,11 +1,9 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.sun.xml.bind.v2.schemagen.xmlschema.Import;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -26,10 +24,9 @@ import net.sf.jsqlparser.statement.select.Select;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -46,7 +43,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Parses JPARespository subclasses to indentify the queries that they execute.
+ * Parses JPARespository subclasses to identify the queries that they execute.
  *
  * These queries can then be used to determine what kind of data need to be sent
  * to the controller for a valid response.
@@ -75,14 +72,12 @@ public class RepositoryParser extends ClassProcessor {
      * As determined by the configurations
      */
     private static boolean runQueries;
+
     /**
-     * The java parser compilation unit associated with this entity.
-     *
-     * This is different from the 'cu' field in the AbstractClassProcessor. That field will
-     * represent the repository interface while the entityCu will represent the entity that
-     * is part of the type arguments
+     * The compilation unit or class associated with this entity.
      */
-    private CompilationUnit entityCu;
+    private TypeWrapper entity;
+
     /**
      * The table name associated with the entity
      */
@@ -173,9 +168,8 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Process the CompilationUnit to identify the queries.
-     * @throws IOException
      */
-    public void process() throws IOException {
+    public void process()  {
         for(var tp : cu.getTypes()) {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
@@ -187,8 +181,8 @@ public class RepositoryParser extends ClassProcessor {
                         Optional<NodeList<Type>> t = parent.getTypeArguments();
                         if (t.isPresent()) {
                             entityType = t.get().get(0);
-                            entityCu = findEntity(entityType);
-                            table = findTableName(entityCu);
+                            entity = findEntity(entityType);
+                            table = findTableName(entity);
                         }
                         break;
                     }
@@ -273,10 +267,9 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Execute the query represented by the method.
      * @param method the name of the method that represents the query in the JPARepository interface
-     * @throws FileNotFoundException raised by covertFieldsToSnakeCase
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(MethodDeclaration method) throws IOException {
+    public ResultSet executeQuery(MethodDeclaration method) {
         ResultSet cached = cache.get(method);
         if (cached != null) {
             return cached;
@@ -390,27 +383,28 @@ public class RepositoryParser extends ClassProcessor {
      * This method is made static because when processing joins there are multiple entities
      * and there by multipe table names involved.
      *
-     * @param entityCu a compilation unit representing the entity
+     * @param entity a TypeWrapper representing the entity
      * @return the table name as a string.
      */
-    public static String findTableName(CompilationUnit entityCu) {
+    public static String findTableName(TypeWrapper entity) {
         String table = null;
-        if(entityCu != null) {
-            Optional<AnnotationExpr> ann = entityCu.getTypes().get(0).getAnnotationByName("Table");
-            if (ann.isPresent()) {
-                if (ann.get().isNormalAnnotationExpr()) {
-                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                        if (pair.getNameAsString().equals("name")) {
-                            table = pair.getValue().toString().replace("\"", "");
+        if(entity != null) {
+            if (entity.getType() != null) {
+                Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
+                if (ann.isPresent()) {
+                    if (ann.get().isNormalAnnotationExpr()) {
+                        for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                            if (pair.getNameAsString().equals("name")) {
+                                table = pair.getValue().toString().replace("\"", "");
+                            }
                         }
+                    } else {
+                        table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
                     }
+                    return table;
                 } else {
-                    table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+                    return camelToSnake(entity.getType().getNameAsString());
                 }
-                return table;
-            }
-            else {
-                return camelToSnake(entityCu.getTypes().get(0).getNameAsString());
             }
         }
         else {
@@ -425,14 +419,25 @@ public class RepositoryParser extends ClassProcessor {
      * @param fd FieldDeclaration for which we need to find the compilation unit
      * @return a compilation unit
      */
-    public static CompilationUnit findEntity(Type fd) {
+    public static TypeWrapper findEntity(Type fd) {
         Optional<CompilationUnit> cu = fd.findCompilationUnit();
         if (cu.isPresent()) {
             for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
                 if (wrapper.getType() != null) {
-                    return AntikytheraRunTime.getCompilationUnit(wrapper.getNameAsString());
+                    return new TypeWrapper(wrapper.getType());
+                }
+                else if(!wrapper.getImport().getNameAsString().startsWith("java.util")) {
+                    try {
+                        AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
+                        return new TypeWrapper(
+                            Class.forName(wrapper.getImport().getNameAsString())
+                        );
+                    } catch (ClassNotFoundException e) {
+                        // can be ignored, we are trying to check for the existence of the class
+                    }
                 }
             }
+            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd));
         }
         return null;
     }
@@ -529,7 +534,7 @@ public class RepositoryParser extends ClassProcessor {
         boolean ordering = false;
         String next = "";
 
-        String tableName = findTableName(entityCu);
+        String tableName = findTableName(entity);
         if (tableName != null) {
             for (int i = 0; i < components.size(); i++) {
                 String component = components.get(i);
