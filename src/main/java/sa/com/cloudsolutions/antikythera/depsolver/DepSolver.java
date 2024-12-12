@@ -653,12 +653,6 @@ public class DepSolver {
             }
         }
 
-        @Override
-        public void visit(final ThisExpr n, final GraphNode arg) {
-            System.out.println(n.toString());
-        }
-
-
     }
 
     public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {
