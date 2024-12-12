@@ -13,14 +13,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.BinaryExpr;
-import com.github.javaparser.ast.expr.CastExpr;
-import com.github.javaparser.ast.expr.ConditionalExpr;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
@@ -397,11 +390,23 @@ public class DepSolver {
             super.visit(n, node);
         }
 
+
+//        @Override
+//        public void visit(final NameExpr n,GraphNode node){
+////            System.out.println(n.getNameAsString());
+//        }
+
+
+
         @Override
         public void visit(final VariableDeclarationExpr n, GraphNode node) {
+//            System.out.println("Parameter" + n.toString());
             for(VariableDeclarator vd : n.getVariables()) {
+//
+
                 names.put(vd.getNameAsString(), vd.getType());
                 try {
+//                    System.out.println(vd.getType());
                     if (vd.getType().isClassOrInterfaceType()) {
                         node.addTypeArguments(vd.getType().asClassOrInterfaceType());
                     }
@@ -530,9 +535,27 @@ public class DepSolver {
 
         @Override
         public void visit(ExpressionStmt n, GraphNode arg) {
+
             if (n.getExpression().isAssignExpr()) {
-                Expression expr = n.getExpression().asAssignExpr().getValue();
+
+                AssignExpr assignExpr = n.getExpression().asAssignExpr();
+                Expression expr = assignExpr.getValue();
                 ImportUtils.addImport(arg, expr);
+
+
+                if (assignExpr.getTarget().isFieldAccessExpr()) {
+                    FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
+                    SimpleName nmae = fae.getName();
+                    arg.getEnclosingType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(nmae.asString())).ifPresent(f -> {
+                        try {
+                            Graph.createGraphNode(f);
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    });
+
+                    ImportUtils.addImport(arg, fae);
+                }
             }
             super.visit(n, arg);
         }
@@ -594,6 +617,7 @@ public class DepSolver {
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
             List<ImportWrapper> imports = solveType(oce.getType(), node);
+
             for (ImportWrapper imp : imports) {
                 node.getDestination().addImport(imp.getImport());
             }
@@ -627,6 +651,11 @@ public class DepSolver {
                 }
 
             }
+        }
+
+        @Override
+        public void visit(final ThisExpr n, final GraphNode arg) {
+            System.out.println(n.toString());
         }
 
 
