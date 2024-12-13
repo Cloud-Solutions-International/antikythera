@@ -186,6 +186,7 @@ public class SpringTestGenerator implements  TestGenerator {
              * Non-empty parameters.
              */
             ControllerRequest request = new ControllerRequest();
+            // todo fix query param map
             request.setPath(getPath(annotation).replace("\"", ""));
 
             if (state == ENLIGHTENED_STATE) {

@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassDependency;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -206,21 +208,26 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
-                evaluator.setArgumentGenerator(new NullArgumentGenerator());
-                evaluator.reset();
-                evaluator.resetColors();
-                AntikytheraRunTime.reset();
-                try {
-                    evaluator.visit(md);
-                } catch (AntikytheraException | ReflectiveOperationException e) {
-                    if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                        logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-                    } else {
-                        throw new GeneratorException(e);
-                    }
-                } finally {
-                    logger.info(md.getNameAsString());
+                evaluateMethod(md, new NullArgumentGenerator());
+                evaluateMethod(md, new DummyArgumentGenerator());
+            }
+        }
+
+        private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+            evaluator.setArgumentGenerator(gen);
+            evaluator.reset();
+            evaluator.resetColors();
+            AntikytheraRunTime.reset();
+            try {
+                evaluator.visit(md);
+            } catch (AntikytheraException | ReflectiveOperationException e) {
+                if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
+                } else {
+                    throw new GeneratorException(e);
                 }
+            } finally {
+                logger.info(md.getNameAsString());
             }
         }
 
@@ -231,9 +238,9 @@ public class RestControllerParser extends ClassProcessor {
             if (md.isPublic()) {
                 Optional<String> ctrl  = Settings.getProperty("controllers", String.class);
                 if(ctrl.isPresent()) {
-                    String[] controllers = ctrl.get().split("#");
-                    if (controllers.length > 1) {
-                        if (md.getNameAsString().equals(controllers[controllers.length - 1])) {
+                    String[] crs = ctrl.get().split("#");
+                    if (crs.length > 1) {
+                        if (md.getNameAsString().equals(crs[crs.length - 1])) {
                             return true;
                         }
                         return false;

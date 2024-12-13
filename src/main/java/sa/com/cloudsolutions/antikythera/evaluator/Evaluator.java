@@ -1395,17 +1395,6 @@ public class Evaluator {
         ArrayList<Boolean> missing = new ArrayList<>();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
-            p.getAnnotationByName("RequestParam").ifPresent(a -> {
-                if (a.isNormalAnnotationExpr()) {
-                    NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
-                    for (MemberValuePair pair : ne.getPairs()) {
-                        if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
-                            return;
-                        }
-                    }
-                }
-                missing.add(true);
-            });
             /*
              * Our implementation differs from a standard Expression Evaluation engine in that we do not
              * throw an exception if the stack is empty.
@@ -1416,9 +1405,24 @@ public class Evaluator {
              */
             if (AntikytheraRunTime.isEmptyStack()) {
                 logger.warn("Stack is empty");
+                missing.add(true);
             }
             else {
-                setLocal(md.getBody().get(), p.getNameAsString(), AntikytheraRunTime.pop());
+                Variable va = AntikytheraRunTime.pop();
+                setLocal(md.getBody().get(), p.getNameAsString(), va);
+                p.getAnnotationByName("RequestParam").ifPresent(a -> {
+                    if (a.isNormalAnnotationExpr()) {
+                        NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
+                        for (MemberValuePair pair : ne.getPairs()) {
+                            if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
+                                return;
+                            }
+                        }
+                    }
+                    if (va == null || va.getValue() == null) {
+                        missing.add(true);
+                    }
+                });
             }
         }
         return missing.isEmpty();

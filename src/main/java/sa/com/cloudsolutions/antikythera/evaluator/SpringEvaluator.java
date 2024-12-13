@@ -112,7 +112,7 @@ public class SpringEvaluator extends Evaluator {
      * Called by the java parser method visitor.
      *
      * This is where the code evaluation begins. Note that we may run the same code repeatedly
-     * so that we can excercise all the paths in the code. This is done by setting the values
+     * so that we can exercise all the paths in the code. This is done by setting the values
      * of variables so that different branches in conditional statements are taken.
      *
      * @param md The MethodDeclaration being worked on
@@ -156,6 +156,9 @@ public class SpringEvaluator extends Evaluator {
             ControllerResponse cr = new ControllerResponse();
             ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
             cr.setResponse(new Variable(response));
+            for (Statement st : statements) {
+                lines.put(st.hashCode(), new LineOfCode(st, LineOfCode.BLACK));
+            }
             return createTests(cr);
         }
         return returnValue;
@@ -513,11 +516,7 @@ public class SpringEvaluator extends Evaluator {
 
             branching.add(ifst);
             Variable v = super.ifThenElseBlock(ifst);
-            if ((Boolean)v.getValue()) {
-                setupIfCondition(ifst, false);
-            } else {
-                setupIfCondition(ifst, true);
-            }
+            setupIfCondition(ifst, !((boolean) v.getValue()));
             return v;
         }
         else if (l.getColor() == LineOfCode.GREY) {
@@ -615,7 +614,7 @@ public class SpringEvaluator extends Evaluator {
     /**
      * Check if a collection of statements have been previously executed or not.
      * @param statements The collection of statements to check.
-     * @return
+     * @return true if the statements have all been executed.
      */
     private boolean checkStatements(List<Statement> statements) {
         for (Statement line : statements) {
@@ -669,9 +668,9 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Has thsi line of code being executed before
-     * @param stmt statement representing a line of code (except that a multiline statments are not supported)
-     * @return
+     * Has this line of code being executed before
+     * @param stmt statement representing a line of code (except that a multiline statements are not supported)
+     * @return true if this line has been visited.
      */
     private boolean isLineVisited(Statement stmt) {
         LineOfCode l = lines.get(stmt.hashCode());
