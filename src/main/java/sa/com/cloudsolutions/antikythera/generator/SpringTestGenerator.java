@@ -65,7 +65,7 @@ import java.util.Set;
  * for us to try methods without branching three times. The first time without any query strings,
  * Secondly with naive values and finally with values that will result in queries being executed.
  */
-public class SpringTestGenerator implements  TestGenerator {
+public class SpringTestGenerator extends  TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
     /**
      * The URL path component common to all functions in a controller.
@@ -186,7 +186,8 @@ public class SpringTestGenerator implements  TestGenerator {
              * Non-empty parameters.
              */
             ControllerRequest request = new ControllerRequest();
-            // todo fix query param map
+            handleURIVariables(md, request);
+
             request.setPath(getPath(annotation).replace("\"", ""));
 
             if (state == ENLIGHTENED_STATE) {
@@ -195,9 +196,6 @@ public class SpringTestGenerator implements  TestGenerator {
                 } catch (SQLException e) {
                     logger.warn(e.getMessage());
                 }
-            }
-            if (state == DUMMY_STATE) {
-                handleURIVariables(md, request);
             }
 
             addQueryParams(makeGetCall, request, body);
@@ -212,12 +210,18 @@ public class SpringTestGenerator implements  TestGenerator {
 
     }
 
-    private static void addQueryParams(MethodCallExpr getCall, ControllerRequest request, BlockStmt body) {
+    private  void addQueryParams(MethodCallExpr getCall, ControllerRequest request, BlockStmt body) {
         getCall.addArgument(new StringLiteralExpr(request.getPath()));
         if(!request.getQueryParameters().isEmpty()) {
             body.addStatement("Map<String, String> queryParams = new HashMap<>();");
             for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
-                body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
+                if (argumentGenerator != null) {
+                    Object v = argumentGenerator.getArguments().get(entry.getValue()).getValue();
+                    if (v != null) {
+                        body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");",
+                                entry.getKey(), v));
+                    }
+                }
             }
             getCall.addArgument(new NameExpr("queryParams"));
         }
@@ -374,8 +378,6 @@ public class SpringTestGenerator implements  TestGenerator {
             }
         }
     }
-
-
 
     private static void testForResponseBodyAsString(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
         body.addStatement("String resp = response.getBody().asString();");
@@ -549,39 +551,15 @@ public class SpringTestGenerator implements  TestGenerator {
 
     /**
      * Handle the RequestParam and PathVariables.
-     * We just set the values to a reasonable default. These defaults are likely to result in the
-     * method not throwing any null pointer exceptions, that's all!
+     * It may happen that the PathVariable annotation will result in the parameter having a
+     * different name from the variable name. So we will build that map for better tracking
      *
      * @param md the method declaration
      * @param request the controller request
      */
     void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
-            String paramString = String.valueOf(param);
-
-            String paramName = AbstractCompiler.getRestParameterName(param);
-            if (paramString.startsWith("@RequestParam")) {
-                if (!request.getQueryParameters().containsKey(paramName)) {
-                    request.addQueryParameter(paramName, switch (param.getTypeAsString()) {
-                        case "Boolean" -> "false";
-                        case "float", "Float", "double", "Double" -> "0.0";
-                        case "Integer", "int", "Long" -> "0";
-                        case "String" -> "Ibuprofen";
-                        default -> "0";
-                    });
-                }
-            } else if (paramString.startsWith("@PathVariable")) {
-                final String target = '{' + paramName + '}';
-
-                String path = switch (param.getTypeAsString()) {
-                    case "Boolean" -> request.getPath().replace(target, "false");
-                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "0.0");
-                    case "Integer", "int", "Long" -> request.getPath().replace(target, "0");
-                    case "String" -> request.getPath().replace(target, "Ibuprofen");
-                    default -> request.getPath().replace(target, "");
-                };
-                request.setPath(path);
-            }
+            request.addQueryParameter(param.getNameAsString(), AbstractCompiler.getRestParameterName(param));
         }
     }
 

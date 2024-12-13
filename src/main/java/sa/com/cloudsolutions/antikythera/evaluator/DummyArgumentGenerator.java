@@ -8,16 +8,17 @@ import org.slf4j.LoggerFactory;
 public class DummyArgumentGenerator extends ArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
 
-
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
         String paramString = String.valueOf(param);
+        Variable v = null;
 
         if (paramString.startsWith("@RequestBody")) {
             /*
              * Request body on the other hand will be more complex and will most likely be a DTO.
              */
             Type t = param.getType();
+
             if (t.isClassOrInterfaceType()) {
                 String fullClassName = t.asClassOrInterfaceType().resolve().asReferenceType().getQualifiedName();
                 if (fullClassName.startsWith("java")) {
@@ -26,53 +27,39 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                      * boxed type.
                      */
                     if (t.asClassOrInterfaceType().isBoxedType()) {
-                        Variable v = mockParameter(param.getTypeAsString());
-                        /*
-                         * We need to push this variable to the stack so that it can be used later.
-                         */
-                        AntikytheraRunTime.push(v);
+                        v = mockParameter(param.getTypeAsString());
                     } else {
                         if (fullClassName.startsWith("java.util")) {
-                            Variable v = Reflect.variableFactory(fullClassName);
-                            /*
-                             * Pushed to be popped later in the callee
-                             */
-                            AntikytheraRunTime.push(v);
+                            v = Reflect.variableFactory(fullClassName);
                         } else {
                             Class<?> clazz = Class.forName(fullClassName);
-                            Variable v = new Variable(clazz.newInstance());
-                            /*
-                             * PUsh arguments
-                             */
-                            AntikytheraRunTime.push(v);
+                            v = new Variable(clazz.newInstance());
                         }
                     }
                 } else {
-
                     Evaluator o = new SpringEvaluator(fullClassName);
                     o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
-                    Variable v = new Variable(o);
-                    /*
-                     * Args to be popped by the callee
-                     */
-                    AntikytheraRunTime.push(v);
+                    v = new Variable(o);
                 }
             } else {
-                AntikytheraRunTime.push(mockParameter(param.getTypeAsString()));
+                v = mockParameter(param.getTypeAsString());
             }
         } else {
             /*
-             * Request parameters are typically strings or numbers and these are pushed into the stack
-             * to be popped in the callee
+             * Request parameters are typically strings or numbers or booleans.
              */
-            Variable v = mockParameter(param.getTypeAsString());
-            AntikytheraRunTime.push(v);
+            v = mockParameter(param.getTypeAsString());
         }
+        /*
+         * Pushed to be popped later in the callee
+         */
+        arguments.put(param.getNameAsString(), v);
+        AntikytheraRunTime.push(v);
     }
 
      public Variable mockParameter(String typeName) {
         return new Variable(switch (typeName) {
-            case "Boolean" -> false;
+            case "Boolean", "boolean" -> false;
             case "float", "Float", "double", "Double" -> 0.0;
             case "Integer", "int" -> 0;
             case "Long", "long" -> 0L;
