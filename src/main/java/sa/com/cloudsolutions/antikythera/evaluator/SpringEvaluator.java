@@ -78,16 +78,16 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Sort of a stack that keeps track of the conditional code blocks.
-     * We consider IF THEN ELSE statements as branching statements. However we also consider JPA
-     * queries to be branching statements as well. There are two branches with the 'A" branch being
+     * We consider IF THEN ELSE statements as branching statements. However, we also consider JPA
+     * queries to be branching statements as well. There are two branches with the 'A' branch being
      * executing the query with the default parameters that were passed in and the 'B' branch will
      * be executing the query with parameters that will have a valid result set being returned
      *
      * Of course there will be situations where no parameters exist to give a valid resultset
      * and these will just be ignored.
      *
-     * The values that are used in the A branch for the query will just be arbitary non null values
-     * integers like 0 will usually not have matching entries in the datbaase and will result in
+     * The values that are used in the A branch for the query will just be arbitrary non null values
+     * integers like 0 will usually not have matching entries in the database and will result in
      * empty responses. If due to some reason there are valid resultsets of integers like 0 for
      * primary keys there's nothing we can do about it, we just move onto the next test.
      */
@@ -128,23 +128,37 @@ public class SpringEvaluator extends Evaluator {
             }
         });
 
-        try {
-            NodeList<Statement> statements = md.getBody().get().getStatements();
-            for (int i = 0; i < statements.size(); i++) {
-                Statement st = statements.get(i);
-                if (!lines.containsKey(st.hashCode())) {
-                    mockURIVariables(md);
-                    super.executeMethod(md);
-                    if (returnFrom != null) {
-                        // rewind!
+        NodeList<Statement> statements = md.getBody().get().getStatements();
+        for (int i = 0; i < statements.size(); i++) {
+            Statement st = statements.get(i);
+            if (!lines.containsKey(st.hashCode())) {
+                mockURIVariables(md);
+                executeMethod(md);
+                if (returnFrom != null) {
+                    // rewind!
 
-                        i = 0;
-                    }
+                    i = 0;
                 }
             }
-        } catch (Exception e) {
-            throw new EvaluatorException("Error while mocking controller arguments", e);
         }
+    }
+
+    @Override
+    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+        returnFrom = null;
+        returnValue = null;
+
+        List<Statement> statements = md.getBody().orElseThrow().getStatements();
+        if (setupParameters(md)) {
+            executeBlock(statements);
+        }
+        else {
+            ControllerResponse cr = new ControllerResponse();
+            ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            cr.setResponse(new Variable(response));
+            return createTests(cr);
+        }
+        return returnValue;
     }
 
     /**
@@ -536,7 +550,7 @@ public class SpringEvaluator extends Evaluator {
      * @param ifst the if statement to mess with
      * @param state the desired state.
      */
-    private void setupIfCondition(IfStmt ifst, boolean state) throws AntikytheraException, ReflectiveOperationException {
+    private void setupIfCondition(IfStmt ifst, boolean state)  {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
         LineOfCode l = lines.get(ifst.hashCode());
@@ -546,7 +560,7 @@ public class SpringEvaluator extends Evaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if(entry.getKey().isMethodCallExpr()) {
-                    MethodCallExpr mce = entry.getKey().asMethodCallExpr();
+
                     LinkedList<Expression> chain = findScopeChain(entry.getKey());
                     if (!chain.isEmpty()) {
                         Expression expr = chain.getFirst();
@@ -673,8 +687,8 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Execute a method that's only available to us in source code format.
-     * @param methodCall
-     * @return
+     * @param methodCall the method call whose execution is to be simulated.
+     * @return the result from the execution as a Variable instance
      * @throws AntikytheraException
      * @throws ReflectiveOperationException
      */
@@ -764,9 +778,6 @@ public class SpringEvaluator extends Evaluator {
      * Converts an SQL row to an Entity.
      * @param variable copy the data from the record into this variable.
      * @param rs the sql result set
-     *
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
      */
     private boolean resultToEntity(Variable variable, ResultSet rs) {
 

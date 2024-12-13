@@ -53,6 +53,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -1379,13 +1380,32 @@ public class Evaluator {
 
     public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-        List<Statement> statements = md.getBody().orElseThrow().getStatements();
-        NodeList<Parameter> parameters = md.getParameters();
-
         returnValue = null;
+
+        List<Statement> statements = md.getBody().orElseThrow().getStatements();
+        setupParameters(md);
+
+        executeBlock(statements);
+
+        return returnValue;
+    }
+
+    protected boolean setupParameters(MethodDeclaration md) {
+        NodeList<Parameter> parameters = md.getParameters();
+        ArrayList<Boolean> missing = new ArrayList<>();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
-
+            p.getAnnotationByName("RequestParam").ifPresent(a -> {
+                if (a.isNormalAnnotationExpr()) {
+                    NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
+                    for (MemberValuePair pair : ne.getPairs()) {
+                        if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
+                            return;
+                        }
+                    }
+                }
+                missing.add(true);
+            });
             /*
              * Our implementation differs from a standard Expression Evaluation engine in that we do not
              * throw an exception if the stack is empty.
@@ -1401,10 +1421,7 @@ public class Evaluator {
                 setLocal(md.getBody().get(), p.getNameAsString(), AntikytheraRunTime.pop());
             }
         }
-
-        executeBlock(statements);
-
-        return returnValue;
+        return missing.isEmpty();
     }
 
     /**
