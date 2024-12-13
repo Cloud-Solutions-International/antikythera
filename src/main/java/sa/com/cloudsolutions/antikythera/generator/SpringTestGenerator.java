@@ -559,7 +559,12 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
-            request.addQueryParameter(param.getNameAsString(), AbstractCompiler.getRestParameterName(param));
+            String nameAsString = param.getNameAsString();
+            request.addQueryParameter(nameAsString, AbstractCompiler.getRestParameterName(param));
+            if (param.getAnnotationByName("PathVariable").isPresent()) {
+                request.setPath(request.getPath().replace("{" + nameAsString + "}",
+                        argumentGenerator.getArguments().get(nameAsString).getValue().toString()));
+            }
         }
     }
 

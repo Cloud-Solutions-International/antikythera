@@ -8,6 +8,7 @@ import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -106,7 +107,7 @@ class TestSpringGenerator {
             "float, 0.0",
             "Long, 0"
     })
-    void handleURIVariablesTestPath(String paramType, String paramValue) {
+    void handleURIVariablesTestPath(String paramType, String paramValue) throws ReflectiveOperationException {
         // Arrange
         MethodDeclaration md = new MethodDeclaration();
         Parameter param = new Parameter();
@@ -119,7 +120,9 @@ class TestSpringGenerator {
         request.setPath("/api/test/{param1}");
 
         SpringTestGenerator generator = new SpringTestGenerator();
-
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        argumentGenerator.generateArgument(param);
+        generator.setArgumentGenerator(argumentGenerator);
         generator.handleURIVariables(md, request);
 
         assertEquals("/api/test/" + paramValue, request.getPath());
@@ -132,7 +135,7 @@ class TestSpringGenerator {
             "int, number, 0",
             "dto, dto, 0",
     })
-    void handleURIVariablesTestQueryString(String paramType, String paramName, String paramValue) {
+    void handleURIVariablesTestQueryString(String paramType, String paramName, String paramValue) throws ReflectiveOperationException {
         // Arrange
         MethodDeclaration md = new MethodDeclaration();
         Parameter param = new Parameter();
@@ -145,11 +148,13 @@ class TestSpringGenerator {
         request.setPath("/api/test/");
 
         SpringTestGenerator generator = new SpringTestGenerator();
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        argumentGenerator.generateArgument(param);
 
         generator.handleURIVariables(md, request);
 
         assertEquals("/api/test/", request.getPath());
         assertTrue(request.getQueryParameters().containsKey(paramName));
-        assertTrue(request.getQueryParameters().get(paramName).equals(paramValue));
+        assertEquals(argumentGenerator.getArguments().get(paramName).getValue().toString(), paramValue);
     }
 }
