@@ -143,7 +143,9 @@ public class DepSolver {
 
             Type returnType = md.getType();
             String returns = md.getTypeAsString();
+
             if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
+//                System.out.println(returnType.toString());
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
 
@@ -313,10 +315,16 @@ public class DepSolver {
      * @throws AntikytheraException if the dependencies cannot be resolved.
      */
      void fieldSearch(GraphNode node) throws AntikytheraException {
-        if(node.getNode() instanceof FieldDeclaration fd) {
+
+         if(node.getNode() instanceof FieldDeclaration fd) {
             node.addField(fd);
         }
-    }
+         else if (node.getNode() instanceof ClassOrInterfaceDeclaration ecd) {
+            for (FieldDeclaration fd : ecd.getFields()) {
+                node.addField(fd);
+            }
+         }
+     }
 
     private void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
         List<FieldDeclaration> fields = new ArrayList<>();
@@ -406,7 +414,7 @@ public class DepSolver {
 
         @Override
         public void visit(final VariableDeclarationExpr n, GraphNode node) {
-//            System.out.println("Parameter" + n.toString());
+
             for(VariableDeclarator vd : n.getVariables()) {
 //
 
@@ -622,6 +630,7 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
+
             List<ImportWrapper> imports = solveType(oce.getType(), node);
 
             for (ImportWrapper imp : imports) {
@@ -658,10 +667,10 @@ public class DepSolver {
 
             }
         }
-
     }
 
     public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {
+
         solver.initField(field, node);
     }
 
