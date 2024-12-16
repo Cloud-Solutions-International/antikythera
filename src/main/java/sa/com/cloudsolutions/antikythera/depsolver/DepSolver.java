@@ -147,11 +147,17 @@ public class DepSolver {
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
 
+            for (Type thrownException : md.getThrownExceptions()) {
+                ImportUtils.addImport(node, thrownException);
+
+            }
+
             if (md.getAnnotationByName("Override").isPresent()) {
                 findParentMethods(node, md);
             }
 
             if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
+
                 findImplementations(node, md);
             }
         }
