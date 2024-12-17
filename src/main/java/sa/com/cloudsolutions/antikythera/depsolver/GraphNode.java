@@ -110,7 +110,7 @@ public class GraphNode {
         GraphNode tmp = new GraphNode(node);
         GraphNode g = Graph.getNodes().get(tmp.hashCode());
         if (g == null) {
-            Graph.getNodes().put(tmp.hashCode(), tmp);
+            Graph.getNodes().put(tmp.hashCode(), tmp); // put into hashmap
             return tmp;
         }
         return g;

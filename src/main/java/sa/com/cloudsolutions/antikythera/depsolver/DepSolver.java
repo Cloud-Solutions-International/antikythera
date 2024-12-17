@@ -144,13 +144,11 @@ public class DepSolver {
             Type returnType = md.getType();
             String returns = md.getTypeAsString();
             if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                System.out.println(returnType);
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
 
             for (Type thrownException : md.getThrownExceptions()) {
                 ImportUtils.addImport(node, thrownException);
-
             }
 
             if (md.getAnnotationByName("Override").isPresent()) {
