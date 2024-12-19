@@ -314,11 +314,6 @@ public class DepSolver {
      void fieldSearch(GraphNode node) throws AntikytheraException {
          if(node.getNode() instanceof FieldDeclaration fd) {
             node.addField(fd);
-        }
-         else if (node.getNode() instanceof ClassOrInterfaceDeclaration ecd) {
-            for (FieldDeclaration fd : ecd.getFields()) {
-                node.addField(fd);
-            }
          }
      }
 
@@ -396,7 +391,11 @@ public class DepSolver {
         public void visit(final Parameter n, GraphNode node) {
             names.put(n.getNameAsString(), n.getType());
 
-            solveType(n.getType(), node);
+            try{
+                solveType(n.getType(), node);
+            } catch (AntikytheraException e) {
+                throw new RuntimeException(e);
+            }
             super.visit(n, node);
         }
 
@@ -405,11 +404,9 @@ public class DepSolver {
         public void visit(final VariableDeclarationExpr n, GraphNode node) {
 
             for(VariableDeclarator vd : n.getVariables()) {
-//
 
                 names.put(vd.getNameAsString(), vd.getType());
                 try {
-//                    System.out.println(vd.getType());
                     if (vd.getType().isClassOrInterfaceType()) {
                         node.addTypeArguments(vd.getType().asClassOrInterfaceType());
                     }
@@ -440,35 +437,45 @@ public class DepSolver {
      * @param node
      * @return
      */
-    @Deprecated
-    private List<ImportWrapper> solveType(Type vd, GraphNode node) {
+
+//    private List<ImportWrapper> solveType(Type vd, GraphNode node) {
+//        if (vd.isClassOrInterfaceType()) {
+//            List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
+//            for (ImportWrapper imp : imports) {
+//                try {
+//                    searchClass(node, imp);
+//                    FieldDeclaration fieldDeclaration = imp.getField();
+//                    if (fieldDeclaration != null) {
+//                        Graph.createGraphNode(fieldDeclaration);
+//                    }
+//                } catch (AntikytheraException e) {
+//                    throw new DepsolverException(e);
+//                }
+//            }
+//            if (imports.isEmpty()) {
+//                CompilationUnit cu = node.getCompilationUnit();
+//                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, vd.asClassOrInterfaceType().getNameAsString());
+//                CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+//                if (target != null) {
+//                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(target, vd.asClassOrInterfaceType().getNameAsString());
+//                    try {
+//                        Graph.createGraphNode(t);
+//                    } catch (AntikytheraException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//            }
+//            return imports;
+//        }
+//        return List.of();
+//    }
+
+    private List<ImportWrapper> solveType(Type vd, GraphNode node) throws AntikytheraException {
         if (vd.isClassOrInterfaceType()) {
-            List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
-            for (ImportWrapper imp : imports) {
-                try {
-                    searchClass(node, imp);
-                    FieldDeclaration fieldDeclaration = imp.getField();
-                    if (fieldDeclaration != null) {
-                        Graph.createGraphNode(fieldDeclaration);
-                    }
-                } catch (AntikytheraException e) {
-                    throw new DepsolverException(e);
-                }
-            }
-            if (imports.isEmpty()) {
-                CompilationUnit cu = node.getCompilationUnit();
-                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, vd.asClassOrInterfaceType().getNameAsString());
-                CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                if (target != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(target, vd.asClassOrInterfaceType().getNameAsString());
-                    try {
-                        Graph.createGraphNode(t);
-                    } catch (AntikytheraException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-            return imports;
+            ClassOrInterfaceType ctype = vd.asClassOrInterfaceType();
+            node.addTypeArguments(ctype);
+        } else {
+            ImportUtils.addImport(node, vd);
         }
         return List.of();
     }
@@ -538,7 +545,6 @@ public class DepSolver {
 
         @Override
         public void visit(ExpressionStmt n, GraphNode arg) {
-
             if (n.getExpression().isAssignExpr()) {
 
                 AssignExpr assignExpr = n.getExpression().asAssignExpr();
@@ -620,7 +626,12 @@ public class DepSolver {
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
 
-            List<ImportWrapper> imports = solveType(oce.getType(), node);
+            List<ImportWrapper> imports = null;
+            try {
+                imports = solveType(oce.getType(), node);
+            } catch (AntikytheraException e) {
+                throw new RuntimeException(e);
+            }
 
             for (ImportWrapper imp : imports) {
                 node.getDestination().addImport(imp.getImport());
@@ -643,7 +654,12 @@ public class DepSolver {
             if (expr.isObjectCreationExpr()) {
                 ObjectCreationExpr oce = expr.asObjectCreationExpr();
                 GraphNode node = arg;
-                List<ImportWrapper> imports = solveType(oce.getType(), node);
+                List<ImportWrapper> imports = null;
+                try {
+                    imports = solveType(oce.getType(), node);
+                } catch (AntikytheraException e) {
+                    throw new RuntimeException(e);
+                }
                 for (ImportWrapper imp : imports) {
                     node.getDestination().addImport(imp.getImport());
                 }
