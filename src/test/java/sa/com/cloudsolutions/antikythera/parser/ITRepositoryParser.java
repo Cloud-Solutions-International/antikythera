@@ -38,52 +38,50 @@ public class ITRepositoryParser {
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
 
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
-                md1 -> md1.getNameAsString().equals("queries2")).get();
+        cu.findFirst(MethodDeclaration.class,
+                md1 -> md1.getNameAsString().equals("queries2")).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
+                    @Override
+                    public void visit(MethodCallExpr n, Void arg) {
+                        super.visit(n, arg);
+                        MethodDeclaration md = tp.findMethodDeclaration(n);
+                        assertNotNull(md);
+                        RepositoryQuery rql = tp.get(md);
+                        assertNotNull(rql);
 
-        md.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodCallExpr n, Void arg) {
-                super.visit(n, arg);
-                MethodDeclaration md = tp.findMethodDeclaration(n);
-                assertNotNull(md);
-                RepositoryQuery rql = tp.get(md);
-                assertNotNull(rql);
+                        String sql = rql.getOriginalQuery();
+                        assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
+                        assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
 
-                String sql = rql.getOriginalQuery();
-                assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
-                assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
+                        try {
+                            Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
+                            assertNotNull(stmt);
+                            assertEquals(
+                                    "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
+                                    stmt.toString()
+                            );
+                            Statement ex = rql.getSimplifiedStatement();
+                            assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
+                                    ex.toString());
+                        } catch (JSQLParserException e) {
+                            throw new RuntimeException(e);
+                        }
 
-                try {
-                    Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
-                    assertNotNull(stmt);
-                    assertEquals(
-                         "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
-                            stmt.toString()
-                    );
-                    Statement ex = rql.getSimplifiedStatement();
-                    assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
-                            ex.toString());
-                } catch (JSQLParserException e) {
-                    throw new RuntimeException(e);
-                }
-
-            }
-        }, null);
+                    }
+                }, null));
     }
 
     @Test
     void testPersonRepositoryParser() throws IOException {
+        RepositoryParser.preProcess();
+
         final RepositoryParser tp = new RepositoryParser();
-        tp.preProcess();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
         tp.process();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
 
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).get();
-        md.accept(new VoidVisitorAdapter<Void>() {
+        cu.findFirst(MethodDeclaration.class).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
             @Override
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
@@ -132,6 +130,7 @@ public class ITRepositoryParser {
                     assertEquals("SELECT * FROM person WHERE name LIKE ?1", rql.getQuery());
                 }
             }
-        }, null);
+        }, null));
+
     }
 }

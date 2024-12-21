@@ -256,9 +256,7 @@ public class SpringEvaluator extends Evaluator {
                     }
 
                     repository.executeQuery(repoMethod);
-                    for(TestGenerator gen : generators) {
-                        gen.setQuery(q);
-                    }
+                    DatabaseArgumentGenerator.setQuery(q);
                 }
                 else {
                     // todo do some fake work here
@@ -852,10 +850,6 @@ public class SpringEvaluator extends Evaluator {
             return new Variable(response);
         }
         return v;
-    }
-
-    public ArgumentGenerator getArgumentGenerator() {
-        return argumentGenerator;
     }
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {

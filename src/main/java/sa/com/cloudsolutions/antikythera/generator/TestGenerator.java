@@ -27,10 +27,6 @@ public abstract class TestGenerator {
 
     public abstract void setBranched(boolean branched);
 
-    public abstract void setQuery(RepositoryQuery query);
-
-    public abstract RepositoryQuery getQuery();
-
     public ArgumentGenerator getArgumentGenerator() {
         return argumentGenerator;
     }

@@ -31,6 +31,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassDependency;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
@@ -208,8 +209,9 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
-                evaluateMethod(md, new NullArgumentGenerator());
+//                evaluateMethod(md, new NullArgumentGenerator());
                 evaluateMethod(md, new DummyArgumentGenerator());
+                evaluateMethod(md, new DatabaseArgumentGenerator());
             }
         }
 

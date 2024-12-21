@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import com.github.javaparser.ast.CompilationUnit;
@@ -31,12 +32,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -79,10 +77,7 @@ public class SpringTestGenerator extends  TestGenerator {
      * tests for the same method.
      */
     Set<String> testMethodNames = new HashSet<>();
-    /**
-     * The last executed database query.
-     */
-    RepositoryQuery query;
+
     /**
      * The compilation unit that represents the tests being generated.
      * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
@@ -190,14 +185,6 @@ public class SpringTestGenerator extends  TestGenerator {
 
             request.setPath(getPath(annotation).replace("\"", ""));
 
-            if (state == ENLIGHTENED_STATE) {
-                try {
-                    replaceURIVariablesFromDb(md, request);
-                } catch (SQLException e) {
-                    logger.warn(e.getMessage());
-                }
-            }
-
             addQueryParams(makeGetCall, request, body);
         }
         VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
@@ -216,69 +203,17 @@ public class SpringTestGenerator extends  TestGenerator {
             body.addStatement("Map<String, String> queryParams = new HashMap<>();");
             for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
                 if (argumentGenerator != null) {
-                    Object v = argumentGenerator.getArguments().get(entry.getValue()).getValue();
+                    Variable v = argumentGenerator.getArguments().get(entry.getValue());
                     if (v != null) {
                         body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");",
-                                entry.getKey(), v));
+                                entry.getKey(), v.getValue()));
+                    }
+                    else {
+                        logger.warn("Could not get value for {}", entry.getValue());
                     }
                 }
             }
             getCall.addArgument(new NameExpr("queryParams"));
-        }
-    }
-
-
-    /**
-     * Replace PathVariable and RequestParam values with the values from the database.
-     *
-      We need to figure out if any of the path or request parameters are supposed to
-     * match the values from the database.
-     *
-     * If the last field is not null that means there is likely to be a query associated
-     * with those parameters.
-     *
-     * Mapping parameters works like this.
-     *    Request or path parameter becomes an argument to a method call.
-     *    The argument in the method call becomes a parameter for a placeholder
-     *    The placeholder may have been removed though!
-     */
-    private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
-        if (query != null && query.getSimplifiedResultSet() != null) {
-            ResultSet rs = query.getSimplifiedResultSet();
-            List<QueryMethodParameter> paramMap = query.getMethodParameters();
-            List<QueryMethodArgument> argsMap = query.getMethodArguments();
-            System.out.println(query.getSimplifiedStatement().toString());
-            if(rs.next()) {
-                for(int i = 0 ; i < paramMap.size() ; i++) {
-                    QueryMethodParameter param = paramMap.get(i);
-                    QueryMethodArgument arg = argsMap.get(i);
-
-                    if(param.getColumnName() != null) {
-                        String[] parts = param.getColumnName().split("\\.");
-                        String col = parts.length > 1 ? parts[1] : parts[0];
-
-                        logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col));
-
-                        // finally try to match it against the path and request variables
-                        for (Parameter p : md.getParameters()) {
-                            Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
-                            Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
-                            if (requestParam.isPresent()) {
-                                String name = AbstractCompiler.getRestParameterName(p);
-                                if (name.equals(arg.getArgument().toString())) {
-                                    request.getQueryParameters().put(name, rs.getObject(col).toString());
-                                }
-                            } else if (pathParam.isPresent()) {
-                                String name = AbstractCompiler.getRestParameterName(p);
-                                final String target = '{' + name + '}';
-                                if (name.equals(arg.getArgument().toString())) {
-                                    request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -621,16 +556,6 @@ public class SpringTestGenerator extends  TestGenerator {
     @Override
     public void setBranched(boolean branched) {
         this.branched = branched;
-    }
-
-    @Override
-    public void setQuery(RepositoryQuery query) {
-        this.query = query;
-    }
-
-    @Override
-    public RepositoryQuery getQuery() {
-        return null;
     }
 }
 

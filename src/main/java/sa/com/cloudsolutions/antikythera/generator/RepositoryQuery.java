@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.Type;
@@ -37,6 +36,7 @@ import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
@@ -46,6 +46,7 @@ import java.io.FileNotFoundException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -521,25 +522,35 @@ public class RepositoryQuery {
                 ine.setRightExpression(rightExpression);
             }
         } else if (expr instanceof ComparisonOperator compare) {
-            net.sf.jsqlparser.expression.Expression left = compare.getLeftExpression();
-            net.sf.jsqlparser.expression.Expression right = compare.getRightExpression();
-            if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
-
-                String name = RepositoryParser.camelToSnake(left.toString());
-                mapPlaceHolders(right, name);
-                if (col.getColumnName().equals("hospital_id")) {
-                    compare.setRightExpression(new LongValue("1"));
-                } else if (col.getColumnName().equals("hospital_group_id")) {
-                    compare.setRightExpression(new LongValue("1"));
-                } else  {
-                    compare.setLeftExpression(new StringValue("1"));
-                    compare.setRightExpression(new StringValue("1"));
-                }
-                remove(name, right);
-                return expr;
-            }
+            return simplifyCompare(expr, compare);
         }
         return expr;
+    }
+
+    private Expression simplifyCompare(Expression expr, ComparisonOperator compare) {
+        Expression left = compare.getLeftExpression();
+        Expression right = compare.getRightExpression();
+        if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
+            Optional<Map> params = Settings.getProperty("database.parameters", Map.class);
+            if (params.isPresent()) {
+                String name = RepositoryParser.camelToSnake(left.toString());
+                mapPlaceHolders(right, name);
+                for (Object param : params.get().entrySet()) {
+                    if (param instanceof Map.Entry<?,?> entry) {
+                        if (col.getColumnName().equals(entry.getKey().toString())) {
+                            compare.setRightExpression(new LongValue(entry.getValue().toString()));
+                            remove(name, right);
+                            return expr;
+                        }
+                    }
+                }
+            }
+            compare.setLeftExpression(new StringValue("1"));
+            compare.setRightExpression(new StringValue("1"));
+            remove(compare.getRightExpression().toString(), right);
+            return expr;
+        }
+        return null;
     }
 
 
