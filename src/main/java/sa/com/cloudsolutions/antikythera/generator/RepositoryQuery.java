@@ -314,86 +314,97 @@ public class RepositoryQuery {
         // from this we need to extract the dischargeNurseRequest
         String[] parts = a.toString().split("\\.");
         if (parts.length == 2) {
-            TypeWrapper other = null;
-            // the join may happen against any of the tables that we have encountered so far
-            // hence the need to loop through here.
-            for(TypeWrapper unit : units) {
-                String field = parts[1].split(" ")[0];
-                Optional<FieldDeclaration> x = unit.getType().getFieldByName(field);
-                if(x.isPresent()) {
-                    var member = x.get();
-                    String lhs = null;
-                    String rhs = null;
-
-                    // find if there is a join column annotation, that will tell us the column names
-                    // to map for the on clause.
-                    for (var ann : member.getAnnotations()) {
-                        if (ann.getNameAsString().equals("JoinColumn")) {
-                            if (ann.isNormalAnnotationExpr()) {
-                                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                                    if (pair.getNameAsString().equals("name")) {
-                                        lhs = RepositoryParser.camelToSnake(pair.getValue().toString());
-                                    }
-                                    if (pair.getNameAsString().equals("referencedColumnName")) {
-                                        rhs = RepositoryParser.camelToSnake(pair.getValue().toString());
-                                    }
-                                }
-                            } else {
-                                lhs = RepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
-                            }
-                            break;
-                        }
-                    }
-
-                    other = RepositoryParser.findEntity(member.getElementType());
-
-                    String tableName = RepositoryParser.findTableName(other);
-                    if (tableName == null || other == null) {
-                        throw new AntikytheraException("Could not find table name for " +member.getElementType());
-                    }
-                    if(RepositoryParser.isOracle()) {
-                        tableName = tableName.replace("\"","");
-                    }
-
-                    var f = j.getFromItem();
-                    if (f instanceof Table) {
-                        Table t = new Table(tableName);
-                        t.setAlias(f.getAlias());
-                        j.setFromItem(t);
-
-                    }
-                    if(lhs == null || rhs == null) {
-                        // lets roll with an implicit join for now
-                        // todo fix this by figuring out the join column from other annotations
-                        for(var column : other.getType().getFields()) {
-                            for(var ann : column.getAnnotations()) {
-                                if(ann.getNameAsString().equals("Id")) {
-                                    lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
-                                    rhs = lhs;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if(lhs != null && rhs != null) {
-                        if (RepositoryParser.isOracle()) {
-                            lhs = lhs.replace("\"", "");
-                            rhs = rhs.replace("\"", "");
-                        }
-                        EqualsTo eq = new EqualsTo();
-                        eq.setLeftExpression(new Column(parts[0] + "." + lhs));
-                        eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
-                        j.getOnExpressions().add(eq);
-                    }
-
-                }
-            }
+            TypeWrapper other = processJoins(j, units, parts);
             // if we have discovered a new entity add it to our collection for looking up
             // join fields in the next one
             if(other != null) {
                 units.add(other);
             }
         }
+    }
+
+    private static TypeWrapper processJoins(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
+        TypeWrapper other = null;
+        // the join may happen against any of the tables that we have encountered so far
+        // hence the need to loop through here.
+        for(TypeWrapper unit : units) {
+            String field = parts[1].split(" ")[0];
+            Optional<FieldDeclaration> x = unit.getType().getFieldByName(field);
+            if(x.isPresent()) {
+                var member = x.get();
+                String lhs = null;
+                String rhs = null;
+
+                // find if there is a join column annotation, that will tell us the column names
+                // to map for the on clause.
+
+                for (var ann : member.getAnnotations()) {
+                    if (ann.getNameAsString().equals("JoinColumn")) {
+                        if (ann.isNormalAnnotationExpr()) {
+                            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                                if (pair.getNameAsString().equals("name")) {
+                                    lhs = RepositoryParser.camelToSnake(pair.getValue().toString());
+                                }
+                                if (pair.getNameAsString().equals("referencedColumnName")) {
+                                    rhs = RepositoryParser.camelToSnake(pair.getValue().toString());
+                                }
+                            }
+                        } else {
+                            lhs = RepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
+                        }
+                        break;
+                    }
+                }
+
+                other = RepositoryParser.findEntity(member.getElementType());
+
+                String tableName = RepositoryParser.findTableName(other);
+                if (tableName == null || other == null) {
+                    throw new AntikytheraException("Could not find table name for " +member.getElementType());
+                }
+                if(RepositoryParser.isOracle()) {
+                    tableName = tableName.replace("\"","");
+                }
+
+                var f = j.getFromItem();
+                if (f instanceof Table) {
+                    Table t = new Table(tableName);
+                    t.setAlias(f.getAlias());
+                    j.setFromItem(t);
+
+                }
+                if(lhs == null || rhs == null) {
+                    rhs = lhs = implicitJoin(other, lhs);
+                }
+                if(lhs != null && rhs != null) {
+                    if (RepositoryParser.isOracle()) {
+                        lhs = lhs.replace("\"", "");
+                        rhs = rhs.replace("\"", "");
+                    }
+                    EqualsTo eq = new EqualsTo();
+                    eq.setLeftExpression(new Column(parts[0] + "." + lhs));
+                    eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
+                    j.getOnExpressions().add(eq);
+                }
+
+            }
+        }
+        return other;
+    }
+
+    private static String implicitJoin(TypeWrapper other, String lhs) {
+        // lets roll with an implicit join for now
+        // todo fix this by figuring out the join column from other annotations
+        for(var column : other.getType().getFields()) {
+            for(var ann : column.getAnnotations()) {
+                if(ann.getNameAsString().equals("Id")) {
+                    lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
+
+                    break;
+                }
+            }
+        }
+        return lhs;
     }
 
     public void setEntityType(Type entityType) {
