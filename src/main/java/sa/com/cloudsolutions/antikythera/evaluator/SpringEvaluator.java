@@ -116,8 +116,8 @@ public class SpringEvaluator extends Evaluator {
      * of variables so that different branches in conditional statements are taken.
      *
      * @param md The MethodDeclaration being worked on
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @throws AntikytheraException if evaluation fails
+     * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {

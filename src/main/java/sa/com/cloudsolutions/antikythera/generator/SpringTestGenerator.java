@@ -165,7 +165,7 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
     private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call, ControllerResponse response)  {
-        MethodDeclaration testMethod = buildTestMethod(md);
+        final MethodDeclaration testMethod = buildTestMethod(md);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
         BlockStmt body = testMethod.getBody().get();

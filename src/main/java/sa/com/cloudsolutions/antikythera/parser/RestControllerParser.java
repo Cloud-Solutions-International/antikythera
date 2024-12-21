@@ -209,7 +209,7 @@ public class RestControllerParser extends ClassProcessor {
             evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
-//                evaluateMethod(md, new NullArgumentGenerator());
+                evaluateMethod(md, new NullArgumentGenerator());
                 evaluateMethod(md, new DummyArgumentGenerator());
                 evaluateMethod(md, new DatabaseArgumentGenerator());
             }
@@ -223,7 +223,7 @@ public class RestControllerParser extends ClassProcessor {
             try {
                 evaluator.visit(md);
             } catch (AntikytheraException | ReflectiveOperationException e) {
-                if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                if (logger.equals(Settings.getProperty("dependencies.on_error"))) {
                     logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
                 } else {
                     throw new GeneratorException(e);

@@ -50,7 +50,7 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
      *    The placeholder may have been removed though!
      */
     @Override
-    public void generateArgument(Parameter param) throws ReflectiveOperationException {
+    public void generateArgument(Parameter param) {
         if (prepared) {
             Variable v = mockParameter(param.getNameAsString());
             arguments.put(param.getNameAsString(), v);
