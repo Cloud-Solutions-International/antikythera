@@ -7,18 +7,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.ArrayAccessExpr;
-import com.github.javaparser.ast.expr.ArrayInitializerExpr;
-import com.github.javaparser.ast.expr.ConditionalExpr;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.MemberValuePair;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.MethodReferenceExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -249,27 +238,37 @@ public class Resolver {
     }
 
     public static void resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
-        FieldAccessExpr fae = expr.asFieldAccessExpr();
+        final FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
         if (scope.isNameExpr()) {
-            resolveScopedNameExpression(scope, fae, node, null).ifPresent(types::add);
-        }
-        else {
-            if (scope.isFieldAccessExpr()) {
-                resolveFieldAccess(node, scope, types);
-            }
-            else {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                    if (imp.isExternal()) {
-                        getExternalType(fae, imp).ifPresent(types::add);
-                    }
+            resolveScopedNameExpression(scope, fae, node, DepSolver.getNames()).ifPresent(t -> {
+                ImportWrapper wrapper = AbstractCompiler.findImport(node.getCompilationUnit(), t.asString());
+                if (wrapper != null && wrapper.getType() != null) {
+                    SimpleName name = fae.getName();
+                    wrapper.getType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(name.asString())).ifPresent(f -> {
+                        try {
+                            Graph.createGraphNode(f);
+                        } catch (AntikytheraException e) {
+                            throw new DepsolverException(e);
+                        }
+                    });
+                }
+                types.add(t);
+            });
+        } else if (scope.isFieldAccessExpr()) {
+            resolveFieldAccess(node, scope, types);
+
+
+        } else {
+            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+            if (imp != null) {
+                node.getDestination().addImport(imp.getImport());
+                if (imp.isExternal()) {
+                    getExternalType(fae, imp).ifPresent(types::add);
                 }
             }
         }
     }
-
 
     static GraphNode chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
         if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce) {
@@ -518,8 +517,8 @@ public class Resolver {
                 } else {
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
                     if (imp != null) {
+                        node.getDestination().addImport(imp.getImport());
                         if (imp.getMethodDeclaration() != null) {
-                            node.getDestination().addImport(imp.getImport());
                             Graph.createGraphNode(imp.getMethodDeclaration());
                         }
                     }
