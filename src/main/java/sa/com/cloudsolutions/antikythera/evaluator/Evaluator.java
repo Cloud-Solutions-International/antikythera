@@ -14,8 +14,6 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
-import org.aspectj.weaver.ast.Call;
-import org.checkerframework.checker.units.qual.N;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -105,7 +103,7 @@ public class Evaluator {
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
-    private final Deque<TryStmt> catching = new LinkedList<>();
+    protected final Deque<TryStmt> catching = new LinkedList<>();
 
     static {
         try {
@@ -932,37 +930,33 @@ public class Evaluator {
     }
 
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        try {
-            if (v != null) {
-                NodeList<Expression> arguments = methodCall.getArguments();
-                if(arguments.isNonEmpty())
-                {
-                    Expression argument = arguments.get(0);
-                    if(argument.isMethodReferenceExpr()) {
-                        return evaluateMethodReference(v, arguments);
-                    }
-                    else if (argument.isLambdaExpr()) {
-                        return evaluateLambda(v, arguments);
-                    }
+        if (v != null) {
+            NodeList<Expression> arguments = methodCall.getArguments();
+            if(arguments.isNonEmpty())
+            {
+                Expression argument = arguments.get(0);
+                if(argument.isMethodReferenceExpr()) {
+                    return evaluateMethodReference(v, arguments);
                 }
-                ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
-                if (v.getValue() instanceof Evaluator eval) {
-                    for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
-                        /*
-                         * Push method arguments
-                         */
-                        AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
-                    }
-                    return eval.executeMethod(methodCall);
+                else if (argument.isLambdaExpr()) {
+                    return evaluateLambda(v, arguments);
                 }
-
-                return reflectiveMethodCall(v, reflectionArguments);
-            } else {
-                return executeMethod(methodCall);
             }
-        } catch (ReflectiveOperationException ex) {
-            throw new EvaluatorException("Error evaluating method call", ex);
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+
+            if (v.getValue() instanceof Evaluator eval) {
+                for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
+                    /*
+                     * Push method arguments
+                     */
+                    AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
+                }
+                return eval.executeMethod(methodCall);
+            }
+
+            return reflectiveMethodCall(v, reflectionArguments);
+        } else {
+            return executeMethod(methodCall);
         }
     }
 

@@ -7,6 +7,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
@@ -127,18 +128,22 @@ public class SpringEvaluator extends Evaluator {
             }
         });
 
-        NodeList<Statement> statements = md.getBody().get().getStatements();
-        for (int i = 0; i < statements.size(); i++) {
-            Statement st = statements.get(i);
-            if (!lines.containsKey(st.hashCode())) {
-                mockURIVariables(md);
-                executeMethod(md);
-                if (returnFrom != null) {
-                    // rewind!
+        try {
+            NodeList<Statement> statements = md.getBody().get().getStatements();
+            for (int i = 0; i < statements.size(); i++) {
+                Statement st = statements.get(i);
+                if (!lines.containsKey(st.hashCode())) {
+                    mockURIVariables(md);
+                    executeMethod(md);
+                    if (returnFrom != null) {
+                        // rewind!
 
-                    i = 0;
+                        i = 0;
+                    }
                 }
             }
+        } catch (AUTException aex) {
+
         }
     }
 
@@ -182,10 +187,20 @@ public class SpringEvaluator extends Evaluator {
                     break;
                 }
             }
-        } catch (EvaluatorException|ReflectiveOperationException ex) {
-            throw ex;
         } catch (Exception e) {
             handleApplicationException(e);
+        }
+    }
+
+    @Override
+    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+        if (catching.isEmpty()) {
+            testForInternalServerError(null,
+                    new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
+            throw new AUTException(e.getMessage());
+        }
+        else {
+            super.handleApplicationException(e);
         }
     }
 
@@ -462,19 +477,23 @@ public class SpringEvaluator extends Evaluator {
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
-                ControllerResponse controllerResponse = new ControllerResponse();
-                if (eex.getError() != 0 && onTest) {
-                    Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
-                    controllerResponse.setResponse(r);
-                    createTests(controllerResponse);
-                    returnFrom = methodCall;
-                }
-                else {
-                    throw eex;
-                }
+                testForInternalServerError(methodCall, eex);
             }
         }
         return null;
+    }
+
+    private void testForInternalServerError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
+        ControllerResponse controllerResponse = new ControllerResponse();
+        if (eex.getError() != 0 && onTest) {
+            Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
+            controllerResponse.setResponse(r);
+            createTests(controllerResponse);
+            returnFrom = methodCall;
+        }
+        else {
+            throw eex;
+        }
     }
 
     @Override

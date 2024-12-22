@@ -203,7 +203,7 @@ public class SpringTestGenerator extends  TestGenerator {
             body.addStatement("Map<String, String> queryParams = new HashMap<>();");
             for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
                 if (argumentGenerator != null) {
-                    Variable v = argumentGenerator.getArguments().get(entry.getValue());
+                    Variable v = argumentGenerator.getArguments().get(entry.getKey());
                     if (v != null) {
                         body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");",
                                 entry.getKey(), v.getValue()));
