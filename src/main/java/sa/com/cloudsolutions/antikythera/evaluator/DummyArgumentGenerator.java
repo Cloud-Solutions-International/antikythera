@@ -62,7 +62,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             case "Boolean", "boolean" -> false;
             case "float", "Float", "double", "Double" -> 0.0;
             case "Integer", "int" -> 0;
-            case "Long", "long" -> 0L;
+            case "Long", "long" -> -100L;
             case "String" -> "Ibuprofen";
             default -> "0";
         });
