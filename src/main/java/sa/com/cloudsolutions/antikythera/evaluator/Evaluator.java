@@ -177,11 +177,7 @@ public class Evaluator {
             /*
              * Binary expressions can also be difficult
              */
-            BinaryExpr binaryExpr = expr.asBinaryExpr();
-            Expression left = binaryExpr.getLeft();
-            Expression right = binaryExpr.getRight();
-
-            return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
+            return evaluateBinaryExpression(expr);
         } else if (expr.isUnaryExpr()) {
             return  evaluateUnaryExpression(expr);
         } else if (expr.isMethodCallExpr()) {
@@ -213,8 +209,28 @@ public class Evaluator {
             return evaluateExpression(expr.asEnclosedExpr().getInner());
         } else if(expr.isCastExpr()) {
             return evaluateExpression(expr.asCastExpr().getExpression());
+        } else if (expr.isConditionalExpr()) {
+            return evaluateConditionalExpression(expr.asConditionalExpr());
         }
         return null;
+    }
+
+    private Variable evaluateBinaryExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+        BinaryExpr binaryExpr = expr.asBinaryExpr();
+        Expression left = binaryExpr.getLeft();
+        Expression right = binaryExpr.getRight();
+
+        return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
+    }
+
+    private Variable evaluateConditionalExpression(ConditionalExpr conditionalExpr) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = evaluateBinaryExpression(conditionalExpr.getCondition());
+        if (v != null && v.getValue().equals(Boolean.TRUE)) {
+            return evaluateExpression(conditionalExpr.getThenExpr());
+        }
+        else {
+            return evaluateExpression(conditionalExpr.getElseExpr());
+        }
     }
 
     /**

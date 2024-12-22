@@ -73,7 +73,7 @@ public class SpringEvaluator extends Evaluator {
     /**
      * The lines of code already looked at in the method.
      */
-    private static HashMap<Integer, LineOfCode> lines = new HashMap<>();
+    private static final HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
     /**
      * Sort of a stack that keeps track of the conditional code blocks.
@@ -745,6 +745,9 @@ public class SpringEvaluator extends Evaluator {
                                 Variable row = createObject(stmt, v, objectCreationExpr);
                                 if(resultToEntity(row, rs)) {
                                     ((Collection) variable.getValue()).add(row);
+                                }
+                                else {
+                                    break;
                                 }
                             }
                         }

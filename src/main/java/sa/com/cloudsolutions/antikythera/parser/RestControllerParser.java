@@ -224,7 +224,7 @@ public class RestControllerParser extends ClassProcessor {
             try {
                 evaluator.visit(md);
             } catch (AntikytheraException | ReflectiveOperationException e) {
-                if (logger.equals(Settings.getProperty("dependencies.on_error"))) {
+                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
                     logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
                 } else {
                     throw new GeneratorException(e);

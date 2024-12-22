@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Parses JPARespository subclasses to identify the queries that they execute.
@@ -295,27 +296,11 @@ public class RepositoryParser extends ClassProcessor {
                 int argumentCount = countPlaceholders(sql);
 
                 if (argumentCount != 0) {
-                    // we will run the query the simplified query as well.
-                    Select simplified = (Select) rql.getSimplifiedStatement();
-                    String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
-                    PreparedStatement prep = conn.prepareStatement(simplifiedSql);
-                    for (int i = 0; i < argumentCount ; i++) {
-                        QueryMethodArgument arg = rql.getMethodArguments().get(i);
-                        QueryMethodParameter p = rql.getMethodParameters().get(i);
-                        if(!p.isRemoved()) {
-                            bindParameters(arg, prep, i);
-                        }
-                    }
-
-                    if (prep.execute()) {
-                        happyCache.put(method, prep.getResultSet());
-                        rql.setSimplifedResultSet(prep.getResultSet());
-                    }
+                    executeSimplifiedQuery(rql, method, argumentCount);
                 }
 
                 PreparedStatement prep = conn.prepareStatement(sql);
-
-                for (int i = 0; i < argumentCount ; i++) {
+                for (int i = 0; i < argumentCount; i++) {
                     QueryMethodArgument arg = rql.getMethodArguments().get(i);
                     bindParameters(arg, prep, i);
                 }
@@ -323,12 +308,32 @@ public class RepositoryParser extends ClassProcessor {
                 if (prep.execute()) {
                     return prep.getResultSet();
                 }
+
             }
 
         } catch (SQLException e) {
             logger.error(rql.getQuery());
         }
         return null;
+    }
+
+    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException {
+        Select simplified = (Select) rql.getSimplifiedStatement();
+        String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
+        PreparedStatement prep = conn.prepareStatement(simplifiedSql);
+        for (int i = 0; i < argumentCount; i++) {
+            QueryMethodArgument arg = rql.getMethodArguments().get(i);
+            QueryMethodParameter p = rql.getMethodParameters().get(i);
+            if (!p.isRemoved()) {
+                bindParameters(arg, prep, i);
+            }
+        }
+
+        if (prep.execute()) {
+            happyCache.put(method, prep.getResultSet());
+            rql.setSimplifedResultSet(prep.getResultSet());
+        }
+
     }
 
     private static void bindParameters(QueryMethodArgument arg, PreparedStatement prep, int i) throws SQLException {
@@ -343,6 +348,17 @@ public class RepositoryParser extends ClassProcessor {
                 case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
                 case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
                 case "java.lang.Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+                default -> {
+                    if (clazz.getName().contains("List")) {
+                        List<?> list = (List<?>) arg.getVariable().getValue();
+                        String arrayString = list.stream()
+                                .map(Object::toString)
+                                .collect(Collectors.joining(","));
+                        prep.setString(i + 1, arrayString);
+                    } else {
+                        prep.setObject(i + 1, arg.getVariable().getValue());
+                    }
+                }
             }
         }
     }

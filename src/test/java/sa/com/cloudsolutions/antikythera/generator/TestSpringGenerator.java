@@ -149,6 +149,7 @@ class TestSpringGenerator {
 
         SpringTestGenerator generator = new SpringTestGenerator();
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        generator.setArgumentGenerator(argumentGenerator);
         argumentGenerator.generateArgument(param);
 
         generator.handleURIVariables(md, request);
