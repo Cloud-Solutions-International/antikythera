@@ -41,8 +41,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
-import java.io.FileNotFoundException;
-
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,7 +65,13 @@ public class RepositoryQuery {
      * The result set from the last execution of this query if any
      */
     private ResultSet resultSet;
-
+    /**
+     * The result set from running the query with only predefined parameters.
+     * When the default query is being executed the presence of many filters will typically cause
+     * the result set to be empty. You are more likely to get a non-empty result when you have a
+     * small number of filters. This simplifiedResultSet represents that.
+     */
+    private ResultSet simplifiedResultSet;
     /**
      * This is the list of parameters that are defined in the function signature
      */
@@ -82,6 +86,9 @@ public class RepositoryQuery {
      */
     MethodDeclaration methodDeclaration;
 
+    /**
+     * Running the same query repeatedly will slow things down and be wastefull, lets cache it.
+     */
     Variable cachedResult;
     /**
      * The type of the entity that is being queried.
@@ -104,15 +111,11 @@ public class RepositoryQuery {
      * The original query as it was passed to the repository method.
      */
     private String originalQuery;
-    private ResultSet simplifiedResultSet;
+
 
     public RepositoryQuery() {
         methodParameters = new ArrayList<>();
         methodArguments = new ArrayList<>();
-    }
-
-    public boolean isNative() {
-        return isNative;
     }
 
     public String getQuery() {
@@ -130,13 +133,10 @@ public class RepositoryQuery {
         return cachedResult;
     }
 
-    public void setCachedResult(Variable cachedResult) {
-        this.cachedResult = cachedResult;
-    }
-
     /**
-     * Mark that the column was actually not used in the query filters.
-     * @param column
+     * Mark that the column was actually not used in the query filters of the simplified query.
+     * @param column the column name that was removed from the filters
+     * @param right the right hand side of the original expression
      */
     public void remove(String column, Expression right) {
         boolean matched = false;
@@ -160,10 +160,18 @@ public class RepositoryQuery {
         }
     }
 
+    /**
+     * Get the result set for the simplified query. This will often be non-empty.
+     * @return the result set for the simplified query
+     */
     public ResultSet getSimplifiedResultSet() {
         return simplifiedResultSet;
     }
 
+    /**
+     * Get the result set for the un tampered query
+     * @return a JDBC result set which is likely to be empty in most situations.
+     */
     public ResultSet getResultSet() {
         return resultSet;
     }
@@ -227,7 +235,7 @@ public class RepositoryQuery {
             PlainSelect select = sel.getPlainSelect();
 
             List<SelectItem<?>> items = select.getSelectItems();
-            if(items.size() == 1 && items.get(0).toString().length() == 1) {
+            if(items.size() == 1 && items.getFirst().toString().length() == 1) {
                 // This is a select * query but because it's an HQL query it appears as SELECT t
                 // replace select t with select *
                 items.set(0, SelectItem.from(new AllColumns()));
@@ -250,8 +258,8 @@ public class RepositoryQuery {
 
             if (select.getOrderByElements() != null) {
                 List<OrderByElement> orderBy = select.getOrderByElements();
-                for (int i = 0; i < orderBy.size(); i++) {
-                    orderBy.get(i).setExpression(RepositoryQuery.convertExpressionToSnakeCase(orderBy.get(i).getExpression()));
+                for (OrderByElement orderByElement : orderBy) {
+                    orderByElement.setExpression(RepositoryQuery.convertExpressionToSnakeCase(orderByElement.getExpression()));
                 }
             }
 
@@ -297,8 +305,7 @@ public class RepositoryQuery {
 
         List<Join> joins = select.getJoins();
         if(joins != null) {
-            for (int i = 0 ; i < joins.size() ; i++) {
-                Join j = joins.get(i);
+            for (Join j : joins) {
                 if (j.getRightItem() instanceof ParenthesedSelect ps) {
                     convertFieldsToSnakeCase(ps.getSelectBody(), entity);
                 } else {
@@ -314,7 +321,7 @@ public class RepositoryQuery {
         // from this we need to extract the dischargeNurseRequest
         String[] parts = a.toString().split("\\.");
         if (parts.length == 2) {
-            TypeWrapper other = processJoins(j, units, parts);
+            TypeWrapper other = processJoin(j, units, parts);
             // if we have discovered a new entity add it to our collection for looking up
             // join fields in the next one
             if(other != null) {
@@ -323,7 +330,7 @@ public class RepositoryQuery {
         }
     }
 
-    private static TypeWrapper processJoins(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
+    private static TypeWrapper processJoin(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
         TypeWrapper other = null;
         // the join may happen against any of the tables that we have encountered so far
         // hence the need to loop through here.
@@ -486,9 +493,6 @@ public class RepositoryQuery {
         return sql;
     }
 
-    public static String removeNumberedParams(String sql) {
-        return sql.replaceAll("\\?\\d+", "?");
-    }
     public Statement getStatement() {
         return statement;
     }
@@ -505,7 +509,7 @@ public class RepositoryQuery {
      * will give a non-empty result. That's one of the key challenges of API and Integration
      * testing.
      *
-     * If we are able to run the query with a very limited where clause or a non existent where
+     * If we are able to run the query with a very limited where clause or a non-existent where
      * clause we can then examine the result to figure out what values can actually be used to
      * @param expr the expression to be modified
      *
@@ -547,12 +551,11 @@ public class RepositoryQuery {
                 String name = RepositoryParser.camelToSnake(left.toString());
                 mapPlaceHolders(right, name);
                 for (Object param : params.get().entrySet()) {
-                    if (param instanceof Map.Entry<?,?> entry) {
-                        if (col.getColumnName().equals(entry.getKey().toString())) {
-                            compare.setRightExpression(new LongValue(entry.getValue().toString()));
-                            remove(name, right);
-                            return expr;
-                        }
+                    if (param instanceof Map.Entry<?,?> entry && entry.getKey() instanceof String
+                            && col.getColumnName().equals(entry.getKey().toString())) {
+                        compare.setRightExpression(new LongValue(entry.getValue().toString()));
+                        remove(name, right);
+                        return expr;
                     }
                 }
             }

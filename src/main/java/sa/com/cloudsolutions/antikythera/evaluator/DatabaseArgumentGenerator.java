@@ -76,8 +76,4 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
             logger.error(e.getMessage());
         }
     }
-
-    public static RepositoryQuery getQuery() {
-        return query;
-    }
 }

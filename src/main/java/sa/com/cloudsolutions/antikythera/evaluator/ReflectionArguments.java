@@ -1,9 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 public class ReflectionArguments {
-    private String methodName;
+    private final String methodName;
     private Object[] args;
-    private Class<?>[] paramTypes;
+    private final Class<?>[] paramTypes;
 
     public ReflectionArguments(String methodName, Object[] args, Class<?>[] paramTypes) {
         this.methodName = methodName;
@@ -11,16 +11,8 @@ public class ReflectionArguments {
         this.paramTypes = paramTypes;
     }
 
-    public ReflectionArguments() {
-
-    }
-
     public String getMethodName() {
         return methodName;
-    }
-
-    public void setMethodName(String methodName) {
-        this.methodName = methodName;
     }
 
     public Object[] getArgs() {
@@ -33,9 +25,5 @@ public class ReflectionArguments {
 
     public Class<?>[] getParamTypes() {
         return paramTypes;
-    }
-
-    public void setParamTypes(Class<?>[] paramTypes) {
-        this.paramTypes = paramTypes;
     }
 }

@@ -8,7 +8,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -192,7 +191,7 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Executes a single statement
-     * OVerrides the superclass method to keep track of the lines of code that have been
+     * Overrides the superclass method to keep track of the lines of code that have been
      * executed. While the basic Evaluator class does not run the same code over and over again,
      * this class does!
      * @param stmt the statement to execute
@@ -300,28 +299,24 @@ public class SpringEvaluator extends Evaluator {
         Type t = variable.getType().asClassOrInterfaceType();
         String className = t.resolve().describe();
 
-        if (!className.startsWith("java.")) {
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
-            if (cu != null) {
-                for (var typeDecl : cu.getTypes()) {
-                    if (typeDecl.isClassOrInterfaceDeclaration()) {
-                        ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
-                        if (cdecl.getNameAsString().equals(shortName)) {
-                            for (var ext : cdecl.getExtendedTypes()) {
-                                if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
-                                    /*
-                                     * We have found a repository. Now we need to process it. Afterwards
-                                     * it will be added to the repositories map, to be identified by the
-                                     * field name.
-                                     */
-                                    RepositoryParser parser = new RepositoryParser();
-                                    parser.compile(AbstractCompiler.classToPath(className));
-                                    parser.process();
-                                    repositories.put(variable.getNameAsString(), parser);
-                                    break;
-                                }
-                            }
-                        }
+
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
+        if (cu != null) {
+            var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
+            if (typeDecl != null && typeDecl.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+                for (var ext : cdecl.getExtendedTypes()) {
+                    if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                        /*
+                         * We have found a repository. Now we need to process it. Afterward
+                         * it will be added to the repositories map, to be identified by the
+                         * field name.
+                         */
+                        RepositoryParser parser = new RepositoryParser();
+                        parser.compile(AbstractCompiler.classToPath(className));
+                        parser.process();
+                        repositories.put(variable.getNameAsString(), parser);
+                        break;
                     }
                 }
             }
@@ -572,7 +567,7 @@ public class SpringEvaluator extends Evaluator {
                                  * The only other possibility is static access on a class
                                  */
                                 try {
-                                    Class<?> clazz = Class.forName(fullname);
+                                    Class.forName(fullname);
 
                                 } catch (ReflectiveOperationException e) {
                                     /*
@@ -783,8 +778,8 @@ public class SpringEvaluator extends Evaluator {
                 Map<String, Variable> fields = evaluator.getFields();
 
                 for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-                    for (VariableDeclarator var : field.getVariables()) {
-                        String fieldName = var.getNameAsString();
+                    for (VariableDeclarator fieldVar : field.getVariables()) {
+                        String fieldName = fieldVar.getNameAsString();
                         try {
                             if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
                                 Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));

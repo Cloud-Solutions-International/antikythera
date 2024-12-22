@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
+import javax.swing.text.html.Option;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -337,8 +338,7 @@ public class RepositoryParser extends ClassProcessor {
 
         }
         else {
-            String name = clazz.getName();
-            switch (name) {
+            switch (clazz.getName()) {
                 case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
                 case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
                 case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
@@ -349,8 +349,8 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Oracle has wierd ideas about boolean
-     * @param sql
-     * @return
+     * @param sql the sql statement
+     * @return the sql statement modified so that oracle can understand it.
      */
     private static String trueFalseCheck(String sql) {
         if(dialect.equals(ORACLE)) {
@@ -480,33 +480,29 @@ public class RepositoryParser extends ClassProcessor {
             super.visit(n, arg);
             String query = null;
             boolean nt = false;
+            AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
 
-            for (var ann : n.getAnnotations()) {
-                if (ann.getNameAsString().equals("Query")) {
-                    if (ann.isSingleMemberAnnotationExpr()) {
-                        try {
-                            Evaluator eval = new Evaluator(className);
-                            Variable v = eval.evaluateExpression(
-                                    ann.asSingleMemberAnnotationExpr().getMemberValue()
-                            );
-                            query = v.getValue().toString();
-                        } catch (AntikytheraException|ReflectiveOperationException e) {
-                            throw new RuntimeException(e);
-                        }
-                    } else if (ann.isNormalAnnotationExpr()) {
+            if (ann != null && ann.isSingleMemberAnnotationExpr()) {
+                try {
+                    Evaluator eval = new Evaluator(className);
+                    Variable v = eval.evaluateExpression(
+                            ann.asSingleMemberAnnotationExpr().getMemberValue()
+                    );
+                    query = v.getValue().toString();
+                } catch (AntikytheraException|ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            } else if (ann != null && ann.isNormalAnnotationExpr()) {
 
-                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
-                                nt = true;
-                            }
-                        }
-                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("value")) {
-                                query = pair.getValue().toString();
-                            }
-                        }
+                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
+                        nt = true;
                     }
-                    break;
+                }
+                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("value")) {
+                        query = pair.getValue().toString();
+                    }
                 }
             }
 
@@ -520,9 +516,9 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Build a repository query object
-     * @param query
-     * @param isNative
-     * @return
+     * @param query the query
+     * @param isNative will be true if an annotation says a native query
+     * @return a repository query instance.
      */
     RepositoryQuery queryBuilder(String query, boolean isNative, MethodDeclaration md) {
         RepositoryQuery rql = new RepositoryQuery();

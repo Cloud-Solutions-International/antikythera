@@ -4,6 +4,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -363,13 +364,11 @@ public class RestControllerParser extends ClassProcessor {
         private void identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null && from != null) {
-                if (expression.isObjectCreationExpr()) {
-                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
-                            solveTypeDependencies(from, typeArg);
-                        }
+            if (expression != null && from != null && expression.isObjectCreationExpr()) {
+                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                    for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+                        solveTypeDependencies(from, typeArg);
                     }
                 }
             }
@@ -383,13 +382,16 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path from the RequestMapping Annotation or an empty string
      */
     private String getCommonPath() {
-        for (var classAnnotation : getPublicType(cu).getAnnotations()) {
-            if (classAnnotation.getName().asString().equals("RequestMapping")) {
+        TypeDeclaration<?> decl =  getPublicType(cu);
+        if (decl != null) {
+            Optional<AnnotationExpr> ann = decl.getAnnotationByName("RequestMapping");
+            if (ann.isPresent()) {
+                AnnotationExpr classAnnotation = ann.get();
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();
                 } else {
                     var memberValue = classAnnotation.asSingleMemberAnnotationExpr().getMemberValue();
-                    if(memberValue.isArrayInitializerExpr()) {
+                    if (memberValue.isArrayInitializerExpr()) {
                         return memberValue.asArrayInitializerExpr().getValues().get(0).toString();
                     }
                     return classAnnotation.asSingleMemberAnnotationExpr().getMemberValue().toString();
