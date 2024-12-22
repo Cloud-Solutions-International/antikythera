@@ -231,20 +231,21 @@ public class SpringTestGenerator extends  TestGenerator {
             return blockStmt;
         });
 
-        if (resp.getBody() == null || resp.getBody().getValue() == null) {
-            MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
-            as.addArgument("response.getBody().asString().isEmpty()");
-            body.addStatement(new ExpressionStmt(as));
-        }
-        else {
-            Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-            VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-            MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-            variableDeclarator.setInitializer(methodCallExpr);
-            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-            ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-            body.addStatement(expressionStmt);
+        if (resp.getBody() != null) {
+            if (resp.getBody().getValue() != null) {
+                Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
+                variableDeclarator.setInitializer(methodCallExpr);
+                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+                body.addStatement(expressionStmt);
+            } else {
+                MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
+                as.addArgument("response.getBody().asString().isEmpty()");
+                body.addStatement(new ExpressionStmt(as));
+            }
         }
         addHttpStatusCheck(body, resp.getStatusCode());
     }
