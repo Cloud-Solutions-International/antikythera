@@ -177,7 +177,6 @@ public class RepositoryParser extends ClassProcessor {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
                 boolean found = false;
-
                 for(var parent : cls.getExtendedTypes()) {
                     if (parent.toString().startsWith(JPA_REPOSITORY)) {
                         found = true;

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
 import java.io.File;
@@ -39,35 +40,38 @@ public class ITRepositoryParser {
         assertNotNull(cu);
 
         cu.findFirst(MethodDeclaration.class,
-                md1 -> md1.getNameAsString().equals("queries2")).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
-                    @Override
-                    public void visit(MethodCallExpr n, Void arg) {
-                        super.visit(n, arg);
-                        MethodDeclaration md = tp.findMethodDeclaration(n);
-                        assertNotNull(md);
-                        RepositoryQuery rql = tp.get(md);
-                        assertNotNull(rql);
+            md1 -> md1.getNameAsString().equals("queries2")).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
+                @Override
+                public void visit(MethodCallExpr n, Void arg) {
+                    super.visit(n, arg);
+                    MethodDeclaration md = tp.findMethodDeclaration(n);
+                    assertNotNull(md);
+                    RepositoryQuery rql = tp.get(md);
+                    assertNotNull(rql);
 
-                        String sql = rql.getOriginalQuery();
-                        assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
-                        assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
+                    String sql = rql.getOriginalQuery();
+                    assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
+                    assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
 
-                        try {
-                            Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
-                            assertNotNull(stmt);
-                            assertEquals(
-                                    "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
-                                    stmt.toString()
-                            );
-                            Statement ex = rql.getSimplifiedStatement();
-                            assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
-                                    ex.toString());
-                        } catch (JSQLParserException e) {
-                            throw new RuntimeException(e);
-                        }
-
+                    try {
+                        Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
+                        assertNotNull(stmt);
+                        assertEquals(
+                                "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
+                                stmt.toString()
+                        );
+                        rql.buildSimplifiedQuery();
+                        Statement ex = rql.getSimplifiedStatement();
+                        assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
+                                ex.toString());
+                    } catch (JSQLParserException e) {
+                        throw new RuntimeException(e);
+                    } catch (AntikytheraException e) {
+                        throw new RuntimeException(e);
                     }
-                }, null));
+
+                }
+            }, null));
     }
 
     @Test

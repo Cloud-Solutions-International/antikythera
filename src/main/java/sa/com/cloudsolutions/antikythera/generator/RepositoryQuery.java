@@ -427,19 +427,22 @@ public class RepositoryQuery {
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
-            this.simplifiedStatement = CCJSqlParserUtil.parse(query);
-
             TypeWrapper entity = RepositoryParser.findEntity(entityType);
-            convertFieldsToSnakeCase(simplifiedStatement, entity);
             convertFieldsToSnakeCase(statement, entity);
-
-            if (simplifiedStatement instanceof PlainSelect ps) {
-                simplifyWhereClause(ps.getWhere());
-            }
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);
         } catch (AntikytheraException e) {
             logger.debug(e.getMessage());
+        }
+    }
+
+    public void buildSimplifiedQuery() throws JSQLParserException, AntikytheraException {
+        this.simplifiedStatement = CCJSqlParserUtil.parse(cleanUp(this.originalQuery));
+        TypeWrapper entity = RepositoryParser.findEntity(entityType);
+        convertFieldsToSnakeCase(simplifiedStatement, entity);
+
+        if (simplifiedStatement instanceof PlainSelect ps) {
+            simplifyWhereClause(ps.getWhere());
         }
     }
 
