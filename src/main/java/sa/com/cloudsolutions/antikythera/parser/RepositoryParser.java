@@ -273,10 +273,6 @@ public class RepositoryParser extends ClassProcessor {
      * @return the result set if the query was executed successfully
      */
     public ResultSet executeQuery(MethodDeclaration method) {
-        ResultSet cached = cache.get(method);
-        if (cached != null) {
-            return cached;
-        }
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
@@ -295,7 +291,7 @@ public class RepositoryParser extends ClassProcessor {
 
                 int argumentCount = countPlaceholders(sql);
 
-                if (argumentCount != 0) {
+                if (argumentCount != 0 && rql.getSimplifiedResultSet() == null) {
                     executeSimplifiedQuery(rql, method, argumentCount);
                 }
 
@@ -317,6 +313,13 @@ public class RepositoryParser extends ClassProcessor {
         return null;
     }
 
+    /**
+     * Executes the query by removing some of its placeholders
+     * @param rql the repository query to be executed
+     * @param method the method in the JPARepository
+     * @param argumentCount the number of placeholders
+     * @throws SQLException if the statement cannot be executed
+     */
     private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException {
         Select simplified = (Select) rql.getSimplifiedStatement();
         String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
@@ -330,8 +333,11 @@ public class RepositoryParser extends ClassProcessor {
         }
 
         if (prep.execute()) {
-            happyCache.put(method, prep.getResultSet());
-            rql.setSimplifedResultSet(prep.getResultSet());
+            ResultSet resultSet = prep.getResultSet();
+            if (resultSet.next()) {
+                happyCache.put(method, resultSet);
+                rql.setSimplifedResultSet(resultSet);
+            }
         }
 
     }

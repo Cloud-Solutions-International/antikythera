@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
@@ -31,6 +32,34 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
                     String col = parts.length > 1 ? parts[1] : parts[0];
 
                     if (col.equals(RepositoryParser.camelToSnake(typeName))) {
+                        Type type = param.getParameter().getType();
+                        if (type.isClassOrInterfaceType()) {
+                            String t = type.asClassOrInterfaceType().getTypeArguments().isPresent()
+                                    ? type.asClassOrInterfaceType().getTypeArguments().get().get(0).asString()
+                                    : type.asClassOrInterfaceType().getNameAsString();
+                            switch (t) {
+                                case "Integer":
+                                case "int":
+                                    return new Variable(query.getSimplifiedResultSet().getInt(col));
+                                case "String":
+                                    return new Variable(query.getSimplifiedResultSet().getString(col));
+                                case "boolean":
+                                    return new Variable(query.getSimplifiedResultSet().getBoolean(col));
+                                case "double":
+                                    return new Variable(query.getSimplifiedResultSet().getDouble(col));
+                                case "float":
+                                    return new Variable(query.getSimplifiedResultSet().getFloat(col));
+                                case "Long":
+                                case "long":
+                                    return new Variable(query.getSimplifiedResultSet().getLong(col));
+                                case "short":
+                                    return new Variable(query.getSimplifiedResultSet().getShort(col));
+                                case "byte":
+                                    return new Variable(query.getSimplifiedResultSet().getByte(col));
+                                case "char":
+                                    return new Variable(query.getSimplifiedResultSet().getString(col).charAt(0));
+                            }
+                        }
                         return new Variable(query.getSimplifiedResultSet().getObject(col));
                     }
                 }

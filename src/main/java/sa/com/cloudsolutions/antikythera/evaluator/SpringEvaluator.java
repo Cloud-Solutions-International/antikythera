@@ -143,7 +143,7 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
         } catch (AUTException aex) {
-
+            logger.warn("This has probably been handled {}", aex.getMessage());
         }
     }
 
@@ -264,6 +264,7 @@ public class SpringEvaluator extends Evaluator {
                  */
                 String nameAsString = repoMethod.getNameAsString();
                 if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
+                    q.getMethodArguments().clear();
                     for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
                         Expression argument = methodCall.getArgument(i);
                         q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));

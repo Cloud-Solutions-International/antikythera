@@ -617,6 +617,11 @@ public class RepositoryQuery {
         return expr;
     }
 
+    /**
+     * Sets the result set for the simplified query.
+     * It should already have advanced to the first row.
+     * @param resultSet the result set for the simplified query (the one with minimal filters)
+     */
     public void setSimplifedResultSet(ResultSet resultSet) {
         this.simplifiedResultSet = resultSet;
     }
