@@ -41,8 +41,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -218,7 +216,6 @@ public class RepositoryQuery {
      *
      * @param stmt   the sql statement
      * @param entity a compilation unit representing the entity.
-     * @throws FileNotFoundException
      */
     void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws AntikytheraException {
 
@@ -285,7 +282,6 @@ public class RepositoryQuery {
      * query through JDBC.
      * @param entity the primary table or view for the join
      * @param select the select statement
-     * @throws FileNotFoundException if we are unable to find related entities.
      */
     private void processJoins(CompilationUnit entity, PlainSelect select) throws AntikytheraException {
         List<CompilationUnit> units = new ArrayList<>();
@@ -485,7 +481,7 @@ public class RepositoryQuery {
      * will give a non-empty result. That's one of the key challenges of API and Integration
      * testing.
      *
-     * If we are able to run the query with a very limited where clause or a non existent where
+     * If we are able to run the query with a very limited where clause or a non-existent where
      * clause we can then examine the result to figure out what values can actually be used to
      * @param expr the expression to be modified
      *
