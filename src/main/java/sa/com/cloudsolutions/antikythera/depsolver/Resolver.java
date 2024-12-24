@@ -415,8 +415,10 @@ public class Resolver {
                     }
                 });
             }
-        }
-        else {
+        } else if (expr.isClassExpr()) {
+            ClassExpr ce = expr.asClassExpr();
+            ImportUtils.addImport(node, ce.getType().asString());
+        } else {
             // seems other types dont need special handling they are caught else where
         }
     }
