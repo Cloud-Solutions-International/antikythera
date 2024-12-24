@@ -426,15 +426,10 @@ public class RepositoryParser extends ClassProcessor {
      * @return a compilation unit
      */
     public static CompilationUnit findEntity(Type fd) {
-        Optional<CompilationUnit> cu = fd.findCompilationUnit();
-        if (cu.isPresent()) {
-            for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
-                if (wrapper.getType() != null) {
-                    return AntikytheraRunTime.getCompilationUnit(wrapper.getNameAsString());
-                }
-            }
-        }
-        return null;
+        return fd.findCompilationUnit().map(cu -> {
+            String nameAsString = AbstractCompiler.findFullyQualifiedName(cu, fd.toString());
+            return AntikytheraRunTime.getCompilationUnit(nameAsString);
+        }).orElse(null);
     }
 
     /**
