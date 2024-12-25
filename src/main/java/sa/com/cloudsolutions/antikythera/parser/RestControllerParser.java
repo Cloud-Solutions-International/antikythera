@@ -51,7 +51,6 @@ public class RestControllerParser extends ClassProcessor {
      */
     private static Stats stats = new Stats();
 
-    private boolean evaluatorUnsupported = false;
     File current;
     private SpringEvaluator evaluator;
 
@@ -207,7 +206,6 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-            evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
                 evaluateMethod(md, new NullArgumentGenerator());
@@ -244,10 +242,7 @@ public class RestControllerParser extends ClassProcessor {
                 if(ctrl.isPresent()) {
                     String[] crs = ctrl.get().split("#");
                     if (crs.length > 1) {
-                        if (md.getNameAsString().equals(crs[crs.length - 1])) {
-                            return true;
-                        }
-                        return false;
+                        return md.getNameAsString().equals(crs[crs.length - 1]);
                     }
                 }
                 return true;
@@ -273,8 +268,7 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-            evaluatorUnsupported = false;
-                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
                 return;
             }
             if (md.isPublic()) {
@@ -308,7 +302,7 @@ public class RestControllerParser extends ClassProcessor {
                     if (SpringEvaluator.getRepositories().containsKey(classToInstanceName(shortName))) {
                         return;
                     }
-                    solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null), variable.getType());
+                    field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(f -> solveTypeDependencies(f, variable.getType()));
                 }
             }
         }
@@ -351,12 +345,9 @@ public class RestControllerParser extends ClassProcessor {
                 super.visit(statement, md);
                 Expression expr = statement.getExpression();
                 if(expr.isVariableDeclarationExpr()) {
-                    Type t = expr.asVariableDeclarationExpr().getElementType();
+                    final Type t = expr.asVariableDeclarationExpr().getElementType();
                     if (!t.isPrimitiveType()) {
-                        TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-                        if (from != null) {
-                            createEdge(t, from);
-                        }
+                        md.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(from -> createEdge(t, from));
                     }
                 }
             }

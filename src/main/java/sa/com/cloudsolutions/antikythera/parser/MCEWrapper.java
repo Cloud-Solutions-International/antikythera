@@ -36,7 +36,7 @@ public class MCEWrapper {
 
     /**
      * Sets the types of the arguments for the method call expression
-     * @param argumentTypes
+     * @param argumentTypes the types of the arguments
      */
     public void setArgumentTypes(NodeList<Type> argumentTypes) {
         this.argumentTypes = argumentTypes;

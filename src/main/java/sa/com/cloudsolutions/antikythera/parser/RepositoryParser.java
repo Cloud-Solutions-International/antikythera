@@ -238,10 +238,9 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Execute all the queries that were identified.
      * This is useful only for visualization purposes.
-     * @throws IOException
-     * @throws SQLException
+     * @throws SQLException if the query cannot be executed
      */
-    public void executeAllQueries() throws IOException, SQLException {
+    public void executeAllQueries() throws SQLException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());
             if (rs != null) {
@@ -554,7 +553,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Parse a repository method that does not have a query annotation.
      * In these cases the naming convention of the method is used to infer the query.
-     * @param md
+     * @param md the method declaration
      */
     void parseNonAnnotatedMethod(MethodDeclaration md) {
         String methodName = md.getNameAsString();

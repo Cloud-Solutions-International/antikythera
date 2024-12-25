@@ -308,11 +308,12 @@ public class SpringEvaluator extends Evaluator {
      * @throws IOException if the file cannot be read
      */
     private static void detectRepository(VariableDeclarator variable) throws IOException {
-        String shortName = variable.getType().asClassOrInterfaceType().getNameAsString();
+        ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+        String shortName = t.getNameAsString();
         if (SpringEvaluator.getRepositories().containsKey(shortName)) {
             return;
         }
-        Type t = variable.getType().asClassOrInterfaceType();
+
         String className = t.resolve().describe();
 
 
@@ -341,7 +342,7 @@ public class SpringEvaluator extends Evaluator {
 
     /**
      * Execute a return statement.
-     * Over rides the super class method to create tests.
+     * Overrides the super class method to create tests.
      *
      * @param statement the statement to execute
      * @return the variable that is returned
