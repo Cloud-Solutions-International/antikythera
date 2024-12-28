@@ -319,11 +319,11 @@ public class RepositoryParser extends ClassProcessor {
         Select simplified = (Select) rql.getSimplifiedStatement();
         String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
         PreparedStatement prep = conn.prepareStatement(simplifiedSql);
-        for (int i = 0; i < argumentCount; i++) {
+        for (int i = 0, j= 0; i < argumentCount; i++) {
             QueryMethodArgument arg = rql.getMethodArguments().get(i);
             QueryMethodParameter p = rql.getMethodParameters().get(i);
             if (!p.isRemoved()) {
-                bindParameters(arg, prep, i);
+                bindParameters(arg, prep, j++);
             }
         }
 

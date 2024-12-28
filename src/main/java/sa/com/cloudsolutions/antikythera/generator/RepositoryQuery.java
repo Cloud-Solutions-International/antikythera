@@ -554,11 +554,15 @@ public class RepositoryQuery {
         return expr;
     }
 
+    private String getColumnName(Column expr) {
+        return RepositoryParser.camelToSnake(expr.getColumnName());
+    }
+
     private Expression simplifyCompare(Expression expr, ComparisonOperator compare) {
         Expression left = compare.getLeftExpression();
         Expression right = compare.getRightExpression();
         if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
-            String name = RepositoryParser.camelToSnake(left.toString());
+            String name = getColumnName(col);
             if (mapPlaceHolders(right, name)) {
                 Optional<Map> params = Settings.getProperty("database.parameters", Map.class);
                 if (params.isPresent()) {

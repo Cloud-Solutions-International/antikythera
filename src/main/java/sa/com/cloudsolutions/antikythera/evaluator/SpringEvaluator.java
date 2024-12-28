@@ -722,9 +722,7 @@ public class SpringEvaluator extends Evaluator {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
                         ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        Variable v = (q.getCachedResult() == null)
-                                ? processResult(stmt, q.getResultSet())
-                                : q.getCachedResult();
+                        Variable v = processResult(stmt, q.getResultSet());
 
                         if (l.getRepositoryQuery() == null) {
                             l.setRepositoryQuery(q);
@@ -796,9 +794,9 @@ public class SpringEvaluator extends Evaluator {
      * @param rs the sql result set
      */
     private boolean resultToEntity(Variable variable, ResultSet rs) {
-
         try {
-            if (variable.getValue() instanceof Evaluator evaluator && rs.next() && cu != null) {
+            if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
                 Map<String, Variable> fields = evaluator.getFields();
 
                 for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
@@ -868,6 +866,7 @@ public class SpringEvaluator extends Evaluator {
             response.setType(type);
             return new Variable(response);
         }
+        v.setType(type);
         return v;
     }
 
