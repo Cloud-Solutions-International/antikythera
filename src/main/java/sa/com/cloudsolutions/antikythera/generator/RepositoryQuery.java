@@ -195,13 +195,18 @@ public class RepositoryQuery {
         return simplifiedStatement;
     }
 
-    public void mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
+    public boolean mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
         if(right instanceof  JdbcParameter rhs) {
             int pos = rhs.getIndex();
-            if (pos < getMethodParameters().size() -1) {
+            if (pos <= getMethodParameters().size() ) {
+                QueryMethodArgument arg = getMethodArguments().get(pos - 1);
+                if (arg.getArgument().isLiteralExpr()) {
+                    return false;
+                }
                 QueryMethodParameter params = getMethodParameters().get(pos - 1);
                 params.getPlaceHolderId().add(pos);
                 params.setColumnName(name);
+                return true;
             }
         }
         else if (right instanceof JdbcNamedParameter rhs ){
@@ -209,13 +214,14 @@ public class RepositoryQuery {
             for(QueryMethodParameter p : getMethodParameters()) {
                 if(p.getPlaceHolderName().equals(placeHolder)) {
                     p.setColumnName(name);
-                    break;
+                    return true;
                 }
             }
         }
         else if (right instanceof ParenthesedExpressionList<?> rhs) {
             System.out.println(rhs + " not mapped");
         }
+        return false;
     }
 
 
@@ -523,12 +529,15 @@ public class RepositoryQuery {
             andExpr.setRightExpression(simplifyWhereClause(andExpr.getRightExpression()));
         }
         if (expr instanceof Between between) {
-            mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
-            mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
-            remove(RepositoryParser.camelToSnake(between.getLeftExpression().toString()), between);
-            between.setBetweenExpressionStart(new LongValue("2"));
-            between.setBetweenExpressionEnd(new LongValue("4"));
-            between.setLeftExpression(new LongValue("3"));
+            String left = between.getLeftExpression().toString();
+            if (mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(left)) &&
+                    mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(left))) {
+
+                remove(RepositoryParser.camelToSnake(left), between);
+                between.setBetweenExpressionStart(new LongValue("2"));
+                between.setBetweenExpressionEnd(new LongValue("4"));
+                between.setLeftExpression(new LongValue("3"));
+            }
         } else if (expr instanceof InExpression ine) {
             Column col = (Column) ine.getLeftExpression();
             if (!("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
@@ -549,25 +558,27 @@ public class RepositoryQuery {
         Expression left = compare.getLeftExpression();
         Expression right = compare.getRightExpression();
         if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
-            Optional<Map> params = Settings.getProperty("database.parameters", Map.class);
-            if (params.isPresent()) {
-                String name = RepositoryParser.camelToSnake(left.toString());
-                mapPlaceHolders(right, name);
-                for (Object param : params.get().entrySet()) {
-                    if (param instanceof Map.Entry<?,?> entry && entry.getKey() instanceof String
-                            && col.getColumnName().equals(entry.getKey().toString())) {
-                        compare.setRightExpression(new LongValue(entry.getValue().toString()));
-                        remove(name, right);
-                        return expr;
+            String name = RepositoryParser.camelToSnake(left.toString());
+            if (mapPlaceHolders(right, name)) {
+                Optional<Map> params = Settings.getProperty("database.parameters", Map.class);
+                if (params.isPresent()) {
+
+                    for (Object param : params.get().entrySet()) {
+                        if (param instanceof Map.Entry<?, ?> entry && entry.getKey() instanceof String
+                                && col.getColumnName().equals(entry.getKey().toString())) {
+                            compare.setRightExpression(new LongValue(entry.getValue().toString()));
+                            remove(name, right);
+                            return expr;
+                        }
                     }
                 }
+                compare.setLeftExpression(new StringValue("1"));
+                compare.setRightExpression(new StringValue("1"));
+                remove(compare.getRightExpression().toString(), right);
+
             }
-            compare.setLeftExpression(new StringValue("1"));
-            compare.setRightExpression(new StringValue("1"));
-            remove(compare.getRightExpression().toString(), right);
-            return expr;
         }
-        return null;
+        return expr;
     }
 
 

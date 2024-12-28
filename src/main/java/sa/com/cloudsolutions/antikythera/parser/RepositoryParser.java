@@ -4,6 +4,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import net.sf.jsqlparser.JSQLParserException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -127,7 +128,7 @@ public class RepositoryParser extends ClassProcessor {
      * credentials are provide the connection is setup only if the runQueries
      * setting is true.
      *
-     * @throws SQLException
+     * @throws SQLException if the connection could not be established
      */
     private static void createConnection() throws SQLException {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
@@ -141,7 +142,7 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    public static void main(String[] args) throws IOException, SQLException {
+    public static void main(String[] args) throws IOException, SQLException, AntikytheraException, JSQLParserException {
         if(args.length != 1) {
             logger.error("Please specifiy the path to a repository class");
         }
@@ -240,7 +241,7 @@ public class RepositoryParser extends ClassProcessor {
      * This is useful only for visualization purposes.
      * @throws SQLException if the query cannot be executed
      */
-    public void executeAllQueries() throws SQLException {
+    public void executeAllQueries() throws SQLException, AntikytheraException, JSQLParserException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());
             if (rs != null) {
@@ -270,7 +271,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param method the name of the method that represents the query in the JPARepository interface
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(MethodDeclaration method) {
+    public ResultSet executeQuery(MethodDeclaration method) throws AntikytheraException, SQLException, JSQLParserException {
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
@@ -278,35 +279,30 @@ public class RepositoryParser extends ClassProcessor {
         return rs;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method)  {
-        try {
-            if(runQueries) {
-                RepositoryParser.createConnection();
-                
-                Select stmt = (Select) rql.getStatement();
-                String sql = beautify(stmt.toString());
-                sql = trueFalseCheck(sql);
+    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, AntikytheraException, JSQLParserException {
+        if(runQueries) {
+            RepositoryParser.createConnection();
 
-                int argumentCount = countPlaceholders(sql);
+            Select stmt = (Select) rql.getStatement();
+            String sql = beautify(stmt.toString());
+            sql = trueFalseCheck(sql);
 
-                if (argumentCount != 0 && rql.getSimplifiedResultSet() == null) {
-                    executeSimplifiedQuery(rql, method, argumentCount);
-                }
+            int argumentCount = countPlaceholders(sql);
 
-                PreparedStatement prep = conn.prepareStatement(sql);
-                for (int i = 0; i < argumentCount; i++) {
-                    QueryMethodArgument arg = rql.getMethodArguments().get(i);
-                    bindParameters(arg, prep, i);
-                }
-
-                if (prep.execute()) {
-                    return prep.getResultSet();
-                }
-
+            if (argumentCount != 0 && rql.getSimplifiedResultSet() == null) {
+                executeSimplifiedQuery(rql, method, argumentCount);
             }
 
-        } catch (SQLException e) {
-            logger.error(rql.getQuery());
+            PreparedStatement prep = conn.prepareStatement(sql);
+            for (int i = 0; i < argumentCount; i++) {
+                QueryMethodArgument arg = rql.getMethodArguments().get(i);
+                bindParameters(arg, prep, i);
+            }
+
+            if (prep.execute()) {
+                return prep.getResultSet();
+            }
+
         }
         return null;
     }
@@ -318,7 +314,8 @@ public class RepositoryParser extends ClassProcessor {
      * @param argumentCount the number of placeholders
      * @throws SQLException if the statement cannot be executed
      */
-    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException {
+    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, AntikytheraException, JSQLParserException {
+        rql.buildSimplifiedQuery();
         Select simplified = (Select) rql.getSimplifiedStatement();
         String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
         PreparedStatement prep = conn.prepareStatement(simplifiedSql);
