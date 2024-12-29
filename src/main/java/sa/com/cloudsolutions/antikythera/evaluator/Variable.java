@@ -102,7 +102,11 @@ public class Variable {
     }
 
     public String toString() {
-        return value == null ? "null" : value.toString();
+        try {
+             return value == null ? "null" : value.toString();
+        } catch (Exception e) {
+             return "not evaluated";
+        }
     }
 
     public Class<?> getClazz() {

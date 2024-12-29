@@ -157,15 +157,19 @@ public class SpringEvaluator extends Evaluator {
             executeBlock(statements);
         }
         else {
-            ControllerResponse cr = new ControllerResponse();
-            ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-            cr.setResponse(new Variable(response));
-            for (Statement st : statements) {
-                lines.put(st.hashCode(), new LineOfCode(st, LineOfCode.BLACK));
-            }
-            return createTests(cr);
+            return testForBadRequest(statements);
         }
         return returnValue;
+    }
+
+    private Variable testForBadRequest(List<Statement> statements) {
+        ControllerResponse cr = new ControllerResponse();
+        ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        cr.setResponse(new Variable(response));
+        for (Statement st : statements) {
+            lines.put(st.hashCode(), new LineOfCode(st, LineOfCode.BLACK));
+        }
+        return createTests(cr);
     }
 
     /**

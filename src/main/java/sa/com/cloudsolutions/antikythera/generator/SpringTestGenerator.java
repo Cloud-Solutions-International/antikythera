@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -30,6 +32,7 @@ import com.github.javaparser.ast.type.VoidType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
 import java.util.HashSet;
@@ -192,7 +195,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(testMethod, response);
+        addCheckStatus(md, testMethod, response);
         gen.getType(0).addMember(testMethod);
 
     }
@@ -221,10 +224,29 @@ public class SpringTestGenerator extends  TestGenerator {
         httpWithBody(md, annotation, returnType, "makePost");
     }
 
+    private Type getReturnType(MethodDeclaration md, ControllerResponse resp) {
+        if (resp.getType() == null
+                || resp.getType().toString().equals("ResponseEntity")
+                || resp.getType().toString().equals("Object")) {
+            return md.getType();
+//            TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
+//            Expression expression = returnStmt.getExpression().orElse(null);
+//            if (expression != null && from != null && expression.isObjectCreationExpr()) {
+//                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+//                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+//                    for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+//                        solveTypeDependencies(from, typeArg);
+//                    }
+//                }
+//            }
+        }
+        return resp.getType();
+    }
 
-    private void addCheckStatus(MethodDeclaration md, ControllerResponse resp) {
+    private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
 
-        Type returnType = resp.getType();
+        Type returnType = getReturnType(mut, resp);
+
         BlockStmt body = md.getBody().orElseGet(() -> {
             BlockStmt blockStmt = new BlockStmt();
             md.setBody(blockStmt);
@@ -232,22 +254,42 @@ public class SpringTestGenerator extends  TestGenerator {
         });
 
         if (resp.getBody() != null) {
-            if (resp.getBody().getValue() != null) {
-                Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-                VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-                MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-                methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-                variableDeclarator.setInitializer(methodCallExpr);
-                VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-                ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-                body.addStatement(expressionStmt);
+            if (resp.getBody().getValue() != null && returnType.isClassOrInterfaceType()) {
+                Type respType;
+                if (returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                    respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getTypeArguments().get().get(0).toString());
+                } else {
+                    respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                }
+                ImportWrapper wrapper = AbstractCompiler.findImport(mut.findCompilationUnit().get(), respType.toString());
+                if (wrapper != null) {
+                    gen.addImport(wrapper.getImport());
+                }
+                body.addStatement(createResponseObject(respType));
+                addHttpStatusCheck(body, resp.getStatusCode());
+
+                MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertNotNull");
+                as.addArgument("resp");
+                body.addStatement(new ExpressionStmt(as));
+
             } else {
                 MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
                 as.addArgument("response.getBody().asString().isEmpty()");
                 body.addStatement(new ExpressionStmt(as));
+                addHttpStatusCheck(body, resp.getStatusCode());
             }
         }
-        addHttpStatusCheck(body, resp.getStatusCode());
+
+    }
+
+    private static ExpressionStmt createResponseObject(Type respType) {
+        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+        methodCallExpr.addArgument(respType.toString() + ".class");
+        variableDeclarator.setInitializer(methodCallExpr);
+        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
+        return expressionStmt;
     }
 
 
@@ -308,7 +350,7 @@ public class SpringTestGenerator extends  TestGenerator {
                     if (respType.toString().equals("String")) {
                         testForResponseBodyAsString(md, resp, body);
                     } else {
-                        addCheckStatus(md, resp);
+                        addCheckStatus(md, testMethod, resp);
                     }
                 }
             }
