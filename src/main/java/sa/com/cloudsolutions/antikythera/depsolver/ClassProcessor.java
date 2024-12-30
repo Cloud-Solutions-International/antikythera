@@ -562,57 +562,62 @@ public class ClassProcessor extends AbstractCompiler {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-            String fieldAsString = field.getElementType().toString();
-            if (fieldAsString.equals("DateScheduleUtil")
-                    || fieldAsString.equals("Logger")
-                    || fieldAsString.equals("Sort.Direction")) {
-                return null;
-            }
-
-            // Filter annotations to retain only @JsonFormat and @JsonIgnore
-            NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
-            for (AnnotationExpr annotation : field.getAnnotations()) {
-                String annotationName = annotation.getNameAsString();
-                if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
-                    resolveImport(annotationName);
-                    filteredAnnotations.add(annotation);
-                }
-                else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
-                    switch(field.getElementType().asString()) {
-                        case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
-                            break;
-                    }
-                }
-            }
-            field.getAnnotations().clear();
-            field.setAnnotations(filteredAnnotations);
-
-            Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
-
-            if (ancestor.isPresent()) {
-                /*
-                 * We need not have this ancestor check because java can't have global variables but that's the
-                 * way the library is structured.
-                 * Having identified that we have a field, we need to solve it's type dependencies. Matters are
-                 * slightly complicated by the fact that sometimes a field may have an initializer. This may be
-                 * a method call (which we will ignore for now) but this is more often simply an object creation
-                 * It may look like this:
-                 *
-                 *     List<String> list = new ArrayList<>();
-                 *
-                 * Because the field type and the initializer differ we need to solve the type dependencies for
-                 * the initializer as well.
-                 */
-                solveTypeDependencies(ancestor.get(), field.getElementType());
-                VariableDeclarator firstVariable = field.getVariables().get(0);
-                firstVariable.getInitializer().ifPresent(init -> {
-                    if (init.isObjectCreationExpr()) {
-                        solveTypeDependencies(ancestor.get(), init.asObjectCreationExpr().getType());
-                    }
-                });
-            }
+            collectField(field);
+            field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(
+                    classOrInterfaceDeclaration -> collectFieldAncestors(field, classOrInterfaceDeclaration)
+            );
             return super.visit(field, args);
         }
+    }
+
+    protected void collectFieldAncestors(FieldDeclaration field, ClassOrInterfaceDeclaration ancestor) {
+        /*
+         * We need not have this ancestor check because java can't have global variables but that's the
+         * way the library is structured.
+         * Having identified that we have a field, we need to solve it's type dependencies. Matters are
+         * slightly complicated by the fact that sometimes a field may have an initializer. This may be
+         * a method call (which we will ignore for now) but this is more often simply an object creation
+         * It may look like this:
+         *
+         *     List<String> list = new ArrayList<>();
+         *
+         * Because the field type and the initializer differ we need to solve the type dependencies for
+         * the initializer as well.
+         */
+        solveTypeDependencies(ancestor, field.getElementType());
+        VariableDeclarator firstVariable = field.getVariables().get(0);
+        firstVariable.getInitializer().ifPresent(init -> {
+            if (init.isObjectCreationExpr()) {
+                solveTypeDependencies(ancestor, init.asObjectCreationExpr().getType());
+            }
+        });
+    }
+
+    protected void collectField(FieldDeclaration field) {
+        String fieldAsString = field.getElementType().toString();
+        if (fieldAsString.equals("DateScheduleUtil")
+                || fieldAsString.equals("Logger")
+                || fieldAsString.equals("Sort.Direction")) {
+            return ;
+        }
+
+        // Filter annotations to retain only @JsonFormat and @JsonIgnore
+        NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
+        for (AnnotationExpr annotation : field.getAnnotations()) {
+            String annotationName = annotation.getNameAsString();
+            if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+                resolveImport(annotationName);
+                filteredAnnotations.add(annotation);
+            }
+            else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
+                switch(field.getElementType().asString()) {
+                    case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
+                        break;
+                }
+            }
+        }
+        field.getAnnotations().clear();
+        field.setAnnotations(filteredAnnotations);
     }
 
     private ModifierVisitor createTypeCollector() {

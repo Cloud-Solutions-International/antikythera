@@ -1,7 +1,10 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import com.github.javaparser.ast.CompilationUnit;
@@ -29,14 +32,12 @@ import com.github.javaparser.ast.type.VoidType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -65,7 +66,7 @@ import java.util.Set;
  * for us to try methods without branching three times. The first time without any query strings,
  * Secondly with naive values and finally with values that will result in queries being executed.
  */
-public class SpringTestGenerator implements  TestGenerator {
+public class SpringTestGenerator extends  TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
     /**
      * The URL path component common to all functions in a controller.
@@ -79,10 +80,7 @@ public class SpringTestGenerator implements  TestGenerator {
      * tests for the same method.
      */
     Set<String> testMethodNames = new HashSet<>();
-    /**
-     * The last executed database query.
-     */
-    RepositoryQuery query;
+
     /**
      * The compilation unit that represents the tests being generated.
      * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
@@ -170,7 +168,7 @@ public class SpringTestGenerator implements  TestGenerator {
     }
 
     private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call, ControllerResponse response)  {
-        MethodDeclaration testMethod = buildTestMethod(md);
+        final MethodDeclaration testMethod = buildTestMethod(md);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
         BlockStmt body = testMethod.getBody().get();
@@ -186,18 +184,9 @@ public class SpringTestGenerator implements  TestGenerator {
              * Non-empty parameters.
              */
             ControllerRequest request = new ControllerRequest();
-            request.setPath(getPath(annotation).replace("\"", ""));
+            handleURIVariables(md, request);
 
-            if (state == ENLIGHTENED_STATE) {
-                try {
-                    replaceURIVariablesFromDb(md, request);
-                } catch (SQLException e) {
-                    logger.warn(e.getMessage());
-                }
-            }
-            if (state == DUMMY_STATE) {
-                handleURIVariables(md, request);
-            }
+            request.setPath(getPath(annotation).replace("\"", ""));
 
             addQueryParams(makeGetCall, request, body);
         }
@@ -206,74 +195,28 @@ public class SpringTestGenerator implements  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(testMethod, response);
+        addCheckStatus(md, testMethod, response);
         gen.getType(0).addMember(testMethod);
 
     }
 
-    private static void addQueryParams(MethodCallExpr getCall, ControllerRequest request, BlockStmt body) {
+    private  void addQueryParams(MethodCallExpr getCall, ControllerRequest request, BlockStmt body) {
         getCall.addArgument(new StringLiteralExpr(request.getPath()));
         if(!request.getQueryParameters().isEmpty()) {
             body.addStatement("Map<String, String> queryParams = new HashMap<>();");
             for(Map.Entry<String, String> entry : request.getQueryParameters().entrySet()) {
-                body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");", entry.getKey(), entry.getValue()));
-            }
-            getCall.addArgument(new NameExpr("queryParams"));
-        }
-    }
-
-
-    /**
-     * Replace PathVariable and RequestParam values with the values from the database.
-     *
-      We need to figure out if any of the path or request parameters are supposed to
-     * match the values from the database.
-     *
-     * If the last field is not null that means there is likely to be a query associated
-     * with those parameters.
-     *
-     * Mapping parameters works like this.
-     *    Request or path parameter becomes an argument to a method call.
-     *    The argument in the method call becomes a parameter for a placeholder
-     *    The placeholder may have been removed though!
-     */
-    private void replaceURIVariablesFromDb(MethodDeclaration md, ControllerRequest request) throws SQLException {
-        if (query != null && query.getSimplifiedResultSet() != null) {
-            ResultSet rs = query.getSimplifiedResultSet();
-            List<QueryMethodParameter> paramMap = query.getMethodParameters();
-            List<QueryMethodArgument> argsMap = query.getMethodArguments();
-            System.out.println(query.getSimplifiedStatement().toString());
-            if(rs.next()) {
-                for(int i = 0 ; i < paramMap.size() ; i++) {
-                    QueryMethodParameter param = paramMap.get(i);
-                    QueryMethodArgument arg = argsMap.get(i);
-
-                    if(param.getColumnName() != null) {
-                        String[] parts = param.getColumnName().split("\\.");
-                        String col = parts.length > 1 ? parts[1] : parts[0];
-
-                        logger.debug(param.getColumnName() + " " + arg.getArgument() + " " + rs.getObject(col));
-
-                        // finally try to match it against the path and request variables
-                        for (Parameter p : md.getParameters()) {
-                            Optional<AnnotationExpr> requestParam = p.getAnnotationByName("RequestParam");
-                            Optional<AnnotationExpr> pathParam = p.getAnnotationByName("PathVariable");
-                            if (requestParam.isPresent()) {
-                                String name = AbstractCompiler.getRestParameterName(p);
-                                if (name.equals(arg.getArgument().toString())) {
-                                    request.getQueryParameters().put(name, rs.getObject(col).toString());
-                                }
-                            } else if (pathParam.isPresent()) {
-                                String name = AbstractCompiler.getRestParameterName(p);
-                                final String target = '{' + name + '}';
-                                if (name.equals(arg.getArgument().toString())) {
-                                    request.setPath(request.getPath().replace(target, rs.getObject(col).toString()));
-                                }
-                            }
-                        }
+                if (argumentGenerator != null) {
+                    Variable v = argumentGenerator.getArguments().get(entry.getKey());
+                    if (v != null) {
+                        body.addStatement(String.format("queryParams.put(\"%s\", \"%s\");",
+                                entry.getKey(), v.getValue()));
+                    }
+                    else {
+                        logger.warn("Could not get value for {}", entry.getValue());
                     }
                 }
             }
+            getCall.addArgument(new NameExpr("queryParams"));
         }
     }
 
@@ -281,32 +224,61 @@ public class SpringTestGenerator implements  TestGenerator {
         httpWithBody(md, annotation, returnType, "makePost");
     }
 
+    private Type getReturnType(MethodDeclaration md, ControllerResponse resp) {
+        if (resp.getType() == null
+                || resp.getType().toString().equals("ResponseEntity")
+                || resp.getType().toString().equals("Object")) {
+            return md.getType();
+        }
+        return resp.getType();
+    }
 
-    private void addCheckStatus(MethodDeclaration md, ControllerResponse resp) {
+    private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
 
-        Type returnType = resp.getType();
+        Type returnType = getReturnType(mut, resp);
+
         BlockStmt body = md.getBody().orElseGet(() -> {
             BlockStmt blockStmt = new BlockStmt();
             md.setBody(blockStmt);
             return blockStmt;
         });
 
-        if (resp.getBody() == null || resp.getBody().getValue() == null) {
-            MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
-            as.addArgument("response.getBody().asString().isEmpty()");
-            body.addStatement(new ExpressionStmt(as));
+        if (resp.getBody() != null) {
+            if (resp.getBody().getValue() != null && returnType.isClassOrInterfaceType()) {
+                Type respType;
+                if (returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                    respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getTypeArguments().get().get(0).toString());
+                } else {
+                    respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
+                }
+                ImportWrapper wrapper = AbstractCompiler.findImport(mut.findCompilationUnit().get(), respType.toString());
+                if (wrapper != null) {
+                    gen.addImport(wrapper.getImport());
+                }
+                body.addStatement(createResponseObject(respType));
+                addHttpStatusCheck(body, resp.getStatusCode());
+
+                MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertNotNull");
+                as.addArgument("resp");
+                body.addStatement(new ExpressionStmt(as));
+
+            } else {
+                MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
+                as.addArgument("response.getBody().asString().isEmpty()");
+                body.addStatement(new ExpressionStmt(as));
+                addHttpStatusCheck(body, resp.getStatusCode());
+            }
         }
-        else {
-            Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
-            VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-            MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-            methodCallExpr.addArgument(returnType.asClassOrInterfaceType().getNameAsString() + ".class");
-            variableDeclarator.setInitializer(methodCallExpr);
-            VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-            ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-            body.addStatement(expressionStmt);
-        }
-        addHttpStatusCheck(body, resp.getStatusCode());
+
+    }
+
+    private static ExpressionStmt createResponseObject(Type respType) {
+        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
+        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
+        methodCallExpr.addArgument(respType.toString() + ".class");
+        variableDeclarator.setInitializer(methodCallExpr);
+        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
+        return new ExpressionStmt(variableDeclarationExpr);
     }
 
 
@@ -367,14 +339,12 @@ public class SpringTestGenerator implements  TestGenerator {
                     if (respType.toString().equals("String")) {
                         testForResponseBodyAsString(md, resp, body);
                     } else {
-                        addCheckStatus(md, resp);
+                        addCheckStatus(md, testMethod, resp);
                     }
                 }
             }
         }
     }
-
-
 
     private static void testForResponseBodyAsString(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
         body.addStatement("String resp = response.getBody().asString();");
@@ -490,13 +460,10 @@ public class SpringTestGenerator implements  TestGenerator {
         testMethod.addAnnotation("Test");
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
-            for(var ann : param.getAnnotations()) {
-                if(ann.getNameAsString().equals("PathVariable")) {
-                    paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                            .append(param.getNameAsString().substring(1));
-                    break;
-                }
-            }
+            param.getAnnotationByName("PathVariable").ifPresent(ann -> {
+                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                        .append(param.getNameAsString().substring(1));
+            });
         }
 
         String testName = String.valueOf(md.getName());
@@ -548,38 +515,24 @@ public class SpringTestGenerator implements  TestGenerator {
 
     /**
      * Handle the RequestParam and PathVariables.
-     * We just set the values to a reasonable default. These defaults are likely to result in the
-     * method not throwing any null pointer exceptions, that's all!
+     * It may happen that the PathVariable annotation will result in the parameter having a
+     * different name from the variable name. So we will build that map for better tracking
      *
      * @param md the method declaration
      * @param request the controller request
      */
     void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
         for(var param : md.getParameters()) {
-            String paramString = String.valueOf(param);
+            String nameAsString = param.getNameAsString();
+            String queryParam = AbstractCompiler.getRestParameterName(param);
+            Variable value = argumentGenerator.getArguments().get(queryParam);
+            if (value != null && value.getValue() != null) {
+                request.addQueryParameter(nameAsString, value.getValue().toString());
 
-            String paramName = AbstractCompiler.getRestParameterName(param);
-            if (paramString.startsWith("@RequestParam")) {
-                if (!request.getQueryParameters().containsKey(paramName)) {
-                    request.addQueryParameter(paramName, switch (param.getTypeAsString()) {
-                        case "Boolean" -> "false";
-                        case "float", "Float", "double", "Double" -> "0.0";
-                        case "Integer", "int", "Long" -> "0";
-                        case "String" -> "Ibuprofen";
-                        default -> "0";
-                    });
+                if (param.getAnnotationByName("PathVariable").isPresent()) {
+                    request.setPath(request.getPath().replace("{" + nameAsString + "}",
+                            value.getValue().toString()));
                 }
-            } else if (paramString.startsWith("@PathVariable")) {
-                final String target = '{' + paramName + '}';
-
-                String path = switch (param.getTypeAsString()) {
-                    case "Boolean" -> request.getPath().replace(target, "false");
-                    case "float", "Float", "double", "Double" -> request.getPath().replace(target, "0.0");
-                    case "Integer", "int", "Long" -> request.getPath().replace(target, "0");
-                    case "String" -> request.getPath().replace(target, "Ibuprofen");
-                    default -> request.getPath().replace(target, "");
-                };
-                request.setPath(path);
             }
         }
     }
@@ -637,16 +590,6 @@ public class SpringTestGenerator implements  TestGenerator {
     @Override
     public void setBranched(boolean branched) {
         this.branched = branched;
-    }
-
-    @Override
-    public void setQuery(RepositoryQuery query) {
-        this.query = query;
-    }
-
-    @Override
-    public RepositoryQuery getQuery() {
-        return null;
     }
 }
 

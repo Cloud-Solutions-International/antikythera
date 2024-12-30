@@ -51,7 +51,7 @@ public class Variable {
      * Create an instance with the given value.
      *
      * if the value is not null, it's class will be detected and saved in the class field.
-     * @param value
+     * @param value the initial value for the Variable
      */
     public Variable(Object value) {
         this.value = value;
@@ -88,9 +88,7 @@ public class Variable {
                 case "Short" -> Short.class;
                 case "Byte" -> Byte.class;
                 case "Character" -> Character.class;
-                default -> {
-                    yield null;
-                }
+                default -> null;
             };
         }
     }
@@ -104,7 +102,11 @@ public class Variable {
     }
 
     public String toString() {
-        return value == null ? "null" : value.toString();
+        try {
+             return value == null ? "null" : value.toString();
+        } catch (Exception e) {
+             return "not evaluated";
+        }
     }
 
     public Class<?> getClazz() {

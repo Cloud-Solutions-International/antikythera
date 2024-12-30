@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.exception;
 public class EvaluatorException extends AntikytheraException {
     private int error;
     public static final int NPE = 1;
+    public static final int INTERNAL_SERVER_ERROR = 2;
 
     public EvaluatorException(String message) {
         super(message);

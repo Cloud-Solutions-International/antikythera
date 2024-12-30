@@ -11,19 +11,14 @@ import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
-import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
-import com.github.javaparser.resolution.types.ResolvedType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -156,6 +151,21 @@ public class AbstractCompiler {
         setupParser();
     }
 
+    static TypeDeclaration<?> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
+        String packageName = compilationUnit.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
+        String name = fd.isClassOrInterfaceType() ? fd.asClassOrInterfaceType().getNameAsString() : fd.toString();
+        String fileName = packageName + "." + name + SUFFIX;
+
+        if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
+            CompilationUnit other = AntikytheraRunTime.getCompilationUnit(fileName.replace(SUFFIX,""));
+            if (other != null) {
+                return getMatchingType(other, name);
+
+            }
+        }
+        return null;
+    }
+
     /**
      * Creates a compilation unit from the source code at the relative path.
      *
@@ -224,10 +234,9 @@ public class AbstractCompiler {
                     return t;
                 }
                 for (Node child : t.getChildNodes()) {
-                    if (child instanceof ClassOrInterfaceDeclaration cid) {
-                        if (cid.getNameAsString().equals(type.getNameAsString())) {
-                            return cid;
-                        }
+                    if (child instanceof ClassOrInterfaceDeclaration cid &&
+                            cid.getNameAsString().equals(type.getNameAsString())) {
+                        return cid;
                     }
                 }
             }
@@ -237,14 +246,7 @@ public class AbstractCompiler {
                 return wrapper.getType();
             }
 
-            String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
-            String fileName = packageName + "." + type.getNameAsString() + SUFFIX;
-            if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
-                CompilationUnit other = AntikytheraRunTime.getCompilationUnit(fileName.replace(".java",""));
-                if (other != null) {
-                    return getMatchingType(other, type.getNameAsString());
-                }
-            }
+            return findInSamePackage(cu, type);
         }
 
         return null;
@@ -499,19 +501,11 @@ public class AbstractCompiler {
             wrapper.setType(p);
         }
 
-        Optional<FieldDeclaration> field = target.findFirst(FieldDeclaration.class,
-                f -> f.getVariable(0).getNameAsString().equals(className)
-        );
-        if (field.isPresent()) {
-            wrapper.setField(field.get());
-        }
-        Optional<MethodDeclaration> methodDeclaration = target.findFirst(MethodDeclaration.class,
-                f -> f.getNameAsString().equals(className)
-        );
-        if (methodDeclaration.isPresent()) {
-            wrapper.setMethodDeclaration(methodDeclaration.get());
-        }
+        target.findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(className))
+              .ifPresent(wrapper::setField);
 
+        target.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals(className))
+              .ifPresent(wrapper::setMethodDeclaration);
     }
 
      static ImportWrapper findWildcardImport(CompilationUnit cu, String className) {
@@ -670,8 +664,9 @@ public class AbstractCompiler {
             ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
 
             for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                if (cdecl.findCompilationUnit().isPresent()) {
-                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
+                Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+                if (compilationUnit.isPresent()) {
+                    String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
                         TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
