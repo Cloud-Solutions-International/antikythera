@@ -320,7 +320,6 @@ public class SpringEvaluator extends Evaluator {
 
         String className = t.resolve().describe();
 
-
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
