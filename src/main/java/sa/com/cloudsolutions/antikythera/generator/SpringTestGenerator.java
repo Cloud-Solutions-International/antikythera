@@ -229,16 +229,6 @@ public class SpringTestGenerator extends  TestGenerator {
                 || resp.getType().toString().equals("ResponseEntity")
                 || resp.getType().toString().equals("Object")) {
             return md.getType();
-//            TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-//            Expression expression = returnStmt.getExpression().orElse(null);
-//            if (expression != null && from != null && expression.isObjectCreationExpr()) {
-//                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-//                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-//                    for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
-//                        solveTypeDependencies(from, typeArg);
-//                    }
-//                }
-//            }
         }
         return resp.getType();
     }
@@ -288,8 +278,7 @@ public class SpringTestGenerator extends  TestGenerator {
         methodCallExpr.addArgument(respType.toString() + ".class");
         variableDeclarator.setInitializer(methodCallExpr);
         VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-        ExpressionStmt expressionStmt = new ExpressionStmt(variableDeclarationExpr);
-        return expressionStmt;
+        return new ExpressionStmt(variableDeclarationExpr);
     }
 
 
@@ -471,13 +460,10 @@ public class SpringTestGenerator extends  TestGenerator {
         testMethod.addAnnotation("Test");
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
-            for(var ann : param.getAnnotations()) {
-                if(ann.getNameAsString().equals("PathVariable")) {
-                    paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                            .append(param.getNameAsString().substring(1));
-                    break;
-                }
-            }
+            param.getAnnotationByName("PathVariable").ifPresent(ann -> {
+                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
+                        .append(param.getNameAsString().substring(1));
+            });
         }
 
         String testName = String.valueOf(md.getName());
