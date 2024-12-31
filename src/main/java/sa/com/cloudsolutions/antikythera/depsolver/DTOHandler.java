@@ -77,30 +77,7 @@ public class DTOHandler extends ClassProcessor {
             CompilationUnit tmp = cu;
             cu = cu.clone();
 
-            expandWildCards(cu);
-
-            allImports.addAll(cu.getImports());
-            cu.setImports(new NodeList<>());
-
-            for (var t : cu.getTypes()) {
-                if (t.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                    if (!cdecl.isInnerClass()) {
-                        /*
-                         * we are iterating through all the types defined in the source file through the for loop
-                         * above. At this point we create a visitor and identifying the various dependencies will
-                         * be the job of the visitor.
-                         * Because the visitor will not look at parent classes so we do that below.
-                         */
-                        cdecl.accept(new TypeCollector(), null);
-                    }
-                    for(var ext : cdecl.getExtendedTypes()) {
-                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
-                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
-                        addEdgeFromImport(t, ext, imp);
-                    }
-                }
-            }
+            visitTypes();
 
             if (!AntikytheraRunTime.isInterface( AbstractCompiler.pathToClass(relativePath))) {
                 removeUnwanted();
@@ -246,7 +223,8 @@ public class DTOHandler extends ClassProcessor {
         for (AnnotationExpr annotation : annotations) {
             String annotationName = annotation.getNameAsString();
             if (annotationName.equals(STR_GETTER) || annotationName.equals("Setter") || annotationName.equals("Data")
-                    || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")) {
+                    || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")
+                    || annotationName.equals("Transient")) {
                 preserve.add(annotation);
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotationName, false, false);
                 cu.addImport(importDeclaration);
@@ -270,7 +248,7 @@ public class DTOHandler extends ClassProcessor {
             Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
 
             if (ancestor.isPresent()) {
-               collectFieldAncestors(field, ancestor.get());
+                collectFieldAncestors(field, ancestor.get());
                 VariableDeclarator firstVariable = field.getVariables().get(0);
 
                 // handle custom getters and setters
@@ -360,7 +338,7 @@ public class DTOHandler extends ClassProcessor {
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
         TypeDeclaration<?> cdecl = AbstractCompiler.getPublicType(cu);
 
-        if (!field.isStatic()) {
+        if (!field.isStatic() && cdecl != null ) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
             String instance = classToInstanceName(cdecl);
             String fieldName = field.getVariables().get(0).getNameAsString();
@@ -463,4 +441,8 @@ public class DTOHandler extends ClassProcessor {
         this.cu = cu;
     }
 
+    @Override
+    protected ModifierVisitor<?> createTypeCollector() {
+        return new ClassProcessor.TypeCollector();
+    }
 }

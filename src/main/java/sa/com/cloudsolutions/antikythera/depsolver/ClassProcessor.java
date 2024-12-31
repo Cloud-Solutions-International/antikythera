@@ -512,38 +512,42 @@ public class ClassProcessor extends AbstractCompiler {
             CompilationUnit tmp = cu;
             cu = cu.clone();
 
-            expandWildCards(cu);
-            allImports.addAll(cu.getImports());
-            cu.setImports(new NodeList<>());
-
-            for (var t : cu.getTypes()) {
-                if (t.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                    if (!cdecl.isInnerClass()) {
-                        /*
-                         * we are iterating through all the types defined in the source file through the for loop
-                         * above. At this point we create a visitor and identifying the various dependencies will
-                         * be the job of the visitor.
-                         * Because the visitor will not look at parent classes so we do that below.
-                         */
-                        cdecl.accept(createTypeCollector(), null);
-                    }
-                    for(var ext : cdecl.getExtendedTypes()) {
-                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
-                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
-                        addEdgeFromImport(t, ext, imp);
-                    }
-                }
-            }
+            visitTypes();
 
             cu.getImports().addAll(keepImports);
             cu = tmp;
         }
     }
 
+    protected void visitTypes() {
+        expandWildCards(cu);
+        allImports.addAll(cu.getImports());
+        cu.setImports(new NodeList<>());
+
+        for (var t : cu.getTypes()) {
+            if (t.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                if (!cdecl.isInnerClass()) {
+                    /*
+                     * we are iterating through all the types defined in the source file through the for loop
+                     * above. At this point we create a visitor and identifying the various dependencies will
+                     * be the job of the visitor.
+                     * Because the visitor will not look at parent classes so we do that below.
+                     */
+                    cdecl.accept(createTypeCollector(), null);
+                }
+                for(var ext : cdecl.getExtendedTypes()) {
+                    ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
+                    ImportDeclaration imp = resolveImport(parent.getNameAsString());
+                    addEdgeFromImport(t, ext, imp);
+                }
+            }
+        }
+    }
+
     /**
      * Puts all the classes marked as dependencies of the current class through java parser.
-     * @throws IOException
+     * @throws IOException if source file could not be processed
      */
     protected void compileDependencies() throws IOException {
         Optional<String> fullyQualifiedName = getPublicType(cu).getFullyQualifiedName();
@@ -605,7 +609,8 @@ public class ClassProcessor extends AbstractCompiler {
         NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
         for (AnnotationExpr annotation : field.getAnnotations()) {
             String annotationName = annotation.getNameAsString();
-            if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
+            if (annotationName.equals("JsonFormat") || annotationName.equals("Transient")
+                    || annotationName.equals("JsonIgnore")) {
                 resolveImport(annotationName);
                 filteredAnnotations.add(annotation);
             }
@@ -620,9 +625,7 @@ public class ClassProcessor extends AbstractCompiler {
         field.setAnnotations(filteredAnnotations);
     }
 
-    private ModifierVisitor createTypeCollector() {
+    protected ModifierVisitor<?> createTypeCollector() {
         return new TypeCollector();
     }
-
-
 }
