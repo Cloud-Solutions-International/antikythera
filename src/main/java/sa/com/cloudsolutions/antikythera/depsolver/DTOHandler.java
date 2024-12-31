@@ -174,34 +174,7 @@ public class DTOHandler extends ClassProcessor {
             String methodName = md.getNameAsString();
             if (methodName.startsWith("get") || methodName.startsWith("set")) {
                 keep.add(md);
-
-                Optional<BlockStmt> body = md.getBody();
-                if(body.isPresent()) {
-                    NodeList<Statement> statements = body.get().getStatements();
-                    if(statements.size() > 1 || statements.get(0).isBlockStmt() || statements.get(0).isIfStmt()) {
-                        if (methodName.startsWith("get")) {
-                            if(md.getParameters().isEmpty()) {
-                                body.get().getStatements().clear();
-                                body.get().addStatement(new ReturnStmt(new NameExpr(methodName.replaceFirst("get", ""))));
-                            }
-                            else {
-                                keep.remove(md);
-                            }
-                        }
-                        else if (methodName.startsWith("set")) {
-                            body.get().getStatements().clear();
-                            if (!md.getParameters().isEmpty()) {
-                                String fieldName = classToInstanceName(methodName.replaceFirst("set", ""));
-                                Optional<FieldDeclaration> fd = classDecl.getFieldByName(fieldName);
-                                Parameter parameter = md.getParameters().get(0);
-                                if (fd.isPresent() && fd.get().getElementType().equals(parameter.getType())) {
-                                    body.get().addStatement(new AssignExpr(new NameExpr("this." + fieldName),
-                                            new NameExpr(parameter.getNameAsString()), AssignExpr.Operator.ASSIGN));
-                                }
-                            }
-                        }
-                    }
-                }
+                md.getBody().ifPresent(body -> processBadGettersSetters(classDecl, md, body, methodName, keep));
             }
         }
         // for some reason clear throws an exception
@@ -210,6 +183,33 @@ public class DTOHandler extends ClassProcessor {
             classDecl.addMember(md);
         }
 
+    }
+
+    private void processBadGettersSetters(ClassOrInterfaceDeclaration classDecl, MethodDeclaration md, BlockStmt body, String methodName, Set<MethodDeclaration> keep) {
+        NodeList<Statement> statements = body.getStatements();
+        if(statements.size() > 1 || statements.get(0).isBlockStmt() || statements.get(0).isIfStmt()) {
+            if (methodName.startsWith("get")) {
+                if(md.getParameters().isEmpty()) {
+                    body.getStatements().clear();
+                    body.addStatement(new ReturnStmt(new NameExpr(methodName.replaceFirst("get", ""))));
+                }
+                else {
+                    keep.remove(md);
+                }
+            }
+            else if (methodName.startsWith("set")) {
+                body.getStatements().clear();
+                if (!md.getParameters().isEmpty()) {
+                    String fieldName = classToInstanceName(methodName.replaceFirst("set", ""));
+                    Optional<FieldDeclaration> fd = classDecl.getFieldByName(fieldName);
+                    Parameter parameter = md.getParameters().get(0);
+                    if (fd.isPresent() && fd.get().getElementType().equals(parameter.getType())) {
+                        body.addStatement(new AssignExpr(new NameExpr("this." + fieldName),
+                                new NameExpr(parameter.getNameAsString()), AssignExpr.Operator.ASSIGN));
+                    }
+                }
+            }
+        }
     }
 
     /**
