@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class    Bunches {
+public class Bunches {
 
     public static void main(String[] args) {
         Bunches bunches = new Bunches();

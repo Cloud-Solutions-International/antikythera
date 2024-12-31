@@ -1,9 +1,11 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.sun.xml.bind.v2.schemagen.xmlschema.Import;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -27,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -184,7 +187,7 @@ public class RepositoryParser extends ClassProcessor {
                         Optional<NodeList<Type>> t = parent.getTypeArguments();
                         if (t.isPresent()) {
                             entityType = t.get().get(0);
-                            entityCu = findEntity(cu, entityType);
+                            entityCu = findEntity(entityType);
                             table = findTableName(entityCu);
                         }
                         break;
@@ -419,20 +422,21 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Find and parse the given entity.
      *
-     * @param cu
-     * @param entity a type representing the entity
+     * @param fd FieldDeclaration for which we need to find the compilation unit
      * @return a compilation unit
-     * @throws FileNotFoundException if the entity cannot be found in the AUT
      */
-    public static CompilationUnit findEntity(CompilationUnit cu, Type entity) {
-        String nameAsString = AbstractCompiler.findFullyQualifiedName(cu, entity.asClassOrInterfaceType().getNameAsString());
-        return AntikytheraRunTime.getCompilationUnit(nameAsString);
+    public static CompilationUnit findEntity(Type fd) {
+        return fd.findCompilationUnit().map(cu -> {
+            String nameAsString = AbstractCompiler.findFullyQualifiedName(cu, fd.toString());
+            return AntikytheraRunTime.getCompilationUnit(nameAsString);
+        }).orElse(null);
     }
 
+
     /**
-     * Converts the fields in an Entity to snake case whcih is the usual pattern for columns
-     * @param str
-     * @return
+     * Converts the fields in an Entity to snake case which is the usual pattern for columns
+     * @param str A camel cased variable
+     * @return a snake cased variable
      */
     public static String camelToSnake(String str) {
         if(str.equalsIgnoreCase("patientpomr")) {
@@ -504,7 +508,7 @@ public class RepositoryParser extends ClassProcessor {
         rql.setIsNative(isNative);
         rql.setEntityType(entityType);
         rql.setTable(table);
-        rql.setQuery(md.findCompilationUnit().get(), query);
+        rql.setQuery(query);
         return rql;
     }
 
@@ -521,10 +525,11 @@ public class RepositoryParser extends ClassProcessor {
         boolean ordering = false;
         String next = "";
 
-        for (int i = 0; i < components.size(); i++) {
-            String component = components.get(i);
-            String tableName = findTableName(entityCu);
-            if (tableName != null) {
+        String tableName = findTableName(entityCu);
+        if (tableName != null) {
+            for (int i = 0; i < components.size(); i++) {
+                String component = components.get(i);
+
                 if (i < components.size() - 1) {
                     next = components.get(i + 1);
                 }
@@ -572,10 +577,11 @@ public class RepositoryParser extends ClassProcessor {
                         }
                     }
                 }
-            } else {
-                logger.warn("Table name cannot be null");
             }
+        } else {
+            logger.warn("Table name cannot be null");
         }
+
         if (top) {
             if (dialect.equals(ORACLE)) {
                 sql.append(" AND ROWNUM = 1");

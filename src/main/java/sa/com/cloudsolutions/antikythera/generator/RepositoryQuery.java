@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
@@ -40,11 +41,10 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -216,7 +216,6 @@ public class RepositoryQuery {
      *
      * @param stmt   the sql statement
      * @param entity a compilation unit representing the entity.
-     * @throws FileNotFoundException
      */
     void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws AntikytheraException {
 
@@ -283,7 +282,6 @@ public class RepositoryQuery {
      * query through JDBC.
      * @param entity the primary table or view for the join
      * @param select the select statement
-     * @throws FileNotFoundException if we are unable to find related entities.
      */
     private void processJoins(CompilationUnit entity, PlainSelect select) throws AntikytheraException {
         List<CompilationUnit> units = new ArrayList<>();
@@ -306,7 +304,7 @@ public class RepositoryQuery {
                         // hence the need to loop through here.
                         for(CompilationUnit unit : units) {
                             String field = parts[1].split(" ")[0];
-                            var x = unit.getType(0).getFieldByName(field);
+                            Optional<FieldDeclaration> x = unit.getType(0).getFieldByName(field);
                             if(x.isPresent()) {
                                 var member = x.get();
                                 String lhs = null;
@@ -332,7 +330,7 @@ public class RepositoryQuery {
                                     }
                                 }
 
-                                other = RepositoryParser.findEntity(member.findCompilationUnit().get(), member.getElementType());
+                                other = RepositoryParser.findEntity(member.getElementType());
 
                                 String tableName = RepositoryParser.findTableName(other);
                                 if (tableName == null || other == null) {
@@ -394,15 +392,15 @@ public class RepositoryQuery {
         this.table = table;
     }
 
-    public void setQuery(CompilationUnit cu, String query) {
+    public void setQuery(String query) {
         this.originalQuery = query;
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
             this.simplifiedStatement = CCJSqlParserUtil.parse(query);
 
-            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(cu, entityType));
-            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(cu, entityType));
+            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
+            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(entityType));
 
             if (simplifiedStatement instanceof PlainSelect ps) {
                 simplifyWhereClause(ps.getWhere());
@@ -483,7 +481,7 @@ public class RepositoryQuery {
      * will give a non-empty result. That's one of the key challenges of API and Integration
      * testing.
      *
-     * If we are able to run the query with a very limited where clause or a non existent where
+     * If we are able to run the query with a very limited where clause or a non-existent where
      * clause we can then examine the result to figure out what values can actually be used to
      * @param expr the expression to be modified
      *
