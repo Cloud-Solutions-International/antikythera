@@ -9,14 +9,14 @@ import java.util.List;
 /**
  * Represents a parameter in the query method.
  *
- * Lets get the normenclature sorted out. Though arguments and parameters are used interchangeably
+ * Let's get the nomenclature sorted out. Though arguments and parameters are used interchangeably
  * they have a subtle difference.
  *     An argument is the value that is passed to a function when it is called.
  *     A parameter refers to the variable that is used in the function declaration
  */
 public class QueryMethodParameter {
     /**
-     * The name of the argument as defined in the respository function
+     * The name of the argument as defined in the repository function
      */
     Parameter parameter;
 
@@ -65,8 +65,8 @@ public class QueryMethodParameter {
 
     /**
      * The name of the jdbc named parameter.
-     * These can typicall be identified in the JPARepository function by the @Param annotation.
-     * If they are used along side custom queries, the query will have a place holder that starts
+     * These can typically be identified in the JPARepository function by the @Param annotation.
+     * If they are used alongside custom queries, the query will have a place holder that starts
      * with the : character and matches the name of the parameter.
      * example:
      *     select u from User u where u.firstname = :firstname or u.lastname = :lastname

@@ -73,7 +73,7 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private String commonPath;
     /**
-     * The names thave have already been assigned to various tests.
+     * The names have have already been assigned to various tests.
      * Because of overloaded methods and the need to write multiple tests for a single end point
      * we may end up with duplicate method names. To avoid that we add a suffix of the query
      * string arguments to distinguish overloaded and a alphabetic suffix to identify multiple
@@ -171,7 +171,7 @@ public class SpringTestGenerator extends  TestGenerator {
         final MethodDeclaration testMethod = buildTestMethod(md);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
-        BlockStmt body = testMethod.getBody().get();
+        BlockStmt body = getBody(testMethod);
 
         if(md.getParameters().isEmpty()) {
             /*
@@ -233,15 +233,19 @@ public class SpringTestGenerator extends  TestGenerator {
         return resp.getType();
     }
 
-    private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
-
-        Type returnType = getReturnType(mut, resp);
-
-        BlockStmt body = md.getBody().orElseGet(() -> {
+    private BlockStmt getBody(MethodDeclaration md) {
+        return md.getBody().orElseGet(() -> {
             BlockStmt blockStmt = new BlockStmt();
             md.setBody(blockStmt);
             return blockStmt;
         });
+    }
+
+    private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
+
+        Type returnType = getReturnType(mut, resp);
+
+        BlockStmt body = getBody(md);
 
         if (resp.getBody() != null) {
             if (resp.getBody().getValue() != null && returnType.isClassOrInterfaceType()) {
@@ -286,7 +290,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         MethodDeclaration testMethod = buildTestMethod(md);
         MethodCallExpr makePost = new MethodCallExpr(call);
-        BlockStmt body = testMethod.getBody().get();
+        BlockStmt body = getBody(testMethod);
 
         ControllerRequest request = new ControllerRequest();
         request.setPath(getPath(annotation).replace("\"", ""));
@@ -392,7 +396,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 MethodCallExpr methodCallExpr = new MethodCallExpr("uploadFile");
                 methodCallExpr.addArgument(new StringLiteralExpr(testMethod.getNameAsString()));
                 variableDeclarator.setInitializer(methodCallExpr);
-                testMethod.getBody().get().addStatement(new VariableDeclarationExpr(variableDeclarator));
+                getBody(testMethod).addStatement(new VariableDeclarationExpr(variableDeclarator));
                 break;
             }
 
@@ -445,7 +449,7 @@ public class SpringTestGenerator extends  TestGenerator {
         variableDeclarator.setInitializer(methodCallExpr);
         VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
 
-        testMethod.getBody().get().addStatement(variableDeclarationExpr);
+        getBody(testMethod).addStatement(variableDeclarationExpr);
     }
 
 

@@ -399,7 +399,7 @@ public class RepositoryParser extends ClassProcessor {
      * Usually the entity will have an annotation giving the actual name of the table.
      *
      * This method is made static because when processing joins there are multiple entities
-     * and there by multipe table names involved.
+     * and there by multiple table names involved.
      *
      * @param entity a TypeWrapper representing the entity
      * @return the table name as a string.
