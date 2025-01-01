@@ -14,8 +14,6 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
-import org.aspectj.weaver.ast.Call;
-import org.checkerframework.checker.units.qual.N;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -53,6 +51,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -104,7 +103,7 @@ public class Evaluator {
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
-    private final Deque<TryStmt> catching = new LinkedList<>();
+    protected final Deque<TryStmt> catching = new LinkedList<>();
 
     static {
         try {
@@ -176,11 +175,7 @@ public class Evaluator {
             /*
              * Binary expressions can also be difficult
              */
-            BinaryExpr binaryExpr = expr.asBinaryExpr();
-            Expression left = binaryExpr.getLeft();
-            Expression right = binaryExpr.getRight();
-
-            return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
+            return evaluateBinaryExpression(expr);
         } else if (expr.isUnaryExpr()) {
             return  evaluateUnaryExpression(expr);
         } else if (expr.isMethodCallExpr()) {
@@ -212,8 +207,28 @@ public class Evaluator {
             return evaluateExpression(expr.asEnclosedExpr().getInner());
         } else if(expr.isCastExpr()) {
             return evaluateExpression(expr.asCastExpr().getExpression());
+        } else if (expr.isConditionalExpr()) {
+            return evaluateConditionalExpression(expr.asConditionalExpr());
         }
         return null;
+    }
+
+    private Variable evaluateBinaryExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+        BinaryExpr binaryExpr = expr.asBinaryExpr();
+        Expression left = binaryExpr.getLeft();
+        Expression right = binaryExpr.getRight();
+
+        return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
+    }
+
+    private Variable evaluateConditionalExpression(ConditionalExpr conditionalExpr) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = evaluateBinaryExpression(conditionalExpr.getCondition());
+        if (v != null && v.getValue().equals(Boolean.TRUE)) {
+            return evaluateExpression(conditionalExpr.getThenExpr());
+        }
+        else {
+            return evaluateExpression(conditionalExpr.getElseExpr());
+        }
     }
 
     /**
@@ -488,7 +503,7 @@ public class Evaluator {
         ClassOrInterfaceType type = oce.getType();
         Variable vx;
 
-        vx = createUsingEvaluator(type, oce);
+        vx = createUsingEvaluator(type, oce, instructionPointer);
 
         if (vx == null) {
             vx = createUsingReflection(type, oce);
@@ -530,8 +545,8 @@ public class Evaluator {
      * @param type the class or interface type that we need to create an instance of
      * @param oce the object creation expression.
      */
-    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
-        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, oce);
+    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws AntikytheraException, ReflectiveOperationException {
+        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
         if (match != null) {
             Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
             annonymousOverrides(type, oce, eval);
@@ -915,37 +930,33 @@ public class Evaluator {
     }
 
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        try {
-            if (v != null) {
-                NodeList<Expression> arguments = methodCall.getArguments();
-                if(arguments.isNonEmpty())
-                {
-                    Expression argument = arguments.get(0);
-                    if(argument.isMethodReferenceExpr()) {
-                        return evaluateMethodReference(v, arguments);
-                    }
-                    else if (argument.isLambdaExpr()) {
-                        return evaluateLambda(v, arguments);
-                    }
+        if (v != null) {
+            NodeList<Expression> arguments = methodCall.getArguments();
+            if(arguments.isNonEmpty())
+            {
+                Expression argument = arguments.get(0);
+                if(argument.isMethodReferenceExpr()) {
+                    return evaluateMethodReference(v, arguments);
                 }
-                ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
-                if (v.getValue() instanceof Evaluator eval) {
-                    for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
-                        /*
-                         * Push method arguments
-                         */
-                        AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
-                    }
-                    return eval.executeMethod(methodCall);
+                else if (argument.isLambdaExpr()) {
+                    return evaluateLambda(v, arguments);
                 }
-
-                return reflectiveMethodCall(v, reflectionArguments);
-            } else {
-                return executeMethod(methodCall);
             }
-        } catch (ReflectiveOperationException ex) {
-            throw new EvaluatorException("Error evaluating method call", ex);
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+
+            if (v.getValue() instanceof Evaluator eval) {
+                for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
+                    /*
+                     * Push method arguments
+                     */
+                    AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
+                }
+                return eval.executeMethod(methodCall);
+            }
+
+            return reflectiveMethodCall(v, reflectionArguments);
+        } else {
+            return executeMethod(methodCall);
         }
     }
 
@@ -1379,13 +1390,21 @@ public class Evaluator {
 
     public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-        List<Statement> statements = md.getBody().orElseThrow().getStatements();
-        NodeList<Parameter> parameters = md.getParameters();
-
         returnValue = null;
+
+        List<Statement> statements = md.getBody().orElseThrow().getStatements();
+        setupParameters(md);
+
+        executeBlock(statements);
+
+        return returnValue;
+    }
+
+    protected boolean setupParameters(MethodDeclaration md) {
+        NodeList<Parameter> parameters = md.getParameters();
+        ArrayList<Boolean> missing = new ArrayList<>();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
-
             /*
              * Our implementation differs from a standard Expression Evaluation engine in that we do not
              * throw an exception if the stack is empty.
@@ -1396,15 +1415,27 @@ public class Evaluator {
              */
             if (AntikytheraRunTime.isEmptyStack()) {
                 logger.warn("Stack is empty");
+                missing.add(true);
             }
             else {
-                setLocal(md.getBody().get(), p.getNameAsString(), AntikytheraRunTime.pop());
+                Variable va = AntikytheraRunTime.pop();
+                setLocal(md.getBody().get(), p.getNameAsString(), va);
+                p.getAnnotationByName("RequestParam").ifPresent(a -> {
+                    if (a.isNormalAnnotationExpr()) {
+                        NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
+                        for (MemberValuePair pair : ne.getPairs()) {
+                            if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
+                                return;
+                            }
+                        }
+                    }
+                    if (va == null || va.getValue() == null) {
+                        missing.add(true);
+                    }
+                });
             }
         }
-
-        executeBlock(statements);
-
-        return returnValue;
+        return missing.isEmpty();
     }
 
     /**

@@ -18,8 +18,11 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class Reflect {
+    public static final String BOOLEAN = "boolean";
+    public static final String FLOAT = "float";
+    public static final String DOUBLE = "double";
     /**
-     * Keeps a map of wrapper types to their primitive counter part
+     * Keeps a map of wrapper types to their primitive counterpart
      * for example Integer.class -> int.class
      */
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
@@ -51,7 +54,7 @@ public class Reflect {
     /**
      * Build the suitable set of arguments for use with a reflective  method call
      * @param methodCall ObjectCreationExpr from java parser , which will be used as the basis for finding the
-     *      *            method to be called and it's argument.
+     *      *            method to be called along with it's arguments.
      * @param evaluator  the evaluator to use to evaluate the arguments if any
      * @return A ReflectionArguments object which contains all the information required to execute a method
      *          using reflection.
@@ -106,11 +109,11 @@ public class Reflect {
 
     public static String primitiveToWrapper(String className) {
         return switch (className) {
-            case "boolean" -> "java.lang.Boolean";
+            case BOOLEAN -> "java.lang.Boolean";
             case "int" -> "java.lang.Integer";
             case "long" -> "java.lang.Long";
-            case "float" -> "java.lang.Float";
-            case "double" -> "java.lang.Double";
+            case FLOAT -> "java.lang.Float";
+            case DOUBLE -> "java.lang.Double";
             case "char" -> "java.lang.Character";
             default -> className;
         };
@@ -119,10 +122,10 @@ public class Reflect {
     public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
         return switch (elementType) {
             case "int" -> int.class;
-            case "double" -> double.class;
-            case "boolean" -> boolean.class;
+            case DOUBLE -> double.class;
+            case BOOLEAN -> boolean.class;
             case "long" -> long.class;
-            case "float" -> float.class;
+            case FLOAT -> float.class;
             case "short" -> short.class;
             case "byte" -> byte.class;
             case "char" -> char.class;
@@ -133,10 +136,10 @@ public class Reflect {
     public static Object getDefault(String elementType)  {
         return switch (elementType) {
             case "int" -> 0;
-            case "double" -> 0.0;
-            case "boolean" -> false;
+            case DOUBLE -> 0.0;
+            case BOOLEAN -> false;
             case "long" -> 0L;
-            case "float" -> 0.0f;
+            case FLOAT -> 0.0f;
             case "short" -> Short.valueOf("0");
             case "byte", "char" -> 0x0;
             default -> null;
@@ -184,9 +187,8 @@ public class Reflect {
                     continue;
                 }
                 boolean found = true;
-                for(int i = 0 ; i < paramTypes.length ; i++) {
-                    if (findMatch(paramTypes, types, i)) continue;
-                    if(types[i].getName().equals("java.lang.Object")) {
+                for (int i = 0 ; i < paramTypes.length ; i++) {
+                    if (findMatch(paramTypes, types, i) || types[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
                     found = false;

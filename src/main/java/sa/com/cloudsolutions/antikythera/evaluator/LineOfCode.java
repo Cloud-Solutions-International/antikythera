@@ -59,6 +59,11 @@ public class LineOfCode {
         this.statement = statement;
     }
 
+    public LineOfCode(Statement st, int color) {
+        this.statement = st;
+        this.color = color;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if(obj instanceof LineOfCode b) {

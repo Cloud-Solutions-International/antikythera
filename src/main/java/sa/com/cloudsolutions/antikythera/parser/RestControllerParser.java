@@ -4,6 +4,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -30,6 +31,9 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassDependency;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -47,7 +51,6 @@ public class RestControllerParser extends ClassProcessor {
      */
     private static Stats stats = new Stats();
 
-    private boolean evaluatorUnsupported = false;
     File current;
     private SpringEvaluator evaluator;
 
@@ -203,24 +206,30 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-            evaluatorUnsupported = false;
 
             if (checkEligible(md)) {
-                evaluator.setArgumentGenerator(new NullArgumentGenerator());
-                evaluator.reset();
-                evaluator.resetColors();
-                AntikytheraRunTime.reset();
-                try {
-                    evaluator.visit(md);
-                } catch (AntikytheraException | ReflectiveOperationException e) {
-                    if (Settings.getProperty("dependencies.on_error").equals("log")) {
-                        logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-                    } else {
-                        throw new GeneratorException(e);
-                    }
-                } finally {
-                    logger.info(md.getNameAsString());
+                evaluateMethod(md, new NullArgumentGenerator());
+                evaluateMethod(md, new DummyArgumentGenerator());
+                evaluateMethod(md, new DatabaseArgumentGenerator());
+            }
+        }
+
+        private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+            evaluator.setArgumentGenerator(gen);
+            evaluator.reset();
+            evaluator.resetColors();
+            AntikytheraRunTime.reset();
+            try {
+                evaluator.visit(md);
+
+            } catch (AntikytheraException | ReflectiveOperationException e) {
+                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
+                } else {
+                    throw new GeneratorException(e);
                 }
+            } finally {
+                logger.info(md.getNameAsString());
             }
         }
 
@@ -231,12 +240,9 @@ public class RestControllerParser extends ClassProcessor {
             if (md.isPublic()) {
                 Optional<String> ctrl  = Settings.getProperty("controllers", String.class);
                 if(ctrl.isPresent()) {
-                    String[] controllers = ctrl.get().split("#");
-                    if (controllers.length > 1) {
-                        if (md.getNameAsString().equals(controllers[controllers.length - 1])) {
-                            return true;
-                        }
-                        return false;
+                    String[] crs = ctrl.get().split("#");
+                    if (crs.length > 1) {
+                        return md.getNameAsString().equals(crs[crs.length - 1]);
                     }
                 }
                 return true;
@@ -262,8 +268,7 @@ public class RestControllerParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration md, Void arg) {
             super.visit(md, arg);
-            evaluatorUnsupported = false;
-                if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
+            if (md.getAnnotationByName("ExceptionHandler").isPresent()) {
                 return;
             }
             if (md.isPublic()) {
@@ -297,7 +302,7 @@ public class RestControllerParser extends ClassProcessor {
                     if (SpringEvaluator.getRepositories().containsKey(classToInstanceName(shortName))) {
                         return;
                     }
-                    solveTypeDependencies(field.findAncestor(ClassOrInterfaceDeclaration.class).orElseGet(null), variable.getType());
+                    field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(f -> solveTypeDependencies(f, variable.getType()));
                 }
             }
         }
@@ -340,12 +345,9 @@ public class RestControllerParser extends ClassProcessor {
                 super.visit(statement, md);
                 Expression expr = statement.getExpression();
                 if(expr.isVariableDeclarationExpr()) {
-                    Type t = expr.asVariableDeclarationExpr().getElementType();
+                    final Type t = expr.asVariableDeclarationExpr().getElementType();
                     if (!t.isPrimitiveType()) {
-                        TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-                        if (from != null) {
-                            createEdge(t, from);
-                        }
+                        md.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(from -> createEdge(t, from));
                     }
                 }
             }
@@ -354,13 +356,11 @@ public class RestControllerParser extends ClassProcessor {
         private void identifyReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
             TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
             Expression expression = returnStmt.getExpression().orElse(null);
-            if (expression != null && from != null) {
-                if (expression.isObjectCreationExpr()) {
-                    ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-                    if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                        for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
-                            solveTypeDependencies(from, typeArg);
-                        }
+            if (expression != null && from != null && expression.isObjectCreationExpr()) {
+                ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+                if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                    for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+                        solveTypeDependencies(from, typeArg);
                     }
                 }
             }
@@ -374,13 +374,16 @@ public class RestControllerParser extends ClassProcessor {
      * @return the path from the RequestMapping Annotation or an empty string
      */
     private String getCommonPath() {
-        for (var classAnnotation : getPublicType(cu).getAnnotations()) {
-            if (classAnnotation.getName().asString().equals("RequestMapping")) {
+        TypeDeclaration<?> decl =  getPublicType(cu);
+        if (decl != null) {
+            Optional<AnnotationExpr> ann = decl.getAnnotationByName("RequestMapping");
+            if (ann.isPresent()) {
+                AnnotationExpr classAnnotation = ann.get();
                 if (classAnnotation.isNormalAnnotationExpr()) {
                     return classAnnotation.asNormalAnnotationExpr().getPairs().get(0).getValue().toString();
                 } else {
                     var memberValue = classAnnotation.asSingleMemberAnnotationExpr().getMemberValue();
-                    if(memberValue.isArrayInitializerExpr()) {
+                    if (memberValue.isArrayInitializerExpr()) {
                         return memberValue.asArrayInitializerExpr().getValues().get(0).toString();
                     }
                     return classAnnotation.asSingleMemberAnnotationExpr().getMemberValue().toString();

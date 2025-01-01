@@ -77,30 +77,7 @@ public class DTOHandler extends ClassProcessor {
             CompilationUnit tmp = cu;
             cu = cu.clone();
 
-            expandWildCards(cu);
-
-            allImports.addAll(cu.getImports());
-            cu.setImports(new NodeList<>());
-
-            for (var t : cu.getTypes()) {
-                if (t.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                    if (!cdecl.isInnerClass()) {
-                        /*
-                         * we are iterating through all the types defined in the source file through the for loop
-                         * above. At this point we create a visitor and identifying the various dependencies will
-                         * be the job of the visitor.
-                         * Because the visitor will not look at parent classes so we do that below.
-                         */
-                        cdecl.accept(new TypeCollector(), null);
-                    }
-                    for(var ext : cdecl.getExtendedTypes()) {
-                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
-                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
-                        addEdgeFromImport(t, ext, imp);
-                    }
-                }
-            }
+            visitTypes();
 
             if (!AntikytheraRunTime.isInterface( AbstractCompiler.pathToClass(relativePath))) {
                 removeUnwanted();
@@ -197,34 +174,7 @@ public class DTOHandler extends ClassProcessor {
             String methodName = md.getNameAsString();
             if (methodName.startsWith("get") || methodName.startsWith("set")) {
                 keep.add(md);
-
-                Optional<BlockStmt> body = md.getBody();
-                if(body.isPresent()) {
-                    NodeList<Statement> statements = body.get().getStatements();
-                    if(statements.size() > 1 || statements.get(0).isBlockStmt() || statements.get(0).isIfStmt()) {
-                        if (methodName.startsWith("get")) {
-                            if(md.getParameters().isEmpty()) {
-                                body.get().getStatements().clear();
-                                body.get().addStatement(new ReturnStmt(new NameExpr(methodName.replaceFirst("get", ""))));
-                            }
-                            else {
-                                keep.remove(md);
-                            }
-                        }
-                        else if (methodName.startsWith("set")) {
-                            body.get().getStatements().clear();
-                            if (!md.getParameters().isEmpty()) {
-                                String fieldName = classToInstanceName(methodName.replaceFirst("set", ""));
-                                Optional<FieldDeclaration> fd = classDecl.getFieldByName(fieldName);
-                                Parameter parameter = md.getParameters().get(0);
-                                if (fd.isPresent() && fd.get().getElementType().equals(parameter.getType())) {
-                                    body.get().addStatement(new AssignExpr(new NameExpr("this." + fieldName),
-                                            new NameExpr(parameter.getNameAsString()), AssignExpr.Operator.ASSIGN));
-                                }
-                            }
-                        }
-                    }
-                }
+                md.getBody().ifPresent(body -> processBadGettersSetters(classDecl, md, body, methodName, keep));
             }
         }
         // for some reason clear throws an exception
@@ -233,6 +183,33 @@ public class DTOHandler extends ClassProcessor {
             classDecl.addMember(md);
         }
 
+    }
+
+    private void processBadGettersSetters(ClassOrInterfaceDeclaration classDecl, MethodDeclaration md, BlockStmt body, String methodName, Set<MethodDeclaration> keep) {
+        NodeList<Statement> statements = body.getStatements();
+        if(statements.size() > 1 || statements.get(0).isBlockStmt() || statements.get(0).isIfStmt()) {
+            if (methodName.startsWith("get")) {
+                if(md.getParameters().isEmpty()) {
+                    body.getStatements().clear();
+                    body.addStatement(new ReturnStmt(new NameExpr(methodName.replaceFirst("get", ""))));
+                }
+                else {
+                    keep.remove(md);
+                }
+            }
+            else if (methodName.startsWith("set")) {
+                body.getStatements().clear();
+                if (!md.getParameters().isEmpty()) {
+                    String fieldName = classToInstanceName(methodName.replaceFirst("set", ""));
+                    Optional<FieldDeclaration> fd = classDecl.getFieldByName(fieldName);
+                    Parameter parameter = md.getParameters().get(0);
+                    if (fd.isPresent() && fd.get().getElementType().equals(parameter.getType())) {
+                        body.addStatement(new AssignExpr(new NameExpr("this." + fieldName),
+                                new NameExpr(parameter.getNameAsString()), AssignExpr.Operator.ASSIGN));
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -246,7 +223,8 @@ public class DTOHandler extends ClassProcessor {
         for (AnnotationExpr annotation : annotations) {
             String annotationName = annotation.getNameAsString();
             if (annotationName.equals(STR_GETTER) || annotationName.equals("Setter") || annotationName.equals("Data")
-                    || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")) {
+                    || annotationName.equals("NoArgsConstructor") || annotationName.equals("AllArgsConstructor")
+                    || annotationName.equals("Transient")) {
                 preserve.add(annotation);
                 ImportDeclaration importDeclaration = new ImportDeclaration("lombok." + annotationName, false, false);
                 cu.addImport(importDeclaration);
@@ -265,58 +243,15 @@ public class DTOHandler extends ClassProcessor {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-            String fieldAsString = field.getElementType().toString();
-            if (fieldAsString.equals("DateScheduleUtil")
-                    || fieldAsString.equals("Logger")
-                    || fieldAsString.equals("Sort.Direction")) {
-                return null;
-            }
-
-            // Filter annotations to retain only @JsonFormat and @JsonIgnore
-            NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
-            for (AnnotationExpr annotation : field.getAnnotations()) {
-                String annotationName = annotation.getNameAsString();
-                if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
-                    resolveImport(annotationName);
-                    filteredAnnotations.add(annotation);
-                }
-                else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
-                    switch(field.getElementType().asString()) {
-                        case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
-                        break;
-                    }
-                }
-            }
-            field.getAnnotations().clear();
-            field.setAnnotations(filteredAnnotations);
+            collectField(field);
 
             Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
 
             if (ancestor.isPresent()) {
-                /*
-                 * We need not have this ancestor check because java can't have global variables but that's the
-                 * way the library is structured.
-                 * Having identified that we have a field, we need to solve it's type dependencies. Matters are
-                 * slightly complicated by the fact that sometimes a field may have an initializer. This may be
-                 * a method call (which we will ignore for now) but this is more often simply an object creation
-                 * It may look like this:
-                 *
-                 *     List<String> list = new ArrayList<>();
-                 *
-                 * Because the field type and the initializer differ we need to solve the type dependencies for
-                 * the initializer as well.
-                 */
-                solveTypeDependencies(ancestor.get(), field.getElementType());
+                collectFieldAncestors(field, ancestor.get());
                 VariableDeclarator firstVariable = field.getVariables().get(0);
-                firstVariable.getInitializer().ifPresent(init -> {
-                    if (init.isObjectCreationExpr()) {
-                        solveTypeDependencies(ancestor.get(), init.asObjectCreationExpr().getType());
-                    }
-                });
-
 
                 // handle custom getters and setters
-
                 String fieldName = firstVariable.getNameAsString();
                 TypeDeclaration<?> cdecl = getPublicType(cu);
                 String className = cdecl.getNameAsString();
@@ -403,7 +338,7 @@ public class DTOHandler extends ClassProcessor {
     public static MethodCallExpr generateRandomValue(FieldDeclaration field, CompilationUnit cu) {
         TypeDeclaration<?> cdecl = AbstractCompiler.getPublicType(cu);
 
-        if (!field.isStatic()) {
+        if (!field.isStatic() && cdecl != null ) {
             boolean isArray = field.getElementType().getParentNode().toString().contains("[]");
             String instance = classToInstanceName(cdecl);
             String fieldName = field.getVariables().get(0).getNameAsString();
@@ -506,4 +441,8 @@ public class DTOHandler extends ClassProcessor {
         this.cu = cu;
     }
 
+    @Override
+    protected ModifierVisitor<?> createTypeCollector() {
+        return new ClassProcessor.TypeCollector();
+    }
 }

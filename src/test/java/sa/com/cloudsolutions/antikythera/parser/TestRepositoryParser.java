@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,12 +52,13 @@ class TestRepositoryParser {
     @Test
     void testFindTableName() {
 
-        assertEquals("table_name", RepositoryParser.findTableName(cu));
+        assertEquals("table_name", RepositoryParser.findTableName(new TypeWrapper(cu.getType(0))));
 
         cu = StaticJavaParser.parse("""
                 public class AdmissionClearanceTable implements Serializable {}
                 """);
-        assertEquals("admission_clearance_table", RepositoryParser.findTableName(cu));
+        assertEquals("admission_clearance_table",
+                RepositoryParser.findTableName(new TypeWrapper(cu.getType(0))));
     }
 
     @Test
