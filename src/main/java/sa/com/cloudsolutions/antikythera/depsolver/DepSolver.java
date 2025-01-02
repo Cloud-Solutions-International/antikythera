@@ -23,6 +23,7 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.stmt.*;
+import com.github.javaparser.ast.type.TypeParameter;
 import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -145,8 +146,15 @@ public class DepSolver {
             String returns = md.getTypeAsString();
 
             if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-//                System.out.println(returnType.toString());
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
+            }
+
+
+            // Handle generic type parameters
+            for (TypeParameter typeParameter : md.getTypeParameters()) {
+                for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
+                    node.addTypeArguments(bound);
+                }
             }
 
             for (Type thrownException : md.getThrownExceptions()) {
@@ -159,7 +167,6 @@ public class DepSolver {
             }
 
             if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
-
                 findImplementations(node, md);
             }
         }
