@@ -434,6 +434,9 @@ public class Resolver {
             }
         }
         else if (scope.isTypeExpr()) {
+            for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
+                Graph.createGraphNode(m);
+            }
             ImportUtils.addImport(node, scope.asTypeExpr().getType().asString());
         }
     }
