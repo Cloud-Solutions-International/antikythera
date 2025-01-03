@@ -506,8 +506,11 @@ public class DepSolver {
 
                 AssignExpr assignExpr = n.getExpression().asAssignExpr();
                 Expression expr = assignExpr.getValue();
-                ImportUtils.addImport(arg, expr);
-
+                try {
+                    Resolver.processExpression(arg, expr, new NodeList<>());
+                } catch (AntikytheraException e) {
+                    throw new RuntimeException(e);
+                }
 
                 if (assignExpr.getTarget().isFieldAccessExpr()) {
                     FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
