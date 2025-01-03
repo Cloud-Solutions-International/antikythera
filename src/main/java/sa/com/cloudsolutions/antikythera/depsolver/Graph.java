@@ -38,8 +38,9 @@ public class Graph {
      */
     public static GraphNode createGraphNode(Node n) throws AntikytheraException {
         GraphNode g = GraphNode.graphNodeFactory(n);
-
+        //System.out.println(g.toString());
         TypeDeclaration<?> cdecl = g.getEnclosingType();
+        //System.out.println(cdecl.toString());
         if (cdecl != null) {
             Optional<String> fullyQualifiedName = cdecl.getFullyQualifiedName();
             if (fullyQualifiedName.isPresent()) {
