@@ -153,15 +153,36 @@ public class DepSolver {
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
 
+            for (Type thrownException : md.getThrownExceptions()) {
+                ImportUtils.addImport(node, thrownException);
+            }
+
             if (md.getAnnotationByName("Override").isPresent()) {
                 findParentMethods(node, md);
             }
 
-            if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
+            // Handle generics and their bounds
+            md.getTypeParameters().forEach(typeParam -> {
+                typeParam.getTypeBound().forEach(bound -> {
+                    if (bound.isClassOrInterfaceType()) {
+                        try {
+                            node.addTypeArguments(bound.asClassOrInterfaceType());
+                            ClassOrInterfaceType boundClassType = bound.asClassOrInterfaceType();
+                            GraphNode boundNode = Graph.createGraphNode(boundClassType);
+                            stack.add(boundNode);
+                        } catch (AntikytheraException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+            });
+
+            if (node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
                 findImplementations(node, md);
             }
         }
     }
+
 
     private static void findImplementations(GraphNode node, MethodDeclaration md) throws AntikytheraException {
         ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
