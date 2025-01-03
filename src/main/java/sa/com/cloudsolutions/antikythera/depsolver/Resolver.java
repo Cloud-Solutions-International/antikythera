@@ -10,7 +10,6 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayAccessExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
-import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
@@ -20,7 +19,6 @@ import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -50,9 +48,9 @@ public class Resolver {
      */
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
-        if (decl != null && decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-            FieldDeclaration f = cdecl.getFieldByName(value.getNameAsString()).orElse(null);
+        if (decl != null) {
+
+            FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
             if (f != null) {
                 try {
                     node.addField(f);
@@ -194,7 +192,7 @@ public class Resolver {
     }
 
     public static Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae,
-                                                       GraphNode node, final Map<String, Type> names) throws AntikytheraException {
+                                                             GraphNode node, final Map<String, Type> names) throws AntikytheraException {
         if (names != null ) {
             Type t = names.get(scope.asNameExpr().getNameAsString());
 
@@ -251,37 +249,27 @@ public class Resolver {
     }
 
     public static void resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
-        final FieldAccessExpr fae = expr.asFieldAccessExpr();
+        FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
         if (scope.isNameExpr()) {
-            resolveScopedNameExpression(scope, fae, node, DepSolver.getNames()).ifPresent(t -> {
-                ImportWrapper wrapper = AbstractCompiler.findImport(node.getCompilationUnit(), t.asString());
-                if (wrapper != null && wrapper.getType() != null) {
-                    SimpleName name = fae.getName();
-                    wrapper.getType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(name.asString())).ifPresent(f -> {
-                        try {
-                            Graph.createGraphNode(f);
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    });
-                }
-                types.add(t);
-            });
-        } else if (scope.isFieldAccessExpr()) {
-            resolveFieldAccess(node, scope, types);
-
-
-        } else {
-            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
-            if (imp != null) {
-                node.getDestination().addImport(imp.getImport());
-                if (imp.isExternal()) {
-                    getExternalType(fae, imp).ifPresent(types::add);
+            resolveScopedNameExpression(scope, fae, node, null).ifPresent(types::add);
+        }
+        else {
+            if (scope.isFieldAccessExpr()) {
+                resolveFieldAccess(node, scope, types);
+            }
+            else {
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), fae.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp.getImport());
+                    if (imp.isExternal()) {
+                        getExternalType(fae, imp).ifPresent(types::add);
+                    }
                 }
             }
         }
     }
+
 
     static GraphNode chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
         if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce) {
@@ -428,10 +416,8 @@ public class Resolver {
                     }
                 });
             }
-        } else if (expr.isClassExpr()) {
-            ClassExpr ce = expr.asClassExpr();
-            ImportUtils.addImport(node, ce.getType().asString());
-        } else {
+        }
+        else {
             // seems other types dont need special handling they are caught else where
         }
     }
@@ -532,8 +518,8 @@ public class Resolver {
                 } else {
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
                     if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
                         if (imp.getMethodDeclaration() != null) {
+                            node.getDestination().addImport(imp.getImport());
                             Graph.createGraphNode(imp.getMethodDeclaration());
                         }
                     }
@@ -558,10 +544,9 @@ public class Resolver {
         if (t != null) {
             types.add(t);
         }
-        else if (node.getEnclosingType().isClassOrInterfaceDeclaration()){
-            ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
-            Optional<FieldDeclaration> fd = cdecl.getFieldByName(arg.asNameExpr().getNameAsString());
+        else {
 
+            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(arg.asNameExpr().getNameAsString());
             if (fd.isPresent()) {
                 node.addField(fd.get());
                 Type field = fd.get().getElementType();

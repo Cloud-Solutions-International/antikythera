@@ -30,14 +30,6 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                     node.getDestination().addImport(imp2.getImport());
                 }
             }
-            else if (n.getMemberValue().isClassExpr()) {
-                ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                        n.getMemberValue().asClassExpr().getTypeAsString()
-                );
-                if (imp2 != null) {
-                    node.getDestination().addImport(imp2.getImport());
-                }
-            }
             else if (n.getMemberValue().isBinaryExpr()) {
                 Resolver.resolveBinaryExpr(node, n.getMemberValue());
             }
