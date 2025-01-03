@@ -110,7 +110,7 @@ public class GraphNode {
         GraphNode tmp = new GraphNode(node);
         GraphNode g = Graph.getNodes().get(tmp.hashCode());
         if (g == null) {
-            Graph.getNodes().put(tmp.hashCode(), tmp); // put into hashmap
+            Graph.getNodes().put(tmp.hashCode(), tmp);
             return tmp;
         }
         return g;
@@ -238,7 +238,7 @@ public class GraphNode {
         ImportUtils.addImport(this, ifc);
     }
 
-    private void processTypeArgument(Type typeArg) throws AntikytheraException {
+    private void processTypeArgument(Type typeArg) {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
             if (ctype.getTypeArguments().isPresent()) {

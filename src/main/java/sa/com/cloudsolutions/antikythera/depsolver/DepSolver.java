@@ -13,7 +13,17 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.CastExpr;
+import com.github.javaparser.ast.expr.ConditionalExpr;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
@@ -22,7 +32,6 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.stmt.*;
 import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -438,38 +447,6 @@ public class DepSolver {
      * @return
      */
 
-//    private List<ImportWrapper> solveType(Type vd, GraphNode node) {
-//        if (vd.isClassOrInterfaceType()) {
-//            List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), vd);
-//            for (ImportWrapper imp : imports) {
-//                try {
-//                    searchClass(node, imp);
-//                    FieldDeclaration fieldDeclaration = imp.getField();
-//                    if (fieldDeclaration != null) {
-//                        Graph.createGraphNode(fieldDeclaration);
-//                    }
-//                } catch (AntikytheraException e) {
-//                    throw new DepsolverException(e);
-//                }
-//            }
-//            if (imports.isEmpty()) {
-//                CompilationUnit cu = node.getCompilationUnit();
-//                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, vd.asClassOrInterfaceType().getNameAsString());
-//                CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-//                if (target != null) {
-//                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(target, vd.asClassOrInterfaceType().getNameAsString());
-//                    try {
-//                        Graph.createGraphNode(t);
-//                    } catch (AntikytheraException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//            }
-//            return imports;
-//        }
-//        return List.of();
-//    }
-
     private List<ImportWrapper> solveType(Type vd, GraphNode node) throws AntikytheraException {
         if (vd.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = vd.asClassOrInterfaceType();
@@ -482,26 +459,6 @@ public class DepSolver {
 
     private class Visitor extends AnnotationVisitor {
 
-
-//        @Override
-//        public void visit(ObjectCreationExpr oce, GraphNode node) {
-//            visitConstructor(oce, node);
-//
-//            super.visit(oce, node);
-//        }
-//
-//        private void visitConstructor(ObjectCreationExpr oce, GraphNode node) {
-//            List<ImportWrapper> imports = solveType(oce.getType(), node);
-//            for (ImportWrapper imp : imports) {
-//                node.getDestination().addImport(imp.getImport());
-//            }
-//            try {
-//                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
-//                Resolver.chainedMethodCall(node, mceWrapper);
-//            } catch (Exception e) {
-//                throw new DepsolverException(e);
-//            }
-//        }
         @Override
         public void visit(ExplicitConstructorInvocationStmt n, GraphNode node) {
             if (node.getNode() instanceof ConstructorDeclaration cd && node.getEnclosingType().isClassOrInterfaceDeclaration()) {
@@ -625,52 +582,19 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-
-            List<ImportWrapper> imports = null;
             try {
-                imports = solveType(oce.getType(), node);
-            } catch (AntikytheraException e) {
-                throw new RuntimeException(e);
-            }
-
-            for (ImportWrapper imp : imports) {
-                node.getDestination().addImport(imp.getImport());
-            }
-            try {
-                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
-                Resolver.chainedMethodCall(node, mceWrapper);
-            } catch (Exception e) {
-                throw new DepsolverException(e);
-            }
-
-
-            super.visit(oce, node);
-        }
-
-
-        @Override
-        public void visit(final ThrowStmt n, final GraphNode arg) {
-            Expression expr = n.getExpression();
-            if (expr.isObjectCreationExpr()) {
-                ObjectCreationExpr oce = expr.asObjectCreationExpr();
-                GraphNode node = arg;
-                List<ImportWrapper> imports = null;
-                try {
-                    imports = solveType(oce.getType(), node);
-                } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
-                }
+                List<ImportWrapper> imports = solveType(oce.getType(), node);
                 for (ImportWrapper imp : imports) {
                     node.getDestination().addImport(imp.getImport());
                 }
-                try {
-                    MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
-                    Resolver.chainedMethodCall(node, mceWrapper);
-                } catch (Exception e) {
-                    throw new DepsolverException(e);
-                }
-
+                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
+                Resolver.chainedMethodCall(node, mceWrapper);
+            } catch (AntikytheraException e) {
+                throw new RuntimeException(e);
+            } catch (Exception e) {
+                throw new DepsolverException(e);
             }
+            super.visit(oce, node);
         }
     }
 
