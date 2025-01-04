@@ -432,7 +432,7 @@ public class DTOHandler extends ClassProcessor {
                 processor.copyDTO(args[0]);
             }
             else {
-                processor.copyDTO(processor.classToPath(args[0]));
+                processor.copyDTO(AbstractCompiler.classToPath(args[0]));
             }
         }
     }
@@ -443,6 +443,6 @@ public class DTOHandler extends ClassProcessor {
 
     @Override
     protected ModifierVisitor<?> createTypeCollector() {
-        return new ClassProcessor.TypeCollector();
+        return new TypeCollector();
     }
 }

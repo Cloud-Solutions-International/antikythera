@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.configuration;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -61,15 +62,16 @@ public class Settings {
      *
      * Using yaml gives us the advantage of being able to have nested properties and also properties
      * that can have multiple entries without getting into ugly comma separated values.
-     * @param yamlFile
-     * @throws IOException
+     * @param yamlFile the location of the file containing the configuration data
+     * @throws IOException if the file could not be read
      */
     private static void loadYamlConfig(File yamlFile) throws IOException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
                 .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
 
-        Map<String, Object> yamlProps = mapper.readValue(yamlFile, Map.class);
+        Map<String, Object> yamlProps = mapper.readValue(yamlFile, new TypeReference<Map<String, Object>>() {});
+
         Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault("variables", new HashMap<>());
         props.put("variables", variables);
 
@@ -79,6 +81,10 @@ public class Settings {
 
         replaceVariables(yamlProps, props);
 
+        hostInfo(yamlProps);
+    }
+
+    private static void hostInfo(Map<String, Object> yamlProps) throws IOException {
         if(yamlProps.get("application.host") != null || yamlProps.get("application.version") != null) {
             Path path = Paths.get("src", "test", "resources", "testdata", "qa").resolve("Url.properties");
             File urlFile = path.toFile();
@@ -110,8 +116,8 @@ public class Settings {
     /**
      * Replace variables from the yaml file with environment or internal variables
      *
-     * @param source
-     * @param target
+     * @param source the source from whcih we will copy the data
+     * @param target the destination where we will put the data
      */
     private static void replaceVariables(Map<String, Object> source, Map<String, Object> target) {
         String userDir = System.getProperty("user.home");
@@ -147,8 +153,8 @@ public class Settings {
 
     /**
      * Replace variables in the given property.
-     * @param value
-     * @return
+     * @param value the replacement
+     * @return the updated value
      */
     private static String replaceYamlVariables(String value) {
         Map<String, Object> variablesMap = (Map<String, Object>) props.get("variables");
