@@ -494,6 +494,7 @@ public class Resolver {
             Optional<FieldDeclaration> fd = cid.getFieldByName(ClassProcessor.classToInstanceName(field));
             if (fd.isPresent()) {
                 Type t = fd.get().getElementType();
+                t.asClassOrInterfaceType().getScope().ifPresent(scp -> ImportUtils.addImport(gn, scp));
                 ImportUtils.addImport(gn, t);
                 return t;
             }
