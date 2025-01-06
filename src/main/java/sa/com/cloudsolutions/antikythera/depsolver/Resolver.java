@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -485,7 +486,7 @@ public class Resolver {
         }
     }
 
-    static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) {
+    static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) throws AntikytheraException {
         if (argMethodCall.getNameAsString().startsWith("get") &&
                 cid.getAnnotationByName("Data").isPresent() ||
                 cid.getAnnotationByName("Getter").isPresent()
@@ -496,6 +497,18 @@ public class Resolver {
                 Type t = fd.get().getElementType();
                 t.asClassOrInterfaceType().getScope().ifPresent(scp -> ImportUtils.addImport(gn, scp));
                 ImportUtils.addImport(gn, t);
+
+                if (t.isClassOrInterfaceType()) {
+                    String innerClassName = t.asClassOrInterfaceType().getNameAsString();
+                    Optional<ClassOrInterfaceDeclaration> innerClass = cid.findFirst(ClassOrInterfaceDeclaration.class, c -> c.getNameAsString().equals(innerClassName));
+                    innerClass.ifPresent(declaration -> {
+                        declaration.getParentNode().ifPresent(parent -> {
+                            if (parent instanceof ClassOrInterfaceDeclaration ci) {
+                                gn.getDestination().addType(declaration);
+                            }
+                        });
+                    });
+                }
                 return t;
             }
         }
