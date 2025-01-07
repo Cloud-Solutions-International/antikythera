@@ -330,6 +330,7 @@ public class DepSolver {
         List<FieldDeclaration> fields = new ArrayList<>();
         List<ConstructorDeclaration> constructors = new ArrayList<>();
         List<MethodDeclaration> methods = new ArrayList<>();
+        List<ClassOrInterfaceDeclaration> inners = new ArrayList<>();
 
         for (BodyDeclaration<?> member : classOrInterface.getMembers()) {
             if (member instanceof FieldDeclaration fd) {
@@ -338,6 +339,8 @@ public class DepSolver {
                 constructors.add(cd);
             } else if (member instanceof MethodDeclaration md) {
                 methods.add(md);
+            } else if (member instanceof ClassOrInterfaceDeclaration md) {
+                inners.add(md);
             }
         }
 
@@ -354,6 +357,7 @@ public class DepSolver {
         classOrInterface.getMembers().addAll(fields);
         classOrInterface.getMembers().addAll(constructors);
         classOrInterface.getMembers().addAll(methods);
+        classOrInterface.getMembers().addAll(inners);
     }
 
     private void writeFiles() throws IOException {
@@ -362,6 +366,7 @@ public class DepSolver {
                 StandardCopyOption.REPLACE_EXISTING);
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
+            boolean write = false;
             CompilationUnit cu = entry.getValue();
 
             List<ImportDeclaration> list = new ArrayList<>(cu.getImports());
@@ -369,13 +374,19 @@ public class DepSolver {
             list.sort(Comparator.comparing(NodeWithName::getNameAsString));
             cu.getImports().addAll(list);
 
-            for(TypeDeclaration<?> decl : cu.getTypes()) {
+            for (TypeDeclaration<?> decl : cu.getTypes()) {
                 if (decl.isClassOrInterfaceDeclaration()) {
+                    if (entry.getKey().endsWith(decl.asClassOrInterfaceDeclaration().getNameAsString())) {
+                        write = true;
+                    }
                     sortClass(decl.asClassOrInterfaceDeclaration());
+                } else if (decl.isEnumDeclaration()) {
+                    write = true;
                 }
             }
-            CopyUtils.writeFile(
-                        AbstractCompiler.classToPath(entry.getKey()), cu.toString());
+            if (write) {
+                CopyUtils.writeFile(AbstractCompiler.classToPath(entry.getKey()), cu.toString());
+            }
         }
     }
 

@@ -347,6 +347,11 @@ public class GraphNode {
 
             if (variable.getType().isClassOrInterfaceType()) {
                 addTypeArguments(variable.getType().asClassOrInterfaceType());
+
+                if(variable.getType().asClassOrInterfaceType().getScope().isPresent()){
+                    ClassOrInterfaceType scp = variable.getType().asClassOrInterfaceType().getScope().get();
+                    ImportUtils.addImport(this, scp.getNameAsString());
+                }
             }
             else {
                 ImportUtils.addImport(this, variable.getTypeAsString());
