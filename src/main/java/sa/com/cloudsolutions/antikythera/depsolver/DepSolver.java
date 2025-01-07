@@ -519,22 +519,21 @@ public class DepSolver {
                 Expression expr = assignExpr.getValue();
                 try {
                     Resolver.processExpression(arg, expr, new NodeList<>());
+
+                    if (assignExpr.getTarget().isFieldAccessExpr()) {
+                        FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
+                        SimpleName nmae = fae.getName();
+                        arg.getEnclosingType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(nmae.asString())).ifPresent(f -> {
+                            try {
+                                Graph.createGraphNode(f);
+                            } catch (AntikytheraException e) {
+                                throw new DepsolverException(e);
+                            }
+                        });
+                        ImportUtils.addImport(arg, fae);
+                    }
                 } catch (AntikytheraException e) {
                     throw new RuntimeException(e);
-                }
-
-                if (assignExpr.getTarget().isFieldAccessExpr()) {
-                    FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
-                    SimpleName nmae = fae.getName();
-                    arg.getEnclosingType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(nmae.asString())).ifPresent(f -> {
-                        try {
-                            Graph.createGraphNode(f);
-                        } catch (AntikytheraException e) {
-                            throw new DepsolverException(e);
-                        }
-                    });
-
-                    ImportUtils.addImport(arg, fae);
                 }
             }
             super.visit(n, arg);
