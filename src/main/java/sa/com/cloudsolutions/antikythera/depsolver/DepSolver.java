@@ -380,11 +380,12 @@ public class DepSolver {
                         write = true;
                     }
                     sortClass(decl.asClassOrInterfaceDeclaration());
+                } else if (decl.isEnumDeclaration()) {
+                    write = true;
                 }
             }
             if (write) {
-                CopyUtils.writeFile(
-                        AbstractCompiler.classToPath(entry.getKey()), cu.toString());
+                CopyUtils.writeFile(AbstractCompiler.classToPath(entry.getKey()), cu.toString());
             }
         }
     }
