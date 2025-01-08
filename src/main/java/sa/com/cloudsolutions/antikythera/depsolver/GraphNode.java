@@ -206,18 +206,6 @@ public class GraphNode {
 
                     }
                     else {
-//                        try {
-//                            Class<?> clz = AbstractCompiler.loadClass(fullyQualifiedName);
-//                            if (Modifier.isAbstract(clz.getModifiers())) {
-//                                for (MethodDeclaration md : enclosingDeclaration.getMethods()) {
-//                                    if (!md.isAbstract()) {
-//                                        Graph.createGraphNode(md);
-//                                    }
-//                                }
-//                            }
-//                        } catch (ClassNotFoundException e) {
-//                            logger.error("Class not found: " + fullyQualifiedName);
-//                        }
 
                         try {
                             Class<?> clz = AbstractCompiler.loadClass(fullyQualifiedName);
@@ -248,12 +236,7 @@ public class GraphNode {
             if (method.getName().equals(md.getNameAsString())) {
                 if (method.getParameters().length == md.getParameters().size()) {
                     boolean match = true;
-//                    for (int i = 0; i < method.getParameters().length; i++) {
-//                        if (!method.getParameterTypes()[i].getSimpleName().equals(md.getParameter(i).getType().toString())) {
-//                            match = false;
-//                            break;
-//                        }
-//                    }
+                 //todo need to find a way to compare the parameters
                     if (match) {
                         if(Modifier.isAbstract(method.getModifiers())) {
                             try {
