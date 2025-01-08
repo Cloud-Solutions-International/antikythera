@@ -80,22 +80,41 @@ public class Graph {
      */
     private static void unseenType(GraphNode g, TypeDeclaration<?> cdecl) {
         if (g.getDestination() == null) {
-            g.setDestination(new CompilationUnit());
-            TypeDeclaration<?> target;
-            if (cdecl.isAnnotationDeclaration()) {
-                target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
-            }
-            else {
-                target = g.getDestination().addClass(cdecl.getNameAsString());
-                target.setModifiers(cdecl.getModifiers());
-                if (cdecl.isClassOrInterfaceDeclaration()) {
+            TypeDeclaration<?> target = null;
+            Optional<Node> parentNode = cdecl.getParentNode();
+            if (cdecl.isClassOrInterfaceDeclaration() && parentNode.isPresent() && parentNode.get() instanceof ClassOrInterfaceDeclaration parent)
+            {
+                try {
+                    GraphNode parentGraphNode = createGraphNode(parent);
+                    CompilationUnit parentCompilationUnit = parentGraphNode.getDestination();
+                    g.setDestination(parentCompilationUnit);
+
+                    ClassOrInterfaceDeclaration parentClass = parentGraphNode.getTypeDeclaration().asClassOrInterfaceDeclaration();
+                    ClassOrInterfaceDeclaration innerClass = cdecl.asClassOrInterfaceDeclaration().clone();
+                    target = parentClass.addMember(innerClass);
                     target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
+                    g.setTypeDeclaration(innerClass);
+                } catch (AntikytheraException e) {
+                    throw new RuntimeException(e);
                 }
             }
-            Optional<JavadocComment> comment = cdecl.getJavadocComment();
-            comment.ifPresent(target::setJavadocComment);
-
-            g.setTypeDeclaration(target);
+            else {
+                g.setDestination(new CompilationUnit());
+                if (cdecl.isAnnotationDeclaration()) {
+                    target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
+                } else {
+                    target = g.getDestination().addClass(cdecl.getNameAsString());
+                    target.setModifiers(cdecl.getModifiers());
+                    if (cdecl.isClassOrInterfaceDeclaration()) {
+                        target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
+                    }
+                }
+                g.setTypeDeclaration(target);
+            }
+            if(target != null) {
+                Optional<JavadocComment> comment = cdecl.getJavadocComment();
+                comment.ifPresent(target::setJavadocComment);
+            }
         }
     }
 
