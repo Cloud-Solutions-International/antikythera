@@ -163,6 +163,7 @@ public class Resolver {
                 Resolver.resolveArrayExpr(node, value);
             }
             else if (value.isClassExpr()) {
+
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
                 ImportUtils.addImport(node, ct.getName().toString());
             }
@@ -437,6 +438,7 @@ public class Resolver {
     }
 
     static void resolveMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
+
         MethodReferenceExpr mre = arg.asMethodReferenceExpr();
         Expression scope = mre.getScope();
         if (scope.isNameExpr()) {
@@ -448,10 +450,20 @@ public class Resolver {
             }
         }
         else if (scope.isTypeExpr()) {
-            for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
-                Graph.createGraphNode(m);
+            // Resolve the type expression to its corresponding class
+            String typeName = scope.asTypeExpr().getType().asString();
+            String fullQulifiedName=AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), typeName);
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQulifiedName);
+            if (cu != null) {
+                TypeDeclaration<?> typeDecl = AbstractCompiler.getPublicType(cu);
+                if (typeDecl != null) {
+                    // Find the method in the resolved class
+                    for (MethodDeclaration m : typeDecl.getMethodsByName(mre.getIdentifier())) {
+                        Graph.createGraphNode(m);
+                    }
+                }
             }
-            ImportUtils.addImport(node, scope.asTypeExpr().getType().asString());
+            ImportUtils.addImport(node, typeName);
         }
     }
 

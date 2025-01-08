@@ -156,8 +156,17 @@ public class DepSolver {
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
 
+
+            // Handle generic type parameters
+            for (TypeParameter typeParameter : md.getTypeParameters()) {
+                for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
+                    node.addTypeArguments(bound);
+                }
+            }
+
             for (Type thrownException : md.getThrownExceptions()) {
                 ImportUtils.addImport(node, thrownException);
+
             }
 
             if (md.getAnnotationByName("Override").isPresent()) {
@@ -165,7 +174,6 @@ public class DepSolver {
             }
 
             if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
-
                 findImplementations(node, md);
             }
         }
