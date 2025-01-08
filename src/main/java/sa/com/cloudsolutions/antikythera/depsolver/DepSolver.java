@@ -320,11 +320,11 @@ public class DepSolver {
      *             along with the required imports.
      * @throws AntikytheraException if the dependencies cannot be resolved.
      */
-     void fieldSearch(GraphNode node) throws AntikytheraException {
-         if(node.getNode() instanceof FieldDeclaration fd) {
+    void fieldSearch(GraphNode node) throws AntikytheraException {
+        if(node.getNode() instanceof FieldDeclaration fd) {
             node.addField(fd);
-         }
-     }
+        }
+    }
 
     private void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
         List<FieldDeclaration> fields = new ArrayList<>();
@@ -457,7 +457,7 @@ public class DepSolver {
      * @param node
      * @return
      */
-
+    @Deprecated
     private List<ImportWrapper> solveType(Type vd, GraphNode node) throws AntikytheraException {
         if (vd.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = vd.asClassOrInterfaceType();
