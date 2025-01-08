@@ -32,6 +32,7 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.TypeParameter;
 import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -156,8 +157,17 @@ public class DepSolver {
                 node.addTypeArguments(returnType.asClassOrInterfaceType());
             }
 
+
+            // Handle generic type parameters
+            for (TypeParameter typeParameter : md.getTypeParameters()) {
+                for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
+                    node.addTypeArguments(bound);
+                }
+            }
+
             for (Type thrownException : md.getThrownExceptions()) {
                 ImportUtils.addImport(node, thrownException);
+
             }
 
             if (md.getAnnotationByName("Override").isPresent()) {
@@ -165,7 +175,6 @@ public class DepSolver {
             }
 
             if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
-
                 findImplementations(node, md);
             }
         }
