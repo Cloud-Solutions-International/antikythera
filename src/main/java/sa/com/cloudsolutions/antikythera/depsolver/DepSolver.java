@@ -414,10 +414,7 @@ public class DepSolver {
         }
 
 
-//        @Override
-//        public void visit(final NameExpr n,GraphNode node){
-////            System.out.println(n.getNameAsString());
-//        }
+
 
 
 
@@ -425,11 +422,8 @@ public class DepSolver {
         public void visit(final VariableDeclarationExpr n, GraphNode node) {
 
             for(VariableDeclarator vd : n.getVariables()) {
-//
-
                 names.put(vd.getNameAsString(), vd.getType());
                 try {
-//                    System.out.println(vd.getType());
                     if (vd.getType().isClassOrInterfaceType()) {
                         node.addTypeArguments(vd.getType().asClassOrInterfaceType());
                     }
