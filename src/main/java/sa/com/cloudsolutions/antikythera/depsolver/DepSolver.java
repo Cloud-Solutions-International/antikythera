@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -85,6 +86,7 @@ public class DepSolver {
      * @throws AntikytheraException
      */
      void processMethod(String s) throws AntikytheraException {
+
         String[] parts = s.split("#");
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0] );
@@ -243,7 +245,6 @@ public class DepSolver {
     }
 
     private static void methodOverrides(CallableDeclaration<?> cd, String className) throws AntikytheraException {
-
         for (String s : AntikytheraRunTime.findSubClasses(className)) {
             addOverRide(cd, s);
         }
@@ -254,6 +255,7 @@ public class DepSolver {
     }
 
     private static void addOverRide(CallableDeclaration<?> cd, String s) throws AntikytheraException {
+
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(s);
         if (cu != null) {
             TypeDeclaration<?> parent = cu.findFirst(TypeDeclaration.class, td -> td.isPublic()).orElse(null);
@@ -493,26 +495,6 @@ public class DepSolver {
 
     private class Visitor extends AnnotationVisitor {
 
-
-//        @Override
-//        public void visit(ObjectCreationExpr oce, GraphNode node) {
-//            visitConstructor(oce, node);
-//
-//            super.visit(oce, node);
-//        }
-//
-//        private void visitConstructor(ObjectCreationExpr oce, GraphNode node) {
-//            List<ImportWrapper> imports = solveType(oce.getType(), node);
-//            for (ImportWrapper imp : imports) {
-//                node.getDestination().addImport(imp.getImport());
-//            }
-//            try {
-//                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
-//                Resolver.chainedMethodCall(node, mceWrapper);
-//            } catch (Exception e) {
-//                throw new DepsolverException(e);
-//            }
-//        }
         @Override
         public void visit(ExplicitConstructorInvocationStmt n, GraphNode node) {
             if (node.getNode() instanceof ConstructorDeclaration cd && node.getEnclosingType().isClassOrInterfaceDeclaration()) {

@@ -31,6 +31,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Optional;
@@ -205,24 +206,76 @@ public class GraphNode {
 
                     }
                     else {
+//                        try {
+//                            Class<?> clz = AbstractCompiler.loadClass(fullyQualifiedName);
+//                            if (Modifier.isAbstract(clz.getModifiers())) {
+//                                for (MethodDeclaration md : enclosingDeclaration.getMethods()) {
+//                                    if (!md.isAbstract()) {
+//                                        Graph.createGraphNode(md);
+//                                    }
+//                                }
+//                            }
+//                        } catch (ClassNotFoundException e) {
+//                            logger.error("Class not found: " + fullyQualifiedName);
+//                        }
+
                         try {
                             Class<?> clz = AbstractCompiler.loadClass(fullyQualifiedName);
                             if (Modifier.isAbstract(clz.getModifiers())) {
                                 for (MethodDeclaration md : enclosingDeclaration.getMethods()) {
-                                    if (!md.isAbstract()) {
-                                        Graph.createGraphNode(md);
-                                    }
+                                    addAbstractMethods(md,clz);
                                 }
                             }
                         } catch (ClassNotFoundException e) {
                             logger.error("Class not found: " + fullyQualifiedName);
                         }
                     }
+
                     addTypeArguments(ifc);
                 }
             }
         }
     }
+
+
+    private void addAbstractMethods(MethodDeclaration md, Class<?> parent) throws AntikytheraException{
+        if (!Modifier.isAbstract(parent.getModifiers())) {
+            return;
+        }
+        Method[] methods = parent.getDeclaredMethods();
+
+        for (Method method :  methods) {
+            if (method.getName().equals(md.getNameAsString())) {
+                if (method.getParameters().length == md.getParameters().size()) {
+                    boolean match = true;
+//                    for (int i = 0; i < method.getParameters().length; i++) {
+//                        if (!method.getParameterTypes()[i].getSimpleName().equals(md.getParameter(i).getType().toString())) {
+//                            match = false;
+//                            break;
+//                        }
+//                    }
+                    if (match) {
+                        if(Modifier.isAbstract(method.getModifiers())) {
+                            try {
+                                Graph.createGraphNode(md);
+                            } catch (AntikytheraException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+        if(parent.getSuperclass() !=null){
+             addAbstractMethods(md,parent.getSuperclass() );
+            return;
+        }
+        return;
+    }
+
+
+
 
 
 
