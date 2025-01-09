@@ -89,7 +89,6 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
 
     private static void prepare() throws SQLException {
         if (query != null && query.getSimplifiedResultSet() != null) {
-            ResultSet rs = query.getSimplifiedResultSet();
             prepared = true;
         }
     }
