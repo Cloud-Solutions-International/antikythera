@@ -61,8 +61,8 @@ public class SpringEvaluator extends Evaluator {
      * List of generators that we have.
      *
      * Generators ought to be seperated from the parsers/evaluators because different kinds of
-     * tests can be created. They can be unit tests, integration tests, api tests and end to
-     * end tests.
+     * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
+     * tests.
      */
     private final List<TestGenerator> generators  = new ArrayList<>();
 
@@ -86,7 +86,7 @@ public class SpringEvaluator extends Evaluator {
      * Of course there will be situations where no parameters exist to give a valid resultset
      * and these will just be ignored.
      *
-     * The values that are used in the A branch for the query will just be arbitrary non null values
+     * The values that are used in the A branch for the query will just be arbitrary non-null values
      * integers like 0 will usually not have matching entries in the database and will result in
      * empty responses. If due to some reason there are valid resultsets of integers like 0 for
      * primary keys there's nothing we can do about it, we just move onto the next test.
@@ -129,7 +129,7 @@ public class SpringEvaluator extends Evaluator {
         });
 
         try {
-            NodeList<Statement> statements = md.getBody().get().getStatements();
+            NodeList<Statement> statements = md.getBody().orElseThrow().getStatements();
             for (int i = 0; i < statements.size(); i++) {
                 Statement st = statements.get(i);
                 if (!lines.containsKey(st.hashCode())) {
@@ -705,8 +705,8 @@ public class SpringEvaluator extends Evaluator {
      * Execute a method that's only available to us in source code format.
      * @param methodCall the method call whose execution is to be simulated.
      * @return the result from the execution as a Variable instance
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @throws AntikytheraException when the source code could not be executed
+     * @throws ReflectiveOperationException when a reflective operation fails
      */
     @Override
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {

@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
-import javax.swing.text.html.Option;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -23,12 +22,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Scanner;
-import java.util.Set;
 
 /**
  * Manages the configuration properties from generator.yml file or generator.cfg file.
  */
 public class Settings {
+    public static final String APPLICATION_HOST = "application.host";
     /**
      * HashMap to store the configurations.
      */
@@ -85,7 +84,7 @@ public class Settings {
     }
 
     private static void hostInfo(Map<String, Object> yamlProps) throws IOException {
-        if(yamlProps.get("application.host") != null || yamlProps.get("application.version") != null) {
+        if(yamlProps.get(APPLICATION_HOST) != null || yamlProps.get("application.version") != null) {
             Path path = Paths.get("src", "test", "resources", "testdata", "qa").resolve("Url.properties");
             File urlFile = path.toFile();
             if(urlFile.exists()) {
@@ -93,14 +92,14 @@ public class Settings {
                 Scanner sc = new Scanner(urlFile);
                 while (sc.hasNextLine()) {
                     String line = sc.nextLine().strip();
-                    if(line.startsWith("application.host")) {
-                        sb.append("application.host=")
-                          .append(yamlProps.get("application.host") == null ? "" : yamlProps.get("application.host"))
+                    if(line.startsWith(APPLICATION_HOST)) {
+                        sb.append(APPLICATION_HOST).append("=")
+                          .append(yamlProps.get(APPLICATION_HOST) == null ? "" : yamlProps.get(APPLICATION_HOST))
                           .append("\n");
                     }
                     else if(line.startsWith("application.version")) {
                         sb.append("application.version=")
-                                .append(yamlProps.get("application.version") == null ? "" : yamlProps.get("application.host"))
+                                .append(yamlProps.get("application.version") == null ? "" : yamlProps.get(APPLICATION_HOST))
                                 .append("\n");
                     }
                     else {
