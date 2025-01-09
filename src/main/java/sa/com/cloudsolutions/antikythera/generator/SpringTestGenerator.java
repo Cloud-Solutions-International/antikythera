@@ -1,8 +1,5 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -460,10 +457,10 @@ public class SpringTestGenerator extends  TestGenerator {
         testMethod.addAnnotation("Test");
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
-            param.getAnnotationByName("PathVariable").ifPresent(ann -> {
+            param.getAnnotationByName("PathVariable").ifPresent(ann ->
                 paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                        .append(param.getNameAsString().substring(1));
-            });
+                        .append(param.getNameAsString().substring(1))
+            );
         }
 
         String testName = String.valueOf(md.getName());
