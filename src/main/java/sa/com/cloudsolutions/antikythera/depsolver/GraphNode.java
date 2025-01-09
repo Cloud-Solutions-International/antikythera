@@ -21,12 +21,18 @@ import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.types.ResolvedReferenceType;
+import com.github.javaparser.resolution.types.ResolvedType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +40,8 @@ import java.util.Optional;
  * Primary purpose to encapsulate the AST node.
  */
 public class GraphNode {
+    private static final Logger logger = LoggerFactory.getLogger(GraphNode.class);
+
     /**
      * This is the compilation unit for the class that contains the node.
      */
@@ -186,13 +194,73 @@ public class GraphNode {
                 }
             }
             if (cdecl.getExtendedTypes().isEmpty()) {
+                /*
+                 * this empty check is in place to make sure that we do not repeat the process.
+                 * cdecl is the target, if it contains the extentions that means its completed.
+                 */
                 for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
                     cdecl.addExtendedType(ifc.clone());
+                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(ifc.findCompilationUnit().get(),ifc.getNameAsString())  ;
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                    if (cu != null) {
+
+                    }
+                    else {
+
+                        try {
+                            Class<?> clz = AbstractCompiler.loadClass(fullyQualifiedName);
+                            if (Modifier.isAbstract(clz.getModifiers())) {
+                                for (MethodDeclaration md : enclosingDeclaration.getMethods()) {
+                                    addAbstractMethods(md,clz);
+                                }
+                            }
+                        } catch (ClassNotFoundException e) {
+                            logger.error("Class not found: " + fullyQualifiedName);
+                        }
+                    }
+
                     addTypeArguments(ifc);
                 }
             }
         }
     }
+
+
+    private void addAbstractMethods(MethodDeclaration md, Class<?> parent) throws AntikytheraException{
+        if (!Modifier.isAbstract(parent.getModifiers())) {
+            return;
+        }
+        Method[] methods = parent.getDeclaredMethods();
+
+        for (Method method :  methods) {
+            if (method.getName().equals(md.getNameAsString())) {
+                if (method.getParameters().length == md.getParameters().size()) {
+                    boolean match = true;
+                 //todo need to find a way to compare the parameters
+                    if (match) {
+                        if(Modifier.isAbstract(method.getModifiers())) {
+                            try {
+                                Graph.createGraphNode(md);
+                            } catch (AntikytheraException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+        if(parent.getSuperclass() !=null){
+             addAbstractMethods(md,parent.getSuperclass() );
+            return;
+        }
+        return;
+    }
+
+
+
+
+
 
     private void copyFields() throws AntikytheraException {
         for(FieldDeclaration field : enclosingType.asClassOrInterfaceDeclaration().getFields()) {
@@ -222,33 +290,38 @@ public class GraphNode {
 
     /**
      * Adds the type arguments to the graph.
-     * Will make multiple calls to the searchType method which will result in the imports
+     * Will make recursive calls to the searchType method which will result in the imports
      * being eventually added.
      * @param ifc interface or class
 
      * @throws AntikytheraException if the types cannot be fully resolved.
      */
+
     public void addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
         if (typeArguments.isPresent()) {
             for (Type typeArg : typeArguments.get()) {
-                if (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().getTypeArguments().isPresent())
-                {
-                    ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
-                    for(Type t : ctype.getTypeArguments().get()) {
-                        ImportUtils.addImport(this, t);
-                    }
-                    if (ctype.getScope().isPresent()) {
-                        ImportUtils.addImport(this, ctype.getScope().get().getNameAsString());
-                    }
-                    ImportUtils.addImport(this, ctype.getNameAsString());
-                }
-                else {
-                    ImportUtils.addImport(this, typeArg);
-                }
+                processTypeArgument(typeArg);
             }
         }
         ImportUtils.addImport(this, ifc);
+    }
+
+    private void processTypeArgument(Type typeArg) {
+        if (typeArg.isClassOrInterfaceType()) {
+            ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
+            if (ctype.getTypeArguments().isPresent()) {
+                for (Type t : ctype.getTypeArguments().get()) {
+                    processTypeArgument(t);
+                }
+            }
+            if (ctype.getScope().isPresent()) {
+                ImportUtils.addImport(this, ctype.getScope().get().getNameAsString());
+            }
+            ImportUtils.addImport(this, ctype.getNameAsString());
+        } else {
+            ImportUtils.addImport(this, typeArg);
+        }
     }
 
     public boolean isVisited() {
@@ -344,6 +417,11 @@ public class GraphNode {
 
             if (variable.getType().isClassOrInterfaceType()) {
                 addTypeArguments(variable.getType().asClassOrInterfaceType());
+
+                if(variable.getType().asClassOrInterfaceType().getScope().isPresent()){
+                    ClassOrInterfaceType scp = variable.getType().asClassOrInterfaceType().getScope().get();
+                    ImportUtils.addImport(this, scp.getNameAsString());
+                }
             }
             else {
                 ImportUtils.addImport(this, variable.getTypeAsString());
