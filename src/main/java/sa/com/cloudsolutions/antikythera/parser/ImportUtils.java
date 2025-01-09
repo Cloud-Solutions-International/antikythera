@@ -22,7 +22,18 @@ public class ImportUtils {
     public static GraphNode addImport(GraphNode node, Type type) {
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType ct = type.asClassOrInterfaceType();
-            ImportUtils.addImport(node, ct.getNameAsString());
+            GraphNode n = ImportUtils.addImport(node, ct.getNameAsString());
+            if (n == null) {
+                // possibly an inner class
+                node.getEnclosingType().findFirst(TypeDeclaration.class,
+                        td -> td.getNameAsString().equals(ct.getNameAsString())).ifPresent(td -> {
+                    try {
+                        Graph.createGraphNode(td);
+                    } catch (AntikytheraException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
         }
         else {
             ImportUtils.addImport(node, type.toString());
