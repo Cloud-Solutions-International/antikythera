@@ -1,11 +1,10 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.sun.xml.bind.v2.schemagen.xmlschema.Import;
+import net.sf.jsqlparser.JSQLParserException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -26,10 +25,11 @@ import net.sf.jsqlparser.statement.select.Select;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
-import java.io.FileNotFoundException;
+import javax.swing.text.html.Option;
 import java.io.IOException;
-import java.lang.reflect.Field;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -44,9 +44,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
- * Parses JPARespository subclasses to indentify the queries that they execute.
+ * Parses JPARespository subclasses to identify the queries that they execute.
  *
  * These queries can then be used to determine what kind of data need to be sent
  * to the controller for a valid response.
@@ -75,14 +76,12 @@ public class RepositoryParser extends ClassProcessor {
      * As determined by the configurations
      */
     private static boolean runQueries;
+
     /**
-     * The java parser compilation unit associated with this entity.
-     *
-     * This is different from the 'cu' field in the AbstractClassProcessor. That field will
-     * represent the repository interface while the entityCu will represent the entity that
-     * is part of the type arguments
+     * The compilation unit or class associated with this entity.
      */
-    private CompilationUnit entityCu;
+    private TypeWrapper entity;
+
     /**
      * The table name associated with the entity
      */
@@ -129,7 +128,7 @@ public class RepositoryParser extends ClassProcessor {
      * credentials are provide the connection is setup only if the runQueries
      * setting is true.
      *
-     * @throws SQLException
+     * @throws SQLException if the connection could not be established
      */
     private static void createConnection() throws SQLException {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
@@ -143,7 +142,7 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    public static void main(String[] args) throws IOException, SQLException {
+    public static void main(String[] args) throws IOException, SQLException, AntikytheraException, JSQLParserException {
         if(args.length != 1) {
             logger.error("Please specifiy the path to a repository class");
         }
@@ -173,22 +172,20 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Process the CompilationUnit to identify the queries.
-     * @throws IOException
      */
-    public void process() throws IOException {
+    public void process()  {
         for(var tp : cu.getTypes()) {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
                 boolean found = false;
-
                 for(var parent : cls.getExtendedTypes()) {
                     if (parent.toString().startsWith(JPA_REPOSITORY)) {
                         found = true;
                         Optional<NodeList<Type>> t = parent.getTypeArguments();
                         if (t.isPresent()) {
                             entityType = t.get().get(0);
-                            entityCu = findEntity(entityType);
-                            table = findTableName(entityCu);
+                            entity = findEntity(entityType);
+                            table = findTableName(entity);
                         }
                         break;
                     }
@@ -242,10 +239,9 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Execute all the queries that were identified.
      * This is useful only for visualization purposes.
-     * @throws IOException
-     * @throws SQLException
+     * @throws SQLException if the query cannot be executed
      */
-    public void executeAllQueries() throws IOException, SQLException {
+    public void executeAllQueries() throws SQLException, AntikytheraException, JSQLParserException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());
             if (rs != null) {
@@ -273,14 +269,9 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Execute the query represented by the method.
      * @param method the name of the method that represents the query in the JPARepository interface
-     * @throws FileNotFoundException raised by covertFieldsToSnakeCase
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(MethodDeclaration method) throws IOException {
-        ResultSet cached = cache.get(method);
-        if (cached != null) {
-            return cached;
-        }
+    public ResultSet executeQuery(MethodDeclaration method) throws AntikytheraException, SQLException, JSQLParserException {
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
@@ -288,52 +279,62 @@ public class RepositoryParser extends ClassProcessor {
         return rs;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method)  {
-        try {
-            if(runQueries) {
-                RepositoryParser.createConnection();
-                
-                Select stmt = (Select) rql.getStatement();
-                String sql = beautify(stmt.toString());
-                sql = trueFalseCheck(sql);
+    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, AntikytheraException, JSQLParserException {
+        if(runQueries) {
+            RepositoryParser.createConnection();
 
-                int argumentCount = countPlaceholders(sql);
+            Select stmt = (Select) rql.getStatement();
+            String sql = beautify(stmt.toString());
+            sql = trueFalseCheck(sql);
 
-                if (argumentCount != 0) {
-                    // we will run the query the simplified query as well.
-                    Select simplified = (Select) rql.getSimplifiedStatement();
-                    String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
-                    PreparedStatement prep = conn.prepareStatement(simplifiedSql);
-                    for (int i = 0; i < argumentCount ; i++) {
-                        QueryMethodArgument arg = rql.getMethodArguments().get(i);
-                        QueryMethodParameter p = rql.getMethodParameters().get(i);
-                        if(!p.isRemoved()) {
-                            bindParameters(arg, prep, i);
-                        }
-                    }
+            int argumentCount = countPlaceholders(sql);
 
-                    if (prep.execute()) {
-                        happyCache.put(method, prep.getResultSet());
-                        rql.setSimplifedResultSet(prep.getResultSet());
-                    }
-                }
-
-                PreparedStatement prep = conn.prepareStatement(sql);
-
-                for (int i = 0; i < argumentCount ; i++) {
-                    QueryMethodArgument arg = rql.getMethodArguments().get(i);
-                    bindParameters(arg, prep, i);
-                }
-
-                if (prep.execute()) {
-                    return prep.getResultSet();
-                }
+            if (argumentCount != 0 && rql.getSimplifiedResultSet() == null) {
+                executeSimplifiedQuery(rql, method, argumentCount);
             }
 
-        } catch (SQLException e) {
-            logger.error(rql.getQuery());
+            PreparedStatement prep = conn.prepareStatement(sql);
+            for (int i = 0; i < argumentCount; i++) {
+                QueryMethodArgument arg = rql.getMethodArguments().get(i);
+                bindParameters(arg, prep, i);
+            }
+
+            if (prep.execute()) {
+                return prep.getResultSet();
+            }
+
         }
         return null;
+    }
+
+    /**
+     * Executes the query by removing some of its placeholders
+     * @param rql the repository query to be executed
+     * @param method the method in the JPARepository
+     * @param argumentCount the number of placeholders
+     * @throws SQLException if the statement cannot be executed
+     */
+    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, AntikytheraException, JSQLParserException {
+        rql.buildSimplifiedQuery();
+        Select simplified = (Select) rql.getSimplifiedStatement();
+        String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
+        PreparedStatement prep = conn.prepareStatement(simplifiedSql);
+        for (int i = 0, j= 0; i < argumentCount; i++) {
+            QueryMethodArgument arg = rql.getMethodArguments().get(i);
+            QueryMethodParameter p = rql.getMethodParameters().get(i);
+            if (!p.isRemoved()) {
+                bindParameters(arg, prep, j++);
+            }
+        }
+
+        if (prep.execute()) {
+            ResultSet resultSet = prep.getResultSet();
+            if (resultSet.next()) {
+                happyCache.put(method, resultSet);
+                rql.setSimplifedResultSet(resultSet);
+            }
+        }
+
     }
 
     private static void bindParameters(QueryMethodArgument arg, PreparedStatement prep, int i) throws SQLException {
@@ -343,20 +344,30 @@ public class RepositoryParser extends ClassProcessor {
 
         }
         else {
-            String name = clazz.getName();
-            switch (name) {
+            switch (clazz.getName()) {
                 case "java.lang.Long" -> prep.setLong(i + 1, (Long) arg.getVariable().getValue());
                 case "java.lang.String" -> prep.setString(i + 1, (String) arg.getVariable().getValue());
                 case "java.lang.Integer" -> prep.setInt(i + 1, (Integer) arg.getVariable().getValue());
                 case "java.lang.Boolean" -> prep.setBoolean(i + 1, (Boolean) arg.getVariable().getValue());
+                default -> {
+                    if (clazz.getName().contains("List")) {
+                        List<?> list = (List<?>) arg.getVariable().getValue();
+                        String arrayString = list.stream()
+                                .map(Object::toString)
+                                .collect(Collectors.joining(","));
+                        prep.setString(i + 1, arrayString);
+                    } else {
+                        prep.setObject(i + 1, arg.getVariable().getValue());
+                    }
+                }
             }
         }
     }
 
     /**
      * Oracle has wierd ideas about boolean
-     * @param sql
-     * @return
+     * @param sql the sql statement
+     * @return the sql statement modified so that oracle can understand it.
      */
     private static String trueFalseCheck(String sql) {
         if(dialect.equals(ORACLE)) {
@@ -388,29 +399,24 @@ public class RepositoryParser extends ClassProcessor {
      * Usually the entity will have an annotation giving the actual name of the table.
      *
      * This method is made static because when processing joins there are multiple entities
-     * and there by multipe table names involved.
+     * and there by multiple table names involved.
      *
-     * @param entityCu a compilation unit representing the entity
+     * @param entity a TypeWrapper representing the entity
      * @return the table name as a string.
      */
-    public static String findTableName(CompilationUnit entityCu) {
+    public static String findTableName(TypeWrapper entity) {
         String table = null;
-        if(entityCu != null) {
-            Optional<AnnotationExpr> ann = entityCu.getTypes().get(0).getAnnotationByName("Table");
-            if (ann.isPresent()) {
-                if (ann.get().isNormalAnnotationExpr()) {
-                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                        if (pair.getNameAsString().equals("name")) {
-                            table = pair.getValue().toString().replace("\"", "");
-                        }
-                    }
-                } else {
-                    table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
-                }
-                return table;
+        if(entity != null) {
+            if (entity.getType() != null) {
+                return getNameFromType(entity, table);
             }
-            else {
-                return camelToSnake(entityCu.getTypes().get(0).getNameAsString());
+            else if (entity.getCls() != null){
+                Class<?> cls = entity.getCls();
+                for (Annotation ann : cls.getAnnotations()) {
+                    if (ann instanceof javax.persistence.Table t) {
+                        table = t.name();
+                    }
+                }
             }
         }
         else {
@@ -419,19 +425,52 @@ public class RepositoryParser extends ClassProcessor {
         return table;
     }
 
+    private static String getNameFromType(TypeWrapper entity, String table) {
+        Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
+        if (ann.isPresent()) {
+            if (ann.get().isNormalAnnotationExpr()) {
+                for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("name")) {
+                        table = pair.getValue().toString().replace("\"", "");
+                    }
+                }
+            } else {
+                table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+            }
+            return table;
+        } else {
+            return camelToSnake(entity.getType().getNameAsString());
+        }
+    }
+
     /**
      * Find and parse the given entity.
      *
      * @param fd FieldDeclaration for which we need to find the compilation unit
      * @return a compilation unit
      */
-    public static CompilationUnit findEntity(Type fd) {
-        return fd.findCompilationUnit().map(cu -> {
-            String nameAsString = AbstractCompiler.findFullyQualifiedName(cu, fd.toString());
-            return AntikytheraRunTime.getCompilationUnit(nameAsString);
-        }).orElse(null);
-    }
+    public static TypeWrapper findEntity(Type fd) {
+        Optional<CompilationUnit> cu = fd.findCompilationUnit();
+        if (cu.isPresent()) {
+            for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
+                if (wrapper.getType() != null) {
+                    return new TypeWrapper(wrapper.getType());
+                }
+                else if(!wrapper.getImport().getNameAsString().startsWith("java.util")) {
+                    try {
+                        Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
+                        return new TypeWrapper(cls);
 
+                    } catch (ClassNotFoundException e) {
+                        // can be ignored, we are trying to check for the existence of the class
+                        logger.debug(e.getMessage());
+                    }
+                }
+            }
+            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd));
+        }
+        return null;
+    }
 
     /**
      * Converts the fields in an Entity to snake case which is the usual pattern for columns
@@ -458,33 +497,29 @@ public class RepositoryParser extends ClassProcessor {
             super.visit(n, arg);
             String query = null;
             boolean nt = false;
+            AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
 
-            for (var ann : n.getAnnotations()) {
-                if (ann.getNameAsString().equals("Query")) {
-                    if (ann.isSingleMemberAnnotationExpr()) {
-                        try {
-                            Evaluator eval = new Evaluator(className);
-                            Variable v = eval.evaluateExpression(
-                                    ann.asSingleMemberAnnotationExpr().getMemberValue()
-                            );
-                            query = v.getValue().toString();
-                        } catch (AntikytheraException|ReflectiveOperationException e) {
-                            throw new RuntimeException(e);
-                        }
-                    } else if (ann.isNormalAnnotationExpr()) {
+            if (ann != null && ann.isSingleMemberAnnotationExpr()) {
+                try {
+                    Evaluator eval = new Evaluator(className);
+                    Variable v = eval.evaluateExpression(
+                            ann.asSingleMemberAnnotationExpr().getMemberValue()
+                    );
+                    query = v.getValue().toString();
+                } catch (AntikytheraException|ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            } else if (ann != null && ann.isNormalAnnotationExpr()) {
 
-                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
-                                nt = true;
-                            }
-                        }
-                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("value")) {
-                                query = pair.getValue().toString();
-                            }
-                        }
+                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
+                        nt = true;
                     }
-                    break;
+                }
+                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("value")) {
+                        query = pair.getValue().toString();
+                    }
                 }
             }
 
@@ -498,9 +533,9 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Build a repository query object
-     * @param query
-     * @param isNative
-     * @return
+     * @param query the query
+     * @param isNative will be true if an annotation says a native query
+     * @return a repository query instance.
      */
     RepositoryQuery queryBuilder(String query, boolean isNative, MethodDeclaration md) {
         RepositoryQuery rql = new RepositoryQuery();
@@ -515,7 +550,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Parse a repository method that does not have a query annotation.
      * In these cases the naming convention of the method is used to infer the query.
-     * @param md
+     * @param md the method declaration
      */
     void parseNonAnnotatedMethod(MethodDeclaration md) {
         String methodName = md.getNameAsString();
@@ -525,7 +560,7 @@ public class RepositoryParser extends ClassProcessor {
         boolean ordering = false;
         String next = "";
 
-        String tableName = findTableName(entityCu);
+        String tableName = findTableName(entity);
         if (tableName != null) {
             for (int i = 0; i < components.size(); i++) {
                 String component = components.get(i);

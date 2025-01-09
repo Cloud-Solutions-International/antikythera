@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.Type;
@@ -37,6 +36,7 @@ import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
@@ -44,6 +44,7 @@ import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -64,7 +65,13 @@ public class RepositoryQuery {
      * The result set from the last execution of this query if any
      */
     private ResultSet resultSet;
-
+    /**
+     * The result set from running the query with only predefined parameters.
+     * When the default query is being executed the presence of many filters will typically cause
+     * the result set to be empty. You are more likely to get a non-empty result when you have a
+     * small number of filters. This simplifiedResultSet represents that.
+     */
+    private ResultSet simplifiedResultSet;
     /**
      * This is the list of parameters that are defined in the function signature
      */
@@ -79,6 +86,9 @@ public class RepositoryQuery {
      */
     MethodDeclaration methodDeclaration;
 
+    /**
+     * Running the same query repeatedly will slow things down and be wastefull, lets cache it.
+     */
     Variable cachedResult;
     /**
      * The type of the entity that is being queried.
@@ -101,15 +111,11 @@ public class RepositoryQuery {
      * The original query as it was passed to the repository method.
      */
     private String originalQuery;
-    private ResultSet simplifiedResultSet;
+
 
     public RepositoryQuery() {
         methodParameters = new ArrayList<>();
         methodArguments = new ArrayList<>();
-    }
-
-    public boolean isNative() {
-        return isNative;
     }
 
     public String getQuery() {
@@ -127,13 +133,10 @@ public class RepositoryQuery {
         return cachedResult;
     }
 
-    public void setCachedResult(Variable cachedResult) {
-        this.cachedResult = cachedResult;
-    }
-
     /**
-     * Mark that the column was actually not used in the query filters.
-     * @param column
+     * Mark that the column was actually not used in the query filters of the simplified query.
+     * @param column the column name that was removed from the filters
+     * @param right the right hand side of the original expression
      */
     public void remove(String column, Expression right) {
         boolean matched = false;
@@ -157,10 +160,18 @@ public class RepositoryQuery {
         }
     }
 
+    /**
+     * Get the result set for the simplified query. This will often be non-empty.
+     * @return the result set for the simplified query
+     */
     public ResultSet getSimplifiedResultSet() {
         return simplifiedResultSet;
     }
 
+    /**
+     * Get the result set for the un tampered query
+     * @return a JDBC result set which is likely to be empty in most situations.
+     */
     public ResultSet getResultSet() {
         return resultSet;
     }
@@ -184,13 +195,18 @@ public class RepositoryQuery {
         return simplifiedStatement;
     }
 
-    public void mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
+    public boolean mapPlaceHolders(net.sf.jsqlparser.expression.Expression right, String name) {
         if(right instanceof  JdbcParameter rhs) {
             int pos = rhs.getIndex();
-            if (pos < getMethodParameters().size() -1) {
+            if (pos <= getMethodParameters().size() ) {
+                QueryMethodArgument arg = getMethodArguments().get(pos - 1);
+                if (arg.getArgument().isLiteralExpr()) {
+                    return false;
+                }
                 QueryMethodParameter params = getMethodParameters().get(pos - 1);
                 params.getPlaceHolderId().add(pos);
                 params.setColumnName(name);
+                return true;
             }
         }
         else if (right instanceof JdbcNamedParameter rhs ){
@@ -198,13 +214,14 @@ public class RepositoryQuery {
             for(QueryMethodParameter p : getMethodParameters()) {
                 if(p.getPlaceHolderName().equals(placeHolder)) {
                     p.setColumnName(name);
-                    break;
+                    return true;
                 }
             }
         }
         else if (right instanceof ParenthesedExpressionList<?> rhs) {
             System.out.println(rhs + " not mapped");
         }
+        return false;
     }
 
 
@@ -216,37 +233,21 @@ public class RepositoryQuery {
      *
      * @param stmt   the sql statement
      * @param entity a compilation unit representing the entity.
+     * @throws AntikytheraException if we are unable to find related entities.
      */
-    void convertFieldsToSnakeCase(Statement stmt, CompilationUnit entity) throws AntikytheraException {
+    void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
 
-        if(stmt instanceof Select) {
-            PlainSelect select = ((Select) stmt).getPlainSelect();
+        if(stmt instanceof Select sel) {
+            PlainSelect select = sel.getPlainSelect();
 
             List<SelectItem<?>> items = select.getSelectItems();
-            if(items.size() == 1 && items.get(0).toString().length() == 1) {
+            if(items.size() == 1 && items.getFirst().toString().length() == 1) {
                 // This is a select * query but because it's an HQL query it appears as SELECT t
                 // replace select t with select *
                 items.set(0, SelectItem.from(new AllColumns()));
             }
             else {
-                // here we deal with general projections
-                for (int i = 0; i < items.size(); i++) {
-                    SelectItem<?> item = items.get(i);
-                    String itemStr = item.toString();
-                    String[] parts = itemStr.split("\\.");
-
-                    if (itemStr.contains(".") && parts.length == 2) {
-                        String field = parts[1];
-                        String snakeCaseField = RepositoryParser.camelToSnake(field);
-                        SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
-                        items.set(i, col);
-                    }
-                    else {
-                        String snakeCaseField = RepositoryParser.camelToSnake(parts[0]);
-                        SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
-                        items.set(i, col);
-                    }
-                }
+                generalProjections(items);
             }
 
             if (select.getWhere() != null) {
@@ -263,8 +264,8 @@ public class RepositoryQuery {
 
             if (select.getOrderByElements() != null) {
                 List<OrderByElement> orderBy = select.getOrderByElements();
-                for (int i = 0; i < orderBy.size(); i++) {
-                    orderBy.get(i).setExpression(RepositoryQuery.convertExpressionToSnakeCase(orderBy.get(i).getExpression()));
+                for (OrderByElement orderByElement : orderBy) {
+                    orderByElement.setExpression(RepositoryQuery.convertExpressionToSnakeCase(orderByElement.getExpression()));
                 }
             }
 
@@ -275,6 +276,26 @@ public class RepositoryQuery {
         }
     }
 
+    private static void generalProjections(List<SelectItem<?>> items) {
+        for (int i = 0; i < items.size(); i++) {
+            SelectItem<?> item = items.get(i);
+            String itemStr = item.toString();
+            String[] parts = itemStr.split("\\.");
+
+            if (itemStr.contains(".") && parts.length == 2) {
+                String field = parts[1];
+                String snakeCaseField = RepositoryParser.camelToSnake(field);
+                SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
+                items.set(i, col);
+            }
+            else {
+                String snakeCaseField = RepositoryParser.camelToSnake(parts[0]);
+                SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
+                items.set(i, col);
+            }
+        }
+    }
+
 
     /**
      * HQL joins use entity names instead of table name and column names.
@@ -282,106 +303,121 @@ public class RepositoryQuery {
      * query through JDBC.
      * @param entity the primary table or view for the join
      * @param select the select statement
+     * @throws AntikytheraException if we are unable to find related entities.
      */
-    private void processJoins(CompilationUnit entity, PlainSelect select) throws AntikytheraException {
-        List<CompilationUnit> units = new ArrayList<>();
+    private void processJoins(TypeWrapper entity, PlainSelect select) throws AntikytheraException {
+        List<TypeWrapper> units = new ArrayList<>();
         units.add(entity);
 
         List<Join> joins = select.getJoins();
         if(joins != null) {
-            for (int i = 0 ; i < joins.size() ; i++) {
-                Join j = joins.get(i);
+            for (Join j : joins) {
                 if (j.getRightItem() instanceof ParenthesedSelect ps) {
                     convertFieldsToSnakeCase(ps.getSelectBody(), entity);
                 } else {
-                    FromItem a = j.getRightItem();
-                    // the toString() of this will look something like p.dischargeNurseRequest n
-                    // from this we need to extract the dischargeNurseRequest
-                    String[] parts = a.toString().split("\\.");
-                    if (parts.length == 2) {
-                        CompilationUnit other = null;
-                        // the join may happen against any of the tables that we have encountered so far
-                        // hence the need to loop through here.
-                        for(CompilationUnit unit : units) {
-                            String field = parts[1].split(" ")[0];
-                            Optional<FieldDeclaration> x = unit.getType(0).getFieldByName(field);
-                            if(x.isPresent()) {
-                                var member = x.get();
-                                String lhs = null;
-                                String rhs = null;
-
-                                // find if there is a join column annotation, that will tell us the column names
-                                // to map for the on clause.
-                                for (var ann : member.getAnnotations()) {
-                                    if (ann.getNameAsString().equals("JoinColumn")) {
-                                        if (ann.isNormalAnnotationExpr()) {
-                                            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                                                if (pair.getNameAsString().equals("name")) {
-                                                    lhs = RepositoryParser.camelToSnake(pair.getValue().toString());
-                                                }
-                                                if (pair.getNameAsString().equals("referencedColumnName")) {
-                                                    rhs = RepositoryParser.camelToSnake(pair.getValue().toString());
-                                                }
-                                            }
-                                        } else {
-                                            lhs = RepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
-                                        }
-                                        break;
-                                    }
-                                }
-
-                                other = RepositoryParser.findEntity(member.getElementType());
-
-                                String tableName = RepositoryParser.findTableName(other);
-                                if (tableName == null || other == null) {
-                                    throw new AntikytheraException("Could not find table name for " +member.getElementType());
-                                }
-                                if(RepositoryParser.isOracle()) {
-                                    tableName = tableName.replace("\"","");
-                                }
-
-                                var f = j.getFromItem();
-                                if (f instanceof Table) {
-                                    Table t = new Table(tableName);
-                                    t.setAlias(f.getAlias());
-                                    j.setFromItem(t);
-
-                                }
-                                if(lhs == null || rhs == null) {
-                                    // lets roll with an implicit join for now
-                                    // todo fix this by figuring out the join column from other annotations
-                                    for(var column : other.getType(0).getFields()) {
-                                        for(var ann : column.getAnnotations()) {
-                                            if(ann.getNameAsString().equals("Id")) {
-                                                lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
-                                                rhs = lhs;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                if(lhs != null && rhs != null) {
-                                    if (RepositoryParser.isOracle()) {
-                                        lhs = lhs.replace("\"", "");
-                                        rhs = rhs.replace("\"", "");
-                                    }
-                                    EqualsTo eq = new EqualsTo();
-                                    eq.setLeftExpression(new Column(parts[0] + "." + lhs));
-                                    eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
-                                    j.getOnExpressions().add(eq);
-                                }
-
-                            }
-                        }
-                        // if we have discovered a new entity add it to our collection for looking up
-                        // join fields in the next one
-                        if(other != null) {
-                            units.add(other);
-                        }
-                    }
+                    processJoin(j, units);
                 }
             }
         }
+    }
+
+    private static void processJoin(Join j, List<TypeWrapper> units) throws AntikytheraException {
+        FromItem a = j.getRightItem();
+        // the toString() of this will look something like p.dischargeNurseRequest n
+        // from this we need to extract the dischargeNurseRequest
+        String[] parts = a.toString().split("\\.");
+        if (parts.length == 2) {
+            TypeWrapper other = processJoin(j, units, parts);
+            // if we have discovered a new entity add it to our collection for looking up
+            // join fields in the next one
+            if(other != null) {
+                units.add(other);
+            }
+        }
+    }
+
+    private static TypeWrapper processJoin(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
+        TypeWrapper other = null;
+        // the join may happen against any of the tables that we have encountered so far
+        // hence the need to loop through here.
+        for(TypeWrapper unit : units) {
+            String field = parts[1].split(" ")[0];
+            Optional<FieldDeclaration> x = unit.getType().getFieldByName(field);
+            if(x.isPresent()) {
+                var member = x.get();
+                String lhs = null;
+                String rhs = null;
+
+                // find if there is a join column annotation, that will tell us the column names
+                // to map for the on clause.
+
+                for (var ann : member.getAnnotations()) {
+                    if (ann.getNameAsString().equals("JoinColumn")) {
+                        if (ann.isNormalAnnotationExpr()) {
+                            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                                if (pair.getNameAsString().equals("name")) {
+                                    lhs = RepositoryParser.camelToSnake(pair.getValue().toString());
+                                }
+                                if (pair.getNameAsString().equals("referencedColumnName")) {
+                                    rhs = RepositoryParser.camelToSnake(pair.getValue().toString());
+                                }
+                            }
+                        } else {
+                            lhs = RepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
+                        }
+                        break;
+                    }
+                }
+
+                other = RepositoryParser.findEntity(member.getElementType());
+
+                String tableName = RepositoryParser.findTableName(other);
+                if (tableName == null || other == null) {
+                    throw new AntikytheraException("Could not find table name for " +member.getElementType());
+                }
+                if(RepositoryParser.isOracle()) {
+                    tableName = tableName.replace("\"","");
+                }
+
+                var f = j.getFromItem();
+                if (f instanceof Table) {
+                    Table t = new Table(tableName);
+                    t.setAlias(f.getAlias());
+                    j.setFromItem(t);
+
+                }
+                if(lhs == null || rhs == null) {
+                    rhs = lhs = implicitJoin(other, lhs);
+                }
+                if(lhs != null && rhs != null) {
+                    if (RepositoryParser.isOracle()) {
+                        lhs = lhs.replace("\"", "");
+                        rhs = rhs.replace("\"", "");
+                    }
+                    EqualsTo eq = new EqualsTo();
+                    eq.setLeftExpression(new Column(parts[0] + "." + lhs));
+                    eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
+                    j.getOnExpressions().add(eq);
+                }
+
+            }
+        }
+        return other;
+    }
+
+    private static String implicitJoin(TypeWrapper other, String lhs) {
+        // lets roll with an implicit join for now
+        // todo fix this by figuring out the join column from other annotations
+        for(var column : other.getType().getFields()) {
+            for(var ann : column.getAnnotations()) {
+                if(ann.getNameAsString().equals("Id")) {
+                    lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
+
+                    break;
+                }
+            }
+        }
+        return lhs;
     }
 
     public void setEntityType(Type entityType) {
@@ -397,18 +433,22 @@ public class RepositoryQuery {
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
-            this.simplifiedStatement = CCJSqlParserUtil.parse(query);
-
-            convertFieldsToSnakeCase(simplifiedStatement, RepositoryParser.findEntity(entityType));
-            convertFieldsToSnakeCase(statement, RepositoryParser.findEntity(entityType));
-
-            if (simplifiedStatement instanceof PlainSelect ps) {
-                simplifyWhereClause(ps.getWhere());
-            }
+            TypeWrapper entity = RepositoryParser.findEntity(entityType);
+            convertFieldsToSnakeCase(statement, entity);
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);
         } catch (AntikytheraException e) {
             logger.debug(e.getMessage());
+        }
+    }
+
+    public void buildSimplifiedQuery() throws JSQLParserException, AntikytheraException {
+        this.simplifiedStatement = CCJSqlParserUtil.parse(cleanUp(this.originalQuery));
+        TypeWrapper entity = RepositoryParser.findEntity(entityType);
+        convertFieldsToSnakeCase(simplifiedStatement, entity);
+
+        if (simplifiedStatement instanceof PlainSelect ps) {
+            simplifyWhereClause(ps.getWhere());
         }
     }
 
@@ -462,9 +502,6 @@ public class RepositoryQuery {
         return sql;
     }
 
-    public static String removeNumberedParams(String sql) {
-        return sql.replaceAll("\\?\\d+", "?");
-    }
     public Statement getStatement() {
         return statement;
     }
@@ -492,12 +529,15 @@ public class RepositoryQuery {
             andExpr.setRightExpression(simplifyWhereClause(andExpr.getRightExpression()));
         }
         if (expr instanceof Between between) {
-            mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
-            mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(between.getLeftExpression().toString()));
-            remove(RepositoryParser.camelToSnake(between.getLeftExpression().toString()), between);
-            between.setBetweenExpressionStart(new LongValue("2"));
-            between.setBetweenExpressionEnd(new LongValue("4"));
-            between.setLeftExpression(new LongValue("3"));
+            String left = between.getLeftExpression().toString();
+            if (mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(left)) &&
+                    mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(left))) {
+
+                remove(RepositoryParser.camelToSnake(left), between);
+                between.setBetweenExpressionStart(new LongValue("2"));
+                between.setBetweenExpressionEnd(new LongValue("4"));
+                between.setLeftExpression(new LongValue("3"));
+            }
         } else if (expr instanceof InExpression ine) {
             Column col = (Column) ine.getLeftExpression();
             if (!("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
@@ -509,22 +549,37 @@ public class RepositoryQuery {
                 ine.setRightExpression(rightExpression);
             }
         } else if (expr instanceof ComparisonOperator compare) {
-            net.sf.jsqlparser.expression.Expression left = compare.getLeftExpression();
-            net.sf.jsqlparser.expression.Expression right = compare.getRightExpression();
-            if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
+            return simplifyCompare(expr, compare);
+        }
+        return expr;
+    }
 
-                String name = RepositoryParser.camelToSnake(left.toString());
-                mapPlaceHolders(right, name);
-                if (col.getColumnName().equals("hospital_id")) {
-                    compare.setRightExpression(new LongValue("1"));
-                } else if (col.getColumnName().equals("hospital_group_id")) {
-                    compare.setRightExpression(new LongValue("1"));
-                } else  {
-                    compare.setLeftExpression(new StringValue("1"));
-                    compare.setRightExpression(new StringValue("1"));
+    private String getColumnName(Column expr) {
+        return RepositoryParser.camelToSnake(expr.getColumnName());
+    }
+
+    private Expression simplifyCompare(Expression expr, ComparisonOperator compare) {
+        Expression left = compare.getLeftExpression();
+        Expression right = compare.getRightExpression();
+        if (left instanceof Column col && (right instanceof JdbcParameter || right instanceof JdbcNamedParameter)) {
+            String name = getColumnName(col);
+            if (mapPlaceHolders(right, name)) {
+                Optional<Map> params = Settings.getProperty("database.parameters", Map.class);
+                if (params.isPresent()) {
+
+                    for (Object param : params.get().entrySet()) {
+                        if (param instanceof Map.Entry<?, ?> entry && entry.getKey() instanceof String
+                                && col.getColumnName().equals(entry.getKey().toString())) {
+                            compare.setRightExpression(new LongValue(entry.getValue().toString()));
+                            remove(name, right);
+                            return expr;
+                        }
+                    }
                 }
-                remove(name, right);
-                return expr;
+                compare.setLeftExpression(new StringValue("1"));
+                compare.setRightExpression(new StringValue("1"));
+                remove(compare.getRightExpression().toString(), right);
+
             }
         }
         return expr;
@@ -580,6 +635,11 @@ public class RepositoryQuery {
         return expr;
     }
 
+    /**
+     * Sets the result set for the simplified query.
+     * It should already have advanced to the first row.
+     * @param resultSet the result set for the simplified query (the one with minimal filters)
+     */
     public void setSimplifedResultSet(ResultSet resultSet) {
         this.simplifiedResultSet = resultSet;
     }

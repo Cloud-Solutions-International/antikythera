@@ -512,38 +512,42 @@ public class ClassProcessor extends AbstractCompiler {
             CompilationUnit tmp = cu;
             cu = cu.clone();
 
-            expandWildCards(cu);
-            allImports.addAll(cu.getImports());
-            cu.setImports(new NodeList<>());
-
-            for (var t : cu.getTypes()) {
-                if (t.isClassOrInterfaceDeclaration()) {
-                    ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                    if (!cdecl.isInnerClass()) {
-                        /*
-                         * we are iterating through all the types defined in the source file through the for loop
-                         * above. At this point we create a visitor and identifying the various dependencies will
-                         * be the job of the visitor.
-                         * Because the visitor will not look at parent classes so we do that below.
-                         */
-                        cdecl.accept(createTypeCollector(), null);
-                    }
-                    for(var ext : cdecl.getExtendedTypes()) {
-                        ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
-                        ImportDeclaration imp = resolveImport(parent.getNameAsString());
-                        addEdgeFromImport(t, ext, imp);
-                    }
-                }
-            }
+            visitTypes();
 
             cu.getImports().addAll(keepImports);
             cu = tmp;
         }
     }
 
+    protected void visitTypes() {
+        expandWildCards(cu);
+        allImports.addAll(cu.getImports());
+        cu.setImports(new NodeList<>());
+
+        for (var t : cu.getTypes()) {
+            if (t.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+                if (!cdecl.isInnerClass()) {
+                    /*
+                     * we are iterating through all the types defined in the source file through the for loop
+                     * above. At this point we create a visitor and identifying the various dependencies will
+                     * be the job of the visitor.
+                     * Because the visitor will not look at parent classes so we do that below.
+                     */
+                    cdecl.accept(createTypeCollector(), null);
+                }
+                for(var ext : cdecl.getExtendedTypes()) {
+                    ClassOrInterfaceType parent = ext.asClassOrInterfaceType();
+                    ImportDeclaration imp = resolveImport(parent.getNameAsString());
+                    addEdgeFromImport(t, ext, imp);
+                }
+            }
+        }
+    }
+
     /**
      * Puts all the classes marked as dependencies of the current class through java parser.
-     * @throws IOException
+     * @throws IOException if source file could not be processed
      */
     protected void compileDependencies() throws IOException {
         Optional<String> fullyQualifiedName = getPublicType(cu).getFullyQualifiedName();
@@ -562,62 +566,66 @@ public class ClassProcessor extends AbstractCompiler {
 
         @Override
         public Visitable visit(FieldDeclaration field, Void args) {
-            String fieldAsString = field.getElementType().toString();
-            if (fieldAsString.equals("DateScheduleUtil")
-                    || fieldAsString.equals("Logger")
-                    || fieldAsString.equals("Sort.Direction")) {
-                return null;
-            }
-
-            // Filter annotations to retain only @JsonFormat and @JsonIgnore
-            NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
-            for (AnnotationExpr annotation : field.getAnnotations()) {
-                String annotationName = annotation.getNameAsString();
-                if (annotationName.equals("JsonFormat") || annotationName.equals("JsonIgnore")) {
-                    resolveImport(annotationName);
-                    filteredAnnotations.add(annotation);
-                }
-                else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
-                    switch(field.getElementType().asString()) {
-                        case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
-                            break;
-                    }
-                }
-            }
-            field.getAnnotations().clear();
-            field.setAnnotations(filteredAnnotations);
-
-            Optional<ClassOrInterfaceDeclaration> ancestor = field.findAncestor(ClassOrInterfaceDeclaration.class);
-
-            if (ancestor.isPresent()) {
-                /*
-                 * We need not have this ancestor check because java can't have global variables but that's the
-                 * way the library is structured.
-                 * Having identified that we have a field, we need to solve it's type dependencies. Matters are
-                 * slightly complicated by the fact that sometimes a field may have an initializer. This may be
-                 * a method call (which we will ignore for now) but this is more often simply an object creation
-                 * It may look like this:
-                 *
-                 *     List<String> list = new ArrayList<>();
-                 *
-                 * Because the field type and the initializer differ we need to solve the type dependencies for
-                 * the initializer as well.
-                 */
-                solveTypeDependencies(ancestor.get(), field.getElementType());
-                VariableDeclarator firstVariable = field.getVariables().get(0);
-                firstVariable.getInitializer().ifPresent(init -> {
-                    if (init.isObjectCreationExpr()) {
-                        solveTypeDependencies(ancestor.get(), init.asObjectCreationExpr().getType());
-                    }
-                });
-            }
+            collectField(field);
+            field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(
+                    classOrInterfaceDeclaration -> collectFieldAncestors(field, classOrInterfaceDeclaration)
+            );
             return super.visit(field, args);
         }
     }
 
-    private ModifierVisitor createTypeCollector() {
-        return new TypeCollector();
+    protected void collectFieldAncestors(FieldDeclaration field, ClassOrInterfaceDeclaration ancestor) {
+        /*
+         * We need not have this ancestor check because java can't have global variables but that's the
+         * way the library is structured.
+         * Having identified that we have a field, we need to solve it's type dependencies. Matters are
+         * slightly complicated by the fact that sometimes a field may have an initializer. This may be
+         * a method call (which we will ignore for now) but this is more often simply an object creation
+         * It may look like this:
+         *
+         *     List<String> list = new ArrayList<>();
+         *
+         * Because the field type and the initializer differ we need to solve the type dependencies for
+         * the initializer as well.
+         */
+        solveTypeDependencies(ancestor, field.getElementType());
+        VariableDeclarator firstVariable = field.getVariables().get(0);
+        firstVariable.getInitializer().ifPresent(init -> {
+            if (init.isObjectCreationExpr()) {
+                solveTypeDependencies(ancestor, init.asObjectCreationExpr().getType());
+            }
+        });
     }
 
+    protected void collectField(FieldDeclaration field) {
+        String fieldAsString = field.getElementType().toString();
+        if (fieldAsString.equals("DateScheduleUtil")
+                || fieldAsString.equals("Logger")
+                || fieldAsString.equals("Sort.Direction")) {
+            return ;
+        }
 
+        // Filter annotations to retain only @JsonFormat and @JsonIgnore
+        NodeList<AnnotationExpr> filteredAnnotations = new NodeList<>();
+        for (AnnotationExpr annotation : field.getAnnotations()) {
+            String annotationName = annotation.getNameAsString();
+            if (annotationName.equals("JsonFormat") || annotationName.equals("Transient")
+                    || annotationName.equals("JsonIgnore")) {
+                resolveImport(annotationName);
+                filteredAnnotations.add(annotation);
+            }
+            else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
+                switch(field.getElementType().asString()) {
+                    case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
+                        break;
+                }
+            }
+        }
+        field.getAnnotations().clear();
+        field.setAnnotations(filteredAnnotations);
+    }
+
+    protected ModifierVisitor<?> createTypeCollector() {
+        return new TypeCollector();
+    }
 }

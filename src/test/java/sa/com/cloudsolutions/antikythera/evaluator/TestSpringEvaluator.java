@@ -12,6 +12,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestSpringEvaluator {
     @BeforeAll
@@ -34,7 +35,7 @@ class TestSpringEvaluator {
         SpringEvaluator eval = new SpringEvaluator("sa.com.cloudsolutions.controller.SimpleController");
 
         eval.executeMethod(cu.findFirst(MethodDeclaration.class).get());
-        assertNotNull(eval.returnValue);
+        assertNull(eval.returnValue);
 
     }
 }
