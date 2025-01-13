@@ -12,7 +12,7 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import java.sql.SQLException;
 import java.util.Optional;
 
-public class DatabaseArgumentGenerator extends ArgumentGenerator {
+public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DatabaseArgumentGenerator.class);
 
     /**
@@ -24,17 +24,18 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
 
     @Override
     public Variable mockParameter(String typeName) {
-
-        for(int i = 0 ; i < query.getMethodParameters().size() ; i++) {
+        Variable q = null;
+        for(int i = 0 ; i < query.getMethodParameters().size() && q == null; i++) {
             QueryMethodArgument arg = query.getMethodArguments().get(i);
 
             if (arg.getArgument().isNameExpr()) {
-                Variable query1 = matchParameterAndArgument(typeName, i, arg);
-                if (query1 != null) return query1;
+                q = matchParameterAndArgument(typeName, i, arg);
             }
         }
-
-        return null;
+        if (q == null) {
+            return super.mockParameter(typeName);
+        }
+        return q;
     }
 
     private static Variable matchParameterAndArgument(String typeName, int i, QueryMethodArgument arg) {

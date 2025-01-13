@@ -56,6 +56,7 @@ public class RepositoryParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     public static final String JPA_REPOSITORY = "JpaRepository";
     public static final String SELECT_STAR = "SELECT * FROM ";
+    private static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
 
     /**
      * The queries that were identified in this repository
@@ -478,10 +479,7 @@ public class RepositoryParser extends ClassProcessor {
      * @return a snake cased variable
      */
     public static String camelToSnake(String str) {
-        if(str.equalsIgnoreCase("patientpomr")) {
-            return str;
-        }
-        return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
+        return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
 
     public RepositoryQuery get(MethodDeclaration repoMethod) {

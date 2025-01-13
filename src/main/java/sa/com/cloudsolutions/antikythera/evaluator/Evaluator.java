@@ -1441,8 +1441,8 @@ public class Evaluator {
     /**
      * Execute - or rather interpret the code within a constructor found in source code
      * @param md ConstructorDeclaration
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @throws AntikytheraException if the evaluator fails
+     * @throws ReflectiveOperationException when a reflection operation fails
      */
     public void executeConstructor(CallableDeclaration<?> md) throws AntikytheraException, ReflectiveOperationException {
         if (md instanceof ConstructorDeclaration cd) {
