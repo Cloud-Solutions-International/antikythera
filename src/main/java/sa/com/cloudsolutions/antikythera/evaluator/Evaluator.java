@@ -195,7 +195,7 @@ public class Evaluator {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
             /*
-             * Array Initializersions are tricky
+             * Array Initialization is tricky
              */
             ArrayInitializerExpr arrayInitializerExpr = expr.asArrayInitializerExpr();
             return createArray(arrayInitializerExpr);

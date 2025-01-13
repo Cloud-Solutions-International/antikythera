@@ -198,14 +198,19 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
-        if (catching.isEmpty()) {
-            testForInternalServerError(null,
-                    new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
-            throw new AUTException(e.getMessage());
+        if (! (e instanceof AntikytheraException ae)) {
+            if (catching.isEmpty()) {
+                testForInternalServerError(null,
+                        new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
+                throw new AUTException(e.getMessage());
+            } else {
+                super.handleApplicationException(e);
+            }
         }
         else {
-            super.handleApplicationException(e);
+            throw ae;
         }
+
     }
 
     /**
@@ -214,7 +219,8 @@ public class SpringEvaluator extends Evaluator {
      * executed. While the basic Evaluator class does not run the same code over and over again,
      * this class does!
      * @param stmt the statement to execute
-     * @throws Exception
+     * @throws Exception a general exception because at this point we are concerned about the
+     *                  exceptions thrown by the code being executed.
      */
     @Override
     void executeStatement(Statement stmt) throws Exception {
@@ -483,6 +489,7 @@ public class SpringEvaluator extends Evaluator {
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
                 testForInternalServerError(methodCall, eex);
+                throw eex   ;
             }
         }
         return null;
@@ -715,8 +722,8 @@ public class SpringEvaluator extends Evaluator {
                 gen.setBranched(false);
             }
         }
-        Expression expression = methodCall.getScope().orElseGet(null);
-        if (expression != null && expression.isNameExpr()) {
+        Expression expression = methodCall.getScope().orElseThrow();
+        if (expression.isNameExpr()) {
             String fieldName = expression.asNameExpr().getNameAsString();
             RepositoryParser rp = repositories.get(fieldName);
             if (rp != null) {
@@ -863,10 +870,18 @@ public class SpringEvaluator extends Evaluator {
     Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
         Variable v = super.createObject(instructionPointer, decl, oce);
         ClassOrInterfaceType type = oce.getType();
-        if (type.getNameAsString().equals("ResponseEntity")) {
+        if (type.toString().contains("ResponseEntity")) {
             ControllerResponse response = new ControllerResponse(v);
-            response.setBody(evaluateExpression(oce.getArguments().get(0)));
             response.setType(type);
+
+            Optional<Expression> arg = oce.getArguments().getFirst();
+            if (arg.isPresent()) {
+                Variable body = evaluateExpression(arg.get());
+                response.setBody(body);
+                if (type.toString().equals("ResponseEntity")) {
+                    response.setType(new ClassOrInterfaceType(null, type.getName(), new NodeList<>(body.getType())));
+                }
+            }
             return new Variable(response);
         }
         v.setType(type);

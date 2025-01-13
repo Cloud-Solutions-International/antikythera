@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.stmt.ReturnStmt;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -132,6 +133,7 @@ public class SpringTestGenerator extends  TestGenerator {
             }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                 NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
+
                 for (var pair : normalAnnotation.getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
                         if (pair.getValue().toString().equals("RequestMethod.GET")) {
@@ -187,6 +189,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
             addQueryParams(makeGetCall, request, body);
         }
+
         VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
         AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
 
@@ -221,14 +224,6 @@ public class SpringTestGenerator extends  TestGenerator {
         httpWithBody(md, annotation, returnType, "makePost");
     }
 
-    private Type getReturnType(MethodDeclaration md, ControllerResponse resp) {
-        if (resp.getType() == null
-                || resp.getType().toString().equals("ResponseEntity")
-                || resp.getType().toString().equals("Object")) {
-            return md.getType();
-        }
-        return resp.getType();
-    }
 
     private BlockStmt getBody(MethodDeclaration md) {
         return md.getBody().orElseGet(() -> {
@@ -240,7 +235,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
     private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
 
-        Type returnType = getReturnType(mut, resp);
+        Type returnType = resp.getType();
 
         BlockStmt body = getBody(md);
 
@@ -270,7 +265,9 @@ public class SpringTestGenerator extends  TestGenerator {
                 addHttpStatusCheck(body, resp.getStatusCode());
             }
         }
-
+        else {
+            addHttpStatusCheck(body, resp.getStatusCode());
+        }
     }
 
     private static ExpressionStmt createResponseObject(Type respType) {
