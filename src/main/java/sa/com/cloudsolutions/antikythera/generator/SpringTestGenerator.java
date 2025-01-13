@@ -132,21 +132,14 @@ public class SpringTestGenerator extends  TestGenerator {
                 buildDeleteMethodTests(md, annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
-                NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
-
-                for (var pair : normalAnnotation.getPairs()) {
+                for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
-                        if (pair.getValue().toString().equals("RequestMethod.GET")) {
-                            buildGetMethodTests(md, annotation, controllerResponse);
-                        }
-                        if (pair.getValue().toString().equals("RequestMethod.POST")) {
-                            buildPostMethodTests(md, annotation, controllerResponse);
-                        }
-                        if (pair.getValue().toString().equals("RequestMethod.PUT")) {
-                            buildPutMethodTests(md, annotation, controllerResponse);
-                        }
-                        if (pair.getValue().toString().equals("RequestMethod.DELETE")) {
-                            buildDeleteMethodTests(md, annotation, controllerResponse);
+                        switch(pair.getValue().toString()) {
+                            case "RequestMethod.GET" -> buildGetMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.POST" -> buildPostMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.PUT" -> buildPutMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.DELETE" -> buildDeleteMethodTests(md, annotation, controllerResponse);
+                            default -> logger.debug("Unknown request method {}", pair.getValue());
                         }
                     }
                 }
