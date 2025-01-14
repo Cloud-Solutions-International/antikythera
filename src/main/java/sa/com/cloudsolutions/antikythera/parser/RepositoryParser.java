@@ -158,8 +158,8 @@ public class RepositoryParser extends ClassProcessor {
 
     /**
      * Count the number of parameters to bind.
-     * @param sql an sql statement as a string
-     * @return the number of place holder can be 0
+     * @param sql the sql statement as a string in which we will count the number of placeholders
+     * @return the number of placeholders. This can be 0
      */
     private static int countPlaceholders(String sql) {
         Pattern pattern = Pattern.compile("\\?");
@@ -181,19 +181,13 @@ public class RepositoryParser extends ClassProcessor {
                 boolean found = false;
                 for(var parent : cls.getExtendedTypes()) {
                     if (parent.toString().startsWith(JPA_REPOSITORY)) {
-                        found = true;
-                        Optional<NodeList<Type>> t = parent.getTypeArguments();
-                        if (t.isPresent()) {
-                            entityType = t.get().get(0);
+
+                        parent.getTypeArguments().ifPresent(t -> {
+                            entityType = t.getFirst().orElseThrow();
                             entity = findEntity(entityType);
                             table = findTableName(entity);
-                        }
-                        break;
+                        });
                     }
-                }
-                if(found) {
-                    tackOn(cls);
-                    cu.accept(new Visitor(), null);
                 }
             }
         }
@@ -233,7 +227,6 @@ public class RepositoryParser extends ClassProcessor {
                     }
                 }
             }
-
         }
     }
 
@@ -484,6 +477,12 @@ public class RepositoryParser extends ClassProcessor {
 
     public RepositoryQuery get(MethodDeclaration repoMethod) {
         return queries.get(repoMethod);
+    }
+
+    public void buildQueries() {
+        if (cu != null && entity != null) {
+            cu.accept(new Visitor(), null);
+        }
     }
 
     /**

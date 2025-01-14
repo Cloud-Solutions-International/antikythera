@@ -99,6 +99,7 @@ class TestRepositoryParser {
 
         parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
         parser.process();
+        parser.buildQueries();
 
         MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
         assertNotNull(parser.get(md));
