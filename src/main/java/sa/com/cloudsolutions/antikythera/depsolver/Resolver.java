@@ -281,11 +281,7 @@ public class Resolver {
                 SimpleName name = fae.getName();
                 Optional<FieldDeclaration> field = wrapper.getType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(name.asString()));
                 if (field.isPresent()) {
-                    try {
-                        return Graph.createGraphNode(field.get());
-                    } catch (AntikytheraException e) {
-                        throw new DepsolverException(e);
-                    }
+                    return Graph.createGraphNode(field.get());
                 }
             }
             types.add(t);
@@ -296,7 +292,8 @@ public class Resolver {
     private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) throws AntikytheraException {
         GraphNode scopeNode = resolveFieldAccess(node, scope, types);
         if (scopeNode != null) {
-            ClassOrInterfaceType resolvedType = (ClassOrInterfaceType) ((FieldDeclaration) scopeNode.getNode()).getCommonType();
+            FieldDeclaration scopeField = ((FieldDeclaration) scopeNode.getNode()).asFieldDeclaration();
+            ClassOrInterfaceType resolvedType = scopeField.getElementType().asClassOrInterfaceType();
             if (resolvedType != null) {
                 String fqn = AbstractCompiler.findFullyQualifiedName(scopeNode.getCompilationUnit(), resolvedType.getName().asString());
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
