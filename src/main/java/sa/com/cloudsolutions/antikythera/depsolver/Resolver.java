@@ -302,11 +302,7 @@ public class Resolver {
                     if (resolvedClass != null) {
                         Optional<FieldDeclaration> field = resolvedClass.getFieldByName(fae.getNameAsString());
                         if (field.isPresent()) {
-                            try {
-                                return Graph.createGraphNode(field.get());
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
+                            return Graph.createGraphNode(field.get());
                         }
                     }
                 }
