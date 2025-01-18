@@ -44,10 +44,10 @@ import java.util.Optional;
 public class Resolver {
 
     /**
-     * Resolve a field that is accessed through the this. prefix
+     * Resolve a field that is accessed through the <code>this.</code> prefix
      * @param node a graph node representing the current context
      * @param value the field access expression
-     * @return
+     * @return a graph node representing the resolved field
      */
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
@@ -80,11 +80,11 @@ public class Resolver {
 
     /**
      * Resolve a field access expression
-     * If the expression has a this. prefix then the field is resolved from the current class with
-     * help from the resolveThisField method
+     * If the expression has a <code>this.</code> prefix, then the field is resolved within the
+     * current class with help from the resolveThisField method
      * @param node represents a type
      * @param value a field access expression
-     * @return
+     * @return a graph node representing the resolved field
      */
     public static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();

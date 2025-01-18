@@ -5,6 +5,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 
 /**
  * Wraps method call expressions to solve their argument types.
@@ -35,6 +36,20 @@ public class MCEWrapper {
      */
     public NodeList<Type> getArgumentTypes() {
         return argumentTypes;
+    }
+
+    public Class<?>[] getArgumentTypesAsClasses() throws ClassNotFoundException {
+        if (argumentTypes == null) {
+            return null;
+        }
+        Class<?>[] classes = new Class<?>[argumentTypes.size()];
+
+        for (int i = 0; i < argumentTypes.size(); i++) {
+            String elementType = argumentTypes.get(i).getElementType().toString();
+            classes[i] = Reflect.getComponentClass(elementType);
+        }
+
+        return classes;
     }
 
     /**

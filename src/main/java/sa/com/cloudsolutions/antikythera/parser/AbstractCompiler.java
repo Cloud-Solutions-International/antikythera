@@ -38,6 +38,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -319,12 +320,19 @@ public class AbstractCompiler {
         return null;
     }
 
-    public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
+    /**
+     * Compares the list of argument types against the parameters of a callable declarations
+     * @param arguments the types of the arguments that need to be matched
+     * @param callables the list of callable declarations. These maybe method declarations or
+     *                  constructor declarations.
+     * @return the callable declaration if the arguments match the parameters
+     */
+    private static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> callables) {
         if (arguments != null &&
-                (construct.getParameters().size() == arguments.size() ||
-                        (construct.getParameters().size() > arguments.size() && construct.getParameter(arguments.size()).isVarArgs() ) )) {
+                (callables.getParameters().size() == arguments.size() ||
+                        (callables.getParameters().size() > arguments.size() && callables.getParameter(arguments.size()).isVarArgs() ) )) {
             for (int i = 0; i < arguments.size(); i++) {
-                Parameter param = construct.getParameter(i);
+                Parameter param = callables.getParameter(i);
 
                 if (! (param.getType().equals(arguments.get(i))
                         || param.getType().toString().equals("java.lang.Object")
@@ -334,7 +342,7 @@ public class AbstractCompiler {
                     return Optional.empty();
                 }
             }
-            return Optional.of(construct);
+            return Optional.of(callables);
         }
         return Optional.empty();
     }
@@ -516,7 +524,7 @@ public class AbstractCompiler {
 
                 String fullClassName = impName + "." + className;
                 try {
-                    Class.forName(fullClassName);
+                    Class<?> clazz =Class.forName(fullClassName);
                     /*
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked so this is the correct import.
@@ -674,6 +682,23 @@ public class AbstractCompiler {
                         Optional<Callable> method = findCallableDeclaration(methodCall, p);
                         if (method.isPresent()) {
                             return method;
+                        }
+                    } else {
+                        /*
+                         * the extended type is not in the same compilation unit, we will have to
+                         * load the class and try to find the method in it.
+                         */
+                        ImportWrapper wrapper = findImport(decl.findCompilationUnit().get(), extended.getNameAsString());
+                        if (wrapper != null && wrapper.isExternal()) {
+                            try {
+                                Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
+                                Method method = Reflect.findMethod(clazz, methodCall.getMethodName(), methodCall.getArgumentTypesAsClasses());
+                                if (method != null) {
+                                    return Optional.of(new Callable(method));
+                                }
+                            } catch (ClassNotFoundException e) {
+                                return Optional.empty();
+                            }
                         }
                     }
                 }

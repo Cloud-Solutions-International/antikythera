@@ -669,16 +669,11 @@ public class RepositoryParser extends ClassProcessor {
      * @param methodCall the method call being executed
      * @return the MethodDeclaration from the repository interface.
      */
-    public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
+    public Optional<Callable> findMethodDeclaration(MethodCallExpr methodCall) {
         MCEWrapper wrapper = new MCEWrapper(methodCall);
         wrapper.setArgumentTypes(new NodeList<>());
-        Optional<Callable> cd = AbstractCompiler.findMethodDeclaration(wrapper,
+        return AbstractCompiler.findMethodDeclaration(wrapper,
                 cu.getTypes().get(0));
-        if (cd.isPresent() && cd.get().isMethodDeclaration()) {
-            return cd.get().asMethodDeclaration();
-        }
-
-        return null;
     }
 
     public static boolean isOracle() {
