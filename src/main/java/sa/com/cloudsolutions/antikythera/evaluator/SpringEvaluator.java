@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import com.github.javaparser.ast.CompilationUnit;
@@ -266,34 +267,37 @@ public class SpringEvaluator extends Evaluator {
     private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            MethodDeclaration repoMethod = repository.findMethodDeclaration(methodCall);
-            RepositoryQuery q = repository.get(repoMethod);
+            MCEWrapper methodCallWrapper = new MCEWrapper(methodCall);
+            Optional<CallableDeclaration<?>> callableDeclaration = AbstractCompiler.findMethodDeclaration(
+                    methodCallWrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+            if (callableDeclaration.isPresent() && callableDeclaration.get() instanceof MethodDeclaration repoMethod) {
+                RepositoryQuery q = repository.get(repoMethod);
 
-            try {
-                /*
-                 * We have one more challenge; to find the parameters that are being used in the repository
-                 * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
-                 * to the arguments that are passed in when the method is actually being called.
-                 */
-                String nameAsString = repoMethod.getNameAsString();
-                if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
-                    q.getMethodArguments().clear();
-                    for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                        Expression argument = methodCall.getArgument(i);
-                        q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
+                try {
+                    /*
+                     * We have one more challenge; to find the parameters that are being used in the repository
+                     * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
+                     * to the arguments that are passed in when the method is actually being called.
+                     */
+                    String nameAsString = repoMethod.getNameAsString();
+                    if (!(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
+                        q.getMethodArguments().clear();
+                        for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
+                            Expression argument = methodCall.getArgument(i);
+                            q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
+                        }
+
+                        repository.executeQuery(repoMethod);
+                        DatabaseArgumentGenerator.setQuery(q);
+                    } else {
+                        // todo do some fake work here
                     }
-
-                    repository.executeQuery(repoMethod);
-                    DatabaseArgumentGenerator.setQuery(q);
+                } catch (Exception e) {
+                    logger.warn(e.getMessage());
+                    logger.warn("Could not execute query {}", methodCall);
                 }
-                else {
-                    // todo do some fake work here
-                }
-            } catch (Exception e) {
-                logger.warn(e.getMessage());
-                logger.warn("Could not execute query {}", methodCall);
+                return q;
             }
-            return q;
         }
         return null;
     }
