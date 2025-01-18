@@ -8,6 +8,9 @@ import com.github.javaparser.ast.type.Type;
 
 /**
  * Wraps method call expressions to solve their argument types.
+ * At the time that a method call is being evaluated, typically we only have the argument names
+ * and not their types. findMethodDeclaration in AbstractCompiler requires that the types be known
+ * this class bridges that gap.
  */
 public class MCEWrapper {
     /**

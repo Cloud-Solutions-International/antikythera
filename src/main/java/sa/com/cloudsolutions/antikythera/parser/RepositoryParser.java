@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -670,7 +671,15 @@ public class RepositoryParser extends ClassProcessor {
      * @return the MethodDeclaration from the repository interface.
      */
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
-        return findMethodDeclaration(methodCall, cu.getTypes().get(0)).orElse(null);
+        MCEWrapper wrapper = new MCEWrapper(methodCall);
+        wrapper.setArgumentTypes(new NodeList<>());
+        Optional<CallableDeclaration<?>> cd = AbstractCompiler.findMethodDeclaration(wrapper,
+                cu.getTypes().get(0));
+        if (cd.isPresent() && cd.get() instanceof MethodDeclaration md) {
+            return md;
+        }
+
+        return null;
     }
 
     public static boolean isOracle() {

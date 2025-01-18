@@ -1,10 +1,13 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,14 +48,21 @@ class TestOverlord extends TestHelper {
         List<MethodCallExpr> methodCalls = mds.get(3).findAll(MethodCallExpr.class);
 
         /*
-         * Should be able to  locate three method calls in the class, finding the correspondnig
+         * Should be able to  locate three method calls in the class, finding the corresponding
          * methodDeclaration is another matter
          */
         assertEquals(3, methodCalls.size());
-        Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCalls.getFirst(),
+
+        List<MethodDeclaration> decs = compiler.getCompilationUnit().findAll(MethodDeclaration.class);
+
+        MethodCallExpr mce = methodCalls.getFirst();
+        MCEWrapper wrapper = new MCEWrapper(mce);
+        wrapper.setArgumentTypes(new NodeList<>());
+        wrapper.getArgumentTypes().add(new ClassOrInterfaceType("String"));
+
+        Optional<CallableDeclaration<?>> cd = AbstractCompiler.findMethodDeclaration(wrapper,
                 AbstractCompiler.getPublicType(compiler.getCompilationUnit()));
-        assertTrue(md.isEmpty());
-        assertTrue(methodCalls.getFirst().getTypeArguments().isEmpty());
+        assertTrue(cd.isPresent());
 
     }
 
@@ -78,11 +88,6 @@ class TestOverlord extends TestHelper {
         assertEquals("print", md.get().getNameAsString());
         assertEquals(1, md.get().getParameters().size());
 
-//        md = AbstractCompiler.findMethodDeclaration(methodCalls.get(1), decl);
-//        assertTrue(md.isEmpty());
-//
-//        md = AbstractCompiler.findMethodDeclaration(methodCalls.get(2), decl);
-//        assertTrue(md.isPresent());
     }
 
     class FindMethodDeclarationCompiler extends AbstractCompiler {
