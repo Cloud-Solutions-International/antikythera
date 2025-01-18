@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -61,7 +60,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * The queries that were identified in this repository
      */
-    private final Map<MethodDeclaration, RepositoryQuery> queries;
+    private final Map<Callable, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -98,7 +97,7 @@ public class RepositoryParser extends ClassProcessor {
      * different branches, we will end up executing the same query over and over again. This is
      * wasteful in terms of both time and money! So we will cache the result sets here.
      */
-    private final Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
+    private final Map<Callable, ResultSet> cache = new HashMap<>();
 
     /**
      * A cache for the simplified queries.
@@ -265,12 +264,19 @@ public class RepositoryParser extends ClassProcessor {
      * @param method the name of the method that represents the query in the JPARepository interface
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(MethodDeclaration method) throws AntikytheraException, SQLException, JSQLParserException {
+    public ResultSet executeQuery(Callable method) throws AntikytheraException, SQLException, JSQLParserException {
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
         cache.put(method, rs);
         return rs;
+    }
+
+    public ResultSet executeQuery(RepositoryQuery rql, Callable method) throws SQLException, AntikytheraException, JSQLParserException {
+        if(method.isMethodDeclaration()) {
+            return executeQuery(rql, method.asMethodDeclaration());
+        }
+        return null;
     }
 
     public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, AntikytheraException, JSQLParserException {
@@ -475,7 +481,7 @@ public class RepositoryParser extends ClassProcessor {
         return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
 
-    public RepositoryQuery get(MethodDeclaration repoMethod) {
+    public RepositoryQuery get(Callable repoMethod) {
         return queries.get(repoMethod);
     }
 
@@ -519,11 +525,11 @@ public class RepositoryParser extends ClassProcessor {
                     }
                 }
             }
-
+            Callable callable = new Callable(n);
             if (query != null) {
-                queries.put(n, queryBuilder(query, nt, n));
+                queries.put(callable, queryBuilder(query, nt, callable));
             } else {
-                parseNonAnnotatedMethod(n);
+                parseNonAnnotatedMethod(callable);
             }
         }
     }
@@ -534,7 +540,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param isNative will be true if an annotation says a native query
      * @return a repository query instance.
      */
-    RepositoryQuery queryBuilder(String query, boolean isNative, MethodDeclaration md) {
+    RepositoryQuery queryBuilder(String query, boolean isNative, Callable md) {
         RepositoryQuery rql = new RepositoryQuery();
         rql.setMethodDeclaration(md);
         rql.setIsNative(isNative);
@@ -549,7 +555,7 @@ public class RepositoryParser extends ClassProcessor {
      * In these cases the naming convention of the method is used to infer the query.
      * @param md the method declaration
      */
-    void parseNonAnnotatedMethod(MethodDeclaration md) {
+    void parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
         StringBuilder sql = new StringBuilder();
@@ -669,7 +675,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param methodCall the method call being executed
      * @return the MethodDeclaration from the repository interface.
      */
-    public Optional<Callable> findMethodDeclaration(MethodCallExpr methodCall) {
+    public Optional<Callable> findJpaMethod(MethodCallExpr methodCall) {
         MCEWrapper wrapper = new MCEWrapper(methodCall);
         wrapper.setArgumentTypes(new NodeList<>());
         return AbstractCompiler.findMethodDeclaration(wrapper,

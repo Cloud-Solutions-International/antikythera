@@ -269,11 +269,13 @@ public class SpringEvaluator extends Evaluator {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
             MCEWrapper methodCallWrapper = new MCEWrapper(methodCall);
+            // todo fix the wrapper
+
             Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
                     methodCallWrapper, cu.getType(0).asClassOrInterfaceDeclaration());
             if (callable.isPresent() && callable.get().isMethodDeclaration()) {
                 MethodDeclaration repoMethod = callable.get().asMethodDeclaration();
-                RepositoryQuery q = repository.get(repoMethod);
+                RepositoryQuery q = repository.get(callable.get());
 
                 try {
                     /*
@@ -289,7 +291,7 @@ public class SpringEvaluator extends Evaluator {
                             q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
                         }
 
-                        repository.executeQuery(repoMethod);
+                        repository.executeQuery(callable.get());
                         DatabaseArgumentGenerator.setQuery(q);
                     } else {
                         // todo do some fake work here

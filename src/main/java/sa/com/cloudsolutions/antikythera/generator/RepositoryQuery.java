@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
@@ -39,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.sql.ResultSet;
@@ -84,7 +87,7 @@ public class RepositoryQuery {
     /**
      * The method declaration that represents the query on the JPARepository
      */
-    MethodDeclaration methodDeclaration;
+    Callable methodDeclaration;
 
     /**
      * Running the same query repeatedly will slow things down and be wastefull, lets cache it.
@@ -122,10 +125,13 @@ public class RepositoryQuery {
         return statement.toString();
     }
 
-    public void setMethodDeclaration(MethodDeclaration methodDeclaration) {
+    public void setMethodDeclaration(Callable methodDeclaration) {
         this.methodDeclaration = methodDeclaration;
-        for (int i = 0; i < methodDeclaration.getParameters().size(); i++) {
-            methodParameters.add(new QueryMethodParameter(methodDeclaration.getParameter(i), i));
+        if (methodDeclaration.isMethodDeclaration()) {
+            NodeList<Parameter> parameters = methodDeclaration.asMethodDeclaration().getParameters();
+            for (int i = 0; i < parameters.size(); i++) {
+                methodParameters.add(new QueryMethodParameter(methodDeclaration.asMethodDeclaration().getParameter(i), i));
+            }
         }
     }
 

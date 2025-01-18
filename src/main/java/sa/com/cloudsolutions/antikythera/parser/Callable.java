@@ -58,4 +58,30 @@ public class Callable {
         }
         return null;
     }
+
+    public String getNameAsString() {
+        if(isMethod()) {
+            return method.getName();
+        }
+        return callableDeclaration.getNameAsString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof Callable other) {
+            if (method != null) {
+                return method.equals(other.method);
+            }
+            return callableDeclaration.equals(other.callableDeclaration);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        if (method != null) {
+            return method.hashCode();
+        }
+        return callableDeclaration.hashCode();
+    }
 }

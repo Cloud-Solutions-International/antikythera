@@ -46,11 +46,11 @@ public class ITRepositoryParser {
                 @Override
                 public void visit(MethodCallExpr n, Void arg) {
                     super.visit(n, arg);
-                    Optional<Callable> cd = tp.findMethodDeclaration(n);
+                    Optional<Callable> cd = tp.findJpaMethod(n);
                     assertTrue(cd.isPresent());
                     MethodDeclaration md = cd.get().asMethodDeclaration();
                     assertNotNull(md);
-                    RepositoryQuery rql = tp.get(md);
+                    RepositoryQuery rql = tp.get(cd.get());
                     assertNotNull(rql);
 
                     String sql = rql.getOriginalQuery();
@@ -94,13 +94,14 @@ public class ITRepositoryParser {
             @Override
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
-                Optional<Callable> cd = tp.findMethodDeclaration(n);
+                Optional<Callable> cd = tp.findJpaMethod(n);
+                assertTrue(cd.isPresent());
                 MethodDeclaration md = cd.get().asMethodDeclaration();
                 if(md == null) {
                     return;
                 }
 
-                RepositoryQuery rql = tp.get(md);
+                RepositoryQuery rql = tp.get(cd.get());
                 assertNotNull(rql);
 
                 if(n.getNameAsString().equals("findById")) {
