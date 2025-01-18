@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.MethodCallExpr;
 import net.sf.jsqlparser.JSQLParserException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -15,7 +14,6 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
 import com.github.javaparser.ast.type.Type;
@@ -482,7 +480,20 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     public RepositoryQuery get(Callable repoMethod) {
-        return queries.get(repoMethod);
+        RepositoryQuery q = queries.get(repoMethod);
+        if (q == null) {
+            if (repoMethod.isMethodDeclaration()) {
+                queryFromMethodDeclaration(repoMethod.asMethodDeclaration());
+
+            }
+            else {
+                parseNonAnnotatedMethod(repoMethod);
+            }
+            q = queries.get(repoMethod);
+        }
+
+        return q;
+
     }
 
     public void buildQueries() {
@@ -498,39 +509,43 @@ public class RepositoryParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration n, Void arg) {
             super.visit(n, arg);
-            String query = null;
-            boolean nt = false;
-            AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
+            queryFromMethodDeclaration(n);
+        }
+    }
 
-            if (ann != null && ann.isSingleMemberAnnotationExpr()) {
-                try {
-                    Evaluator eval = new Evaluator(className);
-                    Variable v = eval.evaluateExpression(
-                            ann.asSingleMemberAnnotationExpr().getMemberValue()
-                    );
-                    query = v.getValue().toString();
-                } catch (AntikytheraException|ReflectiveOperationException e) {
-                    throw new RuntimeException(e);
-                }
-            } else if (ann != null && ann.isNormalAnnotationExpr()) {
+    private void queryFromMethodDeclaration(MethodDeclaration n) {
+        String query = null;
+        boolean nt = false;
+        AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
 
-                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                    if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
-                        nt = true;
-                    }
-                }
-                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                    if (pair.getNameAsString().equals("value")) {
-                        query = pair.getValue().toString();
-                    }
+        if (ann != null && ann.isSingleMemberAnnotationExpr()) {
+            try {
+                Evaluator eval = new Evaluator(className);
+                Variable v = eval.evaluateExpression(
+                        ann.asSingleMemberAnnotationExpr().getMemberValue()
+                );
+                query = v.getValue().toString();
+            } catch (AntikytheraException|ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        } else if (ann != null && ann.isNormalAnnotationExpr()) {
+
+            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
+                    nt = true;
                 }
             }
-            Callable callable = new Callable(n);
-            if (query != null) {
-                queries.put(callable, queryBuilder(query, nt, callable));
-            } else {
-                parseNonAnnotatedMethod(callable);
+            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                if (pair.getNameAsString().equals("value")) {
+                    query = pair.getValue().toString();
+                }
             }
+        }
+        Callable callable = new Callable(n);
+        if (query != null) {
+            queries.put(callable, queryBuilder(query, nt, callable));
+        } else {
+            parseNonAnnotatedMethod(callable);
         }
     }
 
