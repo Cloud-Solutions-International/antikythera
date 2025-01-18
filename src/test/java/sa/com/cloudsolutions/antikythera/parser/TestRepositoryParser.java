@@ -8,10 +8,8 @@ import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
-import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
-import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,8 +22,6 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -98,7 +94,7 @@ class TestRepositoryParser {
         AbstractCompiler.preProcess();
 
         parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        parser.process();
+        parser.processAll();
         parser.buildQueries();
 
         MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));

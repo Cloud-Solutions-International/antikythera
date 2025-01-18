@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
-import javax.swing.text.html.Option;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -152,7 +151,7 @@ public class RepositoryParser extends ClassProcessor {
             Settings.loadConfigMap();
             RepositoryParser parser = new RepositoryParser();
             parser.compile(AbstractCompiler.classToPath(args[0]));
-            parser.process();
+            parser.processAll();
             parser.executeAllQueries();
         }
     }
@@ -173,13 +172,13 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     /**
-     * Process the CompilationUnit to identify the queries.
+     * Process the CompilationUnit to identify all the queries.
      */
-    public void process()  {
+    public void processAll()  {
         for(var tp : cu.getTypes()) {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
-                boolean found = false;
+
                 for(var parent : cls.getExtendedTypes()) {
                     if (parent.toString().startsWith(JPA_REPOSITORY)) {
 

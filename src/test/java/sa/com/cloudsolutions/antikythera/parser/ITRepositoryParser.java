@@ -34,7 +34,7 @@ public class ITRepositoryParser {
         final RepositoryParser tp = new RepositoryParser();
         RepositoryParser.preProcess();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.DepartmentRepository"));
-        tp.process();
+        tp.processAll();
         tp.buildQueries();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
@@ -81,7 +81,7 @@ public class ITRepositoryParser {
 
         final RepositoryParser tp = new RepositoryParser();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        tp.process();
+        tp.processAll();
         tp.buildQueries();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
