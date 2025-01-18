@@ -90,9 +90,13 @@ public class Reflect {
         for (int i = 0; i < arguments.size(); i++) {
             argValues[i] = evaluator.evaluateExpression(arguments.get(i));
             if (argValues[i] != null) {
-                Class<?> wrapperClass = argValues[i].getClazz() == null ? argValues[i].getValue().getClass() : argValues[i].getClazz();
-                paramTypes[i] = wrapperClass;
                 args[i] = argValues[i].getValue();
+                if (argValues[i].getClazz() != null ) {
+                    paramTypes[i] = argValues[i].getClazz();
+                }
+                else if (args[i] != null) {
+                    paramTypes[i] = argValues[i].getValue().getClass();
+                }
             } else {
                 try {
                     String className = arguments.get(0).calculateResolvedType().describe();
@@ -255,5 +259,7 @@ public class Reflect {
         }
         return false;
     }
+
+
 
 }

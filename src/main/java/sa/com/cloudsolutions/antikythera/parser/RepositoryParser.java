@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.MethodCallExpr;
 import net.sf.jsqlparser.JSQLParserException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -15,7 +14,6 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
 import com.github.javaparser.ast.type.Type;
@@ -27,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
-import javax.swing.text.html.Option;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -56,11 +53,12 @@ public class RepositoryParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     public static final String JPA_REPOSITORY = "JpaRepository";
     public static final String SELECT_STAR = "SELECT * FROM ";
+    private static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
 
     /**
      * The queries that were identified in this repository
      */
-    private final Map<MethodDeclaration, RepositoryQuery> queries;
+    private final Map<Callable, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -97,7 +95,7 @@ public class RepositoryParser extends ClassProcessor {
      * different branches, we will end up executing the same query over and over again. This is
      * wasteful in terms of both time and money! So we will cache the result sets here.
      */
-    private final Map<MethodDeclaration, ResultSet> cache = new HashMap<>();
+    private final Map<Callable, ResultSet> cache = new HashMap<>();
 
     /**
      * A cache for the simplified queries.
@@ -150,15 +148,15 @@ public class RepositoryParser extends ClassProcessor {
             Settings.loadConfigMap();
             RepositoryParser parser = new RepositoryParser();
             parser.compile(AbstractCompiler.classToPath(args[0]));
-            parser.process();
+            parser.processAll();
             parser.executeAllQueries();
         }
     }
 
     /**
      * Count the number of parameters to bind.
-     * @param sql an sql statement as a string
-     * @return the number of place holder can be 0
+     * @param sql the sql statement as a string in which we will count the number of placeholders
+     * @return the number of placeholders. This can be 0
      */
     private static int countPlaceholders(String sql) {
         Pattern pattern = Pattern.compile("\\?");
@@ -171,28 +169,22 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     /**
-     * Process the CompilationUnit to identify the queries.
+     * Process the CompilationUnit to identify all the queries.
      */
-    public void process()  {
+    public void processAll()  {
         for(var tp : cu.getTypes()) {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
-                boolean found = false;
+
                 for(var parent : cls.getExtendedTypes()) {
                     if (parent.toString().startsWith(JPA_REPOSITORY)) {
-                        found = true;
-                        Optional<NodeList<Type>> t = parent.getTypeArguments();
-                        if (t.isPresent()) {
-                            entityType = t.get().get(0);
+
+                        parent.getTypeArguments().ifPresent(t -> {
+                            entityType = t.getFirst().orElseThrow();
                             entity = findEntity(entityType);
                             table = findTableName(entity);
-                        }
-                        break;
+                        });
                     }
-                }
-                if(found) {
-                    tackOn(cls);
-                    cu.accept(new Visitor(), null);
                 }
             }
         }
@@ -232,7 +224,6 @@ public class RepositoryParser extends ClassProcessor {
                     }
                 }
             }
-
         }
     }
 
@@ -271,12 +262,19 @@ public class RepositoryParser extends ClassProcessor {
      * @param method the name of the method that represents the query in the JPARepository interface
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(MethodDeclaration method) throws AntikytheraException, SQLException, JSQLParserException {
+    public ResultSet executeQuery(Callable method) throws AntikytheraException, SQLException, JSQLParserException {
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
         cache.put(method, rs);
         return rs;
+    }
+
+    public ResultSet executeQuery(RepositoryQuery rql, Callable method) throws SQLException, AntikytheraException, JSQLParserException {
+        if(method.isMethodDeclaration()) {
+            return executeQuery(rql, method.asMethodDeclaration());
+        }
+        return null;
     }
 
     public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, AntikytheraException, JSQLParserException {
@@ -478,14 +476,30 @@ public class RepositoryParser extends ClassProcessor {
      * @return a snake cased variable
      */
     public static String camelToSnake(String str) {
-        if(str.equalsIgnoreCase("patientpomr")) {
-            return str;
-        }
-        return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
+        return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
 
-    public RepositoryQuery get(MethodDeclaration repoMethod) {
-        return queries.get(repoMethod);
+    public RepositoryQuery get(Callable repoMethod) {
+        RepositoryQuery q = queries.get(repoMethod);
+        if (q == null) {
+            if (repoMethod.isMethodDeclaration()) {
+                queryFromMethodDeclaration(repoMethod.asMethodDeclaration());
+
+            }
+            else {
+                parseNonAnnotatedMethod(repoMethod);
+            }
+            q = queries.get(repoMethod);
+        }
+
+        return q;
+
+    }
+
+    public void buildQueries() {
+        if (cu != null && entity != null) {
+            cu.accept(new Visitor(), null);
+        }
     }
 
     /**
@@ -495,39 +509,43 @@ public class RepositoryParser extends ClassProcessor {
         @Override
         public void visit(MethodDeclaration n, Void arg) {
             super.visit(n, arg);
-            String query = null;
-            boolean nt = false;
-            AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
+            queryFromMethodDeclaration(n);
+        }
+    }
 
-            if (ann != null && ann.isSingleMemberAnnotationExpr()) {
-                try {
-                    Evaluator eval = new Evaluator(className);
-                    Variable v = eval.evaluateExpression(
-                            ann.asSingleMemberAnnotationExpr().getMemberValue()
-                    );
-                    query = v.getValue().toString();
-                } catch (AntikytheraException|ReflectiveOperationException e) {
-                    throw new RuntimeException(e);
-                }
-            } else if (ann != null && ann.isNormalAnnotationExpr()) {
+    private void queryFromMethodDeclaration(MethodDeclaration n) {
+        String query = null;
+        boolean nt = false;
+        AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
 
-                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                    if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
-                        nt = true;
-                    }
-                }
-                for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                    if (pair.getNameAsString().equals("value")) {
-                        query = pair.getValue().toString();
-                    }
+        if (ann != null && ann.isSingleMemberAnnotationExpr()) {
+            try {
+                Evaluator eval = new Evaluator(className);
+                Variable v = eval.evaluateExpression(
+                        ann.asSingleMemberAnnotationExpr().getMemberValue()
+                );
+                query = v.getValue().toString();
+            } catch (AntikytheraException|ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        } else if (ann != null && ann.isNormalAnnotationExpr()) {
+
+            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
+                    nt = true;
                 }
             }
-
-            if (query != null) {
-                queries.put(n, queryBuilder(query, nt, n));
-            } else {
-                parseNonAnnotatedMethod(n);
+            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                if (pair.getNameAsString().equals("value")) {
+                    query = pair.getValue().toString();
+                }
             }
+        }
+        Callable callable = new Callable(n);
+        if (query != null) {
+            queries.put(callable, queryBuilder(query, nt, callable));
+        } else {
+            parseNonAnnotatedMethod(callable);
         }
     }
 
@@ -537,7 +555,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param isNative will be true if an annotation says a native query
      * @return a repository query instance.
      */
-    RepositoryQuery queryBuilder(String query, boolean isNative, MethodDeclaration md) {
+    RepositoryQuery queryBuilder(String query, boolean isNative, Callable md) {
         RepositoryQuery rql = new RepositoryQuery();
         rql.setMethodDeclaration(md);
         rql.setIsNative(isNative);
@@ -552,7 +570,7 @@ public class RepositoryParser extends ClassProcessor {
      * In these cases the naming convention of the method is used to infer the query.
      * @param md the method declaration
      */
-    void parseNonAnnotatedMethod(MethodDeclaration md) {
+    void parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
         StringBuilder sql = new StringBuilder();
@@ -665,15 +683,6 @@ public class RepositoryParser extends ClassProcessor {
         }
 
         return components;
-    }
-
-    /**
-     * Find the method declaration that corresponds to a method call.
-     * @param methodCall the method call being executed
-     * @return the MethodDeclaration from the repository interface.
-     */
-    public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
-        return findMethodDeclaration(methodCall, cu.getTypes().get(0)).orElse(null);
     }
 
     public static boolean isOracle() {
