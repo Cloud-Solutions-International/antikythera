@@ -22,8 +22,10 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -97,7 +99,9 @@ class TestRepositoryParser {
         parser.processAll();
         parser.buildQueries();
 
-        MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
+        Optional<Callable> cd = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
+        assertTrue(cd.isPresent());
+        assertFalse(cd.get().isMethodDeclaration());
         assertNotNull(parser.get(md));
     }
 }

@@ -17,6 +17,7 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -45,7 +46,9 @@ public class ITRepositoryParser {
                 @Override
                 public void visit(MethodCallExpr n, Void arg) {
                     super.visit(n, arg);
-                    MethodDeclaration md = tp.findMethodDeclaration(n);
+                    Optional<Callable> cd = tp.findMethodDeclaration(n);
+                    assertTrue(cd.isPresent());
+                    MethodDeclaration md = cd.get().asMethodDeclaration();
                     assertNotNull(md);
                     RepositoryQuery rql = tp.get(md);
                     assertNotNull(rql);
@@ -91,7 +94,8 @@ public class ITRepositoryParser {
             @Override
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
-                MethodDeclaration md = tp.findMethodDeclaration(n);
+                Optional<Callable> cd = tp.findMethodDeclaration(n);
+                MethodDeclaration md = cd.get().asMethodDeclaration();
                 if(md == null) {
                     return;
                 }
