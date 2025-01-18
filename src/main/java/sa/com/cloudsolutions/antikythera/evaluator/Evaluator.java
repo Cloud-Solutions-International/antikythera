@@ -44,6 +44,7 @@ import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
@@ -557,10 +558,10 @@ public class Evaluator {
             }
             MCEWrapper mce = wrapCallExpression(oce);
 
-            Optional<CallableDeclaration<?>> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
+            Optional<Callable> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
 
             if (matchingConstructor.isPresent()) {
-                eval.executeConstructor(matchingConstructor.get());
+                eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
                 return new Variable(eval);
             }
             /*
@@ -1051,9 +1052,9 @@ public class Evaluator {
      Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
         MCEWrapper wrapper = wrapCallExpression(methodCall);
-        Optional<CallableDeclaration<?>> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
-        if (n.isPresent()) {
-            return executeMethod(n.get());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+        if (n.isPresent() && n.get().isMethodDeclaration()) {
+            return executeMethod(n.get().asMethodDeclaration());
         }
 
         return null;
@@ -1121,14 +1122,13 @@ public class Evaluator {
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
-            Optional<CallableDeclaration<?>> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
-            if (md.isPresent()) {
-                return executeMethod(md.get());
+            Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
+            if (md.isPresent() && md.get().isMethodDeclaration()) {
+                return executeMethod(md.get().asMethodDeclaration());
             }
         }
         return null;
     }
-
 
     static Class<?> getClass(String className) {
         try {

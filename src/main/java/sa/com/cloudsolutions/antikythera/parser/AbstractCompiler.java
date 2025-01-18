@@ -19,6 +19,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
+import org.aspectj.weaver.ast.Call;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -587,7 +588,7 @@ public class AbstractCompiler {
     }
 
 
-    public static Optional<CallableDeclaration<?>> findConstructorDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findConstructorDeclaration(MCEWrapper methodCall,
                                                                     TypeDeclaration<?> decl) {
         int found = -1;
         int occurs = 0;
@@ -596,7 +597,7 @@ public class AbstractCompiler {
             ConstructorDeclaration constructor = constructors.get(i);
             Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), constructor);
             if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
-                return Optional.of(md);
+                return Optional.of(new Callable(md));
             }
             if (methodCall.getArgumentTypes() != null &&
                     constructor.getParameters().size() == methodCall.getArgumentTypes().size()) {
@@ -605,24 +606,24 @@ public class AbstractCompiler {
             }
         }
 
-        Optional<CallableDeclaration<?>> c = findCallableInParent(methodCall, decl);
+        Optional<Callable> c = findCallableInParent(methodCall, decl);
         if (c.isPresent()) {
             return c;
         }
 
         if (found != -1 && occurs == 1) {
-            return Optional.of(constructors.get(found));
+            return Optional.of(new Callable(constructors.get(found)));
         }
         return Optional.empty();
     }
 
 
-    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findMethodDeclaration(MCEWrapper methodCall,
                                                                          TypeDeclaration<?> decl) {
         return findMethodDeclaration(methodCall, decl, true);
     }
 
-    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findMethodDeclaration(MCEWrapper methodCall,
                                                                          TypeDeclaration<?> decl, boolean overRides) {
 
         if (methodCall.getMethodCallExpr() instanceof MethodCallExpr mce) {
@@ -635,7 +636,7 @@ public class AbstractCompiler {
                 if (methodCall.getArgumentTypes() != null) {
                     Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
                     if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
-                        return Optional.of(md);
+                        return Optional.of(new Callable(md));
                     }
                 }
                 if (method.getParameters().size() == mce.getArguments().size()) {
@@ -645,21 +646,21 @@ public class AbstractCompiler {
             }
 
             if (overRides) {
-                Optional<CallableDeclaration<?>> method = findCallableInParent(methodCall, decl);
+                Optional<Callable> method = findCallableInParent(methodCall, decl);
                 if (method.isPresent()) {
                     return method;
                 }
             }
 
             if (found != -1 && occurs == 1) {
-                return Optional.of(methodsByName.get(found));
+                return Optional.of(new Callable(methodsByName.get(found)));
             }
         }
 
         return Optional.empty();
     }
 
-    private static Optional<CallableDeclaration<?>> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
         if (decl.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
 
@@ -670,7 +671,7 @@ public class AbstractCompiler {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
                         TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
+                        Optional<Callable> method = findCallableDeclaration(methodCall, p);
                         if (method.isPresent()) {
                             return method;
                         }
@@ -681,7 +682,7 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    public static Optional<CallableDeclaration<?>> findCallableDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findCallableDeclaration(MCEWrapper methodCall,
                                                                       TypeDeclaration<?> decl) {
         if(methodCall.getMethodCallExpr() instanceof MethodCallExpr) {
             return findMethodDeclaration(methodCall, decl);

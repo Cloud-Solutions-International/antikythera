@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -268,9 +269,10 @@ public class SpringEvaluator extends Evaluator {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
             MCEWrapper methodCallWrapper = new MCEWrapper(methodCall);
-            Optional<CallableDeclaration<?>> callableDeclaration = AbstractCompiler.findMethodDeclaration(
+            Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
                     methodCallWrapper, cu.getType(0).asClassOrInterfaceDeclaration());
-            if (callableDeclaration.isPresent() && callableDeclaration.get() instanceof MethodDeclaration repoMethod) {
+            if (callable.isPresent() && callable.get().isMethodDeclaration()) {
+                MethodDeclaration repoMethod = callable.get().asMethodDeclaration();
                 RepositoryQuery q = repository.get(repoMethod);
 
                 try {

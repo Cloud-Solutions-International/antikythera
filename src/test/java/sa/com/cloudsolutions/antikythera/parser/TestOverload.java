@@ -60,7 +60,7 @@ class TestOverlord extends TestHelper {
         wrapper.setArgumentTypes(new NodeList<>());
         wrapper.getArgumentTypes().add(new ClassOrInterfaceType("String"));
 
-        Optional<CallableDeclaration<?>> cd = AbstractCompiler.findMethodDeclaration(wrapper,
+        Optional<Callable> cd = AbstractCompiler.findMethodDeclaration(wrapper,
                 AbstractCompiler.getPublicType(compiler.getCompilationUnit()));
         assertTrue(cd.isPresent());
 
@@ -82,11 +82,12 @@ class TestOverlord extends TestHelper {
         MethodCallExpr mce = methodCalls.getFirst();
         MCEWrapper wrapper = Resolver.resolveArgumentTypes(Graph.createGraphNode(mce), mce);
 
-        Optional<CallableDeclaration<?>> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
+        Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
         assertTrue(md.isPresent());
+        assertTrue(md.get().isMethodDeclaration());
 
-        assertEquals("print", md.get().getNameAsString());
-        assertEquals(1, md.get().getParameters().size());
+        assertEquals("print", md.get().asMethodDeclaration().getNameAsString());
+        assertEquals(1, md.get().asMethodDeclaration().getParameters().size());
 
     }
 

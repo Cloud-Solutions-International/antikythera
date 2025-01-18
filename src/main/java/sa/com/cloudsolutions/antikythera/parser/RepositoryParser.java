@@ -672,10 +672,10 @@ public class RepositoryParser extends ClassProcessor {
     public MethodDeclaration findMethodDeclaration(MethodCallExpr methodCall) {
         MCEWrapper wrapper = new MCEWrapper(methodCall);
         wrapper.setArgumentTypes(new NodeList<>());
-        Optional<CallableDeclaration<?>> cd = AbstractCompiler.findMethodDeclaration(wrapper,
+        Optional<Callable> cd = AbstractCompiler.findMethodDeclaration(wrapper,
                 cu.getTypes().get(0));
-        if (cd.isPresent() && cd.get() instanceof MethodDeclaration md) {
-            return md;
+        if (cd.isPresent() && cd.get().isMethodDeclaration()) {
+            return cd.get().asMethodDeclaration();
         }
 
         return null;
