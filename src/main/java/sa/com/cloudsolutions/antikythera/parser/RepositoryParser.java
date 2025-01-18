@@ -670,18 +670,6 @@ public class RepositoryParser extends ClassProcessor {
         return components;
     }
 
-    /**
-     * Find the method declaration that corresponds to a method call.
-     * @param methodCall the method call being executed
-     * @return the MethodDeclaration from the repository interface.
-     */
-    public Optional<Callable> findJpaMethod(MethodCallExpr methodCall) {
-        MCEWrapper wrapper = new MCEWrapper(methodCall);
-        wrapper.setArgumentTypes(new NodeList<>());
-        return AbstractCompiler.findMethodDeclaration(wrapper,
-                cu.getTypes().get(0));
-    }
-
     public static boolean isOracle() {
         return dialect.equals(ORACLE);
     }

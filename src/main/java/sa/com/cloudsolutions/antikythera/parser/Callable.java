@@ -63,7 +63,10 @@ public class Callable {
         if(isMethod()) {
             return method.getName();
         }
-        return callableDeclaration.getNameAsString();
+        if (callableDeclaration != null) {
+            return callableDeclaration.getNameAsString();
+        }
+        return null;
     }
 
     @Override
@@ -83,5 +86,10 @@ public class Callable {
             return method.hashCode();
         }
         return callableDeclaration.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return getNameAsString();
     }
 }

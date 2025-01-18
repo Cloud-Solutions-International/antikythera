@@ -28,6 +28,7 @@ public class MCEWrapper {
 
     public MCEWrapper(NodeWithArguments<?> oce) {
         this.methodCallExpr = oce;
+        argumentTypes = new NodeList<>();
     }
 
     /**
