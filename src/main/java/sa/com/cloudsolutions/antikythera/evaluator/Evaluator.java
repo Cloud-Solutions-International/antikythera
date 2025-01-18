@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ForEachStmt;
@@ -554,18 +555,7 @@ public class Evaluator {
             if (constructors.isEmpty()) {
                 return new Variable(eval);
             }
-            MCEWrapper mce = new MCEWrapper(oce);
-            NodeList<Type> argTypes = new NodeList<>();
-            mce.setArgumentTypes(argTypes);
-
-            for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
-                /*
-                 * Push method arguments
-                 */
-                Variable variable = evaluateExpression(oce.getArguments().get(i));
-                argTypes.add(variable.getType());
-                AntikytheraRunTime.push(variable);
-            }
+            MCEWrapper mce = wrapCallExpression(oce);
 
             Optional<CallableDeclaration<?>> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
 
@@ -580,6 +570,22 @@ public class Evaluator {
         }
 
         return null;
+    }
+
+    private MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws AntikytheraException, ReflectiveOperationException {
+        MCEWrapper mce = new MCEWrapper(oce);
+        NodeList<Type> argTypes = new NodeList<>();
+        mce.setArgumentTypes(argTypes);
+
+        for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+            /*
+             * Push method arguments
+             */
+            Variable variable = evaluateExpression(oce.getArguments().get(i));
+            argTypes.add(variable.getType());
+            AntikytheraRunTime.push(variable);
+        }
+        return mce;
     }
 
     private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
@@ -1044,8 +1050,8 @@ public class Evaluator {
      */
      Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-
-        Optional<MethodDeclaration> n = AbstractCompiler.findMethodDeclaration(methodCall, cu.getType(0).asClassOrInterfaceDeclaration());
+        MCEWrapper wrapper = wrapCallExpression(methodCall);
+        Optional<CallableDeclaration<?>> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
         if (n.isPresent()) {
             return executeMethod(n.get());
         }
@@ -1114,7 +1120,8 @@ public class Evaluator {
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
         if (decl != null) {
-            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCall, decl);
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            Optional<CallableDeclaration<?>> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
             if (md.isPresent()) {
                 return executeMethod(md.get());
             }
@@ -1388,16 +1395,20 @@ public class Evaluator {
         executeMethod(md);
     }
 
-    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        returnFrom = null;
-        returnValue = null;
+    public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        if (cd instanceof MethodDeclaration md) {
 
-        List<Statement> statements = md.getBody().orElseThrow().getStatements();
-        setupParameters(md);
+            returnFrom = null;
+            returnValue = null;
 
-        executeBlock(statements);
+            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            setupParameters(md);
 
-        return returnValue;
+            executeBlock(statements);
+
+            return returnValue;
+        }
+        return null;
     }
 
     protected boolean setupParameters(MethodDeclaration md) {

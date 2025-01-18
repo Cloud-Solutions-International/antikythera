@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -148,18 +149,20 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        returnFrom = null;
-        returnValue = null;
+    public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        if (cd instanceof MethodDeclaration md) {
+            returnFrom = null;
+            returnValue = null;
 
-        List<Statement> statements = md.getBody().orElseThrow().getStatements();
-        if (setupParameters(md)) {
-            executeBlock(statements);
+            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            if (setupParameters(md)) {
+                executeBlock(statements);
+            } else {
+                return testForBadRequest(statements);
+            }
+            return returnValue;
         }
-        else {
-            return testForBadRequest(statements);
-        }
-        return returnValue;
+        return null;
     }
 
     private Variable testForBadRequest(List<Statement> statements) {
