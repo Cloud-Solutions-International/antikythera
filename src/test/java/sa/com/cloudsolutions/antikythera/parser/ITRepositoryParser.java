@@ -1,7 +1,11 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
@@ -30,6 +34,17 @@ public class ITRepositoryParser {
         AbstractCompiler.preProcess();
     }
 
+    MCEWrapper toWrapper(MethodCallExpr mce) {
+        MCEWrapper wrapper = new MCEWrapper(mce);
+        wrapper.setArgumentTypes(new NodeList<>());
+        for (Expression argument : mce.getArguments()) {
+            if (argument.isLiteralExpr()) {
+                wrapper.getArgumentTypes().add(AbstractCompiler.convertLiteralToType(argument.asLiteralExpr()));
+            }
+        }
+        return wrapper;
+    }
+
     @Test
     void testDepartmentRepositoryParser() throws IOException {
         final RepositoryParser tp = new RepositoryParser();
@@ -40,13 +55,14 @@ public class ITRepositoryParser {
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
+        TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
 
         cu.findFirst(MethodDeclaration.class,
             md1 -> md1.getNameAsString().equals("queries2")).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
                 @Override
                 public void visit(MethodCallExpr n, Void arg) {
                     super.visit(n, arg);
-                    Optional<Callable> cd = tp.findJpaMethod(n);
+                    Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(toWrapper(n), repository);
                     assertTrue(cd.isPresent());
                     MethodDeclaration md = cd.get().asMethodDeclaration();
                     assertNotNull(md);
@@ -90,11 +106,13 @@ public class ITRepositoryParser {
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
 
+        TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
+
         cu.findFirst(MethodDeclaration.class).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
             @Override
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
-                Optional<Callable> cd = tp.findJpaMethod(n);
+                Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(toWrapper(n), repository);
                 assertTrue(cd.isPresent());
                 MethodDeclaration md = cd.get().asMethodDeclaration();
                 if(md == null) {

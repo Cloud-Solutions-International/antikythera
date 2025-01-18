@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.type.PrimitiveType;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
@@ -98,9 +99,11 @@ class TestRepositoryParser {
         parser.processAll();
         parser.buildQueries();
 
-        Optional<Callable> cd = parser.findJpaMethod(new MethodCallExpr("findAll"));
+        MCEWrapper wrapper = new MCEWrapper(new MethodCallExpr("findById"));
+        wrapper.getArgumentTypes().add(PrimitiveType.longType());
+        Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(wrapper,parser.getCompilationUnit().getType(0));
         assertTrue(cd.isPresent());
         assertFalse(cd.get().isMethodDeclaration());
-//        assertNotNull(parser.get(md));
+        assertNotNull(parser.get(cd.get()));
     }
 }
