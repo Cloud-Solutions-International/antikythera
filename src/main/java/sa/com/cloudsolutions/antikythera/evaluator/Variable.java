@@ -56,7 +56,7 @@ public class Variable {
     public Variable(Object value) {
         this.value = value;
         if (value != null) {
-            clazz = value.getClass();
+            this.setClazz(value.getClass());
         }
     }
 
@@ -78,18 +78,11 @@ public class Variable {
     public void setType(Type type) {
         this.type = type;
         if (this.clazz == null) {
-            this.clazz = switch (type.asString()) {
-                case "String" -> String.class;
-                case "Double" -> Double.class;
-                case "Integer" -> Integer.class;
-                case "Boolean" -> Boolean.class;
-                case "Long" -> Long.class;
-                case "Float" -> Float.class;
-                case "Short" -> Short.class;
-                case "Byte" -> Byte.class;
-                case "Character" -> Character.class;
-                default -> null;
-            };
+            try {
+                this.clazz = Reflect.getComponentClass(type.asString());
+            } catch (ClassNotFoundException e) {
+                // can be silently ignored
+            }
         }
     }
 
@@ -115,6 +108,9 @@ public class Variable {
 
     public void setClazz(Class<?> clazz) {
         this.clazz = clazz;
+        if (this.type == null) {
+            this.type = Reflect.getComponentType(clazz);
+        }
     }
 
     public Expression getInitializer() {

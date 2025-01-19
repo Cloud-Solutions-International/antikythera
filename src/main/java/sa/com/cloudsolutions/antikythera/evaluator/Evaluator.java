@@ -573,7 +573,7 @@ public class Evaluator {
         return null;
     }
 
-    private MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws AntikytheraException, ReflectiveOperationException {
+    protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws AntikytheraException, ReflectiveOperationException {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
         mce.setArgumentTypes(argTypes);

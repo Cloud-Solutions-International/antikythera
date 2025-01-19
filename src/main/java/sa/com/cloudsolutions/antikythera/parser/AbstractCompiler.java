@@ -19,7 +19,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
-import org.aspectj.weaver.ast.Call;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -333,11 +332,18 @@ public class AbstractCompiler {
                         (callables.getParameters().size() > arguments.size() && callables.getParameter(arguments.size()).isVarArgs() ) )) {
             for (int i = 0; i < arguments.size(); i++) {
                 Parameter param = callables.getParameter(i);
-
-                if (! (param.getType().equals(arguments.get(i))
-                        || param.getType().toString().equals("java.lang.Object")
-                        || arguments.get(i).getElementType().isUnknownType()
-                        || arguments.get(i).toString().equals(Reflect.primitiveToWrapper(param.getType().toString())))
+                Type argumentType = arguments.get(i);
+                Type paramType = param.getType();
+                if (paramType.equals(argumentType)) {
+                    continue;
+                }
+                if (argumentType.isPrimitiveType() && argumentType.asString().equals(paramType.asString().toLowerCase())) {
+                    continue;
+                }
+                if (! (paramType.equals(argumentType)
+                        || paramType.toString().equals("java.lang.Object")
+                        || argumentType.getElementType().isUnknownType()
+                        || argumentType.toString().equals(Reflect.primitiveToWrapper(paramType.toString())))
                 ) {
                     return Optional.empty();
                 }

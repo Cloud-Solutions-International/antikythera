@@ -258,21 +258,19 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-
     /**
      * Execute a query on a repository.
      * @param name the name of the repository
      * @param methodCall the method call expression
      * @return the result set
      */
-    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
+    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            MCEWrapper methodCallWrapper = new MCEWrapper(methodCall);
-            // todo fix the wrapper
+            MCEWrapper methodCallWrapper = wrapCallExpression(methodCall);
 
             Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
-                    methodCallWrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+                    methodCallWrapper, repository.getCompilationUnit().getType(0));
             if (callable.isPresent() && callable.get().isMethodDeclaration()) {
                 MethodDeclaration repoMethod = callable.get().asMethodDeclaration();
                 RepositoryQuery q = repository.get(callable.get());
