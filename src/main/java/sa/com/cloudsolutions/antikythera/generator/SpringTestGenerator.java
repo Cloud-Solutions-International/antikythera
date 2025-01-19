@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.comments.JavadocComment;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -446,9 +447,9 @@ public class SpringTestGenerator extends  TestGenerator {
         NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
         testCaseTypeAnnotation.setName("TestCaseType");
         testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
-
         testMethod.addAnnotation(testCaseTypeAnnotation);
         testMethod.addAnnotation("Test");
+
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
             param.getAnnotationByName("PathVariable").ifPresent(ann ->
@@ -456,6 +457,14 @@ public class SpringTestGenerator extends  TestGenerator {
                         .append(param.getNameAsString().substring(1))
             );
         }
+
+        md.findAncestor(TypeDeclaration.class).ifPresent(c ->
+        {
+            String comment = String.format("Method under test: {@link %s.%s()}\nArgument generator : %s\n",
+                    c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
+            testMethod.setJavadocComment(comment);
+        });
+
 
         String testName = String.valueOf(md.getName());
         if (paramNames.isEmpty()) {
