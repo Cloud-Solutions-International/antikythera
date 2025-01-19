@@ -144,7 +144,7 @@ public class Reflect {
             case "int","java.lang.Integer" -> PrimitiveType.intType();
             case "double","java.lang.Double" -> PrimitiveType.doubleType();
             case "boolean","java.lang.Boolean" -> PrimitiveType.booleanType();
-            case "long","java.lang.Long" -> PrimitiveType.longType();
+            case "long","java.lang.Long","java.lang.BigDecimal" -> PrimitiveType.longType();
             case "float","java.lang.Float" -> PrimitiveType.floatType();
             case "short","java.lang.Short" -> PrimitiveType.shortType();
             case "byte","java.lang.Byte" -> PrimitiveType.byteType();

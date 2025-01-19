@@ -1063,7 +1063,7 @@ public class Evaluator {
     /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
-     * @param methodCall the method call expression to be execute
+     * @param methodCall the method call expression to be executed
      * @return a Variable containing the result of the method call
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors

@@ -349,6 +349,7 @@ public class SpringEvaluator extends Evaluator {
                          */
                         RepositoryParser parser = new RepositoryParser();
                         parser.compile(AbstractCompiler.classToPath(className));
+                        parser.processTypes();
                         repositories.put(variable.getNameAsString(), parser);
                         break;
                     }

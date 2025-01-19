@@ -27,7 +27,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                      * boxed type.
                      */
                     if (t.asClassOrInterfaceType().isBoxedType()) {
-                        v = mockParameter(param.getTypeAsString());
+                        v = mockParameter(param);
                     } else {
                         if (fullClassName.startsWith("java.util")) {
                             v = Reflect.variableFactory(fullClassName);
@@ -42,13 +42,13 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     v = new Variable(o);
                 }
             } else {
-                v = mockParameter(param.getTypeAsString());
+                v = mockParameter(param);
             }
         } else {
             /*
              * Request parameters are typically strings or numbers or booleans.
              */
-            v = mockParameter(param.getTypeAsString());
+            v = mockParameter(param);
         }
         /*
          * Pushed to be popped later in the callee
@@ -57,8 +57,8 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         AntikytheraRunTime.push(v);
     }
 
-     public Variable mockParameter(String typeName) {
-        return new Variable(switch (typeName) {
+     public Variable mockParameter(Parameter param) {
+        return new Variable(switch (param.getType().asString()) {
             case "Boolean", "boolean" -> false;
             case "float", "Float", "double", "Double" -> 0.0;
             case "Integer", "int" -> 0;

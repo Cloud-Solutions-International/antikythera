@@ -96,7 +96,7 @@ class TestRepositoryParser {
         AbstractCompiler.preProcess();
 
         parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        parser.processAll();
+        parser.processTypes();
         parser.buildQueries();
 
         MCEWrapper wrapper = new MCEWrapper(new MethodCallExpr("findById"));
