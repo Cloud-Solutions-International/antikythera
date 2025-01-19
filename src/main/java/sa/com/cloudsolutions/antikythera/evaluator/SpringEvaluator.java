@@ -8,6 +8,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
@@ -271,8 +272,7 @@ public class SpringEvaluator extends Evaluator {
 
             Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
                     methodCallWrapper, repository.getCompilationUnit().getType(0));
-            if (callable.isPresent() && callable.get().isMethodDeclaration()) {
-                MethodDeclaration repoMethod = callable.get().asMethodDeclaration();
+            if (callable.isPresent()) {
                 RepositoryQuery q = repository.get(callable.get());
 
                 try {
@@ -281,7 +281,7 @@ public class SpringEvaluator extends Evaluator {
                      * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                      * to the arguments that are passed in when the method is actually being called.
                      */
-                    String nameAsString = repoMethod.getNameAsString();
+                    String nameAsString = callable.get().getNameAsString();
                     if (!(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                         q.getMethodArguments().clear();
                         for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
@@ -292,7 +292,12 @@ public class SpringEvaluator extends Evaluator {
                         repository.executeQuery(callable.get());
                         DatabaseArgumentGenerator.setQuery(q);
                     } else {
-                        // todo do some fake work here
+                        Optional<Boolean> write = Settings.getProperty("database.write_ops",Boolean.class);
+                        if (write.isPresent() && write.get()) {
+                            // todo this needs to be completed
+                        }
+                        q.setWriteOps(true);
+                        return q;
                     }
                 } catch (Exception e) {
                     logger.warn(e.getMessage());
@@ -741,16 +746,20 @@ public class SpringEvaluator extends Evaluator {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
                         ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        Variable v = processResult(stmt, q.getResultSet());
-
-                        if (l.getRepositoryQuery() == null) {
-                            l.setRepositoryQuery(q);
-                            l.setColor(LineOfCode.GREY);
+                        if (q.isWriteOps()) {
+                            return evaluateExpression(methodCall.getArgument(0));
                         }
                         else {
-                            l.setColor(LineOfCode.BLACK);
+                            Variable v = processResult(stmt, q.getResultSet());
+
+                            if (l.getRepositoryQuery() == null) {
+                                l.setRepositoryQuery(q);
+                                l.setColor(LineOfCode.GREY);
+                            } else {
+                                l.setColor(LineOfCode.BLACK);
+                            }
+                            return v;
                         }
-                        return v;
                     }
                     return null;
                 }
