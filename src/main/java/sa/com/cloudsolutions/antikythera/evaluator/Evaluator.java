@@ -577,6 +577,7 @@ public class Evaluator {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
         mce.setArgumentTypes(argTypes);
+        Deque<Variable> stack = new LinkedList<>();
 
         for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
             /*
@@ -585,6 +586,10 @@ public class Evaluator {
             Variable variable = evaluateExpression(oce.getArguments().get(i));
             argTypes.add(variable.getType());
             AntikytheraRunTime.push(variable);
+        }
+
+        while (!stack.isEmpty()) {
+            AntikytheraRunTime.push(stack.pop());
         }
         return mce;
     }
@@ -790,6 +795,10 @@ public class Evaluator {
 
     /**
      * Evaluate a method call.
+     * There are two types of method calls, those that return values and those that do not.
+     * The ones that return values will typically reach here through a flow such as initialize
+     * variables.
+     * Void method calls will typically reach here through the evaluate expression flow.
      *
      * Does so by executing all the code contained in that method where possible.
      *
@@ -1395,6 +1404,14 @@ public class Evaluator {
         executeMethod(md);
     }
 
+    /**
+     * Execute a method represented by the CallableDeclaration
+     * @param cd a callable declaration
+     * @return the result of the method execution. If the method is void, this will be null
+     * @throws AntikytheraException if the method cannot be executed as source
+     * @throws ReflectiveOperationException if various reflective operations associated with the
+     *      method execution fails
+     */
     public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
         if (cd instanceof MethodDeclaration md) {
 
@@ -1422,7 +1439,7 @@ public class Evaluator {
              *
              * The primary purpose of this is to generate tests. Those tests are sometimes generated for
              * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
-             * allow the developer to make a few manual edits that's more than enougn.
+             * allow the developer to make a few manual edits that's more than enough.
              */
             if (AntikytheraRunTime.isEmptyStack()) {
                 logger.warn("Stack is empty");

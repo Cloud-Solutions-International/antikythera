@@ -22,6 +22,12 @@ public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
 
     private static boolean prepared;
 
+    /**
+     *
+     * @param param a parameter for the rest api end point.
+     *              this represents a parameter in the controller's method signature.
+     * @return a variable that holds a suitable value for the parameter.
+     */
     @Override
     public Variable mockParameter(Parameter param) {
         Variable q = null;
@@ -29,7 +35,7 @@ public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
             QueryMethodArgument arg = query.getMethodArguments().get(i);
 
             if (arg.getArgument().isNameExpr()) {
-                q = matchParameterAndArgument(param.getTypeAsString(), i, arg);
+                q = matchParameterAndArgument(param.getNameAsString(), i, arg);
             }
         }
         if (q == null) {
