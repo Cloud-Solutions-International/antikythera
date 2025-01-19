@@ -6,8 +6,10 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
@@ -132,9 +134,10 @@ public class RestControllerParser extends ClassProcessor {
         ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getNameAsString() + "Test");
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
+        addBeforeClass(gen);
 
         allImports.addAll(cu.getImports());
-
+        gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
         List<String> otherImports = (List<String>) Settings.getProperty("extra_imports");
         if(otherImports != null) {
             for (String s : otherImports) {
@@ -190,6 +193,25 @@ public class RestControllerParser extends ClassProcessor {
                 pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 
+    }
+
+    private void addBeforeClass(CompilationUnit gen) {
+        MethodDeclaration md = new MethodDeclaration();
+        md.addAnnotation("BeforeClass");
+        md.setName("setUp");
+        md.setType(new VoidType());
+
+        BlockStmt body = new BlockStmt();
+        body.addStatement("objectMapper = new ObjectMapper();");
+        body.addStatement("objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);");
+        md.setBody(body);
+
+        gen.getType(0).addMember(md);
+        gen.addImport("com.fasterxml.jackson.databind.ObjectMapper");
+        gen.addImport("com.fasterxml.jackson.databind.DeserializationFeature");
+        gen.addImport("org.testng.annotations.BeforeClass");
+
+        gen.getType(0).addField("ObjectMapper", "objectMapper");
     }
 
     /**

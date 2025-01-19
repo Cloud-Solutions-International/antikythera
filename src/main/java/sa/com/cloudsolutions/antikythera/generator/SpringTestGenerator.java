@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.comments.JavadocComment;
 import org.springframework.http.ResponseEntity;
@@ -264,13 +265,8 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private static ExpressionStmt createResponseObject(Type respType) {
-        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-        methodCallExpr.addArgument(respType.toString() + ".class");
-        variableDeclarator.setInitializer(methodCallExpr);
-        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-        return new ExpressionStmt(variableDeclarationExpr);
+    private static String createResponseObject(Type respType) {
+        return "%s resp = objectMapper.readValue(response.asString(), %s.class);".formatted(respType, respType);
     }
 
 
@@ -449,6 +445,7 @@ public class SpringTestGenerator extends  TestGenerator {
         testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
         testMethod.addAnnotation(testCaseTypeAnnotation);
         testMethod.addAnnotation("Test");
+        testMethod.addThrownException(JsonProcessingException.class);
 
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
