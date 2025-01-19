@@ -1,8 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
@@ -149,6 +153,7 @@ public class Reflect {
             case "short","java.lang.Short" -> PrimitiveType.shortType();
             case "byte","java.lang.Byte" -> PrimitiveType.byteType();
             case "char","java.lang.Character" -> PrimitiveType.charType();
+            case "java.lang.String" -> new ClassOrInterfaceType("String");
             default -> null;
         };
     }

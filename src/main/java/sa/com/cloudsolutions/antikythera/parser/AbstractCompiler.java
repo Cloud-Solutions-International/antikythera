@@ -322,16 +322,16 @@ public class AbstractCompiler {
     /**
      * Compares the list of argument types against the parameters of a callable declarations
      * @param arguments the types of the arguments that need to be matched
-     * @param callables the list of callable declarations. These maybe method declarations or
+     * @param callable the list of callable declarations. These maybe method declarations or
      *                  constructor declarations.
      * @return the callable declaration if the arguments match the parameters
      */
-    private static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> callables) {
+    private static Optional<CallableDeclaration<?>> matchCallable(NodeList<Type> arguments, CallableDeclaration<?> callable) {
         if (arguments != null &&
-                (callables.getParameters().size() == arguments.size() ||
-                        (callables.getParameters().size() > arguments.size() && callables.getParameter(arguments.size()).isVarArgs() ) )) {
+                (callable.getParameters().size() == arguments.size() ||
+                        (callable.getParameters().size() > arguments.size() && callable.getParameter(arguments.size()).isVarArgs() ) )) {
             for (int i = 0; i < arguments.size(); i++) {
-                Parameter param = callables.getParameter(i);
+                Parameter param = callable.getParameter(i);
                 Type argumentType = arguments.get(i);
                 Type paramType = param.getType();
                 if (paramType.equals(argumentType)) {
@@ -348,7 +348,7 @@ public class AbstractCompiler {
                     return Optional.empty();
                 }
             }
-            return Optional.of(callables);
+            return Optional.of(callable);
         }
         return Optional.empty();
     }
@@ -609,7 +609,7 @@ public class AbstractCompiler {
         List<ConstructorDeclaration> constructors = decl.getConstructors();
         for (int i =0 ; i < constructors.size() ; i++) {
             ConstructorDeclaration constructor = constructors.get(i);
-            Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), constructor);
+            Optional<CallableDeclaration<?>> callable = matchCallable(methodCall.getArgumentTypes(), constructor);
             if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
                 return Optional.of(new Callable(md));
             }
@@ -648,7 +648,7 @@ public class AbstractCompiler {
             for (int i = 0; i < methodsByName.size(); i++) {
                 MethodDeclaration method = methodsByName.get(i);
                 if (methodCall.getArgumentTypes() != null) {
-                    Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
+                    Optional<CallableDeclaration<?>> callable = matchCallable(methodCall.getArgumentTypes(), method);
                     if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
                         return Optional.of(new Callable(md));
                     }

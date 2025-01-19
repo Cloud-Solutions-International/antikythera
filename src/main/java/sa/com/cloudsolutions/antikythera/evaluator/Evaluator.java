@@ -577,7 +577,6 @@ public class Evaluator {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
         mce.setArgumentTypes(argTypes);
-        Deque<Variable> stack = new LinkedList<>();
 
         for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
             /*
@@ -588,9 +587,6 @@ public class Evaluator {
             AntikytheraRunTime.push(variable);
         }
 
-        while (!stack.isEmpty()) {
-            AntikytheraRunTime.push(stack.pop());
-        }
         return mce;
     }
 
@@ -967,12 +963,14 @@ public class Evaluator {
                      */
                     AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
                 }
-                return eval.executeMethod(methodCall);
+                MCEWrapper wrapper = wrapCallExpression(methodCall);
+                return eval.executeMethod(wrapper);
             }
 
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
-            return executeMethod(methodCall);
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            return executeMethod(wrapper);
         }
     }
 
@@ -1050,17 +1048,14 @@ public class Evaluator {
 
     /**
      * Execute a method call.
-     *
-     * This method is called when we have a AUT method call that maybe a part of the current class.
-     *
-     * @param methodCall the method call expression
+     * @param wrapper the method call expression wrapped so that the argument types are available
      * @return the result of executing that code.
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-     Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+     Variable executeMethod(MCEWrapper wrapper) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-        MCEWrapper wrapper = wrapCallExpression(methodCall);
+
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
             return executeMethod(n.get().asMethodDeclaration());
