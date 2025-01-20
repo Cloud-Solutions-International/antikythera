@@ -99,7 +99,7 @@ public class SpringEvaluator extends Evaluator {
 
     private boolean onTest;
 
-    private ArgumentGenerator argumentGenerator;
+    private static ArgumentGenerator argumentGenerator;
     /**
      * It is better to use create evaluator
      * @param className the name of the class associated with this evaluator
