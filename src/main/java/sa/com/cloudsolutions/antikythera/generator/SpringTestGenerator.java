@@ -135,6 +135,9 @@ public class SpringTestGenerator extends  TestGenerator {
             else if(annotation.getNameAsString().equals("DeleteMapping")) {
                 buildDeleteMethodTests(md, annotation, controllerResponse);
             }
+            else if(annotation.getNameAsString().equals("PutMapping")) {
+                buildPutMethodTests(md, annotation, controllerResponse);
+            }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                 for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
