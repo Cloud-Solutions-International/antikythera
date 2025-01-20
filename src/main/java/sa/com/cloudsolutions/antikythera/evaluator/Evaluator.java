@@ -855,6 +855,9 @@ public class Evaluator {
             else if (expr2.isLiteralExpr()) {
                 variable = evaluateLiteral(expr2);
             }
+            else if (expr2.isThisExpr()) {
+                variable = new Variable(this);
+            }
             else if (expr2.isTypeExpr()) {
                 /*
                  * todo  : fix this hack.
