@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
+import java.util.Stack;
 
 
 /**
@@ -576,6 +577,7 @@ public class Evaluator {
     protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws AntikytheraException, ReflectiveOperationException {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
+        Stack<Type> args = new Stack<>();
         mce.setArgumentTypes(argTypes);
 
         for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
@@ -583,8 +585,12 @@ public class Evaluator {
              * Push method arguments
              */
             Variable variable = evaluateExpression(oce.getArguments().get(i));
-            argTypes.add(variable.getType());
+            args.push(variable.getType());
             AntikytheraRunTime.push(variable);
+        }
+
+        while(!args.isEmpty()) {
+            argTypes.add(args.pop());
         }
 
         return mce;
@@ -957,19 +963,12 @@ public class Evaluator {
                     return evaluateLambda(v, arguments);
                 }
             }
-            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-
             if (v.getValue() instanceof Evaluator eval) {
-                for (int i = reflectionArguments.getArgs().length - 1; i >= 0; i--) {
-                    /*
-                     * Push method arguments
-                     */
-                    AntikytheraRunTime.push(new Variable(reflectionArguments.getArgs()[i]));
-                }
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 return eval.executeMethod(wrapper);
             }
 
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
