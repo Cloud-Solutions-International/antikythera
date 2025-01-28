@@ -2,8 +2,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.PrimitiveType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
@@ -432,7 +430,7 @@ public class DTOHandler extends ClassProcessor {
                 processor.copyDTO(args[0]);
             }
             else {
-                processor.copyDTO(processor.classToPath(args[0]));
+                processor.copyDTO(AbstractCompiler.classToPath(args[0]));
             }
         }
     }
@@ -443,6 +441,6 @@ public class DTOHandler extends ClassProcessor {
 
     @Override
     protected ModifierVisitor<?> createTypeCollector() {
-        return new ClassProcessor.TypeCollector();
+        return new TypeCollector();
     }
 }

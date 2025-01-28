@@ -11,6 +11,7 @@ public class NullArgumentGenerator extends ArgumentGenerator{
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
         Variable variable = new Variable(null);
+        variable.setType(param.getType());
         arguments.put(param.getNameAsString(), variable);
         AntikytheraRunTime.push(variable);
     }

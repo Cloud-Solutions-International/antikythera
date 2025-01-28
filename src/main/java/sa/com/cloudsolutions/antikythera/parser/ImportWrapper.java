@@ -12,6 +12,7 @@ public class ImportWrapper {
     private TypeDeclaration<?> type;
     private FieldDeclaration fieldDeclaration;
     private MethodDeclaration methodDeclaration;
+    private Class<?> clazz;
 
     public ImportWrapper(ImportDeclaration imp, boolean isExternal) {
         this.imp = imp;

@@ -1,8 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.stmt.ReturnStmt;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -134,20 +132,14 @@ public class SpringTestGenerator extends  TestGenerator {
                 buildDeleteMethodTests(md, annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
-                NormalAnnotationExpr normalAnnotation = annotation.asNormalAnnotationExpr();
-                for (var pair : normalAnnotation.getPairs()) {
+                for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
-                        if (pair.getValue().toString().equals("RequestMethod.GET")) {
-                            buildGetMethodTests(md, annotation, controllerResponse);
-                        }
-                        if (pair.getValue().toString().equals("RequestMethod.POST")) {
-                            buildPostMethodTests(md, annotation, controllerResponse);
-                        }
-                        if (pair.getValue().toString().equals("RequestMethod.PUT")) {
-                            buildPutMethodTests(md, annotation, controllerResponse);
-                        }
-                        if (pair.getValue().toString().equals("RequestMethod.DELETE")) {
-                            buildDeleteMethodTests(md, annotation, controllerResponse);
+                        switch(pair.getValue().toString()) {
+                            case "RequestMethod.GET" -> buildGetMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.POST" -> buildPostMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.PUT" -> buildPutMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.DELETE" -> buildDeleteMethodTests(md, annotation, controllerResponse);
+                            default -> logger.debug("Unknown request method {}", pair.getValue());
                         }
                     }
                 }
@@ -190,6 +182,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
             addQueryParams(makeGetCall, request, body);
         }
+
         VariableDeclarationExpr responseVar = new VariableDeclarationExpr(new ClassOrInterfaceType(null, "Response"), "response");
         AssignExpr assignExpr = new AssignExpr(responseVar, makeGetCall, AssignExpr.Operator.ASSIGN);
 
@@ -224,14 +217,6 @@ public class SpringTestGenerator extends  TestGenerator {
         httpWithBody(md, annotation, returnType, "makePost");
     }
 
-    private Type getReturnType(MethodDeclaration md, ControllerResponse resp) {
-        if (resp.getType() == null
-                || resp.getType().toString().equals("ResponseEntity")
-                || resp.getType().toString().equals("Object")) {
-            return md.getType();
-        }
-        return resp.getType();
-    }
 
     private BlockStmt getBody(MethodDeclaration md) {
         return md.getBody().orElseGet(() -> {
@@ -243,7 +228,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
     private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
 
-        Type returnType = getReturnType(mut, resp);
+        Type returnType = resp.getType();
 
         BlockStmt body = getBody(md);
 
@@ -273,7 +258,9 @@ public class SpringTestGenerator extends  TestGenerator {
                 addHttpStatusCheck(body, resp.getStatusCode());
             }
         }
-
+        else {
+            addHttpStatusCheck(body, resp.getStatusCode());
+        }
     }
 
     private static ExpressionStmt createResponseObject(Type respType) {
@@ -464,10 +451,10 @@ public class SpringTestGenerator extends  TestGenerator {
         testMethod.addAnnotation("Test");
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
-            param.getAnnotationByName("PathVariable").ifPresent(ann -> {
+            param.getAnnotationByName("PathVariable").ifPresent(ann ->
                 paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                        .append(param.getNameAsString().substring(1));
-            });
+                        .append(param.getNameAsString().substring(1))
+            );
         }
 
         String testName = String.valueOf(md.getName());

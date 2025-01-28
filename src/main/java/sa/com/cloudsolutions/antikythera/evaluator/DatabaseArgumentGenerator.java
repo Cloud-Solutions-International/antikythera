@@ -1,17 +1,18 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
-import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
-import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Optional;
 
-public class DatabaseArgumentGenerator extends ArgumentGenerator {
+public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DatabaseArgumentGenerator.class);
 
     /**
@@ -23,49 +24,61 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
 
     @Override
     public Variable mockParameter(String typeName) {
-        try {
-            for(int i = 0 ; i < query.getMethodParameters().size() ; i++) {
-                QueryMethodParameter param = query.getMethodParameters().get(i);
+        Variable q = null;
+        for(int i = 0 ; i < query.getMethodParameters().size() && q == null; i++) {
+            QueryMethodArgument arg = query.getMethodArguments().get(i);
 
-                if (param.getColumnName() != null) {
-                    String[] parts = param.getColumnName().split("\\.");
-                    String col = parts.length > 1 ? parts[1] : parts[0];
+            if (arg.getArgument().isNameExpr()) {
+                q = matchParameterAndArgument(typeName, i, arg);
+            }
+        }
+        if (q == null) {
+            return super.mockParameter(typeName);
+        }
+        return q;
+    }
 
-                    if (col.equals(RepositoryParser.camelToSnake(typeName))) {
-                        Type type = param.getParameter().getType();
-                        if (type.isClassOrInterfaceType()) {
-                            String t = type.asClassOrInterfaceType().getTypeArguments().isPresent()
-                                    ? type.asClassOrInterfaceType().getTypeArguments().get().get(0).asString()
-                                    : type.asClassOrInterfaceType().getNameAsString();
-                            switch (t) {
-                                case "Integer":
-                                case "int":
-                                    return new Variable(query.getSimplifiedResultSet().getInt(col));
-                                case "String":
-                                    return new Variable(query.getSimplifiedResultSet().getString(col));
-                                case "boolean":
-                                    return new Variable(query.getSimplifiedResultSet().getBoolean(col));
-                                case "double":
-                                    return new Variable(query.getSimplifiedResultSet().getDouble(col));
-                                case "float":
-                                    return new Variable(query.getSimplifiedResultSet().getFloat(col));
-                                case "Long":
-                                case "long":
-                                    return new Variable(query.getSimplifiedResultSet().getLong(col));
-                                case "short":
-                                    return new Variable(query.getSimplifiedResultSet().getShort(col));
-                                case "byte":
-                                    return new Variable(query.getSimplifiedResultSet().getByte(col));
-                                case "char":
-                                    return new Variable(query.getSimplifiedResultSet().getString(col).charAt(0));
-                            }
-                        }
-                        return new Variable(query.getSimplifiedResultSet().getObject(col));
-                    }
+    private static Variable matchParameterAndArgument(String typeName, int i, QueryMethodArgument arg) {
+        QueryMethodParameter param = query.getMethodParameters().get(i);
+
+        String name = arg.getArgument().asNameExpr().getNameAsString();
+        if (name.equals(typeName) && param.getColumnName() != null) {
+            String[] parts = param.getColumnName().split("\\.");
+            String col = parts.length > 1 ? parts[1] : parts[0];
+
+            if (col.equals(param.getColumnName())) {
+                Type type = param.getParameter().getType();
+                if (type.isClassOrInterfaceType()) {
+                    Optional<NodeList<Type>> typeArguments = type.asClassOrInterfaceType().getTypeArguments();
+                    String t = typeArguments.isPresent() && typeArguments.get().getFirst().isPresent()
+                            ? typeArguments.get().getFirst().get().asString()
+                            : type.asClassOrInterfaceType().getNameAsString();
+                    return getValueFromColumn(t, col);
+                }
+                else {
+                    throw new RuntimeException("Unhandled");
                 }
             }
+        }
+        return null;
+    }
+
+    private static Variable getValueFromColumn(String t, String col)  {
+        try {
+            return switch (t) {
+                case "Integer", "int" ->  new Variable(query.getSimplifiedResultSet().getInt(col));
+                case "String" -> new Variable(query.getSimplifiedResultSet().getString(col));
+                case "boolean", "Boolean" -> new Variable(query.getSimplifiedResultSet().getBoolean(col));
+                case "double", "Double" -> new Variable(query.getSimplifiedResultSet().getDouble(col));
+                case "float", "Float" -> new Variable(query.getSimplifiedResultSet().getFloat(col));
+                case "Long", "long" -> new Variable(query.getSimplifiedResultSet().getLong(col));
+                case "short", "Short" -> new Variable(query.getSimplifiedResultSet().getShort(col));
+                case "byte" -> new Variable(query.getSimplifiedResultSet().getByte(col));
+                case "char", "Character" -> new Variable(query.getSimplifiedResultSet().getString(col).charAt(0));
+                default -> new Variable(query.getSimplifiedResultSet().getObject(col));
+            };
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            logger.debug(e.getMessage());
         }
         return null;
     }
@@ -87,7 +100,7 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
         }
     }
 
-    private static void prepare() throws SQLException {
+    private static void prepare()  {
         if (query != null && query.getSimplifiedResultSet() != null) {
             prepared = true;
         }
@@ -95,11 +108,7 @@ public class DatabaseArgumentGenerator extends ArgumentGenerator {
 
     public static void setQuery(RepositoryQuery query) {
         DatabaseArgumentGenerator.query = query;
-        try {
-            prepared = false;
-            prepare();
-        } catch (SQLException e) {
-            logger.error(e.getMessage());
-        }
+        prepared = false;
+        prepare();
     }
 }

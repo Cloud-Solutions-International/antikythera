@@ -208,9 +208,9 @@ public class RestControllerParser extends ClassProcessor {
             super.visit(md, arg);
 
             if (checkEligible(md)) {
-                evaluateMethod(md, new NullArgumentGenerator());
-                evaluateMethod(md, new DummyArgumentGenerator());
-                evaluateMethod(md, new DatabaseArgumentGenerator());
+                 evaluateMethod(md, new NullArgumentGenerator());
+                 evaluateMethod(md, new DummyArgumentGenerator());
+                 evaluateMethod(md, new DatabaseArgumentGenerator());
             }
         }
 

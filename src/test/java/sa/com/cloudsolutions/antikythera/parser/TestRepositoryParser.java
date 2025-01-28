@@ -2,16 +2,14 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.type.PrimitiveType;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
-import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
-import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,10 +22,10 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,9 +96,14 @@ class TestRepositoryParser {
         AbstractCompiler.preProcess();
 
         parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        parser.process();
+        parser.processAll();
+        parser.buildQueries();
 
-        MethodDeclaration md = parser.findMethodDeclaration(new MethodCallExpr("findAll"));
-        assertNotNull(parser.get(md));
+        MCEWrapper wrapper = new MCEWrapper(new MethodCallExpr("findById"));
+        wrapper.getArgumentTypes().add(PrimitiveType.longType());
+        Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(wrapper,parser.getCompilationUnit().getType(0));
+        assertTrue(cd.isPresent());
+        assertFalse(cd.get().isMethodDeclaration());
+        assertNotNull(parser.get(cd.get()));
     }
 }

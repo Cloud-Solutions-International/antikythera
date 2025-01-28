@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ForEachStmt;
@@ -43,6 +44,7 @@ import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
@@ -195,7 +197,7 @@ public class Evaluator {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
             /*
-             * Array Initializersions are tricky
+             * Array Initialization is tricky
              */
             ArrayInitializerExpr arrayInitializerExpr = expr.asArrayInitializerExpr();
             return createArray(arrayInitializerExpr);
@@ -554,23 +556,12 @@ public class Evaluator {
             if (constructors.isEmpty()) {
                 return new Variable(eval);
             }
-            MCEWrapper mce = new MCEWrapper(oce);
-            NodeList<Type> argTypes = new NodeList<>();
-            mce.setArgumentTypes(argTypes);
+            MCEWrapper mce = wrapCallExpression(oce);
 
-            for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
-                /*
-                 * Push method arguments
-                 */
-                Variable variable = evaluateExpression(oce.getArguments().get(i));
-                argTypes.add(variable.getType());
-                AntikytheraRunTime.push(variable);
-            }
-
-            Optional<CallableDeclaration<?>> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
+            Optional<Callable> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
 
             if (matchingConstructor.isPresent()) {
-                eval.executeConstructor(matchingConstructor.get());
+                eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
                 return new Variable(eval);
             }
             /*
@@ -580,6 +571,22 @@ public class Evaluator {
         }
 
         return null;
+    }
+
+    private MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws AntikytheraException, ReflectiveOperationException {
+        MCEWrapper mce = new MCEWrapper(oce);
+        NodeList<Type> argTypes = new NodeList<>();
+        mce.setArgumentTypes(argTypes);
+
+        for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+            /*
+             * Push method arguments
+             */
+            Variable variable = evaluateExpression(oce.getArguments().get(i));
+            argTypes.add(variable.getType());
+            AntikytheraRunTime.push(variable);
+        }
+        return mce;
     }
 
     private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
@@ -1044,10 +1051,10 @@ public class Evaluator {
      */
      Variable executeMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         returnFrom = null;
-
-        Optional<MethodDeclaration> n = AbstractCompiler.findMethodDeclaration(methodCall, cu.getType(0).asClassOrInterfaceDeclaration());
-        if (n.isPresent()) {
-            return executeMethod(n.get());
+        MCEWrapper wrapper = wrapCallExpression(methodCall);
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+        if (n.isPresent() && n.get().isMethodDeclaration()) {
+            return executeMethod(n.get().asMethodDeclaration());
         }
 
         return null;
@@ -1114,14 +1121,14 @@ public class Evaluator {
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
         if (decl != null) {
-            Optional<MethodDeclaration> md = AbstractCompiler.findMethodDeclaration(methodCall, decl);
-            if (md.isPresent()) {
-                return executeMethod(md.get());
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
+            if (md.isPresent() && md.get().isMethodDeclaration()) {
+                return executeMethod(md.get().asMethodDeclaration());
             }
         }
         return null;
     }
-
 
     static Class<?> getClass(String className) {
         try {
@@ -1388,16 +1395,20 @@ public class Evaluator {
         executeMethod(md);
     }
 
-    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        returnFrom = null;
-        returnValue = null;
+    public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        if (cd instanceof MethodDeclaration md) {
 
-        List<Statement> statements = md.getBody().orElseThrow().getStatements();
-        setupParameters(md);
+            returnFrom = null;
+            returnValue = null;
 
-        executeBlock(statements);
+            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            setupParameters(md);
 
-        return returnValue;
+            executeBlock(statements);
+
+            return returnValue;
+        }
+        return null;
     }
 
     protected boolean setupParameters(MethodDeclaration md) {
@@ -1441,8 +1452,8 @@ public class Evaluator {
     /**
      * Execute - or rather interpret the code within a constructor found in source code
      * @param md ConstructorDeclaration
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @throws AntikytheraException if the evaluator fails
+     * @throws ReflectiveOperationException when a reflection operation fails
      */
     public void executeConstructor(CallableDeclaration<?> md) throws AntikytheraException, ReflectiveOperationException {
         if (md instanceof ConstructorDeclaration cd) {

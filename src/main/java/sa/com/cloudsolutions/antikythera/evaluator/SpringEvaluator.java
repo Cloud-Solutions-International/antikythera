@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -15,6 +16,8 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import com.github.javaparser.ast.CompilationUnit;
@@ -61,8 +64,8 @@ public class SpringEvaluator extends Evaluator {
      * List of generators that we have.
      *
      * Generators ought to be seperated from the parsers/evaluators because different kinds of
-     * tests can be created. They can be unit tests, integration tests, api tests and end to
-     * end tests.
+     * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
+     * tests.
      */
     private final List<TestGenerator> generators  = new ArrayList<>();
 
@@ -86,7 +89,7 @@ public class SpringEvaluator extends Evaluator {
      * Of course there will be situations where no parameters exist to give a valid resultset
      * and these will just be ignored.
      *
-     * The values that are used in the A branch for the query will just be arbitrary non null values
+     * The values that are used in the A branch for the query will just be arbitrary non-null values
      * integers like 0 will usually not have matching entries in the database and will result in
      * empty responses. If due to some reason there are valid resultsets of integers like 0 for
      * primary keys there's nothing we can do about it, we just move onto the next test.
@@ -129,7 +132,7 @@ public class SpringEvaluator extends Evaluator {
         });
 
         try {
-            NodeList<Statement> statements = md.getBody().get().getStatements();
+            NodeList<Statement> statements = md.getBody().orElseThrow().getStatements();
             for (int i = 0; i < statements.size(); i++) {
                 Statement st = statements.get(i);
                 if (!lines.containsKey(st.hashCode())) {
@@ -148,18 +151,20 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable executeMethod(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        returnFrom = null;
-        returnValue = null;
+    public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        if (cd instanceof MethodDeclaration md) {
+            returnFrom = null;
+            returnValue = null;
 
-        List<Statement> statements = md.getBody().orElseThrow().getStatements();
-        if (setupParameters(md)) {
-            executeBlock(statements);
+            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            if (setupParameters(md)) {
+                executeBlock(statements);
+            } else {
+                return testForBadRequest(statements);
+            }
+            return returnValue;
         }
-        else {
-            return testForBadRequest(statements);
-        }
-        return returnValue;
+        return null;
     }
 
     private Variable testForBadRequest(List<Statement> statements) {
@@ -198,14 +203,19 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
-        if (catching.isEmpty()) {
-            testForInternalServerError(null,
-                    new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
-            throw new AUTException(e.getMessage());
+        if (! (e instanceof AntikytheraException ae)) {
+            if (catching.isEmpty()) {
+                testForInternalServerError(null,
+                        new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
+                throw new AUTException(e.getMessage());
+            } else {
+                super.handleApplicationException(e);
+            }
         }
         else {
-            super.handleApplicationException(e);
+            throw ae;
         }
+
     }
 
     /**
@@ -214,7 +224,8 @@ public class SpringEvaluator extends Evaluator {
      * executed. While the basic Evaluator class does not run the same code over and over again,
      * this class does!
      * @param stmt the statement to execute
-     * @throws Exception
+     * @throws Exception a general exception because at this point we are concerned about the
+     *                  exceptions thrown by the code being executed.
      */
     @Override
     void executeStatement(Statement stmt) throws Exception {
@@ -257,34 +268,40 @@ public class SpringEvaluator extends Evaluator {
     private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            MethodDeclaration repoMethod = repository.findMethodDeclaration(methodCall);
-            RepositoryQuery q = repository.get(repoMethod);
+            MCEWrapper methodCallWrapper = new MCEWrapper(methodCall);
+            // todo fix the wrapper
 
-            try {
-                /*
-                 * We have one more challenge; to find the parameters that are being used in the repository
-                 * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
-                 * to the arguments that are passed in when the method is actually being called.
-                 */
-                String nameAsString = repoMethod.getNameAsString();
-                if ( !(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
-                    q.getMethodArguments().clear();
-                    for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                        Expression argument = methodCall.getArgument(i);
-                        q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
+            Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
+                    methodCallWrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+            if (callable.isPresent() && callable.get().isMethodDeclaration()) {
+                MethodDeclaration repoMethod = callable.get().asMethodDeclaration();
+                RepositoryQuery q = repository.get(callable.get());
+
+                try {
+                    /*
+                     * We have one more challenge; to find the parameters that are being used in the repository
+                     * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
+                     * to the arguments that are passed in when the method is actually being called.
+                     */
+                    String nameAsString = repoMethod.getNameAsString();
+                    if (!(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
+                        q.getMethodArguments().clear();
+                        for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
+                            Expression argument = methodCall.getArgument(i);
+                            q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
+                        }
+
+                        repository.executeQuery(callable.get());
+                        DatabaseArgumentGenerator.setQuery(q);
+                    } else {
+                        // todo do some fake work here
                     }
-
-                    repository.executeQuery(repoMethod);
-                    DatabaseArgumentGenerator.setQuery(q);
+                } catch (Exception e) {
+                    logger.warn(e.getMessage());
+                    logger.warn("Could not execute query {}", methodCall);
                 }
-                else {
-                    // todo do some fake work here
-                }
-            } catch (Exception e) {
-                logger.warn(e.getMessage());
-                logger.warn("Could not execute query {}", methodCall);
+                return q;
             }
-            return q;
         }
         return null;
     }
@@ -334,7 +351,6 @@ public class SpringEvaluator extends Evaluator {
                          */
                         RepositoryParser parser = new RepositoryParser();
                         parser.compile(AbstractCompiler.classToPath(className));
-                        parser.process();
                         repositories.put(variable.getNameAsString(), parser);
                         break;
                     }
@@ -483,6 +499,7 @@ public class SpringEvaluator extends Evaluator {
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
                 testForInternalServerError(methodCall, eex);
+                throw eex   ;
             }
         }
         return null;
@@ -705,8 +722,8 @@ public class SpringEvaluator extends Evaluator {
      * Execute a method that's only available to us in source code format.
      * @param methodCall the method call whose execution is to be simulated.
      * @return the result from the execution as a Variable instance
-     * @throws AntikytheraException
-     * @throws ReflectiveOperationException
+     * @throws AntikytheraException when the source code could not be executed
+     * @throws ReflectiveOperationException when a reflective operation fails
      */
     @Override
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
@@ -715,8 +732,8 @@ public class SpringEvaluator extends Evaluator {
                 gen.setBranched(false);
             }
         }
-        Expression expression = methodCall.getScope().orElseGet(null);
-        if (expression != null && expression.isNameExpr()) {
+        Expression expression = methodCall.getScope().orElseThrow();
+        if (expression.isNameExpr()) {
             String fieldName = expression.asNameExpr().getNameAsString();
             RepositoryParser rp = repositories.get(fieldName);
             if (rp != null) {
@@ -863,10 +880,18 @@ public class SpringEvaluator extends Evaluator {
     Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
         Variable v = super.createObject(instructionPointer, decl, oce);
         ClassOrInterfaceType type = oce.getType();
-        if (type.getNameAsString().equals("ResponseEntity")) {
+        if (type.toString().contains("ResponseEntity")) {
             ControllerResponse response = new ControllerResponse(v);
-            response.setBody(evaluateExpression(oce.getArguments().get(0)));
             response.setType(type);
+
+            Optional<Expression> arg = oce.getArguments().getFirst();
+            if (arg.isPresent()) {
+                Variable body = evaluateExpression(arg.get());
+                response.setBody(body);
+                if (type.toString().equals("ResponseEntity")) {
+                    response.setType(new ClassOrInterfaceType(null, type.getName(), new NodeList<>(body.getType())));
+                }
+            }
             return new Variable(response);
         }
         v.setType(type);

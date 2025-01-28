@@ -1,7 +1,11 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
@@ -17,6 +21,7 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -29,24 +34,39 @@ public class ITRepositoryParser {
         AbstractCompiler.preProcess();
     }
 
+    MCEWrapper toWrapper(MethodCallExpr mce) {
+        MCEWrapper wrapper = new MCEWrapper(mce);
+        wrapper.setArgumentTypes(new NodeList<>());
+        for (Expression argument : mce.getArguments()) {
+            if (argument.isLiteralExpr()) {
+                wrapper.getArgumentTypes().add(AbstractCompiler.convertLiteralToType(argument.asLiteralExpr()));
+            }
+        }
+        return wrapper;
+    }
+
     @Test
     void testDepartmentRepositoryParser() throws IOException {
         final RepositoryParser tp = new RepositoryParser();
         RepositoryParser.preProcess();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.DepartmentRepository"));
-        tp.process();
+        tp.processAll();
+        tp.buildQueries();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
+        TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
 
         cu.findFirst(MethodDeclaration.class,
             md1 -> md1.getNameAsString().equals("queries2")).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
                 @Override
                 public void visit(MethodCallExpr n, Void arg) {
                     super.visit(n, arg);
-                    MethodDeclaration md = tp.findMethodDeclaration(n);
+                    Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(toWrapper(n), repository);
+                    assertTrue(cd.isPresent());
+                    MethodDeclaration md = cd.get().asMethodDeclaration();
                     assertNotNull(md);
-                    RepositoryQuery rql = tp.get(md);
+                    RepositoryQuery rql = tp.get(cd.get());
                     assertNotNull(rql);
 
                     String sql = rql.getOriginalQuery();
@@ -80,21 +100,26 @@ public class ITRepositoryParser {
 
         final RepositoryParser tp = new RepositoryParser();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        tp.process();
+        tp.processAll();
+        tp.buildQueries();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
+
+        TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
 
         cu.findFirst(MethodDeclaration.class).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
             @Override
             public void visit(MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
-                MethodDeclaration md = tp.findMethodDeclaration(n);
+                Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(toWrapper(n), repository);
+                assertTrue(cd.isPresent());
+                MethodDeclaration md = cd.get().asMethodDeclaration();
                 if(md == null) {
                     return;
                 }
 
-                RepositoryQuery rql = tp.get(md);
+                RepositoryQuery rql = tp.get(cd.get());
                 assertNotNull(rql);
 
                 if(n.getNameAsString().equals("findById")) {

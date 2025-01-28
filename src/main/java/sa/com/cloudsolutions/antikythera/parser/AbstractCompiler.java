@@ -19,6 +19,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
+import org.aspectj.weaver.ast.Call;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -37,6 +38,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -318,12 +320,19 @@ public class AbstractCompiler {
         return null;
     }
 
-    public static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> construct) {
+    /**
+     * Compares the list of argument types against the parameters of a callable declarations
+     * @param arguments the types of the arguments that need to be matched
+     * @param callables the list of callable declarations. These maybe method declarations or
+     *                  constructor declarations.
+     * @return the callable declaration if the arguments match the parameters
+     */
+    private static Optional<CallableDeclaration<?>> findCallable(NodeList<Type> arguments, CallableDeclaration<?> callables) {
         if (arguments != null &&
-                (construct.getParameters().size() == arguments.size() ||
-                        (construct.getParameters().size() > arguments.size() && construct.getParameter(arguments.size()).isVarArgs() ) )) {
+                (callables.getParameters().size() == arguments.size() ||
+                        (callables.getParameters().size() > arguments.size() && callables.getParameter(arguments.size()).isVarArgs() ) )) {
             for (int i = 0; i < arguments.size(); i++) {
-                Parameter param = construct.getParameter(i);
+                Parameter param = callables.getParameter(i);
 
                 if (! (param.getType().equals(arguments.get(i))
                         || param.getType().toString().equals("java.lang.Object")
@@ -333,7 +342,7 @@ public class AbstractCompiler {
                     return Optional.empty();
                 }
             }
-            return Optional.of(construct);
+            return Optional.of(callables);
         }
         return Optional.empty();
     }
@@ -515,7 +524,7 @@ public class AbstractCompiler {
 
                 String fullClassName = impName + "." + className;
                 try {
-                    Class.forName(fullClassName);
+                    Class<?> clazz =Class.forName(fullClassName);
                     /*
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked so this is the correct import.
@@ -587,7 +596,7 @@ public class AbstractCompiler {
     }
 
 
-    public static Optional<CallableDeclaration<?>> findConstructorDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findConstructorDeclaration(MCEWrapper methodCall,
                                                                     TypeDeclaration<?> decl) {
         int found = -1;
         int occurs = 0;
@@ -596,7 +605,7 @@ public class AbstractCompiler {
             ConstructorDeclaration constructor = constructors.get(i);
             Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), constructor);
             if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
-                return Optional.of(md);
+                return Optional.of(new Callable(md));
             }
             if (methodCall.getArgumentTypes() != null &&
                     constructor.getParameters().size() == methodCall.getArgumentTypes().size()) {
@@ -605,24 +614,24 @@ public class AbstractCompiler {
             }
         }
 
-        Optional<CallableDeclaration<?>> c = findCallableInParent(methodCall, decl);
+        Optional<Callable> c = findCallableInParent(methodCall, decl);
         if (c.isPresent()) {
             return c;
         }
 
         if (found != -1 && occurs == 1) {
-            return Optional.of(constructors.get(found));
+            return Optional.of(new Callable(constructors.get(found)));
         }
         return Optional.empty();
     }
 
 
-    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findMethodDeclaration(MCEWrapper methodCall,
                                                                          TypeDeclaration<?> decl) {
         return findMethodDeclaration(methodCall, decl, true);
     }
 
-    public static Optional<CallableDeclaration<?>> findMethodDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findMethodDeclaration(MCEWrapper methodCall,
                                                                          TypeDeclaration<?> decl, boolean overRides) {
 
         if (methodCall.getMethodCallExpr() instanceof MethodCallExpr mce) {
@@ -635,7 +644,7 @@ public class AbstractCompiler {
                 if (methodCall.getArgumentTypes() != null) {
                     Optional<CallableDeclaration<?>> callable = findCallable(methodCall.getArgumentTypes(), method);
                     if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
-                        return Optional.of(md);
+                        return Optional.of(new Callable(md));
                     }
                 }
                 if (method.getParameters().size() == mce.getArguments().size()) {
@@ -645,21 +654,21 @@ public class AbstractCompiler {
             }
 
             if (overRides) {
-                Optional<CallableDeclaration<?>> method = findCallableInParent(methodCall, decl);
+                Optional<Callable> method = findCallableInParent(methodCall, decl);
                 if (method.isPresent()) {
                     return method;
                 }
             }
 
             if (found != -1 && occurs == 1) {
-                return Optional.of(methodsByName.get(found));
+                return Optional.of(new Callable(methodsByName.get(found)));
             }
         }
 
         return Optional.empty();
     }
 
-    private static Optional<CallableDeclaration<?>> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
         if (decl.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
 
@@ -670,9 +679,26 @@ public class AbstractCompiler {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
                         TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                        Optional<CallableDeclaration<?>> method = findCallableDeclaration(methodCall, p);
+                        Optional<Callable> method = findCallableDeclaration(methodCall, p);
                         if (method.isPresent()) {
                             return method;
+                        }
+                    } else {
+                        /*
+                         * the extended type is not in the same compilation unit, we will have to
+                         * load the class and try to find the method in it.
+                         */
+                        ImportWrapper wrapper = findImport(decl.findCompilationUnit().get(), extended.getNameAsString());
+                        if (wrapper != null && wrapper.isExternal()) {
+                            try {
+                                Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
+                                Method method = Reflect.findMethod(clazz, methodCall.getMethodName(), methodCall.getArgumentTypesAsClasses());
+                                if (method != null) {
+                                    return Optional.of(new Callable(method));
+                                }
+                            } catch (ClassNotFoundException e) {
+                                return Optional.empty();
+                            }
                         }
                     }
                 }
@@ -681,95 +707,13 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    public static Optional<CallableDeclaration<?>> findCallableDeclaration(MCEWrapper methodCall,
+    public static Optional<Callable> findCallableDeclaration(MCEWrapper methodCall,
                                                                       TypeDeclaration<?> decl) {
         if(methodCall.getMethodCallExpr() instanceof MethodCallExpr) {
             return findMethodDeclaration(methodCall, decl);
         }
 
         return findConstructorDeclaration(methodCall, decl);
-    }
-
-
-    /**
-     * Find the MethodDeclaration that matches the given MethodCallExpression
-     * @param methodCall to search for
-     * @param decl the type declaration that is expected to contain the method declaration
-     * @return an optional of the found method declaration.
-     */
-    public static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall,
-                                                                    TypeDeclaration<?> decl) {
-        List<MethodDeclaration> methods = decl.getMethodsByName(methodCall.getNameAsString());
-
-        /*
-         * If there's only one method matching the name in the type declaration, we just return it.
-         */
-        if (methods.size() == 1) {
-            return Optional.of(methods.getFirst());
-        }
-
-        /*
-         * There are no method declaration at all in the type declaration, that means we must search
-         * the extended types.
-         */
-        if (methods.isEmpty() && decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
-            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                if (cdecl.findCompilationUnit().isPresent()) {
-                    String fullName = findFullyQualifiedName(cdecl.findCompilationUnit().get(), extended.getNameAsString());
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                    if (cu != null) {
-                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
-                        Optional<MethodDeclaration> method = findMethodDeclaration(methodCall, p);
-                        if (method.isPresent()) {
-                            return method;
-                        }
-                    }
-                }
-            }
-        }
-
-        /*
-         * The final attempt will be to compare the types of the arguments to the param types.
-         */
-        return findMethodDeclaration(methodCall, methods);
-
-    }
-
-
-    /**
-     * Find the method declaration matching the given method call expression
-     * @param methodCall the method call expression
-     * @param methods the list of method declarations to search from
-     * @return the method declaration or empty if not found
-     */
-    private static Optional<MethodDeclaration> findMethodDeclaration(MethodCallExpr methodCall, List<MethodDeclaration> methods) {
-        int matchCount = 0;
-        int matchIndex = -1;
-
-        for (int i = 0 ; i < methods.size(); i++) {
-            MethodDeclaration method = methods.get(i);
-            if (method.getParameters().size() == methodCall.getArguments().size()
-                    && method.getNameAsString().equals(methodCall.getNameAsString())) {
-
-                /*
-                 * No argument method call matches a no parameter method declaration
-                 */
-                if(method.getParameters().isEmpty()) {
-                    return Optional.of(method);
-                }
-
-                if (methodCall.getArguments().size() == method.getParameters().size()) {
-                    matchCount++;
-                    matchIndex = i;
-                }
-            }
-        }
-
-        if (matchCount == 1 ) {
-            return Optional.of(methods.get(matchIndex));
-        }
-        return Optional.empty();
     }
 
     /**

@@ -31,6 +31,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -43,10 +44,10 @@ import java.util.Optional;
 public class Resolver {
 
     /**
-     * Resolve a field that is accessed through the this. prefix
+     * Resolve a field that is accessed through the <code>this.</code> prefix
      * @param node a graph node representing the current context
      * @param value the field access expression
-     * @return
+     * @return a graph node representing the resolved field
      */
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
@@ -79,11 +80,11 @@ public class Resolver {
 
     /**
      * Resolve a field access expression
-     * If the expression has a this. prefix then the field is resolved from the current class with
-     * help from the resolveThisField method
+     * If the expression has a <code>this.</code> prefix, then the field is resolved within the
+     * current class with help from the resolveThisField method
      * @param node represents a type
      * @param value a field access expression
-     * @return
+     * @return a graph node representing the resolved field
      */
     public static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
@@ -504,18 +505,20 @@ public class Resolver {
                     ImportUtils.addImport(node, t);
                     types.add(t);
                 } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
-                    Optional<CallableDeclaration<?>> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
+                    Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
                     if (omd.isPresent()) {
-                        CallableDeclaration<?> cd = omd.get();
-                        if (cd instanceof MethodDeclaration md) {
-                            Type t = md.getType();
-                            types.add(t);
-                            ImportUtils.addImport(node, t);
+                        Callable cd = omd.get();
+                        if (cd.isCallableDeclaration()) {
+                            if (cd.isMethodDeclaration()) {
+                                Type t = cd.asMethodDeclaration().getType();
+                                types.add(t);
+                                ImportUtils.addImport(node, t);
 
+                            }
+                            cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
+                                ImportUtils.addImport(node, c.getNameAsString());
+                            });
                         }
-                        cd.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
-                            ImportUtils.addImport(node, c.getNameAsString());
-                        });
                     } else {
                         Type t = lombokSolver(argMethodCall, cid, gn);
                         if (t != null) {
@@ -547,12 +550,12 @@ public class Resolver {
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) throws AntikytheraException {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
         if (cdecl != null) {
-            Optional<CallableDeclaration<?>> md = AbstractCompiler.findCallableDeclaration(
+            Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
                     mceWrapper, cdecl
             );
 
-            if (md.isPresent()) {
-                CallableDeclaration<?> method = md.get();
+            if (md.isPresent() && md.get().isMethodDeclaration()) {
+                MethodDeclaration method = md.get().asMethodDeclaration();
                 for (Type ex : method.getThrownExceptions()) {
                     ImportUtils.addImport(node, ex.asString());
                 }
@@ -561,9 +564,9 @@ public class Resolver {
                     Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
 
                     if (!parent.get().isInterface()) {
-                        Optional<CallableDeclaration<?>> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
+                        Optional<Callable> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
                         if (overRides.isPresent()) {
-                            Graph.createGraphNode(overRides.get());
+                            Graph.createGraphNode(overRides.get().getCallableDeclaration());
                         }
                     }
                 }
