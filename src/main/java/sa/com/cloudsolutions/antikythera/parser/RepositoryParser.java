@@ -484,8 +484,8 @@ public class RepositoryParser extends ClassProcessor {
                         ann.asSingleMemberAnnotationExpr().getMemberValue()
                 );
                 query = v.getValue().toString();
-            } catch (AntikytheraException|ReflectiveOperationException e) {
-                throw new RuntimeException(e);
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
             }
         } else if (ann != null && ann.isNormalAnnotationExpr()) {
 

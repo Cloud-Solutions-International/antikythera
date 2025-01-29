@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
-import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 

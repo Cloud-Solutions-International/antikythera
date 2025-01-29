@@ -40,7 +40,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
-import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
@@ -157,9 +156,8 @@ public class Evaluator {
      *
      * @param expr the expression to evaluat
      * @return the result as a Variable instance which can be null if the expression is supposed to return null
-     * @throws EvaluatorException if we have done something wrong.
      */
-    public Variable evaluateExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+    public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(expr, name);
@@ -216,7 +214,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateBinaryExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+    private Variable evaluateBinaryExpression(Expression expr) throws ReflectiveOperationException {
         BinaryExpr binaryExpr = expr.asBinaryExpr();
         Expression left = binaryExpr.getLeft();
         Expression right = binaryExpr.getRight();
@@ -224,7 +222,7 @@ public class Evaluator {
         return evaluateBinaryExpression(binaryExpr.getOperator(), left, right);
     }
 
-    private Variable evaluateConditionalExpression(ConditionalExpr conditionalExpr) throws AntikytheraException, ReflectiveOperationException {
+    private Variable evaluateConditionalExpression(ConditionalExpr conditionalExpr) throws ReflectiveOperationException {
         Variable v = evaluateBinaryExpression(conditionalExpr.getCondition());
         if (v != null && v.getValue().equals(Boolean.TRUE)) {
             return evaluateExpression(conditionalExpr.getThenExpr());
@@ -264,7 +262,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateUnaryExpression(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+    private Variable evaluateUnaryExpression(Expression expr) throws ReflectiveOperationException {
         Expression unaryExpr = expr.asUnaryExpr().getExpression();
         UnaryExpr.Operator operator = expr.asUnaryExpr().getOperator();
         if (operator.equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
@@ -379,7 +377,7 @@ public class Evaluator {
         };
     }
 
-    private Variable evaluateAssignment(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+    private Variable evaluateAssignment(Expression expr) throws ReflectiveOperationException {
         AssignExpr assignExpr = expr.asAssignExpr();
         Expression target = assignExpr.getTarget();
         Expression value = assignExpr.getValue();
@@ -434,7 +432,7 @@ public class Evaluator {
      *    using the local symbol table.
      * @throws EvaluatorException if there is an error evaluating the expression
      */
-    Variable evaluateVariableDeclaration(Expression expr) throws AntikytheraException, ReflectiveOperationException {
+    Variable evaluateVariableDeclaration(Expression expr) throws ReflectiveOperationException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
         Variable v = null;
         for (var decl : varDeclExpr.getVariables()) {
@@ -463,7 +461,7 @@ public class Evaluator {
         return v;
     }
 
-    private Variable initializeVariable(VariableDeclarator decl, Expression init) throws AntikytheraException, ReflectiveOperationException {
+    private Variable initializeVariable(VariableDeclarator decl, Expression init) throws ReflectiveOperationException {
         Variable v;
         if (init.isMethodCallExpr()) {
             MethodCallExpr methodCall = init.asMethodCallExpr();
@@ -502,7 +500,7 @@ public class Evaluator {
      * @param oce The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
-    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
+    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
         Variable vx;
 
@@ -548,7 +546,7 @@ public class Evaluator {
      * @param type the class or interface type that we need to create an instance of
      * @param oce the object creation expression.
      */
-    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws AntikytheraException, ReflectiveOperationException {
+    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
         if (match != null) {
             Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
@@ -574,7 +572,7 @@ public class Evaluator {
         return null;
     }
 
-    protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws AntikytheraException, ReflectiveOperationException {
+    protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
         Stack<Type> args = new Stack<>();
@@ -809,7 +807,7 @@ public class Evaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-    public Variable evaluateMethodCall(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+    public Variable evaluateMethodCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
         Optional<Expression> scoped = methodCall.getScope();
         if (scoped.isPresent() && scoped.get().toString().equals("logger")) {
             return null;
@@ -827,7 +825,7 @@ public class Evaluator {
 
     }
 
-    private Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException, AntikytheraException {
+    private Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
         Variable variable = null;
         while(!chain.isEmpty()) {
             Expression expr2 = chain.pollLast();
@@ -950,7 +948,7 @@ public class Evaluator {
         }
     }
 
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
         if (v != null) {
             NodeList<Expression> arguments = methodCall.getArguments();
             if(arguments.isNonEmpty())
@@ -976,7 +974,7 @@ public class Evaluator {
         }
     }
 
-    private Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException, AntikytheraException {
+    private Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
         MethodReferenceExpr rfCall = arguments.get(0).asMethodReferenceExpr();
         LinkedList<Expression> chain = findScopeChain(rfCall);
 
@@ -998,7 +996,7 @@ public class Evaluator {
 
     }
 
-    private Variable evaluateLambda(Variable v, NodeList<Expression> arguments) throws AntikytheraException, ReflectiveOperationException {
+    private Variable evaluateLambda(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
         LambdaExpr lambda = arguments.get(0).asLambdaExpr();
         MethodDeclaration md = new MethodDeclaration();
         if(lambda.getBody().isBlockStmt()) {
@@ -1023,7 +1021,7 @@ public class Evaluator {
         return null;
     }
 
-    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException, EvaluatorException {
+    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Class<?> clazz = v.getClazz();
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] paramTypes = reflectionArguments.getParamTypes();
@@ -1055,7 +1053,7 @@ public class Evaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-     Variable executeMethod(MCEWrapper wrapper) throws AntikytheraException, ReflectiveOperationException {
+     Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
 
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
@@ -1074,7 +1072,7 @@ public class Evaluator {
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors
      */
-    Variable executeLocalMethod(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+    Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
         returnFrom = null;
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {
@@ -1122,7 +1120,7 @@ public class Evaluator {
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors
      */
-    Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+    Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
                 ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
@@ -1146,7 +1144,7 @@ public class Evaluator {
     }
 
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator,
-                                      Expression leftExpression, Expression rightExpression) throws AntikytheraException, ReflectiveOperationException {
+                                      Expression leftExpression, Expression rightExpression) throws ReflectiveOperationException {
         Variable left = evaluateExpression(leftExpression);
         left.setInitializer(leftExpression);
 
@@ -1278,7 +1276,7 @@ public class Evaluator {
         return null;
     }
 
-    void identifyFieldDeclarations(VariableDeclarator variable) throws IOException, AntikytheraException, ReflectiveOperationException {
+    void identifyFieldDeclarations(VariableDeclarator variable) throws IOException, ReflectiveOperationException {
         if (variable.getType().isClassOrInterfaceType()) {
             Type t = variable.getType().asClassOrInterfaceType();
             String resolvedClass = t.resolve().describe();
@@ -1306,7 +1304,7 @@ public class Evaluator {
         }
     }
 
-    private void setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws AntikytheraException, ReflectiveOperationException {
+    private void setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v = null;
         Optional<Expression> init = variable.getInitializer();
         if(init.isPresent()) {
@@ -1357,7 +1355,7 @@ public class Evaluator {
      * @throws AntikytheraException if something goes wrong
      * @throws ReflectiveOperationException if a reflective operation fails
      */
-    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
@@ -1374,7 +1372,7 @@ public class Evaluator {
         return false;
     }
 
-    private void resolveNonClassFields(VariableDeclarator variable) throws AntikytheraException, ReflectiveOperationException {
+    private void resolveNonClassFields(VariableDeclarator variable) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if(init.isPresent()) {
@@ -1397,7 +1395,7 @@ public class Evaluator {
         return finches;
     }
 
-    public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+    public void visit(MethodDeclaration md) throws ReflectiveOperationException {
         executeMethod(md);
     }
 
@@ -1409,7 +1407,7 @@ public class Evaluator {
      * @throws ReflectiveOperationException if various reflective operations associated with the
      *      method execution fails
      */
-    public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+    public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException {
         if (cd instanceof MethodDeclaration md) {
 
             returnFrom = null;
@@ -1469,7 +1467,7 @@ public class Evaluator {
      * @throws AntikytheraException if the evaluator fails
      * @throws ReflectiveOperationException when a reflection operation fails
      */
-    public void executeConstructor(CallableDeclaration<?> md) throws AntikytheraException, ReflectiveOperationException {
+    public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException {
         if (md instanceof ConstructorDeclaration cd) {
             List<Statement> statements = cd.getBody().getStatements();
             NodeList<Parameter> parameters = md.getParameters();
@@ -1508,7 +1506,7 @@ public class Evaluator {
      * @throws AntikytheraException if there are situations where we cannot process the block
      * @throws ReflectiveOperationException if a reflection operation fails
      */
-    protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
+    protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException {
         try {
             for (Statement stmt : statements) {
                 if(loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
@@ -1610,7 +1608,7 @@ public class Evaluator {
         }
     }
 
-    private void executeForEach(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
+    private void executeForEach(Statement stmt) throws ReflectiveOperationException {
         loops.addLast(true);
         ForEachStmt forEachStmt = stmt.asForEachStmt();
         Variable iter = evaluateExpression(forEachStmt.getIterable());
@@ -1643,7 +1641,7 @@ public class Evaluator {
         }
     }
 
-    private void executeForLoop(ForStmt forStmt) throws AntikytheraException, ReflectiveOperationException {
+    private void executeForLoop(ForStmt forStmt) throws ReflectiveOperationException {
         loops.addLast(true);
 
         for (Node n : forStmt.getInitialization()) {
@@ -1663,7 +1661,7 @@ public class Evaluator {
         loops.pollLast();
     }
 
-    private void executeDoWhile(DoStmt whileStmt) throws AntikytheraException, ReflectiveOperationException {
+    private void executeDoWhile(DoStmt whileStmt) throws ReflectiveOperationException {
         loops.push(true);
         do {
             executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
@@ -1677,7 +1675,7 @@ public class Evaluator {
      * @throws AntikytheraException if there is an error in the execution
      * @throws ReflectiveOperationException if the classes cannot be instantiated as needed with reflection
      */
-    private void executeWhile(WhileStmt whileStmt) throws AntikytheraException, ReflectiveOperationException {
+    private void executeWhile(WhileStmt whileStmt) throws ReflectiveOperationException {
         loops.push(true);
         while((boolean)evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
             executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
@@ -1717,7 +1715,7 @@ public class Evaluator {
         return v;
     }
 
-    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+    protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
         if(catching.isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
@@ -1742,7 +1740,7 @@ public class Evaluator {
         }
     }
 
-    Variable executeReturnStatement(Statement stmt) throws AntikytheraException, ReflectiveOperationException {
+    Variable executeReturnStatement(Statement stmt) throws ReflectiveOperationException {
         Optional<Expression> expr = stmt.asReturnStmt().getExpression();
         if(expr.isPresent()) {
             returnValue = evaluateExpression(expr.get());
