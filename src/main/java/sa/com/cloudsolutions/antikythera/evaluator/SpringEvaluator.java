@@ -907,7 +907,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
-        this.argumentGenerator = argumentGenerator;
+        SpringEvaluator.argumentGenerator = argumentGenerator;
         for (TestGenerator gen : generators) {
             gen.setArgumentGenerator(argumentGenerator);
         }
