@@ -5,7 +5,6 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.comments.JavadocComment;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,9 +33,8 @@ public class Graph {
      * If the GraphNode is already present in the graph, the same object is returned.
      * @param n AST node
      * @return a GraphNode that may have already existed.
-     * @throws AntikytheraException if resolution fails
      */
-    public static GraphNode createGraphNode(Node n) throws AntikytheraException {
+    public static GraphNode createGraphNode(Node n)  {
         GraphNode g = GraphNode.graphNodeFactory(n);
 
         TypeDeclaration<?> cdecl = g.getEnclosingType();
@@ -84,19 +82,17 @@ public class Graph {
             Optional<Node> parentNode = cdecl.getParentNode();
             if (cdecl.isClassOrInterfaceDeclaration() && parentNode.isPresent() && parentNode.get() instanceof ClassOrInterfaceDeclaration parent)
             {
-                try {
-                    GraphNode parentGraphNode = createGraphNode(parent);
-                    CompilationUnit parentCompilationUnit = parentGraphNode.getDestination();
-                    g.setDestination(parentCompilationUnit);
 
-                    ClassOrInterfaceDeclaration parentClass = parentGraphNode.getTypeDeclaration().asClassOrInterfaceDeclaration();
-                    ClassOrInterfaceDeclaration innerClass = cdecl.asClassOrInterfaceDeclaration().clone();
-                    target = parentClass.addMember(innerClass);
-                    target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
-                    g.setTypeDeclaration(innerClass);
-                } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
-                }
+                GraphNode parentGraphNode = createGraphNode(parent);
+                CompilationUnit parentCompilationUnit = parentGraphNode.getDestination();
+                g.setDestination(parentCompilationUnit);
+
+                ClassOrInterfaceDeclaration parentClass = parentGraphNode.getTypeDeclaration().asClassOrInterfaceDeclaration();
+                ClassOrInterfaceDeclaration innerClass = cdecl.asClassOrInterfaceDeclaration().clone();
+                target = parentClass.addMember(innerClass);
+                target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
+                g.setTypeDeclaration(innerClass);
+
             }
             else {
                 g.setDestination(new CompilationUnit());
