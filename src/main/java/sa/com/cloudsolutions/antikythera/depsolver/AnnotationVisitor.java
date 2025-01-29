@@ -5,7 +5,6 @@ import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
@@ -25,12 +24,7 @@ public class AnnotationVisitor extends VoidVisitorAdapter<GraphNode> {
                 Resolver.resolveField(node, n.getMemberValue().asFieldAccessExpr());
             }
             else if (n.getMemberValue().isNameExpr()) {
-                try {
-                    Resolver.resolveNameExpr(node, n.getMemberValue().asNameExpr(),new NodeList<>());
-                } catch (AntikytheraException e)
-                {
-                    throw new RuntimeException(e);
-                }
+                Resolver.resolveNameExpr(node, n.getMemberValue().asNameExpr(),new NodeList<>());
             }
             else if (n.getMemberValue().isClassExpr()) {
                 ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),

@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.exception;
 
-public class AntikytheraException  extends Exception {
+public class AntikytheraException  extends RuntimeException {
 
     public AntikytheraException(String message) {
         super(message);
