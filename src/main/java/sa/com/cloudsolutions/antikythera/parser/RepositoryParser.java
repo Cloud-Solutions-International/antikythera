@@ -118,9 +118,8 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Create a connection to the database.
      *
-     * The connection will be shared among all instances of this class. Even if the
-     * credentials are provide the connection is setup only if the runQueries
-     * setting is true.
+     * The connection will be shared among all instances of this class provided that the
+     * runQueries configuration is switched on.
      *
      * @throws SQLException if the connection could not be established
      */
@@ -136,7 +135,7 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    public static void main(String[] args) throws IOException, SQLException, AntikytheraException, JSQLParserException {
+    public static void main(String[] args) throws IOException, SQLException, JSQLParserException {
         if(args.length != 1) {
             logger.error("Please specifiy the path to a repository class");
         }
@@ -191,7 +190,7 @@ public class RepositoryParser extends ClassProcessor {
      * This is useful only for visualization purposes.
      * @throws SQLException if the query cannot be executed
      */
-    public void executeAllQueries() throws SQLException, AntikytheraException, JSQLParserException {
+    public void executeAllQueries() throws SQLException, JSQLParserException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());
             if (rs != null) {
@@ -221,7 +220,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param method the name of the method that represents the query in the JPARepository interface
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(Callable method) throws AntikytheraException, SQLException, JSQLParserException {
+    public ResultSet executeQuery(Callable method) throws SQLException, JSQLParserException {
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
@@ -229,14 +228,14 @@ public class RepositoryParser extends ClassProcessor {
         return rs;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql, Callable method) throws SQLException, AntikytheraException, JSQLParserException {
+    public ResultSet executeQuery(RepositoryQuery rql, Callable method) throws SQLException, JSQLParserException {
         if(method.isMethodDeclaration()) {
             return executeQuery(rql, method.asMethodDeclaration());
         }
         return null;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, AntikytheraException, JSQLParserException {
+    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, JSQLParserException {
         if(runQueries) {
             RepositoryParser.createConnection();
 
@@ -271,7 +270,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param argumentCount the number of placeholders
      * @throws SQLException if the statement cannot be executed
      */
-    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, AntikytheraException, JSQLParserException {
+    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, JSQLParserException {
         rql.buildSimplifiedQuery();
         Select simplified = (Select) rql.getSimplifiedStatement();
         String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
