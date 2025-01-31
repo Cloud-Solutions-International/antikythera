@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -12,28 +11,17 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.ArrayInitializerExpr;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.MemberValuePair;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.types.ResolvedReferenceType;
-import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
-import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -83,9 +71,8 @@ public class GraphNode {
      * Creates a new GraphNode
      * However it will not really be ready for use until you call the buildNode method
      * @param node an AST Node
-     * @throws AntikytheraException if something cannot be resolved.
      */
-    private GraphNode(Node node) throws AntikytheraException {
+    private GraphNode(Node node) {
         this.node = node;
         enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
         if (enclosingType != null) {
@@ -112,9 +99,8 @@ public class GraphNode {
      * Create s new GraphNode from the AST node or returns the previously created one.
      * @param node AST node
      * @return a GraphNode
-     * @throws AntikytheraException if the node cannot be processed.
      */
-    public static GraphNode graphNodeFactory(Node node) throws AntikytheraException {
+    public static GraphNode graphNodeFactory(Node node) {
         GraphNode tmp = new GraphNode(node);
         GraphNode g = Graph.getNodes().get(tmp.hashCode());
         if (g == null) {
@@ -128,7 +114,7 @@ public class GraphNode {
      * Builds the graph node from the information available in enclosing type
      *
      */
-    public void buildNode() throws AntikytheraException {
+    public void buildNode()  {
         if(enclosingType == null || preProcessed) {
             return;
         }
@@ -166,7 +152,7 @@ public class GraphNode {
         copyConstructors();
     }
 
-    private void copyConstructors() throws AntikytheraException {
+    private void copyConstructors()  {
         if (enclosingType.isClassOrInterfaceDeclaration()) {
             for (ConstructorDeclaration constructor : enclosingType.asClassOrInterfaceDeclaration().getConstructors()) {
                 Graph.createGraphNode(constructor);
@@ -177,7 +163,7 @@ public class GraphNode {
     /*
      * Handles implementations and extensions
      */
-    private void inherit() throws AntikytheraException {
+    private void inherit()  {
         ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
         if (typeDeclaration.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
@@ -226,7 +212,7 @@ public class GraphNode {
     }
 
 
-    private void addAbstractMethods(MethodDeclaration md, Class<?> parent) throws AntikytheraException{
+    private void addAbstractMethods(MethodDeclaration md, Class<?> parent) {
         if (!Modifier.isAbstract(parent.getModifiers())) {
             return;
         }
@@ -239,11 +225,7 @@ public class GraphNode {
                  //todo need to find a way to compare the parameters
                     if (match) {
                         if(Modifier.isAbstract(method.getModifiers())) {
-                            try {
-                                Graph.createGraphNode(md);
-                            } catch (AntikytheraException e) {
-                                throw new RuntimeException(e);
-                            }
+                            Graph.createGraphNode(md);
                         }
                         return;
                     }
@@ -254,15 +236,10 @@ public class GraphNode {
              addAbstractMethods(md,parent.getSuperclass() );
             return;
         }
-        return;
+
     }
 
-
-
-
-
-
-    private void copyFields() throws AntikytheraException {
+    private void copyFields()  {
         for(FieldDeclaration field : enclosingType.asClassOrInterfaceDeclaration().getFields()) {
 
             for (VariableDeclarator declarator : field.getVariables()) {
@@ -281,7 +258,7 @@ public class GraphNode {
     }
 
 
-    private void processClassAnnotations() throws AntikytheraException {
+    private void processClassAnnotations()  {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
         }
@@ -293,11 +270,9 @@ public class GraphNode {
      * Will make recursive calls to the searchType method which will result in the imports
      * being eventually added.
      * @param ifc interface or class
-
-     * @throws AntikytheraException if the types cannot be fully resolved.
      */
 
-    public void addTypeArguments(ClassOrInterfaceType ifc) throws AntikytheraException {
+    public void addTypeArguments(ClassOrInterfaceType ifc) {
         Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
         if (typeArguments.isPresent()) {
             for (Type typeArg : typeArguments.get()) {
@@ -408,7 +383,7 @@ public class GraphNode {
         return b.toString();
     }
 
-    public void addField(FieldDeclaration fieldDeclaration) throws AntikytheraException {
+    public void addField(FieldDeclaration fieldDeclaration)  {
 
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);

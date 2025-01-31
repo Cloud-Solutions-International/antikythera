@@ -5,7 +5,6 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import net.sf.jsqlparser.JSQLParserException;
@@ -50,7 +49,7 @@ public class ITRepositoryParser {
         final RepositoryParser tp = new RepositoryParser();
         RepositoryParser.preProcess();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.DepartmentRepository"));
-        tp.processAll();
+        tp.processTypes();
         tp.buildQueries();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
@@ -100,7 +99,7 @@ public class ITRepositoryParser {
 
         final RepositoryParser tp = new RepositoryParser();
         tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        tp.processAll();
+        tp.processTypes();
         tp.buildQueries();
 
         final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");

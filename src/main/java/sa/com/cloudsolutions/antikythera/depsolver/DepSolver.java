@@ -37,8 +37,7 @@ import com.github.javaparser.ast.type.UnionType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
+
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
@@ -71,9 +70,8 @@ public class DepSolver {
     /**
      * Main entry point for the dependency solver
      * @throws IOException if files could not be read
-     * @throws AntikytheraException if a dependency could not be resolved.
      */
-    private void solve() throws IOException, AntikytheraException {
+    private void solve() throws IOException {
         AbstractCompiler.preProcess();
         Object methods = Settings.getProperty("methods");
         if (methods instanceof List<?> list) {
@@ -91,9 +89,8 @@ public class DepSolver {
     /**
      * Process the dependencies of a method that was declared in the application configuration
      * @param s the method name
-     * @throws AntikytheraException
      */
-     void processMethod(String s) throws AntikytheraException {
+     void processMethod(String s)  {
         String[] parts = s.split("#");
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0] );
@@ -111,9 +108,9 @@ public class DepSolver {
 
     /**
      * Iterative Depth first search
-     * @throws AntikytheraException if any of the code inspections fails.
+     * @ if any of the code inspections fails.
      */
-    private void dfs() throws AntikytheraException {
+    private void dfs()  {
         /*
          * Operates in three stages.
          *
@@ -147,7 +144,7 @@ public class DepSolver {
      *
      * @param node A graph node that represents a method in the code.
      */
-     void methodSearch(GraphNode node) throws AntikytheraException {
+     void methodSearch(GraphNode node)  {
         if (node.getEnclosingType() != null && node.getNode() instanceof MethodDeclaration md) {
             callableSearch(node, md);
 
@@ -180,7 +177,7 @@ public class DepSolver {
         }
     }
 
-    private static void findImplementations(GraphNode node, MethodDeclaration md) throws AntikytheraException {
+    private static void findImplementations(GraphNode node, MethodDeclaration md)  {
         ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
         for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().get())) {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(t);
@@ -197,7 +194,7 @@ public class DepSolver {
         }
     }
 
-    private static void findParentMethods(GraphNode node, MethodDeclaration md) throws AntikytheraException {
+    private static void findParentMethods(GraphNode node, MethodDeclaration md)  {
         TypeDeclaration<?> td = node.getTypeDeclaration();
         if (td.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = td.asClassOrInterfaceDeclaration();
@@ -226,13 +223,13 @@ public class DepSolver {
      * Any annotations for the arguments or the constructor will be searched as well.
      * @param node A graph node that represents a constructor
      */
-    private void constructorSearch(GraphNode node) throws AntikytheraException {
+    private void constructorSearch(GraphNode node)  {
         if (node.getEnclosingType() != null && node.getNode() instanceof ConstructorDeclaration cd) {
             callableSearch(node, cd);
         }
     }
 
-    private void callableSearch(GraphNode node, CallableDeclaration<?> cd) throws AntikytheraException {
+    private void callableSearch(GraphNode node, CallableDeclaration<?> cd)  {
         String className = node.getEnclosingType().getNameAsString();
         Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
                 t -> t.getNameAsString().equals(className));
@@ -250,7 +247,7 @@ public class DepSolver {
         cd.accept(new Visitor(), node);
     }
 
-    private static void methodOverrides(CallableDeclaration<?> cd, String className) throws AntikytheraException {
+    private static void methodOverrides(CallableDeclaration<?> cd, String className)  {
 
         for (String s : AntikytheraRunTime.findSubClasses(className)) {
             addOverRide(cd, s);
@@ -261,7 +258,7 @@ public class DepSolver {
         }
     }
 
-    private static void addOverRide(CallableDeclaration<?> cd, String s) throws AntikytheraException {
+    private static void addOverRide(CallableDeclaration<?> cd, String s)  {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(s);
         if (cu != null) {
             TypeDeclaration<?> parent = cu.findFirst(TypeDeclaration.class, td -> td.isPublic()).orElse(null);
@@ -279,9 +276,9 @@ public class DepSolver {
      * Search method parameters for dependencies.
      * @param node GraphNode representing a method.
      * @param parameters the list of paremeters of that method
-     * @throws AntikytheraException if some resolution problem crops up
+     * @ if some resolution problem crops up
      */
-    private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters) throws AntikytheraException {
+    private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters)  {
         for(Parameter p : parameters) {
             List<ImportWrapper> imports = AbstractCompiler.findImport(node.getCompilationUnit(), p.getType());
             for(ImportWrapper imp : imports) {
@@ -300,9 +297,9 @@ public class DepSolver {
      * @Deprecated
      * @param node the current node
      * @param imp the import declaration for the other class.
-     * @throws AntikytheraException
+     * @
      */
-    private void searchClass(GraphNode node, ImportWrapper imp) throws AntikytheraException {
+    private void searchClass(GraphNode node, ImportWrapper imp)  {
         /*
          * It is likely that this is a DTO an Entity or a model. So we will assume that all the
          * fields are required along with their respective annotations.
@@ -327,9 +324,9 @@ public class DepSolver {
      * @param node the graph node that is being inspected.
      *             It may or may not be a field. If it is a field, it will be added to the class
      *             along with the required imports.
-     * @throws AntikytheraException if the dependencies cannot be resolved.
+     * @ if the dependencies cannot be resolved.
      */
-    void fieldSearch(GraphNode node) throws AntikytheraException {
+    void fieldSearch(GraphNode node)  {
         if(node.getNode() instanceof FieldDeclaration fd) {
             node.addField(fd);
         }
@@ -419,12 +416,7 @@ public class DepSolver {
         @Override
         public void visit(final Parameter n, GraphNode node) {
             names.put(n.getNameAsString(), n.getType());
-
-            try{
-                solveType(n.getType(), node);
-            } catch (AntikytheraException e) {
-                throw new RuntimeException(e);
-            }
+            solveType(n.getType(), node);
             super.visit(n, node);
         }
 
@@ -435,18 +427,14 @@ public class DepSolver {
             for(VariableDeclarator vd : n.getVariables()) {
 
                 names.put(vd.getNameAsString(), vd.getType());
-                try {
-                    if (vd.getType().isClassOrInterfaceType()) {
-                        node.addTypeArguments(vd.getType().asClassOrInterfaceType());
+                if (vd.getType().isClassOrInterfaceType()) {
+                    node.addTypeArguments(vd.getType().asClassOrInterfaceType());
+                }
+                else if (vd.getType().isArrayType()) {
+                    Type t = vd.getType().asArrayType().getComponentType();
+                    if (t.isClassOrInterfaceType()) {
+                        node.addTypeArguments(t.asClassOrInterfaceType());
                     }
-                    else if (vd.getType().isArrayType()) {
-                        Type t = vd.getType().asArrayType().getComponentType();
-                        if (t.isClassOrInterfaceType()) {
-                            node.addTypeArguments(t.asClassOrInterfaceType());
-                        }
-                    }
-                } catch (AntikytheraException e) {
-                    throw new DepsolverException(e);
                 }
 
                 Optional<Expression> init = vd.getInitializer();
@@ -467,7 +455,7 @@ public class DepSolver {
      * @return
      */
     @Deprecated
-    private List<ImportWrapper> solveType(Type vd, GraphNode node) throws AntikytheraException {
+    private List<ImportWrapper> solveType(Type vd, GraphNode node)  {
         if (vd.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = vd.asClassOrInterfaceType();
             node.addTypeArguments(ctype);
@@ -491,11 +479,7 @@ public class DepSolver {
                             if (cid != null) {
                                 for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
                                     if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
-                                        try {
-                                            Graph.createGraphNode(constructorDeclaration);
-                                        } catch (AntikytheraException e) {
-                                            throw new RuntimeException(e);
-                                        }
+                                        Graph.createGraphNode(constructorDeclaration);
                                     }
                                 }
                             }
@@ -526,23 +510,15 @@ public class DepSolver {
 
                 AssignExpr assignExpr = n.getExpression().asAssignExpr();
                 Expression expr = assignExpr.getValue();
-                try {
-                    Resolver.processExpression(arg, expr, new NodeList<>());
+                Resolver.processExpression(arg, expr, new NodeList<>());
 
-                    if (assignExpr.getTarget().isFieldAccessExpr()) {
-                        FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
-                        SimpleName nmae = fae.getName();
-                        arg.getEnclosingType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(nmae.asString())).ifPresent(f -> {
-                            try {
-                                Graph.createGraphNode(f);
-                            } catch (AntikytheraException e) {
-                                throw new DepsolverException(e);
-                            }
-                        });
-                        ImportUtils.addImport(arg, fae);
-                    }
-                } catch (AntikytheraException e) {
-                    throw new RuntimeException(e);
+                if (assignExpr.getTarget().isFieldAccessExpr()) {
+                    FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
+                    SimpleName nmae = fae.getName();
+                    arg.getEnclosingType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(nmae.asString())).ifPresent(f ->
+                          Graph.createGraphNode(f)
+                    );
+                    ImportUtils.addImport(arg, fae);
                 }
             }
             super.visit(n, arg);
@@ -550,13 +526,9 @@ public class DepSolver {
 
         @Override
         public void visit(ReturnStmt n, GraphNode node) {
-            n.getExpression().ifPresent(e -> {
-                try {
-                    Resolver.processExpression(node, e, new NodeList<>());
-                } catch (AntikytheraException ex) {
-                    throw new DepsolverException(ex);
-                }
-            });
+            n.getExpression().ifPresent(e ->
+               Resolver.processExpression(node, e, new NodeList<>())
+            );
 
             super.visit(n, node);
         }
@@ -564,13 +536,8 @@ public class DepSolver {
 
         @Override
         public void visit(MethodCallExpr mce, GraphNode node) {
-            try {
-                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, mce);
-                Resolver.chainedMethodCall(node, mceWrapper);
-            } catch (Exception e) {
-                throw new DepsolverException(e);
-            }
-
+            MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, mce);
+            Resolver.chainedMethodCall(node, mceWrapper);
             super.visit(mce, node);
         }
 
@@ -580,12 +547,9 @@ public class DepSolver {
             if (parent.isPresent() && !(parent.get() instanceof IfStmt || parent.get() instanceof ConditionalExpr)) {
                 Expression left = n.getLeft();
                 Expression right = n.getRight();
-                try {
-                    Resolver.processExpression(node, left, new NodeList<>());
-                    Resolver.processExpression(node, right, new NodeList<>());
-                } catch (AntikytheraException e) {
-                    throw new DepsolverException(e);
-                }
+
+                Resolver.processExpression(node, left, new NodeList<>());
+                Resolver.processExpression(node, right, new NodeList<>());
             }
             super.visit(n, node);
         }
@@ -604,28 +568,24 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-            try {
-                List<ImportWrapper> imports = solveType(oce.getType(), node);
-                for (ImportWrapper imp : imports) {
-                    node.getDestination().addImport(imp.getImport());
-                }
-                MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
-                Resolver.chainedMethodCall(node, mceWrapper);
-            } catch (AntikytheraException e) {
-                throw new RuntimeException(e);
-            } catch (Exception e) {
-                throw new DepsolverException(e);
+
+            List<ImportWrapper> imports = solveType(oce.getType(), node);
+            for (ImportWrapper imp : imports) {
+                node.getDestination().addImport(imp.getImport());
             }
+            MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
+            Resolver.chainedMethodCall(node, mceWrapper);
+
             super.visit(oce, node);
         }
     }
 
-    public static void initializeField(FieldDeclaration field, GraphNode node) throws AntikytheraException {
+    public static void initializeField(FieldDeclaration field, GraphNode node)  {
 
         solver.initField(field, node);
     }
 
-    public void initField(FieldDeclaration field, GraphNode node) throws AntikytheraException {
+    public void initField(FieldDeclaration field, GraphNode node)  {
         Optional<Expression> init = field.getVariables().get(0).getInitializer();
         if (init.isPresent()) {
             Expression initializer = init.get();
@@ -651,7 +611,7 @@ public class DepSolver {
 
     protected DepSolver() {}
 
-    public static void main(String[] args) throws IOException, AntikytheraException {
+    public static void main(String[] args) throws IOException{
         File yamlFile = new File(Settings.class.getClassLoader().getResource("depsolver.yml").getFile());
         Settings.loadConfigMap(yamlFile);
         DepSolver depSolver = DepSolver.createSolver();

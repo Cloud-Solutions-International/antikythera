@@ -114,6 +114,7 @@ public class RepositoryQuery {
      * The original query as it was passed to the repository method.
      */
     private String originalQuery;
+    private boolean writeOps;
 
 
     public RepositoryQuery() {
@@ -648,5 +649,13 @@ public class RepositoryQuery {
      */
     public void setSimplifedResultSet(ResultSet resultSet) {
         this.simplifiedResultSet = resultSet;
+    }
+
+    public void setWriteOps(boolean b) {
+        this.writeOps = b;
+    }
+
+    public boolean isWriteOps() {
+        return writeOps;
     }
 }

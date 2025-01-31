@@ -4,7 +4,7 @@ import com.github.javaparser.ast.body.Parameter;
 
 public class NullArgumentGenerator extends ArgumentGenerator{
     @Override
-    public Variable mockParameter(String typeName) {
+    public Variable mockParameter(Parameter typeName) {
         return null;
     }
 

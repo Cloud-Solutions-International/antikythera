@@ -1,11 +1,8 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import net.sf.jsqlparser.JSQLParserException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -27,7 +24,6 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -122,9 +118,8 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Create a connection to the database.
      *
-     * The connection will be shared among all instances of this class. Even if the
-     * credentials are provide the connection is setup only if the runQueries
-     * setting is true.
+     * The connection will be shared among all instances of this class provided that the
+     * runQueries configuration is switched on.
      *
      * @throws SQLException if the connection could not be established
      */
@@ -140,7 +135,7 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    public static void main(String[] args) throws IOException, SQLException, AntikytheraException, JSQLParserException {
+    public static void main(String[] args) throws IOException, SQLException, JSQLParserException {
         if(args.length != 1) {
             logger.error("Please specifiy the path to a repository class");
         }
@@ -148,7 +143,7 @@ public class RepositoryParser extends ClassProcessor {
             Settings.loadConfigMap();
             RepositoryParser parser = new RepositoryParser();
             parser.compile(AbstractCompiler.classToPath(args[0]));
-            parser.processAll();
+            parser.processTypes();
             parser.executeAllQueries();
         }
     }
@@ -171,7 +166,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * Process the CompilationUnit to identify all the queries.
      */
-    public void processAll()  {
+    public void processTypes()  {
         for(var tp : cu.getTypes()) {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
@@ -190,49 +185,12 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    private void tackOn(ClassOrInterfaceDeclaration cls) {
-        for(var parent : cls.getExtendedTypes()) {
-            String fullName = AbstractCompiler.findFullyQualifiedName(cu, parent.getNameAsString());
-            if (fullName != null) {
-                CompilationUnit p = AntikytheraRunTime.getCompilationUnit(fullName);
-                if(p == null) {
-                    try {
-                        Class<?> interfaceClass = Class.forName(fullName);
-                        Method[] methods = interfaceClass.getMethods();
-
-                        for (Method method : methods) {
-                            // Extract method information
-                            String methodName = method.getName();
-                            Class<?> returnType = method.getReturnType();
-                            java.lang.reflect.Parameter[] params = method.getParameters();
-                            // Create a MethodDeclaration node using JavaParser
-                            MethodDeclaration methodDeclaration = new MethodDeclaration();
-                            methodDeclaration.setName(methodName);
-                            methodDeclaration.setType(returnType.getCanonicalName());
-
-                            // Add parameters to the method declaration
-                            for (java.lang.reflect.Parameter param : params) {
-                                Parameter parameter = new Parameter();
-                                parameter.setType(param.getType());
-                                parameter.setName(param.getName());
-                                methodDeclaration.addParameter(parameter);
-                            }
-                            cls.addMember(methodDeclaration);
-                        }
-                    } catch (ClassNotFoundException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-        }
-    }
-
     /**
      * Execute all the queries that were identified.
      * This is useful only for visualization purposes.
      * @throws SQLException if the query cannot be executed
      */
-    public void executeAllQueries() throws SQLException, AntikytheraException, JSQLParserException {
+    public void executeAllQueries() throws SQLException, JSQLParserException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());
             if (rs != null) {
@@ -262,7 +220,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param method the name of the method that represents the query in the JPARepository interface
      * @return the result set if the query was executed successfully
      */
-    public ResultSet executeQuery(Callable method) throws AntikytheraException, SQLException, JSQLParserException {
+    public ResultSet executeQuery(Callable method) throws SQLException, JSQLParserException {
         RepositoryQuery rql = queries.get(method);
         ResultSet rs = executeQuery(rql, method);
         rql.setResultSet(rs);
@@ -270,14 +228,14 @@ public class RepositoryParser extends ClassProcessor {
         return rs;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql, Callable method) throws SQLException, AntikytheraException, JSQLParserException {
+    public ResultSet executeQuery(RepositoryQuery rql, Callable method) throws SQLException, JSQLParserException {
         if(method.isMethodDeclaration()) {
             return executeQuery(rql, method.asMethodDeclaration());
         }
         return null;
     }
 
-    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, AntikytheraException, JSQLParserException {
+    public ResultSet executeQuery(RepositoryQuery rql, MethodDeclaration method) throws SQLException, JSQLParserException {
         if(runQueries) {
             RepositoryParser.createConnection();
 
@@ -312,7 +270,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param argumentCount the number of placeholders
      * @throws SQLException if the statement cannot be executed
      */
-    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, AntikytheraException, JSQLParserException {
+    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, JSQLParserException {
         rql.buildSimplifiedQuery();
         Select simplified = (Select) rql.getSimplifiedStatement();
         String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
@@ -525,8 +483,8 @@ public class RepositoryParser extends ClassProcessor {
                         ann.asSingleMemberAnnotationExpr().getMemberValue()
                 );
                 query = v.getValue().toString();
-            } catch (AntikytheraException|ReflectiveOperationException e) {
-                throw new RuntimeException(e);
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
             }
         } else if (ann != null && ann.isNormalAnnotationExpr()) {
 

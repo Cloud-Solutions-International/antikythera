@@ -8,6 +8,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
@@ -98,7 +99,7 @@ public class SpringEvaluator extends Evaluator {
 
     private boolean onTest;
 
-    private ArgumentGenerator argumentGenerator;
+    private static ArgumentGenerator argumentGenerator;
     /**
      * It is better to use create evaluator
      * @param className the name of the class associated with this evaluator
@@ -258,23 +259,20 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-
     /**
      * Execute a query on a repository.
      * @param name the name of the repository
      * @param methodCall the method call expression
      * @return the result set
      */
-    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) {
+    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
         RepositoryParser repository = repositories.get(name);
         if(repository != null) {
-            MCEWrapper methodCallWrapper = new MCEWrapper(methodCall);
-            // todo fix the wrapper
+            MCEWrapper methodCallWrapper = wrapCallExpression(methodCall);
 
             Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
-                    methodCallWrapper, cu.getType(0).asClassOrInterfaceDeclaration());
-            if (callable.isPresent() && callable.get().isMethodDeclaration()) {
-                MethodDeclaration repoMethod = callable.get().asMethodDeclaration();
+                    methodCallWrapper, repository.getCompilationUnit().getType(0));
+            if (callable.isPresent()) {
                 RepositoryQuery q = repository.get(callable.get());
 
                 try {
@@ -283,7 +281,7 @@ public class SpringEvaluator extends Evaluator {
                      * method. These will then have to be mapped to the jdbc placeholders and reverse mapped
                      * to the arguments that are passed in when the method is actually being called.
                      */
-                    String nameAsString = repoMethod.getNameAsString();
+                    String nameAsString = callable.get().getNameAsString();
                     if (!(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                         q.getMethodArguments().clear();
                         for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
@@ -294,7 +292,12 @@ public class SpringEvaluator extends Evaluator {
                         repository.executeQuery(callable.get());
                         DatabaseArgumentGenerator.setQuery(q);
                     } else {
-                        // todo do some fake work here
+                        Optional<Boolean> write = Settings.getProperty("database.write_ops",Boolean.class);
+                        if (write.isPresent() && write.get()) {
+                            // todo this needs to be completed
+                        }
+                        q.setWriteOps(true);
+                        return q;
                     }
                 } catch (Exception e) {
                     logger.warn(e.getMessage());
@@ -351,6 +354,7 @@ public class SpringEvaluator extends Evaluator {
                          */
                         RepositoryParser parser = new RepositoryParser();
                         parser.compile(AbstractCompiler.classToPath(className));
+                        parser.processTypes();
                         repositories.put(variable.getNameAsString(), parser);
                         break;
                     }
@@ -742,16 +746,20 @@ public class SpringEvaluator extends Evaluator {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
                         ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        Variable v = processResult(stmt, q.getResultSet());
-
-                        if (l.getRepositoryQuery() == null) {
-                            l.setRepositoryQuery(q);
-                            l.setColor(LineOfCode.GREY);
+                        if (q.isWriteOps()) {
+                            return evaluateExpression(methodCall.getArgument(0));
                         }
                         else {
-                            l.setColor(LineOfCode.BLACK);
+                            Variable v = processResult(stmt, q.getResultSet());
+
+                            if (l.getRepositoryQuery() == null) {
+                                l.setRepositoryQuery(q);
+                                l.setColor(LineOfCode.GREY);
+                            } else {
+                                l.setColor(LineOfCode.BLACK);
+                            }
+                            return v;
                         }
-                        return v;
                     }
                     return null;
                 }
@@ -899,7 +907,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
-        this.argumentGenerator = argumentGenerator;
+        SpringEvaluator.argumentGenerator = argumentGenerator;
         for (TestGenerator gen : generators) {
             gen.setArgumentGenerator(argumentGenerator);
         }

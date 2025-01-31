@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -131,6 +133,9 @@ public class SpringTestGenerator extends  TestGenerator {
             else if(annotation.getNameAsString().equals("DeleteMapping")) {
                 buildDeleteMethodTests(md, annotation, controllerResponse);
             }
+            else if(annotation.getNameAsString().equals("PutMapping")) {
+                buildPutMethodTests(md, annotation, controllerResponse);
+            }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                 for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
@@ -244,13 +249,16 @@ public class SpringTestGenerator extends  TestGenerator {
                 if (wrapper != null) {
                     gen.addImport(wrapper.getImport());
                 }
-                body.addStatement(createResponseObject(respType));
+
                 addHttpStatusCheck(body, resp.getStatusCode());
+
+                body.addStatement(createResponseObject(respType));
 
                 MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertNotNull");
                 as.addArgument("resp");
                 body.addStatement(new ExpressionStmt(as));
 
+                addFieldAsserts(resp, body);
             } else {
                 MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
                 as.addArgument("response.getBody().asString().isEmpty()");
@@ -263,13 +271,38 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private static ExpressionStmt createResponseObject(Type respType) {
-        VariableDeclarator variableDeclarator = new VariableDeclarator(respType, "resp");
-        MethodCallExpr methodCallExpr = new MethodCallExpr(new NameExpr("response"), "as");
-        methodCallExpr.addArgument(respType.toString() + ".class");
-        variableDeclarator.setInitializer(methodCallExpr);
-        VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
-        return new ExpressionStmt(variableDeclarationExpr);
+    private static void addFieldAsserts(ControllerResponse resp, BlockStmt body) {
+        if (resp.getBody().getValue() instanceof Evaluator ev) {
+            int i = 0;
+            for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
+                try {
+                    if (field.getValue() != null && field.getValue().getValue() != null) {
+                        Variable v = field.getValue();
+                        String getter = "get" + field.getKey().substring(0, 1).toUpperCase() + field.getKey().substring(1);
+                        MethodCallExpr assertEquals = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
+                        assertEquals.addArgument("resp." + getter + "()");
+
+                        if (v.getValue() instanceof String) {
+                            assertEquals.addArgument("\"" + v.getValue() + "\"");
+                        } else {
+                            assertEquals.addArgument(field.getValue().getValue().toString());
+                        }
+                        body.addStatement(new ExpressionStmt(assertEquals));
+                        i++;
+                    }
+                } catch (Exception pex) {
+                    logger.error("Error asserting {}", field.getKey());
+                }
+
+                if (i == 5) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static String createResponseObject(Type respType) {
+        return "%s resp = objectMapper.readValue(response.asString(), %s.class);".formatted(respType, respType);
     }
 
 
@@ -446,9 +479,10 @@ public class SpringTestGenerator extends  TestGenerator {
         NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
         testCaseTypeAnnotation.setName("TestCaseType");
         testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
-
         testMethod.addAnnotation(testCaseTypeAnnotation);
         testMethod.addAnnotation("Test");
+        testMethod.addThrownException(JsonProcessingException.class);
+
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
             param.getAnnotationByName("PathVariable").ifPresent(ann ->
@@ -456,6 +490,14 @@ public class SpringTestGenerator extends  TestGenerator {
                         .append(param.getNameAsString().substring(1))
             );
         }
+
+        md.findAncestor(TypeDeclaration.class).ifPresent(c ->
+        {
+            String comment = String.format("Method under test: %s.%s()\nArgument generator : %s\n",
+                    c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
+            testMethod.setJavadocComment(comment);
+        });
+
 
         String testName = String.valueOf(md.getName());
         if (paramNames.isEmpty()) {

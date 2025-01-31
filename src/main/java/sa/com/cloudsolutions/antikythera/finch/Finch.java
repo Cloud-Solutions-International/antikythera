@@ -13,6 +13,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Finches are simple mechanism to replace classes in the source code with custom classes.
+ *
+ */
 public class Finch {
     static Map<String, Object> classes = new HashMap<>();
 

@@ -22,18 +22,24 @@ public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
 
     private static boolean prepared;
 
+    /**
+     *
+     * @param param a parameter for the rest api end point.
+     *              this represents a parameter in the controller's method signature.
+     * @return a variable that holds a suitable value for the parameter.
+     */
     @Override
-    public Variable mockParameter(String typeName) {
+    public Variable mockParameter(Parameter param) {
         Variable q = null;
         for(int i = 0 ; i < query.getMethodParameters().size() && q == null; i++) {
             QueryMethodArgument arg = query.getMethodArguments().get(i);
 
             if (arg.getArgument().isNameExpr()) {
-                q = matchParameterAndArgument(typeName, i, arg);
+                q = matchParameterAndArgument(param.getNameAsString(), i, arg);
             }
         }
         if (q == null) {
-            return super.mockParameter(typeName);
+            return super.mockParameter(param);
         }
         return q;
     }
@@ -94,7 +100,7 @@ public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
     @Override
     public void generateArgument(Parameter param) {
         if (prepared) {
-            Variable v = mockParameter(param.getNameAsString());
+            Variable v = mockParameter(param);
             arguments.put(param.getNameAsString(), v);
             AntikytheraRunTime.push(v);
         }

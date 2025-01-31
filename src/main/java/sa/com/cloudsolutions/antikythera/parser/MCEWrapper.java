@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
-import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 
@@ -39,15 +38,20 @@ public class MCEWrapper {
         return argumentTypes;
     }
 
-    public Class<?>[] getArgumentTypesAsClasses() throws ClassNotFoundException {
+    public Class<?>[] getArgumentTypesAsClasses()  {
         if (argumentTypes == null) {
             return null;
         }
         Class<?>[] classes = new Class<?>[argumentTypes.size()];
 
         for (int i = 0; i < argumentTypes.size(); i++) {
+
             String elementType = argumentTypes.get(i).getElementType().toString();
-            classes[i] = Reflect.getComponentClass(elementType);
+            try {
+                classes[i] = Reflect.getComponentClass(elementType);
+            } catch (ClassNotFoundException e) {
+                classes[i] = Object.class;
+            }
         }
 
         return classes;

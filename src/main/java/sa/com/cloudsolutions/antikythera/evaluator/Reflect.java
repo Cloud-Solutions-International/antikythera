@@ -1,8 +1,14 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
@@ -134,6 +140,21 @@ public class Reflect {
             case "byte" -> byte.class;
             case "char" -> char.class;
             default -> Class.forName(elementType);
+        };
+    }
+
+    public static Type getComponentType(Class<?> clazz) {
+        return switch (clazz.getName()) {
+            case "int","java.lang.Integer" -> PrimitiveType.intType();
+            case "double","java.lang.Double" -> PrimitiveType.doubleType();
+            case "boolean","java.lang.Boolean" -> PrimitiveType.booleanType();
+            case "long","java.lang.Long","java.lang.BigDecimal" -> PrimitiveType.longType();
+            case "float","java.lang.Float" -> PrimitiveType.floatType();
+            case "short","java.lang.Short" -> PrimitiveType.shortType();
+            case "byte","java.lang.Byte" -> PrimitiveType.byteType();
+            case "char","java.lang.Character" -> PrimitiveType.charType();
+            case "java.lang.String" -> new ClassOrInterfaceType("String");
+            default -> null;
         };
     }
 

@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -243,17 +242,15 @@ public class Resolver {
     }
 
 
-    static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td) throws AntikytheraException {
+    static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td)  {
         if (td != null) {
-            Optional<FieldDeclaration> fieldByName = td.getFieldByName(fae.getNameAsString());
-            if (fieldByName.isPresent()) {
-                Graph.createGraphNode(fieldByName.get());
-            }
+            td.getFieldByName(fae.getNameAsString()).ifPresent(Graph::createGraphNode);
         }
     }
 
 
-    public static GraphNode resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
+
+    public static GraphNode resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) {
         final FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
 
@@ -273,7 +270,7 @@ public class Resolver {
         }
     }
 
-    private static GraphNode handleNameExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) throws AntikytheraException {
+    private static GraphNode handleNameExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) {
         Optional<Type> resolvedType = resolveScopedNameExpression(scope, fae, node, DepSolver.getNames());
         if (resolvedType.isPresent()) {
             Type t = resolvedType.get();
@@ -290,7 +287,7 @@ public class Resolver {
         return null;
     }
 
-    private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) throws AntikytheraException {
+    private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) {
         GraphNode scopeNode = resolveFieldAccess(node, scope, types);
         if (scopeNode != null) {
             FieldDeclaration scopeField = ((FieldDeclaration) scopeNode.getNode()).asFieldDeclaration();
@@ -399,9 +396,8 @@ public class Resolver {
      * @return a Method Call Wrapper instance that contains the original method call as well as the resolved
      *              types of the arguments. If the arguments cannot be resolved correctly the arguments field
      *              in the MCEWrapper will be null.
-     * @throws AntikytheraException if error occurs in type resolution.
      */
-    public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce) throws AntikytheraException {
+    public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce)  {
         MCEWrapper mw = new MCEWrapper();
         NodeList<Type> types = new NodeList<>();
 
@@ -418,7 +414,7 @@ public class Resolver {
         return mw;
     }
 
-    static void processExpression(GraphNode node, Expression expr, NodeList<Type> types) throws AntikytheraException {
+    static void processExpression(GraphNode node, Expression expr, NodeList<Type> types)  {
         if (expr.isNameExpr()) {
             resolveNameExpr(node, expr, types);
         }
@@ -465,7 +461,7 @@ public class Resolver {
         }
     }
 
-    static void resolveMethodReference(GraphNode node, Expression arg) throws AntikytheraException {
+    static void resolveMethodReference(GraphNode node, Expression arg) {
 
         MethodReferenceExpr mre = arg.asMethodReferenceExpr();
         Expression scope = mre.getScope();
@@ -495,7 +491,7 @@ public class Resolver {
         }
     }
 
-    static void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) throws AntikytheraException {
+    static void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) {
         if (arg instanceof MethodCallExpr argMethodCall) {
             MCEWrapper wrap = resolveArgumentTypes(node, arg);
             GraphNode gn = Resolver.chainedMethodCall(node, wrap);
@@ -515,9 +511,9 @@ public class Resolver {
                                 ImportUtils.addImport(node, t);
 
                             }
-                            cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
-                                ImportUtils.addImport(node, c.getNameAsString());
-                            });
+                            cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
+                                ImportUtils.addImport(node, c.getNameAsString())
+                            );
                         }
                     } else {
                         Type t = lombokSolver(argMethodCall, cid, gn);
@@ -547,7 +543,7 @@ public class Resolver {
         return null;
     }
 
-    static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) throws AntikytheraException {
+    static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
         if (cdecl != null) {
             Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
@@ -599,7 +595,7 @@ public class Resolver {
         return null;
     }
 
-    static void resolveNameExpr(GraphNode node, Expression arg, NodeList<Type> types) throws AntikytheraException {
+    static void resolveNameExpr(GraphNode node, Expression arg, NodeList<Type> types) {
         Type t = DepSolver.getNames().get(arg.asNameExpr().getNameAsString());
         if (t != null) {
             types.add(t);
