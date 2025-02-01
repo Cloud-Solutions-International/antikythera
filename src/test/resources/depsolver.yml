@@ -1,0 +1,26 @@
+# This file contains the configurations for Antikythera depsolver. You can use environment variables
+# anywhere in this file. For example ${HOME} will be replaced with the value of the HOME
+# environment variable.
+
+variables:
+  projects_folder: /home/raditha/csi
+  m2_folder: /home/raditha/.m2/repository
+
+# Points to top level folder of the application under test. This is a file system path.
+base_path: ${projects_folder}/antikythera/src/test/resources/sources/src/main/java
+
+# Add the base path to the src/main/java folder of csi-project
+# The top level package for your project. As an example for the pharmacy project it is
+# com.csi.phr
+base_package: sa.com.cloudsolutions
+
+# The controllers settings determines where the controllers can be found. If you
+# specify a package name it will iterate through all the controllers in that
+# package. If you specify an individual controller it will only generate tests
+# for that single controller
+controllers: sa.com.cloudsolutions.controller
+
+# Path to output the generated test project
+output_path: /tmp/antikythera
+
+methods: sa.com.cloudsolutions.controller.ComplexController#list
