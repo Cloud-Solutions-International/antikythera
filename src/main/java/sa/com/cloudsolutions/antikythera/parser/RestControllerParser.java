@@ -6,10 +6,8 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
@@ -277,7 +275,7 @@ public class RestControllerParser extends ClassProcessor {
             if (md.isPublic()) {
                 stats.methods++;
                 resolveMethodParameterTypes(md);
-                md.accept(new ReturnStatmentVisitor(), md);
+                md.accept(new ReturnStatementVisitor(), md);
                 md.accept(new StatementVisitor(), md);
             }
         }
@@ -318,7 +316,7 @@ public class RestControllerParser extends ClassProcessor {
          * We will investigate the return to find that out and then based on the condition will taylor the
          * inputs accordingly.
          */
-        class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+        class ReturnStatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
             /**
              * This method will be called once for each return statment inside the method block.
              *
