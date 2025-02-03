@@ -134,7 +134,7 @@ public class RestControllerParser extends ClassProcessor {
         ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getNameAsString() + "Test");
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
-        addBeforeClass(gen);
+        generator.addBeforeClass();
 
         allImports.addAll(cu.getImports());
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
@@ -193,25 +193,6 @@ public class RestControllerParser extends ClassProcessor {
                 pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 
-    }
-
-    private void addBeforeClass(CompilationUnit gen) {
-        MethodDeclaration md = new MethodDeclaration();
-        md.addAnnotation("BeforeClass");
-        md.setName("setUp");
-        md.setType(new VoidType());
-
-        BlockStmt body = new BlockStmt();
-        body.addStatement("objectMapper = new ObjectMapper();");
-        body.addStatement("objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);");
-        md.setBody(body);
-
-        gen.getType(0).addMember(md);
-        gen.addImport("com.fasterxml.jackson.databind.ObjectMapper");
-        gen.addImport("com.fasterxml.jackson.databind.DeserializationFeature");
-        gen.addImport("org.testng.annotations.BeforeClass");
-
-        gen.getType(0).addField("ObjectMapper", "objectMapper");
     }
 
     /**

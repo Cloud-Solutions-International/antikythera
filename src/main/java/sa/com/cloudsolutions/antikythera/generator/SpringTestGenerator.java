@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -579,5 +580,26 @@ public class SpringTestGenerator extends  TestGenerator {
     public void setBranched(boolean branched) {
         this.branched = branched;
     }
+
+    @Override
+    public void addBeforeClass() {
+        MethodDeclaration md = new MethodDeclaration();
+        md.addAnnotation("BeforeClass");
+        md.setName("setUp");
+        md.setType(new VoidType());
+
+        BlockStmt body = new BlockStmt();
+        body.addStatement("objectMapper = new ObjectMapper();");
+        body.addStatement("objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);");
+        md.setBody(body);
+
+        gen.getType(0).addMember(md);
+        gen.addImport("com.fasterxml.jackson.databind.ObjectMapper");
+        gen.addImport("com.fasterxml.jackson.databind.DeserializationFeature");
+        gen.addImport("org.testng.annotations.BeforeClass");
+
+        gen.getType(0).addField("ObjectMapper", "objectMapper");
+    }
+
 }
 

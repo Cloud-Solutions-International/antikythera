@@ -78,6 +78,8 @@ public abstract class TestGenerator {
         return argumentGenerator;
     }
 
+    public abstract void addBeforeClass();
+
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
         this.argumentGenerator = argumentGenerator;
     }

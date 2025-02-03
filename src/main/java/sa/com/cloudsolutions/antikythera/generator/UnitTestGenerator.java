@@ -36,4 +36,9 @@ public class UnitTestGenerator extends TestGenerator {
     public void setBranched(boolean branched) {
 
     }
+
+    @Override
+    public void addBeforeClass() {
+
+    }
 }
