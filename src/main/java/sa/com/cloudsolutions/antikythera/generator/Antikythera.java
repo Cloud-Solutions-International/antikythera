@@ -245,10 +245,11 @@ public class Antikythera {
 
     private void generateUnitTests() {
         for (String service : services) {
-            String servicesCleaned = service.split("#")[0];
-            if (servicesCleaned.matches(".*\\.java$")) {
-                ServicesParser processor = new ServicesParser(servicesCleaned);
-                processor.start();
+            String[] parts = service.split("#");
+            String servicesCleaned = parts[0];
+            if (parts.length == 2) {
+                ServicesParser processor = new ServicesParser(parts[0]);
+                processor.start(parts[1]);
             } else {
                 ServicesParser processor = new ServicesParser(servicesCleaned);
                 processor.start();
