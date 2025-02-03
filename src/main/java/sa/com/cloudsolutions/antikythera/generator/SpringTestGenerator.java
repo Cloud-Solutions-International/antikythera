@@ -7,7 +7,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -35,10 +34,8 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Test generator for spring applications.
@@ -72,21 +69,7 @@ public class SpringTestGenerator extends  TestGenerator {
      * The URL path component common to all functions in a controller.
      */
     private String commonPath;
-    /**
-     * The names have have already been assigned to various tests.
-     * Because of overloaded methods and the need to write multiple tests for a single end point
-     * we may end up with duplicate method names. To avoid that we add a suffix of the query
-     * string arguments to distinguish overloaded and a alphabetic suffix to identify multiple
-     * tests for the same method.
-     */
-    Set<String> testMethodNames = new HashSet<>();
 
-    /**
-     * The compilation unit that represents the tests being generated.
-     * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
-     *
-     */
-    CompilationUnit gen = new CompilationUnit();
 
     /**
      * The preconditions that need to be met before the test can be executed.
@@ -483,13 +466,6 @@ public class SpringTestGenerator extends  TestGenerator {
         testMethod.addAnnotation("Test");
         testMethod.addThrownException(JsonProcessingException.class);
 
-        StringBuilder paramNames = new StringBuilder();
-        for(var param : md.getParameters()) {
-            param.getAnnotationByName("PathVariable").ifPresent(ann ->
-                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                        .append(param.getNameAsString().substring(1))
-            );
-        }
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
         {
@@ -498,20 +474,7 @@ public class SpringTestGenerator extends  TestGenerator {
             testMethod.setJavadocComment(comment);
         });
 
-
-        String testName = String.valueOf(md.getName());
-        if (paramNames.isEmpty()) {
-            testName += "Test";
-        } else {
-            testName += "By" + paramNames + "Test";
-
-        }
-
-        if (testMethodNames.contains(testName)) {
-            testName += "_" + (char)('A' + testMethodNames.size()  % 26 -1);
-        }
-        testMethodNames.add(testName);
-        testMethod.setName(testName);
+        testMethod.setName(createTestName(md));
 
         BlockStmt body = new BlockStmt();
 
@@ -601,14 +564,6 @@ public class SpringTestGenerator extends  TestGenerator {
         this.commonPath = commonPath;
     }
 
-    @Override
-    public CompilationUnit getCompilationUnit() {
-        return gen;
-    }
-
-    public void setCompilationUnit(CompilationUnit gen) {
-        this.gen = gen;
-    }
 
     @Override
     public void setPreconditions(List<Expression> preconditions) {

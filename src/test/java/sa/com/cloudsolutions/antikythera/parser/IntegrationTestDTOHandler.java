@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IntegrationTestDTOHandler {
     @BeforeAll
-    static void beforeClass() throws IOException, ReflectiveOperationException {
+    static void beforeClass() throws IOException {
         Settings.loadConfigMap();
         AbstractCompiler.reset();
     }
