@@ -168,7 +168,6 @@ public class Antikythera {
                 Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
         }
-
     }
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
@@ -199,11 +198,6 @@ public class Antikythera {
     public void generateApiTests() throws IOException, XmlPullParserException, EvaluatorException {
         for (String controller : controllers) {
 
-            CopyUtils.createMavenProjectStructure(basePackage, outputPath);
-            copyBaseFiles(outputPath);
-
-            AbstractCompiler.preProcess();
-
             String controllersCleaned = controller.split("#")[0];
             if (controllersCleaned.matches(".*\\.java$")) {
                 Path path = Paths.get(basePath, controllersCleaned.replace(".", "/").replace("/java", SUFFIX));
@@ -229,26 +223,34 @@ public class Antikythera {
     }
 
     public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
-        Antikythera.getInstance().generateApiTests();
+        Antikythera antk = Antikythera.getInstance();
+        antk.preProcess();
+        antk.generateApiTests();
         RestControllerParser.Stats stats = RestControllerParser.getStats();
 
         logger.info("Processed {} controllers", stats.getControllers());
         logger.info("Processed {} methods", stats.getMethods());
         logger.info("Generated {} tests", stats.getTests());
 
-        Antikythera.getInstance().generateUnitTests();
+        antk.generateUnitTests();
+    }
+
+    private void preProcess() throws IOException, XmlPullParserException {
+        CopyUtils.createMavenProjectStructure(basePackage, outputPath);
+        copyBaseFiles(outputPath);
+
+        AbstractCompiler.preProcess();
+
     }
 
     private void generateUnitTests() {
         for (String service : services) {
             String servicesCleaned = service.split("#")[0];
             if (servicesCleaned.matches(".*\\.java$")) {
-                Path path = Paths.get(basePath, servicesCleaned.replace(".", "/").replace("/java", SUFFIX));
-                ServicesParser processor = new ServicesParser(path.toFile());
+                ServicesParser processor = new ServicesParser(servicesCleaned);
                 processor.start();
             } else {
-                Path path = Paths.get(basePath, servicesCleaned.replace(".", "/"));
-                ServicesParser processor = new ServicesParser(path.toFile());
+                ServicesParser processor = new ServicesParser(servicesCleaned);
                 processor.start();
             }
         }

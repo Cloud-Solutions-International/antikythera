@@ -82,7 +82,7 @@ public class DepSolver {
      * Process the dependencies of a method that was declared in the application configuration
      * @param s the method name
      */
-     void processMethod(String s)  {
+     public void processMethod(String s)  {
         String[] parts = s.split("#");
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0] );
@@ -97,7 +97,7 @@ public class DepSolver {
      * Iterative Depth first search
      * @ if any of the code inspections fails.
      */
-    private void dfs()  {
+    public void dfs()  {
         /*
          * Operates in three stages.
          *
@@ -555,7 +555,6 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-
             List<ImportWrapper> imports = solveType(oce.getType(), node);
             for (ImportWrapper imp : imports) {
                 node.getDestination().addImport(imp.getImport());
@@ -568,7 +567,6 @@ public class DepSolver {
     }
 
     public static void initializeField(FieldDeclaration field, GraphNode node)  {
-
         solver.initField(field, node);
     }
 
