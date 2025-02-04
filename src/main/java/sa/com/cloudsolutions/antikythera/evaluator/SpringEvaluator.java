@@ -137,7 +137,7 @@ public class SpringEvaluator extends Evaluator {
             for (int i = 0; i < statements.size(); i++) {
                 Statement st = statements.get(i);
                 if (!lines.containsKey(st.hashCode())) {
-                    mockURIVariables(md);
+                    mockMethodArguments(md);
                     executeMethod(md);
                     if (returnFrom != null) {
                         // rewind!
@@ -216,7 +216,6 @@ public class SpringEvaluator extends Evaluator {
         else {
             throw ae;
         }
-
     }
 
     /**
@@ -248,11 +247,14 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * The URL contains Path variables, Query string parameters and post bodies. We mock them here
+     * Mocks method arguments.
+     * In the case of a rest api controller, the URL contains Path variables, Query string
+     * parameters and post bodies. We mock them here with the help of the argument generator.
+     * In the case of services and other classes we can use a mocking library.
      * @param md The method declaration representing an HTTP API end point
      * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
-    private void mockURIVariables(MethodDeclaration md) throws ReflectiveOperationException {
+    private void mockMethodArguments(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);

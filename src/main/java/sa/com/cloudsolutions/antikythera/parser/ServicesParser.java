@@ -89,8 +89,6 @@ public class ServicesParser {
                         System.out.println("Autowired found: " + fd.getVariable(0).getNameAsString());
                     });
                 });
-
-
             }
         }
     }
