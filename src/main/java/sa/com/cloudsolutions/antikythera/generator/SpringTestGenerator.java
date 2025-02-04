@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;

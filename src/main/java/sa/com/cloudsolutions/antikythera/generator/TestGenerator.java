@@ -51,6 +51,14 @@ public abstract class TestGenerator {
         return testName;
     }
 
+    /**
+     * This method will typically be called at the exit point of a method being evaluated.
+     * An exit point is when the evaluator runs into a return statement or the last statement.
+     * Another way in which a function can exit is when an exception is raised or thrown. In all
+     * those scenarios, the evaluator will call this method to generate the tests.
+     * @param md
+     * @param response
+     */
     public abstract void createTests(MethodDeclaration md, ControllerResponse response);
 
     /**
@@ -82,5 +90,13 @@ public abstract class TestGenerator {
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
         this.argumentGenerator = argumentGenerator;
+    }
+
+    /**
+     * Setup fields on the methods being tested.
+     * The default behaviour is to do nothing.
+     */
+    public void mockFields() {
+
     }
 }

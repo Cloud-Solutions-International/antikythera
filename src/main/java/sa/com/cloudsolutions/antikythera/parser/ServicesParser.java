@@ -1,10 +1,9 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.visitor.VoidVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,22 +12,25 @@ import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
-import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
-import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
+import sa.com.cloudsolutions.antikythera.generator.Antikythera;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
-import java.util.Map;
+import java.io.IOException;
+import java.util.Optional;
+
 
 public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
 
     CompilationUnit cu;
     SpringEvaluator evaluator;
+    UnitTestGenerator generator;
 
     public ServicesParser(String cls) {
         this.cu = AntikytheraRunTime.getCompilationUnit(cls);
@@ -36,11 +38,15 @@ public class ServicesParser {
             throw new AntikytheraException("Class not found: " + cls);
         }
         evaluator = new SpringEvaluator(cls);
-        evaluator.addGenerator(new UnitTestGenerator());
+        generator = new UnitTestGenerator();
+        evaluator.addGenerator(generator);
 
+        CompilationUnit testClass = generator.getCompilationUnit();
+        testClass.setPackageDeclaration(cu.getPackageDeclaration().orElse(null));
+        testClass.addClass(AbstractCompiler.getPublicType(cu).getNameAsString() + "Test");
     }
 
-    public void start() {
+    public void start() throws IOException {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
@@ -51,9 +57,10 @@ public class ServicesParser {
             });
             solver.dfs();
         }
+        writeFiles();
     }
 
-    public void start(String method) {
+    public void start(String method) throws IOException {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
@@ -77,22 +84,18 @@ public class ServicesParser {
             }
         }, null);
 
-        autoWire();
+        writeFiles();
     }
 
-    private void autoWire() {
-        for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
-            CompilationUnit cu = entry.getValue();
-            for (TypeDeclaration<?> decl : cu.getTypes()) {
-                decl.findAll(FieldDeclaration.class).forEach(fd -> {
-                    fd.getAnnotationByName("Autowired").ifPresent(ann -> {
-                        System.out.println("Autowired found: " + fd.getVariable(0).getNameAsString());
-                    });
-                });
-            }
-        }
-    }
+    private void writeFiles() throws IOException {
+        Optional<PackageDeclaration> pd = cu.getPackageDeclaration();
+        String packageName = pd.isPresent() ? pd.get().getNameAsString() : "";
 
+        Antikythera.getInstance().writeFilesToTest(
+            packageName, AbstractCompiler.getPublicType(cu).getNameAsString() + "Test.java",
+            generator.toString());
+
+    }
 
     private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
         evaluator.setArgumentGenerator(gen);
