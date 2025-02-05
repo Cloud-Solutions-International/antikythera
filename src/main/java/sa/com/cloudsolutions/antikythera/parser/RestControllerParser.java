@@ -44,7 +44,6 @@ import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends ClassProcessor {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-    private final File controllers;
 
     /**
      * Maintain stats of the controllers and methods parsed
@@ -57,11 +56,11 @@ public class RestControllerParser extends ClassProcessor {
     /**
      * Creates a new RestControllerParser
      *
-     * @param controllers either a folder containing many controllers or a single controller
+     * @param controller either a folder containing many controllers or a single controller
      */
-    public RestControllerParser(File controllers) throws IOException {
+    public RestControllerParser(String controller) throws IOException {
         super();
-        this.controllers = controllers;
+        this.cu = AntikytheraRunTime.getCompilationUnit(controller);
 
         Path dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
 
@@ -73,45 +72,8 @@ public class RestControllerParser extends ClassProcessor {
 
     }
 
-    public void start() throws IOException, EvaluatorException {
-        processControllers(controllers);
-    }
-
-    /**
-     * Process the controllers in the given folder.
-     * If the path is a directory, it will process all the files in the directory.
-     * @param path the path in which to look for controllers
-     * @throws IOException if the file could not be read
-     * @throws EvaluatorException if the file could not be processed due to compilation related issues.
-     */
-    private void processControllers(File path) throws IOException, EvaluatorException {
-        current = path;
-        if (path.isDirectory()) {
-            for (File f : path.listFiles()) {
-                if(f.toString().contains(controllers.toString())) {
-                    new RestControllerParser(f).start();
-                    stats.controllers++;
-                }
-            }
-
-        } else {
-            parseController(path);
-        }
-    }
-
-    private void parseController(File path) throws IOException {
-        String absolutePath = path.getAbsolutePath();
-        logger.info(absolutePath);
-
-        if (shouldSkip(AbstractCompiler.absolutePathToClassName(absolutePath))) {
-            return;
-        }
-
-        compile(AbstractCompiler.classToPath(
-                AbstractCompiler.absolutePathToClassName(absolutePath)
-        ));
-
-        if (cu.getPackageDeclaration().isPresent()) {
+    public void start() throws EvaluatorException, IOException {
+        if(cu != null && cu.getPackageDeclaration().isPresent()) {
             processRestController(cu.getPackageDeclaration().get());
         }
     }
