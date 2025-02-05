@@ -18,7 +18,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.generator.Antikythera;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.io.IOException;
@@ -57,6 +56,7 @@ public class ServicesParser {
             });
             solver.dfs();
         }
+        generator.addBeforeClass();
         writeFiles();
     }
 
@@ -83,7 +83,7 @@ public class ServicesParser {
                 super.visit(md, arg);
             }
         }, null);
-
+        generator.addBeforeClass();
         writeFiles();
     }
 
@@ -93,7 +93,7 @@ public class ServicesParser {
 
         Antikythera.getInstance().writeFilesToTest(
             packageName, AbstractCompiler.getPublicType(cu).getNameAsString() + "Test.java",
-            generator.toString());
+            generator.getCompilationUnit().toString());
 
     }
 

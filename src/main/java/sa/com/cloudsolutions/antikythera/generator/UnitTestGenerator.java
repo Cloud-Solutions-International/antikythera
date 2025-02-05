@@ -7,6 +7,9 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.util.List;
 import java.util.Map;
@@ -14,17 +17,13 @@ import java.util.Map;
 public class UnitTestGenerator extends TestGenerator {
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse response) {
+        addBeforeClass();
         System.out.println("Creating tests for " + md.getNameAsString());
     }
 
     @Override
     public void setCommonPath(String commonPath) {
 
-    }
-
-    @Override
-    public CompilationUnit getCompilationUnit() {
-        return null;
     }
 
     @Override
@@ -49,12 +48,19 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void mockFields() {
+        TypeDeclaration<?> t = gen.getType(0);
+
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
             for (TypeDeclaration<?> decl : cu.getTypes()) {
                 decl.findAll(FieldDeclaration.class).forEach(fd -> {
                     fd.getAnnotationByName("Autowired").ifPresent(ann -> {
-                        System.out.println("Autowired found: " + fd.getVariable(0).getNameAsString());
+                        FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                        field.addAnnotation("MockBean");
+                        ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                        if (wrapper != null) {
+                            gen.addImport(wrapper.getImport());
+                        }
                     });
                 });
             }
