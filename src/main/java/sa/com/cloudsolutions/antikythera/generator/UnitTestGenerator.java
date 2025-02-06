@@ -18,6 +18,7 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse response) {
         addBeforeClass();
+        gen.getType(0).addMember(buildTestMethod(md));
         System.out.println("Creating tests for " + md.getNameAsString());
     }
 
@@ -49,7 +50,7 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void mockFields() {
         TypeDeclaration<?> t = gen.getType(0);
-
+        gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
             for (TypeDeclaration<?> decl : cu.getTypes()) {

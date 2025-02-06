@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -455,9 +454,9 @@ public class SpringTestGenerator extends  TestGenerator {
         getBody(testMethod).addStatement(variableDeclarationExpr);
     }
 
-
+    @Override
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
-        MethodDeclaration testMethod = new MethodDeclaration();
+        MethodDeclaration testMethod = super.buildTestMethod(md);
 
         NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
         testCaseTypeAnnotation.setName("TestCaseType");
@@ -466,24 +465,8 @@ public class SpringTestGenerator extends  TestGenerator {
         testMethod.addAnnotation("Test");
         testMethod.addThrownException(JsonProcessingException.class);
 
-
-        md.findAncestor(TypeDeclaration.class).ifPresent(c ->
-        {
-            String comment = String.format("Method under test: %s.%s()\nArgument generator : %s\n",
-                    c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
-            testMethod.setJavadocComment(comment);
-        });
-
-        testMethod.setName(createTestName(md));
-
-        BlockStmt body = new BlockStmt();
-
-        testMethod.setType(new VoidType());
-
-        testMethod.setBody(body);
         return testMethod;
     }
-
 
     /**
      * Given an annotation for a method in a controller find the full path in the url

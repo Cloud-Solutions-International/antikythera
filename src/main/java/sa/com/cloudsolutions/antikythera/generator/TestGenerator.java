@@ -1,8 +1,13 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 
 import java.util.HashSet;
@@ -56,10 +61,30 @@ public abstract class TestGenerator {
      * An exit point is when the evaluator runs into a return statement or the last statement.
      * Another way in which a function can exit is when an exception is raised or thrown. In all
      * those scenarios, the evaluator will call this method to generate the tests.
-     * @param md
-     * @param response
+     * @param md the method being test
+     * @param response REST API response if this is a controller method
      */
     public abstract void createTests(MethodDeclaration md, ControllerResponse response);
+
+    MethodDeclaration buildTestMethod(MethodDeclaration md) {
+        MethodDeclaration testMethod = new MethodDeclaration();
+
+        md.findAncestor(TypeDeclaration.class).ifPresent(c ->
+        {
+            String comment = String.format("Method under test: %s.%s()\nArgument generator : %s\n",
+                    c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
+            testMethod.setJavadocComment(comment);
+        });
+
+        testMethod.setName(createTestName(md));
+
+        BlockStmt body = new BlockStmt();
+
+        testMethod.setType(new VoidType());
+
+        testMethod.setBody(body);
+        return testMethod;
+    }
 
     /**
      * The common path represents the path declared in the RestController.
