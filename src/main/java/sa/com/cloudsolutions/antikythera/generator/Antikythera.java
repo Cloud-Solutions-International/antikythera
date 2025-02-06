@@ -236,7 +236,7 @@ public class Antikythera {
 
     }
 
-    private void generateUnitTests() {
+    private void generateUnitTests() throws IOException {
         for (String service : services) {
             String[] parts = service.split("#");
             String servicesCleaned = parts[0];

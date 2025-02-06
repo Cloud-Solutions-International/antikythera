@@ -24,7 +24,7 @@ import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.util.Map;
 
-public class ServicesParser {
+public class ServicesParser extends  DepsolvingParser{
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
 
     CompilationUnit cu;
@@ -38,46 +38,6 @@ public class ServicesParser {
         evaluator = new SpringEvaluator(cls);
         evaluator.addGenerator(new UnitTestGenerator());
 
-    }
-
-    public void start() {
-        for(TypeDeclaration<?> decl : cu.getTypes()) {
-            DepSolver solver = DepSolver.createSolver();
-            decl.findAll(MethodDeclaration.class).forEach(md -> {
-                if (!md.isPrivate()) {
-                    Graph.createGraphNode(md);
-
-                }
-            });
-            solver.dfs();
-        }
-    }
-
-    public void start(String method) {
-        for(TypeDeclaration<?> decl : cu.getTypes()) {
-            DepSolver solver = DepSolver.createSolver();
-            decl.findAll(MethodDeclaration.class).forEach(md -> {
-                if (!md.isPrivate() && md.getNameAsString().equals(method)) {
-                    Graph.createGraphNode(md);
-                }
-            });
-            solver.dfs();
-        }
-        
-        cu.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodDeclaration md, Void arg) {
-                /*
-                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
-                 */
-                if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md, new NullArgumentGenerator());
-                }
-                super.visit(md, arg);
-            }
-        }, null);
-
-        autoWire();
     }
 
     private void autoWire() {
@@ -94,7 +54,7 @@ public class ServicesParser {
     }
 
 
-    private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
         evaluator.setArgumentGenerator(gen);
         evaluator.reset();
         evaluator.resetColors();
@@ -116,5 +76,4 @@ public class ServicesParser {
     private boolean checkEligible(MethodDeclaration md) {
         return !md.isPublic();
     }
-
 }

@@ -22,6 +22,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
+import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -617,6 +618,20 @@ public class Resolver {
             }
             else {
                 ImportUtils.addImport(node, arg.asNameExpr().getNameAsString());
+            }
+        }
+    }
+
+    public static void resolveReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
+        TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
+        Expression expression = returnStmt.getExpression().orElse(null);
+        if (expression != null && from != null && expression.isObjectCreationExpr()) {
+            ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+            if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+                    // todo finish this off
+                    //solveTypeDependencies(from, typeArg);
+                }
             }
         }
     }
