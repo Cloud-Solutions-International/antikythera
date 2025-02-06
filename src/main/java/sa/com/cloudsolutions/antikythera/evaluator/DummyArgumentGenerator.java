@@ -11,10 +11,9 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
 
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
-        String paramString = String.valueOf(param);
-        Variable v = null;
+        Variable v;
 
-        if (paramString.startsWith("@RequestBody")) {
+        if (param.getAnnotationByName("RequestBody").isPresent()) {
             /*
              * Request body on the other hand will be more complex and will most likely be a DTO.
              */
@@ -32,7 +31,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         AntikytheraRunTime.push(v);
     }
 
-    private Variable mockRequestBody(Parameter param) throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+    private Variable mockRequestBody(Parameter param) throws ReflectiveOperationException {
         Variable v;
         Type t = param.getType();
 
@@ -64,7 +63,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         return v;
     }
 
-    public Variable mockParameter(Parameter param) {
+    protected Variable mockParameter(Parameter param) {
         return new Variable(switch (param.getType().asString()) {
             case "Boolean", "boolean" -> false;
             case "float", "Float", "double", "Double" -> 0.0;

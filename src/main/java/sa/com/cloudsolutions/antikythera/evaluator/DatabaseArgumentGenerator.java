@@ -28,8 +28,7 @@ public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
      *              this represents a parameter in the controller's method signature.
      * @return a variable that holds a suitable value for the parameter.
      */
-    @Override
-    public Variable mockParameter(Parameter param) {
+    protected Variable mockParameter(Parameter param) {
         Variable q = null;
         for(int i = 0 ; i < query.getMethodParameters().size() && q == null; i++) {
             QueryMethodArgument arg = query.getMethodArguments().get(i);

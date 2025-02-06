@@ -3,10 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.body.Parameter;
 
 public class MockArgumentGenerator extends ArgumentGenerator {
-    @Override
-    public Variable mockParameter(Parameter param) {
-        return null;
-    }
 
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
