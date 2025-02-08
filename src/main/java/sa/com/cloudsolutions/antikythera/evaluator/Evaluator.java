@@ -15,6 +15,7 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
 import com.github.javaparser.ast.stmt.WhileStmt;
+import org.aspectj.weaver.ast.Call;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -813,7 +814,7 @@ public class Evaluator {
             return null;
         }
 
-        LinkedList<Expression> chain = findScopeChain(methodCall);
+        LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
             return executeLocalMethod(methodCall);
@@ -1080,12 +1081,14 @@ public class Evaluator {
              * At this point we are searching for the method call in the current class. For example it
              * maybe a getter or setter that has been defined through lombok annotations.
              */
-            ClassOrInterfaceDeclaration c = cdecl.get();
-            Optional<MethodDeclaration> mdecl = c.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(wrapper, cdecl.get());
+
             if (mdecl.isPresent()) {
-                return executeMethod(mdecl.get());
+                return executeMethod(mdecl.get().getCallableDeclaration());
             }
             else {
+                ClassOrInterfaceDeclaration c = cdecl.get();
                 if (methodCall.getNameAsString().startsWith("get") && (
                         c.getAnnotationByName("Data").isPresent()
                                 || c.getAnnotationByName("Getter").isPresent())) {
