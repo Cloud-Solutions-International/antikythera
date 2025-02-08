@@ -13,6 +13,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 
+import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -78,7 +79,7 @@ public class ServicesParser {
                  * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
                  */
                 if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md, new NullArgumentGenerator());
+                    evaluateMethod(md, new DummyArgumentGenerator());
                 }
                 super.visit(md, arg);
             }

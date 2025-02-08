@@ -1829,6 +1829,10 @@ public class Evaluator {
 
         return hashCode() + " : " + getClassName();
     }
+
+    CompilationUnit getCompilationUnit() {
+        return cu;
+    }
 }
 
 class NumericComparator {
@@ -1854,4 +1858,5 @@ class NumericComparator {
             throw new IllegalArgumentException("Cannot compare " + left + " and " + right);
         }
     }
+
 }

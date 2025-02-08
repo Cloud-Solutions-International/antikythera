@@ -1,10 +1,14 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+
+import javax.swing.*;
+import java.util.Optional;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
@@ -70,7 +74,26 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             case "Integer", "int" -> 0;
             case "Long", "long" -> -100L;
             case "String" -> "Ibuprofen";
-            default -> "0";
+            default -> complexType(param);
         });
+    }
+
+    private Object complexType(Parameter param) {
+        Optional<CompilationUnit> cu = param.findCompilationUnit();
+        if (cu.isPresent()) {
+            String fullClassName = AbstractCompiler.findFullyQualifiedName(cu.get(), param.getType().asString());
+            SpringEvaluator o = new SpringEvaluator(fullClassName);
+            if (o.getCompilationUnit() != null) {
+                return o;
+            }
+            try {
+                Class<?> clazz = Class.forName(fullClassName);
+                return clazz.newInstance();
+            } catch (ReflectiveOperationException e) {
+                logger.warn("Could not find class {}", fullClassName);
+            }
+        }
+
+        return "0";
     }
 }
