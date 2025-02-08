@@ -235,7 +235,7 @@ public class Antikythera {
         antk.generateUnitTests();
     }
 
-    private void preProcess() throws IOException, XmlPullParserException {
+    public void preProcess() throws IOException, XmlPullParserException {
         CopyUtils.createMavenProjectStructure(basePackage, outputPath);
         copyBaseFiles(outputPath);
 
