@@ -82,15 +82,23 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         Optional<CompilationUnit> cu = param.findCompilationUnit();
         if (cu.isPresent()) {
             String fullClassName = AbstractCompiler.findFullyQualifiedName(cu.get(), param.getType().asString());
-            SpringEvaluator o = new SpringEvaluator(fullClassName);
-            if (o.getCompilationUnit() != null) {
-                return o;
-            }
-            try {
-                Class<?> clazz = Class.forName(fullClassName);
-                return clazz.newInstance();
-            } catch (ReflectiveOperationException e) {
-                logger.warn("Could not find class {}", fullClassName);
+            if (fullClassName != null) {
+                SpringEvaluator o = new SpringEvaluator(fullClassName);
+                if (o.getCompilationUnit() != null) {
+                    return o;
+                }
+                try {
+                    Variable v;
+                    if (fullClassName.startsWith("java.util")) {
+                        v = Reflect.variableFactory(fullClassName);
+                    } else {
+                        Class<?> clazz = Class.forName(fullClassName);
+                        v = new Variable(clazz.newInstance());
+                    }
+                    return v.getValue();
+                } catch (ReflectiveOperationException e) {
+                    logger.warn("Could not instantiate {}", fullClassName);
+                }
             }
         }
 
