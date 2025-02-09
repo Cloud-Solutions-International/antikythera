@@ -2,19 +2,30 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+
+import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSpringGenerator {
+    @BeforeAll
+    static void beforeClass() throws IOException {
+        Settings.loadConfigMap();
+        AbstractCompiler.reset();
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"", "PathVariable", "NotRelevant"})
@@ -133,16 +144,20 @@ class TestSpringGenerator {
             "String, med, Ibuprofen",
             "Boolean, flag, false",
             "int, number, 0",
-            "dto, dto, 0",
+            "java.util.List, dto, []",
     })
     void handleURIVariablesTestQueryString(String paramType, String paramName, String paramValue) throws ReflectiveOperationException {
         // Arrange
+        CompilationUnit cu = new CompilationUnit();
+        cu.addImport("java.util.List");
+        ClassOrInterfaceDeclaration cdecl = cu.addClass("TestController");
         MethodDeclaration md = new MethodDeclaration();
         Parameter param = new Parameter();
         param.setType(paramType);
         param.setName(paramName);
         param.addAnnotation("RequestParam");
         md.addParameter(param);
+        cdecl.addMember(md);
 
         ControllerRequest request = new ControllerRequest();
         request.setPath("/api/test/");

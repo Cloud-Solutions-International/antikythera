@@ -1,33 +1,21 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import javax.swing.*;
-import java.util.Optional;
-
 public class DummyArgumentGenerator extends ArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
 
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
-        Variable v;
-
-        if (param.getAnnotationByName("RequestBody").isPresent()) {
-            /*
-             * Request body on the other hand will be more complex and will most likely be a DTO.
-             */
-            v = mockRequestBody(param);
-        } else {
-            /*
-             * Request parameters are typically strings or numbers or booleans.
-             */
-            v = mockParameter(param);
+        Variable v = mockParameter(param);
+        if (v.getValue() == null) {
+            v = mockNonPrimitiveParameter(param);
         }
+
         /*
          * Pushed to be popped later in the callee
          */
@@ -35,8 +23,8 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         AntikytheraRunTime.push(v);
     }
 
-    private Variable mockRequestBody(Parameter param) throws ReflectiveOperationException {
-        Variable v;
+    private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
+        Variable v = null;
         Type t = param.getType();
 
         if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
@@ -61,8 +49,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
                 v = new Variable(o);
             }
-        } else {
-            v = mockParameter(param);
         }
         return v;
     }
@@ -74,34 +60,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             case "Integer", "int" -> 0;
             case "Long", "long" -> -100L;
             case "String" -> "Ibuprofen";
-            default -> complexType(param);
+            default -> null;
         });
-    }
-
-    private Object complexType(Parameter param) {
-        Optional<CompilationUnit> cu = param.findCompilationUnit();
-        if (cu.isPresent()) {
-            String fullClassName = AbstractCompiler.findFullyQualifiedName(cu.get(), param.getType().asString());
-            if (fullClassName != null) {
-                SpringEvaluator o = new SpringEvaluator(fullClassName);
-                if (o.getCompilationUnit() != null) {
-                    return o;
-                }
-                try {
-                    Variable v;
-                    if (fullClassName.startsWith("java.util")) {
-                        v = Reflect.variableFactory(fullClassName);
-                    } else {
-                        Class<?> clazz = Class.forName(fullClassName);
-                        v = new Variable(clazz.newInstance());
-                    }
-                    return v.getValue();
-                } catch (ReflectiveOperationException e) {
-                    logger.warn("Could not instantiate {}", fullClassName);
-                }
-            }
-        }
-
-        return "0";
     }
 }

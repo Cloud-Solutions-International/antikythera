@@ -320,7 +320,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
-    public void identifyFieldDeclarations(VariableDeclarator field) throws IOException, AntikytheraException, ReflectiveOperationException {
+    public void identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
         super.identifyFieldDeclarations(field);
 
         if (field.getType().isClassOrInterfaceType()) {
@@ -340,8 +340,7 @@ public class SpringEvaluator extends Evaluator {
             return;
         }
 
-        String className = t.resolve().describe();
-
+        String className = AbstractCompiler.findFullyQualifiedName(variable.findCompilationUnit().get(), shortName);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);

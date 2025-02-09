@@ -1279,17 +1279,17 @@ public class Evaluator {
         return null;
     }
 
-    void identifyFieldDeclarations(VariableDeclarator variable) throws IOException, ReflectiveOperationException {
+    void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (variable.getType().isClassOrInterfaceType()) {
             Type t = variable.getType().asClassOrInterfaceType();
-            String resolvedClass = t.resolve().describe();
+            String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
 
             if(finches.get(resolvedClass) != null) {
                 Variable v = new Variable(t);
                 v.setValue(finches.get(resolvedClass));
                 fields.put(variable.getNameAsString(), v);
             }
-            else if (resolvedClass.startsWith("java")) {
+            else if (resolvedClass != null && resolvedClass.startsWith("java")) {
                 setupPrimitiveOrBoxedField(variable, t);
             }
             else {
