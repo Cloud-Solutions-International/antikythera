@@ -1282,23 +1282,22 @@ public class Evaluator {
     void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (variable.getType().isClassOrInterfaceType()) {
             Type t = variable.getType().asClassOrInterfaceType();
-            String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
+            for (ImportWrapper imp : AbstractCompiler.findImport(cu, t)) {
+                String resolvedClass = imp.getNameAsString();
 
-            if(finches.get(resolvedClass) != null) {
-                Variable v = new Variable(t);
-                v.setValue(finches.get(resolvedClass));
-                fields.put(variable.getNameAsString(), v);
-            }
-            else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-                setupPrimitiveOrBoxedField(variable, t);
-            }
-            else {
-                CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                if (compilationUnit != null) {
-                    resolveFieldRepresentedByCode(variable, resolvedClass);
-                }
-                else {
-                    logger.debug("Unsolved {}" , resolvedClass);
+                if (finches.get(resolvedClass) != null) {
+                    Variable v = new Variable(t);
+                    v.setValue(finches.get(resolvedClass));
+                    fields.put(variable.getNameAsString(), v);
+                } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
+                    setupPrimitiveOrBoxedField(variable, t);
+                } else {
+                    CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                    if (compilationUnit != null) {
+                        resolveFieldRepresentedByCode(variable, resolvedClass);
+                    } else {
+                        logger.debug("Unsolved {}", resolvedClass);
+                    }
                 }
             }
         }
@@ -1813,23 +1812,6 @@ public class Evaluator {
 
     @Override
     public String toString() {
-        if (cu != null) {
-            Optional<MethodDeclaration> md = cu.findFirst(
-                    MethodDeclaration.class, m -> m.getNameAsString().equals("toString"));
-            if (md.isPresent()) {
-
-                try {
-                    Variable saved = returnValue;
-                    executeMethod(md.get());
-                    String result = returnValue.getValue().toString();
-                    returnValue = saved;
-                    return result;
-                } catch (AntikytheraException | ReflectiveOperationException e) {
-                    return hashCode() + " : " + getClassName() + " could not execute toString()";
-                }
-            }
-        }
-
         return hashCode() + " : " + getClassName();
     }
 
