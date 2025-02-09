@@ -64,8 +64,8 @@ class TestReturnValue extends TestHelper {
 
         protected ReturnValueEval() throws IOException, AntikytheraException {
             cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
-            evaluator = new Evaluator("");
-            evaluator.setupFields(cu);
+            evaluator = new Evaluator(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
+            evaluator.setupFields();
         }
 
     }
