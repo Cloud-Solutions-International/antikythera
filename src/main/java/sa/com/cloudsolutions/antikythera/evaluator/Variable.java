@@ -96,7 +96,7 @@ public class Variable {
 
     public String toString() {
         try {
-             return value == null ? "null" : value.toString();
+             return value == null ? "null" : value instanceof Evaluator ? "Evaluator" : value.toString();
         } catch (Exception e) {
              return "not evaluated";
         }

@@ -940,7 +940,7 @@ public class Evaluator {
                 }
                 else {
                     Evaluator eval = createEvaluator(fullyQualifiedName);
-                    eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
+                    eval.setupFields();
                     v = new Variable(eval);
                 }
             }
@@ -1281,22 +1281,28 @@ public class Evaluator {
 
     void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (variable.getType().isClassOrInterfaceType()) {
-            Type t = variable.getType().asClassOrInterfaceType();
-            for (ImportWrapper imp : AbstractCompiler.findImport(cu, t)) {
-                String resolvedClass = imp.getNameAsString();
+            ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+            if (imports.isEmpty()) {
+                setupPrimitiveOrBoxedField(variable, t);
+            }
+            else {
+                for (ImportWrapper imp : imports) {
+                    String resolvedClass = imp.getNameAsString();
 
-                if (finches.get(resolvedClass) != null) {
-                    Variable v = new Variable(t);
-                    v.setValue(finches.get(resolvedClass));
-                    fields.put(variable.getNameAsString(), v);
-                } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-                    setupPrimitiveOrBoxedField(variable, t);
-                } else {
-                    CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                    if (compilationUnit != null) {
-                        resolveFieldRepresentedByCode(variable, resolvedClass);
+                    if (finches.get(resolvedClass) != null) {
+                        Variable v = new Variable(t);
+                        v.setValue(finches.get(resolvedClass));
+                        fields.put(variable.getNameAsString(), v);
+                    } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
+                        setupPrimitiveOrBoxedField(variable, t);
                     } else {
-                        logger.debug("Unsolved {}", resolvedClass);
+                        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                        if (compilationUnit != null) {
+                            resolveFieldRepresentedByCode(variable, resolvedClass);
+                        } else {
+                            logger.debug("Unsolved {}", resolvedClass);
+                        }
                     }
                 }
             }
@@ -1331,9 +1337,8 @@ public class Evaluator {
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
-                        CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
                         Evaluator eval = createEvaluator(cname);
-                        eval.setupFields(dep);
+                        eval.setupFields();
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1752,10 +1757,6 @@ public class Evaluator {
         }
         returnFrom = stmt.getParentNode().orElse(null);
         return returnValue;
-    }
-
-    public void setupFields(CompilationUnit cu)  {
-        cu.accept(new ControllerFieldVisitor(), null);
     }
 
     public void setupFields()  {
