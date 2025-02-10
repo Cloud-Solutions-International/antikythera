@@ -127,7 +127,7 @@ public class SpringEvaluator extends Evaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         branching.clear();
         md.getParentNode().ifPresent(p -> {
-            if (p instanceof ClassOrInterfaceDeclaration cdecl && cdecl.isAnnotationPresent("RestController")) {
+            if (p instanceof ClassOrInterfaceDeclaration cdecl) {
                 currentMethod = md;
             }
         });
