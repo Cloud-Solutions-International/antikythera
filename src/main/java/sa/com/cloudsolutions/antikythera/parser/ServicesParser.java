@@ -40,6 +40,7 @@ public class ServicesParser {
         evaluator = new SpringEvaluator(cls);
         generator = new UnitTestGenerator();
         evaluator.addGenerator(generator);
+        evaluator.setOnTest(true);
 
         CompilationUnit testClass = generator.getCompilationUnit();
         testClass.setPackageDeclaration(cu.getPackageDeclaration().orElse(null));
