@@ -14,7 +14,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
-import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
@@ -40,11 +39,14 @@ public class ServicesParser {
         evaluator = new SpringEvaluator(cls);
         generator = new UnitTestGenerator();
         evaluator.addGenerator(generator);
+
         evaluator.setOnTest(true);
 
         CompilationUnit testClass = generator.getCompilationUnit();
         testClass.setPackageDeclaration(cu.getPackageDeclaration().orElse(null));
         testClass.addClass(AbstractCompiler.getPublicType(cu).getNameAsString() + "Test");
+
+        generator.addBeforeClass();
     }
 
     public void start() throws IOException {

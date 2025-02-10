@@ -204,15 +204,6 @@ public class SpringTestGenerator extends  TestGenerator {
         httpWithBody(md, annotation, returnType, "makePost");
     }
 
-
-    private BlockStmt getBody(MethodDeclaration md) {
-        return md.getBody().orElseGet(() -> {
-            BlockStmt blockStmt = new BlockStmt();
-            md.setBody(blockStmt);
-            return blockStmt;
-        });
-    }
-
     private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
 
         Type returnType = resp.getType();
@@ -338,8 +329,8 @@ public class SpringTestGenerator extends  TestGenerator {
                     logger.warn("THIS testing path is not completed");
                 }
             } else {
-                List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
-                if (! IncompatibleReturnTypes.contains(returnType.toString()))
+                List<String> incompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
+                if (! incompatibleReturnTypes.contains(returnType.toString()))
                 {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                     if (respType.toString().equals("String")) {
@@ -462,7 +453,7 @@ public class SpringTestGenerator extends  TestGenerator {
         testCaseTypeAnnotation.setName("TestCaseType");
         testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
         testMethod.addAnnotation(testCaseTypeAnnotation);
-        testMethod.addAnnotation("Test");
+
         testMethod.addThrownException(JsonProcessingException.class);
 
         return testMethod;

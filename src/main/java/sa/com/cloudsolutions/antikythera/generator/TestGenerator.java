@@ -1,11 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
@@ -19,9 +17,9 @@ public abstract class TestGenerator {
     /**
      * The names have already been assigned to various tests.
      * Because of overloaded methods and the need to write multiple tests for a single end point
-     * we may end up with duplicate method names. To avoid that we add a suffix of the query
-     * string arguments to distinguish overloaded and a alphabetic suffix to identify multiple
-     * tests for the same method.
+     * we may end up with duplicate method names. To avoid that, query arguments are added as
+     * suffixes to the method name.
+     * When the same method can have multiple tests, an alphabetic suffix is added to the method name.
      */
     Set<String> testMethodNames = new HashSet<>();
 
@@ -61,7 +59,7 @@ public abstract class TestGenerator {
      * An exit point is when the evaluator runs into a return statement or the last statement.
      * Another way in which a function can exit is when an exception is raised or thrown. In all
      * those scenarios, the evaluator will call this method to generate the tests.
-     * @param md the method being test
+     * @param md the method being tested
      * @param response REST API response if this is a controller method
      */
     public abstract void createTests(MethodDeclaration md, ControllerResponse response);
@@ -71,7 +69,7 @@ public abstract class TestGenerator {
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
         {
-            String comment = String.format("Method under test: %s.%s()\nArgument generator : %s\n",
+            String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%n",
                     c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
             testMethod.setJavadocComment(comment);
         });
@@ -83,6 +81,7 @@ public abstract class TestGenerator {
         testMethod.setType(new VoidType());
 
         testMethod.setBody(body);
+        testMethod.addAnnotation("Test");
         return testMethod;
     }
 
@@ -123,5 +122,13 @@ public abstract class TestGenerator {
      */
     public void mockFields() {
 
+    }
+
+    protected BlockStmt getBody(MethodDeclaration md) {
+        return md.getBody().orElseGet(() -> {
+            BlockStmt blockStmt = new BlockStmt();
+            md.setBody(blockStmt);
+            return blockStmt;
+        });
     }
 }

@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -17,9 +19,23 @@ import java.util.Map;
 public class UnitTestGenerator extends TestGenerator {
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse response) {
-        addBeforeClass();
-        gen.getType(0).addMember(buildTestMethod(md));
-        System.out.println("Creating tests for " + md.getNameAsString());
+        MethodDeclaration testMethod = buildTestMethod(md);
+        gen.getType(0).addMember(testMethod);
+
+        createInstance(md, testMethod);
+    }
+
+    private void createInstance(MethodDeclaration md, MethodDeclaration testMethod) {
+        md.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
+            boolean matched = false;
+            for (ConstructorDeclaration cd : c.findAll(ConstructorDeclaration.class)) {
+                if (cd.getParameters().isEmpty()) {
+                    getBody(testMethod).addStatement(c.getNameAsString() + "cls = new " + c.getNameAsString() + "()");
+                    matched = true;
+                    break;
+                }
+            }
+        });
     }
 
     @Override

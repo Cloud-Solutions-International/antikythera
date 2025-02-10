@@ -127,7 +127,7 @@ public class SpringEvaluator extends Evaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         branching.clear();
         md.getParentNode().ifPresent(p -> {
-            if (p instanceof ClassOrInterfaceDeclaration cdecl) {
+            if (p instanceof ClassOrInterfaceDeclaration) {
                 currentMethod = md;
             }
         });
@@ -206,7 +206,7 @@ public class SpringEvaluator extends Evaluator {
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         if (! (e instanceof AntikytheraException ae)) {
             if (catching.isEmpty()) {
-                testForInternalServerError(null,
+                testForInternalError(null,
                         new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
                 throw new AUTException(e.getMessage());
             } else {
@@ -502,14 +502,14 @@ public class SpringEvaluator extends Evaluator {
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
-                testForInternalServerError(methodCall, eex);
+                testForInternalError(methodCall, eex);
                 throw eex   ;
             }
         }
         return null;
     }
 
-    private void testForInternalServerError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
+    private void testForInternalError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
         ControllerResponse controllerResponse = new ControllerResponse();
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
