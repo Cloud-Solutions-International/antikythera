@@ -470,7 +470,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
         {
-            String comment = String.format("Method under test: %s.%s()\nArgument generator : %s\n",
+            String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%n",
                     c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
             testMethod.setJavadocComment(comment);
         });
