@@ -69,7 +69,7 @@ public abstract class TestGenerator {
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
         {
-            String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%n",
+            String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%n@Author : Antikythera%n",
                     c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
             testMethod.setJavadocComment(comment);
         });
@@ -123,6 +123,7 @@ public abstract class TestGenerator {
     public void mockFields() {
 
     }
+
 
     protected BlockStmt getBody(MethodDeclaration md) {
         return md.getBody().orElseGet(() -> {
