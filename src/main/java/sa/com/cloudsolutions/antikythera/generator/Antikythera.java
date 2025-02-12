@@ -214,6 +214,11 @@ public class Antikythera {
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
         String filePath = outputPath + File.separator + SRC + File.separator + "test" + File.separator + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
+
+        writeFile(filePath, content);
+    }
+
+    public void writeFile(String filePath, String content) throws IOException {
         File file = new File(filePath);
         File parentDir = file.getParentFile();
         Files.createDirectories(parentDir.toPath());

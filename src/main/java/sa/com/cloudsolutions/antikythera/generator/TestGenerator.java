@@ -8,6 +8,7 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,7 +29,7 @@ public abstract class TestGenerator {
      * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
      *
      */
-    CompilationUnit gen = new CompilationUnit();
+    CompilationUnit gen;
 
     protected String createTestName(MethodDeclaration md) {
         StringBuilder paramNames = new StringBuilder();
@@ -69,7 +70,7 @@ public abstract class TestGenerator {
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
         {
-            String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%n@Author : Antikythera%n",
+            String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%nAuthor : Antikythera%n",
                     c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
             testMethod.setJavadocComment(comment);
         });
@@ -131,5 +132,8 @@ public abstract class TestGenerator {
             md.setBody(blockStmt);
             return blockStmt;
         });
+    }
+
+    public void save() throws IOException {
     }
 }

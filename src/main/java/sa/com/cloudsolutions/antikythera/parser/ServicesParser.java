@@ -37,7 +37,7 @@ public class ServicesParser {
             throw new AntikytheraException("Class not found: " + cls);
         }
         evaluator = new SpringEvaluator(cls);
-        generator = new UnitTestGenerator();
+        generator = new UnitTestGenerator(cu);
         evaluator.addGenerator(generator);
 
         evaluator.setOnTest(true);
@@ -92,13 +92,7 @@ public class ServicesParser {
     }
 
     private void writeFiles() throws IOException {
-        Optional<PackageDeclaration> pd = cu.getPackageDeclaration();
-        String packageName = pd.isPresent() ? pd.get().getNameAsString() : "";
-
-        Antikythera.getInstance().writeFilesToTest(
-            packageName, AbstractCompiler.getPublicType(cu).getNameAsString() + "Test.java",
-            generator.getCompilationUnit().toString());
-
+        generator.save();
     }
 
     private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {

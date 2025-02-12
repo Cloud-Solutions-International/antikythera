@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.github.javaparser.ast.CompilationUnit;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
+import javax.swing.*;
 import java.util.List;
 import java.util.Map;
 
@@ -96,6 +98,11 @@ public class SpringTestGenerator extends  TestGenerator {
      * The current state of the test generation. It will be one of the values above.
      */
     private int state = NULL_STATE;
+
+    public SpringTestGenerator() {
+        gen = new CompilationUnit();
+    }
+
     /**
      * Create tests based on the method declaration and return type
      * @param md the descriptor of the method for which we are about to write tests.
