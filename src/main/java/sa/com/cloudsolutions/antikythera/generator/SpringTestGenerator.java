@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
-import javax.swing.*;
 import java.util.List;
 import java.util.Map;
 
