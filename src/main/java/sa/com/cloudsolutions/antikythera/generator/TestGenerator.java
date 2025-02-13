@@ -30,7 +30,7 @@ public abstract class TestGenerator {
      *
      */
     CompilationUnit gen;
-    private Asserter asserter;
+    protected Asserter asserter;
 
     protected String createTestName(MethodDeclaration md) {
         StringBuilder paramNames = new StringBuilder();

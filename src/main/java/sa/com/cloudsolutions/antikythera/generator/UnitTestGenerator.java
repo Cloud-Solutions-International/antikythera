@@ -24,17 +24,23 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
     private final String filePath;
+    private CompilationUnit classUnderTest;
+    private MethodDeclaration methodUnderTest;
+    private MethodDeclaration testMethod;
 
     public UnitTestGenerator(CompilationUnit classUnderTest) {
         String packageDecl = classUnderTest.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
         String className = AbstractCompiler.getPublicType(classUnderTest).getNameAsString() + "Test";
+        this.classUnderTest = classUnderTest;
 
         filePath = basePath.replace("main","test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
@@ -77,19 +83,20 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse response) {
-        MethodDeclaration testMethod = buildTestMethod(md);
+        methodUnderTest = md;
+        testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
 
-        createInstance(md, testMethod);
-        mockArguments(md, testMethod);
-        invokeMethod(md, testMethod);
-        addAsserts(md, testMethod, response);
+        createInstance();
+        mockArguments();
+        invokeMethod();
+        addAsserts(response);
     }
 
-    private void createInstance(MethodDeclaration md, MethodDeclaration testMethod) {
-        md.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
+    private void createInstance() {
+        methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
             ConstructorDeclaration matched = null;
-            String className = md.findAncestor(TypeDeclaration.class).get().getNameAsString();
+            String className = methodUnderTest.findAncestor(TypeDeclaration.class).get().getNameAsString();
 
             for (ConstructorDeclaration cd : c.findAll(ConstructorDeclaration.class)) {
                 if (matched == null) {
@@ -116,9 +123,12 @@ public class UnitTestGenerator extends TestGenerator {
         });
     }
 
-    void mockArguments(MethodDeclaration md, MethodDeclaration testMethod) {
+    void mockArguments() {
         BlockStmt body = getBody(testMethod);
-        for(var param : md.getParameters()) {
+
+        for(var param : methodUnderTest.getParameters()) {
+            addClassImports(param.getType());
+
             String nameAsString = param.getNameAsString();
             Variable value = argumentGenerator.getArguments().get(nameAsString);
             if (value != null ) {
@@ -127,18 +137,24 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    void invokeMethod(MethodDeclaration md, MethodDeclaration testMethod) {
+    private void addClassImports(Type t) {
+        for (ImportWrapper wrapper : AbstractCompiler.findImport(classUnderTest, t)) {
+            gen.addImport(wrapper.getImport());
+        }
+    }
+
+    void invokeMethod() {
         BlockStmt body = getBody(testMethod);
         StringBuilder b = new StringBuilder();
 
-        Type t = md.getType();
+        Type t = methodUnderTest.getType();
         if (t != null) {
             b.append(t.asString() + " result = ");
         }
-        b.append("cls." + md.getNameAsString() + "(");
-        for (int i = 0 ; i < md.getParameters().size(); i++) {
-            b.append(md.getParameter(i).getNameAsString());
-            if (i < md.getParameters().size() - 1) {
+        b.append("cls." + methodUnderTest.getNameAsString() + "(");
+        for (int i = 0 ; i < methodUnderTest.getParameters().size(); i++) {
+            b.append(methodUnderTest.getParameter(i).getNameAsString());
+            if (i < methodUnderTest.getParameters().size() - 1) {
                 b.append(", ");
             }
         }
@@ -147,11 +163,12 @@ public class UnitTestGenerator extends TestGenerator {
         body.addStatement(b.toString());
     }
 
-    private void addAsserts(MethodDeclaration md, MethodDeclaration testMethod, ControllerResponse response) {
-        Type t = md.getType();
+    private void addAsserts(ControllerResponse response) {
+        Type t = methodUnderTest.getType();
         BlockStmt body = getBody(testMethod);
         if (t != null) {
-            body.addStatement("assertNotNull(result);");
+            addClassImports(t);
+            asserter.assertNotNull(body, "result");
         }
     }
 
@@ -183,17 +200,25 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void mockFields() {
         TypeDeclaration<?> t = gen.getType(0);
+        Set<Type> oldFields = new HashSet<>();
+        for (FieldDeclaration fd : t.getFields()) {
+            oldFields.add(fd.getElementType());
+        }
+
         gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
+        gen.addImport("org.mockito.Mockito");
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
             for (TypeDeclaration<?> decl : cu.getTypes()) {
                 decl.findAll(FieldDeclaration.class).forEach(fd -> {
                     fd.getAnnotationByName("Autowired").ifPresent(ann -> {
-                        FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                        field.addAnnotation("MockBean");
-                        ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
-                        if (wrapper != null) {
-                            gen.addImport(wrapper.getImport());
+                        if (!oldFields.contains(fd.getElementType())) {
+                            FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                            field.addAnnotation("MockBean");
+                            ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                            if (wrapper != null) {
+                                gen.addImport(wrapper.getImport());
+                            }
                         }
                     });
                 });
