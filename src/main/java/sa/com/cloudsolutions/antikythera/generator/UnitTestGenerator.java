@@ -32,7 +32,7 @@ import java.util.Set;
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
     private final String filePath;
-    private CompilationUnit classUnderTest;
+    private final CompilationUnit compilationUnitUnderTest;
 
     private MethodDeclaration testMethod;
 
@@ -40,7 +40,7 @@ public class UnitTestGenerator extends TestGenerator {
         String packageDecl = classUnderTest.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
         String className = AbstractCompiler.getPublicType(classUnderTest).getNameAsString() + "Test";
-        this.classUnderTest = classUnderTest;
+        this.compilationUnitUnderTest = classUnderTest;
 
         filePath = basePath.replace("main","test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
@@ -146,7 +146,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void addClassImports(Type t) {
-        for (ImportWrapper wrapper : AbstractCompiler.findImport(classUnderTest, t)) {
+        for (ImportWrapper wrapper : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
             gen.addImport(wrapper.getImport());
         }
     }

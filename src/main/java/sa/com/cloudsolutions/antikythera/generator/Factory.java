@@ -43,7 +43,7 @@ public class Factory {
             }
         }
         if (gen != null) {
-            if (Settings.getProperty("test_framework", String.class).orElse(null).equals("junit")) {
+            if ("junit".equals(Settings.getProperty("test_framework", String.class).orElse(null))) {
                 gen.setAsserter(new JunitAsserter());
             }
             else {
