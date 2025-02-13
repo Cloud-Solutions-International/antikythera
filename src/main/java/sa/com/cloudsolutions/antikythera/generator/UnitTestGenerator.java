@@ -132,7 +132,15 @@ public class UnitTestGenerator extends TestGenerator {
             String nameAsString = param.getNameAsString();
             Variable value = argumentGenerator.getArguments().get(nameAsString);
             if (value != null ) {
-                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = Mockito.mock(" + param.getTypeAsString() + ".class);");
+                Type t = param.getType();
+                if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                    body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                            " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
+                }
+                else {
+                    body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                            " = Mockito.mock(" + param.getTypeAsString() + ".class);");
+                }
             }
         }
     }
