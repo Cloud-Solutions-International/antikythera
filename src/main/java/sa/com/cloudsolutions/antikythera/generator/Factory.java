@@ -8,54 +8,63 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Factory {
-    private final Map<String, TestGenerator> unit = new HashMap<>();
-    private final Map<String, TestGenerator> integration = new HashMap<>();
-    private final Map<String, TestGenerator> api = new HashMap<>();
+    private static final Map<String, TestGenerator> unit = new HashMap<>();
+    private static final Map<String, TestGenerator> integration = new HashMap<>();
+    private static final Map<String, TestGenerator> api = new HashMap<>();
 
-    TestGenerator create(String type, CompilationUnit cu) {
+    public static TestGenerator create(String type, CompilationUnit cu) {
         String className = AbstractCompiler.getPublicType(cu).getFullyQualifiedName().orElse(null);
-
+        TestGenerator gen = null;
         if (type.equals("unit")) {
-            TestGenerator gen = unit.get(className);
+            gen = unit.get(className);
             if (gen != null) {
                 return gen;
             }
             else {
-                return createUnitTestGenerator(cu);
+                gen = createUnitTestGenerator(cu);
             }
         }
         else if(type.equals("integration")) {
-            TestGenerator gen = integration.get(cu);
+            gen = integration.get(cu);
             if (gen != null) {
                 return gen;
             }
             else {
-                return createIntegrationTestGenerator();
+                gen = createIntegrationTestGenerator();
             }
         }
         else {
-            TestGenerator gen = api.get(className);
+            gen = api.get(className);
             if (gen != null) {
                 return gen;
             }
             else {
-                return createApiTestGenerator(cu);
+                gen = createApiTestGenerator(cu);
             }
         }
+        if (gen != null) {
+            if (Settings.getProperty("test_framework", String.class).orElse(null).equals("junit")) {
+                gen.setAsserter(new JunitAsserter());
+            }
+            else {
+                gen.setAsserter(new TestNgAsserter());
+            }
+        }
+        return gen;
     }
 
-    private TestGenerator createIntegrationTestGenerator() {
+    private static TestGenerator createIntegrationTestGenerator() {
         return null;
     }
 
-    private TestGenerator createApiTestGenerator(CompilationUnit cu) {
+    private static TestGenerator createApiTestGenerator(CompilationUnit cu) {
         String className = AbstractCompiler.getPublicType(cu).getFullyQualifiedName().orElse(null);
         SpringTestGenerator gen = new SpringTestGenerator();
         api.put(className, gen);
         return gen;
     }
 
-    private TestGenerator createUnitTestGenerator(CompilationUnit cu) {
+    private static TestGenerator createUnitTestGenerator(CompilationUnit cu) {
         String className = AbstractCompiler.getPublicType(cu).getFullyQualifiedName().orElse(null);
         UnitTestGenerator gen = new UnitTestGenerator(cu);
         unit.put(className, gen);

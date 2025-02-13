@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.generator.Antikythera;
+import sa.com.cloudsolutions.antikythera.generator.Factory;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.io.IOException;
@@ -37,15 +38,11 @@ public class ServicesParser {
             throw new AntikytheraException("Class not found: " + cls);
         }
         evaluator = new SpringEvaluator(cls);
-        generator = new UnitTestGenerator(cu);
+        generator = (UnitTestGenerator) Factory.create("unit", cu);
         evaluator.addGenerator(generator);
 
         evaluator.setOnTest(true);
-
-        CompilationUnit testClass = generator.getCompilationUnit();
-        testClass.setPackageDeclaration(cu.getPackageDeclaration().orElse(null));
-        testClass.addClass(AbstractCompiler.getPublicType(cu).getNameAsString() + "Test");
-
+        generator.setupImports();
         generator.addBeforeClass();
     }
 

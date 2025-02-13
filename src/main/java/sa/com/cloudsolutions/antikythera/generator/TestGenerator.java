@@ -30,6 +30,7 @@ public abstract class TestGenerator {
      *
      */
     CompilationUnit gen;
+    private Asserter asserter;
 
     protected String createTestName(MethodDeclaration md) {
         StringBuilder paramNames = new StringBuilder();
@@ -135,5 +136,13 @@ public abstract class TestGenerator {
     }
 
     public void save() throws IOException {
+    }
+
+    public void setAsserter(Asserter asserter) {
+        this.asserter = asserter;
+    }
+
+    public void setupImports() {
+        asserter.setupImports(gen);
     }
 }
