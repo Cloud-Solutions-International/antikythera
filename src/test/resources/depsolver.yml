@@ -1,4 +1,4 @@
-# This file contains the configurations for Antikythera. You can use environment variables
+# This file contains the configurations for Antikythera depsolver. You can use environment variables
 # anywhere in this file. For example ${HOME} will be replaced with the value of the HOME
 # environment variable.
 
@@ -23,23 +23,4 @@ controllers: sa.com.cloudsolutions.controller
 # Path to output the generated test project
 output_path: /tmp/antikythera
 
-#
-# Dependencies configuration
-#
-dependencies:
-  # what should be done if a dependency cannot be found? options are log and exit
-  # if you don't have the jar files locally you may want to try the log option.
-  # not all dependencies need to be resolved to generate tests.
-  on_error: log
-#
-# use the database settings to connect and try out the queries extracted from JPARepository
-#
-database:
-  url: jdbc:oracle:thin:@//host:1521/service_name
-  user: C##xstrm
-  password: oracle_pwd
-  schema: your_schema
-  run_queries: false
-
-log_level: DEBUG
-
+methods: sa.com.cloudsolutions.controller.ComplexController#list
