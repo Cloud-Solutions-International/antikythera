@@ -131,10 +131,12 @@ class TestSpringGenerator {
         request.setPath("/api/test/{param1}");
 
         SpringTestGenerator generator = new SpringTestGenerator();
+        generator.createTests(md, new ControllerResponse());
+
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
         argumentGenerator.generateArgument(param);
         generator.setArgumentGenerator(argumentGenerator);
-        generator.handleURIVariables(md, request);
+        generator.handleURIVariables(request);
 
         assertEquals("/api/test/" + paramValue, request.getPath());
     }
@@ -163,11 +165,13 @@ class TestSpringGenerator {
         request.setPath("/api/test/");
 
         SpringTestGenerator generator = new SpringTestGenerator();
+        generator.createTests(md, new ControllerResponse());
+
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
         generator.setArgumentGenerator(argumentGenerator);
         argumentGenerator.generateArgument(param);
 
-        generator.handleURIVariables(md, request);
+        generator.handleURIVariables(request);
 
         assertEquals("/api/test/", request.getPath());
         assertTrue(request.getQueryParameters().containsKey(paramName));

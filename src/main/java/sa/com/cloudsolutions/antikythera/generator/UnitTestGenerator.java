@@ -33,7 +33,7 @@ public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
     private final String filePath;
     private CompilationUnit classUnderTest;
-    private MethodDeclaration methodUnderTest;
+
     private MethodDeclaration testMethod;
 
     public UnitTestGenerator(CompilationUnit classUnderTest) {

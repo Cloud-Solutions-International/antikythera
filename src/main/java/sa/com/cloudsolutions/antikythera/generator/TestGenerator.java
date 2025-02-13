@@ -31,6 +31,7 @@ public abstract class TestGenerator {
      */
     CompilationUnit gen;
     protected Asserter asserter;
+    protected MethodDeclaration methodUnderTest;
 
     protected String createTestName(MethodDeclaration md) {
         StringBuilder paramNames = new StringBuilder();
