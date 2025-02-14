@@ -65,8 +65,4 @@ public class ControllerResponse {
     public void setBody(Variable body) {
         this.body = body;
     }
-
-    public static Map<String, Integer> getStatusCodes() {
-        return statusCodes;
-    }
 }

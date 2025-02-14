@@ -9,11 +9,15 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.depsolver.DTOHandler;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -35,12 +39,14 @@ public class UnitTestGenerator extends TestGenerator {
     private final CompilationUnit compilationUnitUnderTest;
 
     private MethodDeclaration testMethod;
+    private boolean autoWired;
+    private String instanceName;
 
-    public UnitTestGenerator(CompilationUnit classUnderTest) {
-        String packageDecl = classUnderTest.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
+    public UnitTestGenerator(CompilationUnit cu) {
+        String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
-        String className = AbstractCompiler.getPublicType(classUnderTest).getNameAsString() + "Test";
-        this.compilationUnitUnderTest = classUnderTest;
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
+        this.compilationUnitUnderTest = cu;
 
         filePath = basePath.replace("main","test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
@@ -95,32 +101,80 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
-            ConstructorDeclaration matched = null;
-            String className = methodUnderTest.findAncestor(TypeDeclaration.class).get().getNameAsString();
-
-            for (ConstructorDeclaration cd : c.findAll(ConstructorDeclaration.class)) {
-                if (matched == null) {
-                    matched = cd;
-                }
-                if (matched.getParameters().size() > cd.getParameters().size()) {
-                    matched = cd;
-                }
-            }
-            if (matched != null) {
-                StringBuilder b = new StringBuilder(className + " cls " + " = new " + className + "(");
-                for (int i = 0; i < matched.getParameters().size(); i++) {
-                    b.append("null");
-                    if (i < matched.getParameters().size() - 1) {
-                        b.append(", ");
-                    }
-                }
-                b.append(");");
-                getBody(testMethod).addStatement(b.toString());
+            if (c.getAnnotationByName("Service").isPresent()) {
+                autoWireClass(c);
             }
             else {
-                getBody(testMethod).addStatement(className + " cls = new " + className + "();");
+                instantiateClass(c);
             }
         });
+    }
+
+    private void instantiateClass(ClassOrInterfaceDeclaration classUnderTest) {
+
+        ConstructorDeclaration matched = null;
+        String className = classUnderTest.getNameAsString();
+
+        for (ConstructorDeclaration cd : classUnderTest.findAll(ConstructorDeclaration.class)) {
+            if (matched == null) {
+                matched = cd;
+            }
+            if (matched.getParameters().size() > cd.getParameters().size()) {
+                matched = cd;
+            }
+        }
+        if (matched != null) {
+            StringBuilder b = new StringBuilder(className + " cls " + " = new " + className + "(");
+            for (int i = 0; i < matched.getParameters().size(); i++) {
+                b.append("null");
+                if (i < matched.getParameters().size() - 1) {
+                    b.append(", ");
+                }
+            }
+            b.append(");");
+            getBody(testMethod).addStatement(b.toString());
+        } else {
+            getBody(testMethod).addStatement(className + " cls = new " + className + "();");
+        }
+        instanceName = "cls";
+    }
+
+    private void autoWireClass(ClassOrInterfaceDeclaration classUnderTest) {
+        ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+
+        if (!autoWired) {
+            gen.addImport("org.springframework.beans.factory.annotation.Autowired");
+
+            for (FieldDeclaration fd : classUnderTest.getFields()) {
+                if (fd.getElementType().asString().equals(classUnderTest.getNameAsString())) {
+                    autoWired = true;
+                    instanceName = fd.getVariable(0).getNameAsString();
+                    break;
+                }
+            }
+        }
+        if (!autoWired) {
+            if (! testClass.getAnnotationByName("ContextConfiguration").isPresent()) {
+                gen.addImport("org.springframework.test.context.ContextConfiguration");
+                NormalAnnotationExpr contextConfig = new NormalAnnotationExpr();
+                contextConfig.setName("ContextConfiguration");
+                contextConfig.addPair("classes", String.format("{%s.class}", classUnderTest.getNameAsString()));
+                testClass.addAnnotation(contextConfig);
+            }
+            if (! testClass.getAnnotationByName("ExtendWith").isPresent()) {
+                gen.addImport("org.junit.jupiter.api.extension.ExtendWith");
+                gen.addImport("org.springframework.test.context.junit.jupiter.SpringExtension");
+                NormalAnnotationExpr extendsWith = new NormalAnnotationExpr();
+                extendsWith.setName("ExtendWith");
+                extendsWith.addPair("value", "SpringExtension.class");
+                testClass.addAnnotation(extendsWith);
+            }
+
+            instanceName =  ClassProcessor.classToInstanceName( classUnderTest.getNameAsString());
+            FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
+            fd.addAnnotation("Autowired");
+            autoWired = true;
+        }
     }
 
     void mockArguments() {
@@ -159,7 +213,7 @@ public class UnitTestGenerator extends TestGenerator {
         if (t != null) {
             b.append(t.asString() + " result = ");
         }
-        b.append("cls." + methodUnderTest.getNameAsString() + "(");
+        b.append(instanceName + "." + methodUnderTest.getNameAsString() + "(");
         for (int i = 0 ; i < methodUnderTest.getParameters().size(); i++) {
             b.append(methodUnderTest.getParameter(i).getNameAsString());
             if (i < methodUnderTest.getParameters().size() - 1) {

@@ -212,7 +212,7 @@ public class SpringTestGenerator extends  TestGenerator {
         httpWithBody(annotation, returnType, "makePost");
     }
 
-    private void addCheckStatus(MethodDeclaration mut, ControllerResponse resp) {
+     void addCheckStatus(MethodDeclaration mut, ControllerResponse resp) {
 
         Type returnType = resp.getType();
 
@@ -226,6 +226,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 } else {
                     respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                 }
+                /* todo the following four lines can be deleted */
                 ImportWrapper wrapper = AbstractCompiler.findImport(mut.findCompilationUnit().get(), respType.toString());
                 if (wrapper != null) {
                     gen.addImport(wrapper.getImport());
