@@ -271,20 +271,28 @@ public class UnitTestGenerator extends TestGenerator {
         gen.addImport("org.mockito.Mockito");
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
-            for (TypeDeclaration<?> decl : cu.getTypes()) {
-                decl.findAll(FieldDeclaration.class).forEach(fd -> {
-                    fd.getAnnotationByName("Autowired").ifPresent(ann -> {
-                        if (!oldFields.contains(fd.getElementType())) {
-                            FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                            field.addAnnotation("MockBean");
-                            ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
-                            if (wrapper != null) {
-                                gen.addImport(wrapper.getImport());
-                            }
+            mockFields(cu, oldFields);
+        }
+
+        mockFields(compilationUnitUnderTest, oldFields);
+    }
+
+    private void mockFields(CompilationUnit cu, Set<Type> oldFields) {
+        TypeDeclaration<?> t = gen.getType(0);
+
+        for (TypeDeclaration<?> decl : cu.getTypes()) {
+            decl.findAll(FieldDeclaration.class).forEach(fd -> {
+                fd.getAnnotationByName("Autowired").ifPresent(ann -> {
+                    if (!oldFields.contains(fd.getElementType())) {
+                        FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                        field.addAnnotation("MockBean");
+                        ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                        if (wrapper != null) {
+                            gen.addImport(wrapper.getImport());
                         }
-                    });
+                    }
                 });
-            }
+            });
         }
     }
 
