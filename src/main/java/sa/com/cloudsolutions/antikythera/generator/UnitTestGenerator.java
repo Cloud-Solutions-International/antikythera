@@ -10,16 +10,16 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
-import sa.com.cloudsolutions.antikythera.depsolver.DTOHandler;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import com.github.javaparser.ast.type.Type;
@@ -41,6 +41,7 @@ public class UnitTestGenerator extends TestGenerator {
     private MethodDeclaration testMethod;
     private boolean autoWired;
     private String instanceName;
+    private Set<Type> mockedFields = new HashSet<>();
 
     public UnitTestGenerator(CompilationUnit cu) {
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
@@ -83,8 +84,29 @@ public class UnitTestGenerator extends TestGenerator {
     private void createTestClass(String className, String packageDecl) {
         gen = new CompilationUnit();
         gen.setPackageDeclaration(packageDecl);
-        gen.addClass(className);
+        ClassOrInterfaceDeclaration testClass = gen.addClass(className);
+        loadBaseClassFortest(testClass);
+    }
 
+    private void loadBaseClassFortest(ClassOrInterfaceDeclaration testClass) {
+        String base = Settings.getProperty("base_class", String.class).orElse(null);
+        if (base != null) {
+            testClass.addExtendedType(base);
+            String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
+            String helperPath = basePath.replace("main","test") + File.separator +
+                    AbstractCompiler.classToPath(base);
+            try {
+                CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
+                TypeDeclaration<?> t = AbstractCompiler.getPublicType(cu);
+                for (FieldDeclaration fd : t.getFields()) {
+                    if (fd.getAnnotationByName("MockBean").isPresent()) {
+                        mockedFields.add(fd.getElementType());
+                    }
+                }
+            } catch (FileNotFoundException e) {
+                throw new AntikytheraException("Base class could not be loaded for tests.");
+            }
+        }
     }
 
     @Override
@@ -262,28 +284,29 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void mockFields() {
         TypeDeclaration<?> t = gen.getType(0);
-        Set<Type> oldFields = new HashSet<>();
+
         for (FieldDeclaration fd : t.getFields()) {
-            oldFields.add(fd.getElementType());
+            mockedFields.add(fd.getElementType());
         }
 
         gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
         gen.addImport("org.mockito.Mockito");
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
-            mockFields(cu, oldFields);
+            mockFields(cu);
         }
 
-        mockFields(compilationUnitUnderTest, oldFields);
+        mockFields(compilationUnitUnderTest);
     }
 
-    private void mockFields(CompilationUnit cu, Set<Type> oldFields) {
+    private void mockFields(CompilationUnit cu) {
         TypeDeclaration<?> t = gen.getType(0);
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             decl.findAll(FieldDeclaration.class).forEach(fd -> {
                 fd.getAnnotationByName("Autowired").ifPresent(ann -> {
-                    if (!oldFields.contains(fd.getElementType())) {
+                    if (!mockedFields.contains(fd.getElementType())) {
+                        mockedFields.add(fd.getElementType());
                         FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                         field.addAnnotation("MockBean");
                         ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
