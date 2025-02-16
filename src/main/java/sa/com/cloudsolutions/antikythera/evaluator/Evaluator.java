@@ -930,6 +930,7 @@ public class Evaluator {
                 /*
                  * We know that we don't have a matching local variable or field. That indicates the
                  * presence of an import, a class from same package or this is part of java.lang package
+                 * or a Static import
                  */
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, expr.getNameAsString());
                 Class<?> clazz = getClass(fullyQualifiedName);
