@@ -6,6 +6,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -43,7 +44,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -75,27 +75,9 @@ public class SpringEvaluator extends Evaluator {
      */
     private MethodDeclaration currentMethod;
 
-    /**
-     * The lines of code already looked at in the method.
-     */
-    private static final HashMap<Integer, LineOfCode> lines = new HashMap<>();
 
-    /**
-     * Sort of a stack that keeps track of the conditional code blocks.
-     * We consider IF THEN ELSE statements as branching statements. However, we also consider JPA
-     * queries to be branching statements as well. There are two branches with the 'A' branch being
-     * executing the query with the default parameters that were passed in and the 'B' branch will
-     * be executing the query with parameters that will have a valid result set being returned
-     *
-     * Of course there will be situations where no parameters exist to give a valid resultset
-     * and these will just be ignored.
-     *
-     * The values that are used in the A branch for the query will just be arbitrary non-null values
-     * integers like 0 will usually not have matching entries in the database and will result in
-     * empty responses. If due to some reason there are valid resultsets of integers like 0 for
-     * primary keys there's nothing we can do about it, we just move onto the next test.
-     */
-    private final Set<IfStmt> branching = new HashSet<>();
+    private static final HashMap<Integer, LineOfCode> branching = new HashMap<>();
+
 
     private boolean onTest;
 
@@ -125,26 +107,26 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        branching.clear();
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration) {
                 currentMethod = md;
             }
         });
 
+        md.accept(new VoidVisitorAdapter<Void>(){
+            @Override
+            public void visit(IfStmt stmt, Void arg) {
+                LineOfCode l = new LineOfCode(stmt);
+                branching.putIfAbsent(stmt.hashCode(), l);
+            }
+        }, null);
+
         try {
             NodeList<Statement> statements = md.getBody().orElseThrow().getStatements();
-            for (int i = 0; i < statements.size(); i++) {
+            for (int i = 0; i < branching.size() * 2; i++) {
                 Statement st = statements.get(i);
-                if (!lines.containsKey(st.hashCode())) {
-                    mockMethodArguments(md);
-                    executeMethod(md);
-                    if (returnFrom != null) {
-                        // rewind!
-
-                        i = 0;
-                    }
-                }
+                mockMethodArguments(md);
+                executeMethod(md);
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
@@ -172,9 +154,7 @@ public class SpringEvaluator extends Evaluator {
         ControllerResponse cr = new ControllerResponse();
         ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         cr.setResponse(new Variable(response));
-        for (Statement st : statements) {
-            lines.put(st.hashCode(), new LineOfCode(st, LineOfCode.BLACK));
-        }
+
         return createTests(cr);
     }
 
@@ -216,34 +196,6 @@ public class SpringEvaluator extends Evaluator {
         else {
             throw ae;
         }
-    }
-
-    /**
-     * Executes a single statement
-     * Overrides the superclass method to keep track of the lines of code that have been
-     * executed. While the basic Evaluator class does not run the same code over and over again,
-     * this class does!
-     * @param stmt the statement to execute
-     * @throws Exception a general exception because at this point we are concerned about the
-     *                  exceptions thrown by the code being executed.
-     */
-    @Override
-    void executeStatement(Statement stmt) throws Exception {
-        if(!stmt.isIfStmt()) {
-            boolean repo =  (stmt.isExpressionStmt() && isRepositoryMethod(stmt.asExpressionStmt()));
-
-            LineOfCode l = lines.get(stmt.hashCode());
-            if (l == null) {
-                l = new LineOfCode(stmt);
-                l.setColor(repo ? LineOfCode.GREY : LineOfCode.BLACK);
-                lines.put(stmt.hashCode(), l);
-            }
-            else {
-                l.setColor(LineOfCode.BLACK);
-            }
-        }
-
-        super.executeStatement(stmt);
     }
 
     /**
@@ -403,8 +355,8 @@ public class SpringEvaluator extends Evaluator {
      */
     private void buildPreconditions() {
         List<Expression> expressions = new ArrayList<>();
-        for (LineOfCode l : lines.values()) {
-            if(branching.contains(l.getStatement())) {
+        for (LineOfCode l : branching.values()) {
+            if(branching.containsKey(l.getStatement())) {
                 expressions.addAll(l.getPrecondition(false));
             }
         }
@@ -527,59 +479,33 @@ public class SpringEvaluator extends Evaluator {
         return new SpringEvaluator(name);
     }
 
-    /**
-     * Handle if then else statements.
-     *
-     * We use truth tables to analyze the condition and to set values on the DTOs accordingly.
-     *
-     * @param ifst If / Then statement
-     * @throws Exception
-     */
     @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
-        for(TestGenerator gen : generators) {
-            gen.setBranched(true);
-        }
-
-        LineOfCode l = lines.get(ifst.hashCode());
+        LineOfCode l = branching.get(ifst.hashCode());
         if (l == null) {
-            /*
-             * This if condition has never been executed before. First we will determine if the condition
-             * evaluates to true or false. Then we will use the truth table to find out what values will
-             * result in it going from true to false or false to true.
-             */
-            l = new LineOfCode(ifst);
-            lines.put(ifst.hashCode(), l);
-            l.setColor(LineOfCode.GREY);
-
-            branching.add(ifst);
-            Variable v = super.ifThenElseBlock(ifst);
-            setupIfCondition(ifst, !((boolean) v.getValue()));
-            return v;
+            return super.ifThenElseBlock(ifst);
         }
-        else if (l.getColor() == LineOfCode.GREY) {
-            /*
-             * We have been here before but only traversed the then part of the if statement.
-             */
-            for (Expression st : l.getPrecondition(false)) {
-                evaluateExpression(st);
+        return switch (l.getPathTaken()) {
+            case LineOfCode.UNTAVELLED -> {
+                Variable v = super.ifThenElseBlock(ifst);
+                if ((boolean) v.getValue()) {
+                    l.setPathTaken(LineOfCode.TRUE_PATH);
+                }
+                else {
+                    l.setPathTaken(LineOfCode.FALSE_PATH);
+                }
+                yield v;
             }
-            if (allVisited(ifst)) {
-                l.setColor(LineOfCode.BLACK);
+            case LineOfCode.FALSE_PATH -> {
+                setupIfCondition(ifst, true);
+                yield super.ifThenElseBlock(ifst);
             }
-            else {
-                return super.ifThenElseBlock(ifst);
+            case LineOfCode.TRUE_PATH -> {
+                setupIfCondition(ifst, false);
+                yield super.ifThenElseBlock(ifst);
             }
-        } else if (ifst.getElseStmt().isPresent()) {
-            l = lines.get(ifst.getElseStmt().get());
-            if (l == null || l.getColor() != LineOfCode.BLACK) {
-                l.setColor(LineOfCode.GREY);
-                return super.ifThenElseBlock(ifst);
-            }
-        } else {
-            l.setColor(LineOfCode.BLACK);
-        }
-        return null;
+            default -> null;
+        };
     }
 
     /**
@@ -590,7 +516,7 @@ public class SpringEvaluator extends Evaluator {
     private void setupIfCondition(IfStmt ifst, boolean state)  {
         TruthTable tt = new TruthTable(ifst.getCondition());
 
-        LineOfCode l = lines.get(ifst.hashCode());
+        LineOfCode l = branching.get(ifst.hashCode());
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
         if (!values.isEmpty()) {
@@ -673,11 +599,11 @@ public class SpringEvaluator extends Evaluator {
      * @return
      */
     public boolean allVisited(IfStmt stmt) {
-        LineOfCode l = lines.get(stmt.hashCode());
+        LineOfCode l = branching.get(stmt.hashCode());
         if (l == null) {
             return false;
         }
-        if (l.getColor() == LineOfCode.BLACK) {
+        if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
             return true;
         }
         Statement then = stmt.getThenStmt();
@@ -711,15 +637,15 @@ public class SpringEvaluator extends Evaluator {
      * @return true if this line has been visited.
      */
     private boolean isLineVisited(Statement stmt) {
-        LineOfCode l = lines.get(stmt.hashCode());
+        LineOfCode l = branching.get(stmt.hashCode());
         if (l == null) {
             return false;
         }
-        return l.getColor() == LineOfCode.BLACK;
+        return l.getPathTaken() == LineOfCode.TRUE_PATH;
     }
 
     public void resetColors() {
-        lines.clear();
+        branching.clear();
     }
 
     /**
@@ -754,9 +680,9 @@ public class SpringEvaluator extends Evaluator {
 
                             if (l.getRepositoryQuery() == null) {
                                 l.setRepositoryQuery(q);
-                                l.setColor(LineOfCode.GREY);
+                                l.setPathTaken(LineOfCode.FALSE_PATH);
                             } else {
-                                l.setColor(LineOfCode.BLACK);
+                                l.setPathTaken(LineOfCode.TRUE_PATH);
                             }
                             return v;
                         }
@@ -873,7 +799,7 @@ public class SpringEvaluator extends Evaluator {
                 /*
                  * We have found the expression statement corresponding to this query
                  */
-                return lines.get(stmt.hashCode());
+                return branching.get(stmt.hashCode());
             }
             n = n.getParentNode().orElse(null);
         }

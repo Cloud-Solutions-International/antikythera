@@ -9,8 +9,7 @@ import java.util.List;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
 /**
- * Represents a line of code in a method.
- * The term is used rather loosely, a line of code may span several lines on paper.
+ * Represents a line of code with a condition in a method.
  */
 public class LineOfCode {
 
@@ -30,20 +29,25 @@ public class LineOfCode {
      * Represents the state where the node has not been visited at all.
      * This is the default value for color for all nodes.
      */
-    public static final int WHITE = 0;
+    public static final int UNTAVELLED = 0;
     /**
-     * Represents the stage where we have encountered a node but not traversed all edges.
+     * Represents the stage where we have traversed the false path
      */
-    public static final int GREY = 1;
+    public static final int FALSE_PATH = 1;
     /**
-     * Represents the stage where we have traversed all edges of a node.
+     * Represents the stage where we have traversed the true path
      */
-    public static final int BLACK = 2;
+    public static final int TRUE_PATH = 2;
+
     /**
-     * Shows the current state of the node.
-     * Can be one of WHITE, GREY or BLACK.
+     * This state is achieved by the logical or operation of the FALSE_PATH and TRUE_PATH
      */
-    private int color;
+    public static final int BOTH_PATHS = 3;
+
+    /**
+     * The current state of the
+     */
+    private int pathTaken;
 
     /**
      * The statement that this line of code represents.
@@ -61,7 +65,7 @@ public class LineOfCode {
 
     public LineOfCode(Statement st, int color) {
         this.statement = st;
-        this.color = color;
+        this.pathTaken = color;
     }
 
     @Override
@@ -77,12 +81,12 @@ public class LineOfCode {
         return statement.hashCode();
     }
 
-    public int getColor() {
-        return color;
+    public int getPathTaken() {
+        return pathTaken;
     }
 
-    public void setColor(int color) {
-        this.color = color;
+    public void setPathTaken(int pathTaken) {
+        this.pathTaken = pathTaken;
     }
 
     public void addPrecondition(Expression precondition, boolean state) {

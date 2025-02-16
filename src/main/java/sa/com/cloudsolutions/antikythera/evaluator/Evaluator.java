@@ -1161,6 +1161,9 @@ public class Evaluator {
             case EQUALS:
                 return checkEquality(left, right);
 
+            case AND:
+                return new Variable((boolean) left.getValue() && (boolean) right.getValue());
+
             case GREATER:
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
                     return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
@@ -1698,27 +1701,34 @@ public class Evaluator {
 
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {
-            Statement then = ifst.getThenStmt();
-            if (then.isBlockStmt()) {
-                executeBlock(then.asBlockStmt().getStatements());
-            }
-            else {
-                executeStatement(then);
-            }
+            executeThenBlock(ifst);
         } else {
-
-            Optional<Statement> elseBlock = ifst.getElseStmt();
-            if(elseBlock.isPresent()) {
-                Statement el = elseBlock.get();
-                if(el.isBlockStmt()) {
-                    executeBlock(el.asBlockStmt().getStatements());
-                }
-                else {
-                    executeStatement(el);
-                }
-            }
+            executeElseBlock(ifst);
         }
         return v;
+    }
+
+    private void executeElseBlock(IfStmt ifst) throws Exception {
+        Optional<Statement> elseBlock = ifst.getElseStmt();
+        if(elseBlock.isPresent()) {
+            Statement el = elseBlock.get();
+            if(el.isBlockStmt()) {
+                executeBlock(el.asBlockStmt().getStatements());
+            }
+            else {
+                executeStatement(el);
+            }
+        }
+    }
+
+    private void executeThenBlock(IfStmt ifst) throws Exception {
+        Statement then = ifst.getThenStmt();
+        if (then.isBlockStmt()) {
+            executeBlock(then.asBlockStmt().getStatements());
+        }
+        else {
+            executeStatement(then);
+        }
     }
 
     protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
