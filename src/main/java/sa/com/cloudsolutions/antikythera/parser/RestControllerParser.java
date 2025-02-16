@@ -161,7 +161,7 @@ public class RestControllerParser extends ClassProcessor {
          * Pass 2 : Generate the tests
          */
         AntikytheraRunTime.reset();
-        evaluator.setupFields();
+        evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
 
         for(ImportDeclaration imp : keepImports) {

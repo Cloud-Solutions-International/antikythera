@@ -478,9 +478,10 @@ public class SpringEvaluator extends Evaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 Evaluator eval = new SpringEvaluator(resolvedClass);
+                CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 v = new Variable(eval);
                 AntikytheraRunTime.autoWire(resolvedClass, v);
-                eval.setupFields();
+                eval.setupFields(dependant);
             }
             fields.put(variable.getNameAsString(), v);
 
