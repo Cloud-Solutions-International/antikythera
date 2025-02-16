@@ -74,7 +74,7 @@ class TestStrings extends TestHelper{
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Hello.java");
             cu = getJavaParser().parse(file).getResult().get();
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Hello");
-            evaluator.setupFields();
+            evaluator.setupFields(cu);
         }
     }
 }

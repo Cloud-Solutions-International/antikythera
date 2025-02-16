@@ -82,9 +82,8 @@ public class TestBunches  {
         protected CollectionEvaluator() throws IOException, EvaluatorException {
 
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Bunches");
-            evaluator.setupFields();
             cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches");
-
+            evaluator.setupFields(cu);
         }
     }
 }

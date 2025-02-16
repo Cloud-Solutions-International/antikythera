@@ -82,7 +82,7 @@ class TestTryCatch extends TestHelper {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/TryCatch.java");
             cu = getJavaParser().parse(file).getResult().get();
             evaluator = new Evaluator(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
-            evaluator.setupFields();
+            evaluator.setupFields(cu);
         }
     }
 }
