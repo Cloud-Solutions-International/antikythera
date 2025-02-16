@@ -7,4 +7,5 @@ public interface Constants {
     String OUTPUT_PATH = "output_path";
     String CONTROLLERS = "controllers";
     String DEPENDENCIES = "dependencies";
+    String SERVICES = "services";
 }

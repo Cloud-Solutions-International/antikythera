@@ -73,16 +73,8 @@ public class DepSolver {
      */
     private void solve() throws IOException {
         AbstractCompiler.preProcess();
-        Object methods = Settings.getProperty("methods");
-        if (methods instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof String s) {
-                    processMethod(s);
-                }
-            }
-        }
-        else {
-            processMethod(methods.toString());
+        for (String method : Settings.getPropertyList("methods", String.class)) {
+            processMethod(method);
         }
     }
 
@@ -90,19 +82,14 @@ public class DepSolver {
      * Process the dependencies of a method that was declared in the application configuration
      * @param s the method name
      */
-     void processMethod(String s)  {
+     public void processMethod(String s)  {
         String[] parts = s.split("#");
 
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0] );
         if (cu != null) {
-            Optional<MethodDeclaration> method = cu.findAll(MethodDeclaration.class).stream()
-                    .filter(m -> m.getNameAsString().equals(parts[1]))
-                    .findFirst();
-
-            if (method.isPresent()) {
-                Graph.createGraphNode(method.get());
-                dfs();
-            }
+            cu.findAll(MethodDeclaration.class, m -> m.getNameAsString().equals(parts[1]))
+                    .forEach(Graph::createGraphNode);
+            dfs();
         }
     }
 
@@ -110,7 +97,7 @@ public class DepSolver {
      * Iterative Depth first search
      * @ if any of the code inspections fails.
      */
-    private void dfs()  {
+    public void dfs()  {
         /*
          * Operates in three stages.
          *
@@ -275,7 +262,7 @@ public class DepSolver {
     /**
      * Search method parameters for dependencies.
      * @param node GraphNode representing a method.
-     * @param parameters the list of paremeters of that method
+     * @param parameters the list of parameters of that method
      * @ if some resolution problem crops up
      */
     private void searchMethodParameters(GraphNode node, NodeList<Parameter> parameters)  {
@@ -515,9 +502,9 @@ public class DepSolver {
                 if (assignExpr.getTarget().isFieldAccessExpr()) {
                     FieldAccessExpr fae = assignExpr.getTarget().asFieldAccessExpr();
                     SimpleName nmae = fae.getName();
-                    arg.getEnclosingType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(nmae.asString())).ifPresent(f ->
-                          Graph.createGraphNode(f)
-                    );
+                    arg.getEnclosingType().findFirst(FieldDeclaration.class,
+                            f -> f.getVariable(0).getNameAsString().equals(nmae.asString()))
+                            .ifPresent(Graph::createGraphNode);
                     ImportUtils.addImport(arg, fae);
                 }
             }
@@ -568,7 +555,6 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-
             List<ImportWrapper> imports = solveType(oce.getType(), node);
             for (ImportWrapper imp : imports) {
                 node.getDestination().addImport(imp.getImport());
@@ -581,7 +567,6 @@ public class DepSolver {
     }
 
     public static void initializeField(FieldDeclaration field, GraphNode node)  {
-
         solver.initField(field, node);
     }
 

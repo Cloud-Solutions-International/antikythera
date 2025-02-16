@@ -11,20 +11,11 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
 
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
-        String paramString = String.valueOf(param);
-        Variable v = null;
-
-        if (paramString.startsWith("@RequestBody")) {
-            /*
-             * Request body on the other hand will be more complex and will most likely be a DTO.
-             */
-            v = mockRequestBody(param);
-        } else {
-            /*
-             * Request parameters are typically strings or numbers or booleans.
-             */
-            v = mockParameter(param);
+        Variable v = mockParameter(param);
+        if (v.getValue() == null) {
+            v = mockNonPrimitiveParameter(param);
         }
+
         /*
          * Pushed to be popped later in the callee
          */
@@ -32,8 +23,8 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         AntikytheraRunTime.push(v);
     }
 
-    private Variable mockRequestBody(Parameter param) throws ClassNotFoundException, InstantiationException, IllegalAccessException {
-        Variable v;
+    private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
+        Variable v = null;
         Type t = param.getType();
 
         if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
@@ -55,23 +46,21 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 }
             } else {
                 Evaluator o = new SpringEvaluator(fullClassName);
-                o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
+                o.setupFields();
                 v = new Variable(o);
             }
-        } else {
-            v = mockParameter(param);
         }
         return v;
     }
 
-    public Variable mockParameter(Parameter param) {
+    protected Variable mockParameter(Parameter param) {
         return new Variable(switch (param.getType().asString()) {
             case "Boolean", "boolean" -> false;
             case "float", "Float", "double", "Double" -> 0.0;
             case "Integer", "int" -> 0;
             case "Long", "long" -> -100L;
             case "String" -> "Ibuprofen";
-            default -> "0";
+            default -> null;
         });
     }
 }

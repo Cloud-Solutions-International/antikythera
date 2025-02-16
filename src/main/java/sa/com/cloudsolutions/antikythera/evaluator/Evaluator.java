@@ -813,7 +813,7 @@ public class Evaluator {
             return null;
         }
 
-        LinkedList<Expression> chain = findScopeChain(methodCall);
+        LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
             return executeLocalMethod(methodCall);
@@ -939,7 +939,7 @@ public class Evaluator {
                 }
                 else {
                     Evaluator eval = createEvaluator(fullyQualifiedName);
-                    eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
+                    eval.setupFields();
                     v = new Variable(eval);
                 }
             }
@@ -1080,12 +1080,14 @@ public class Evaluator {
              * At this point we are searching for the method call in the current class. For example it
              * maybe a getter or setter that has been defined through lombok annotations.
              */
-            ClassOrInterfaceDeclaration c = cdecl.get();
-            Optional<MethodDeclaration> mdecl = c.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodCall.getNameAsString()));
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(wrapper, cdecl.get());
+
             if (mdecl.isPresent()) {
-                return executeMethod(mdecl.get());
+                return executeMethod(mdecl.get().getCallableDeclaration());
             }
             else {
+                ClassOrInterfaceDeclaration c = cdecl.get();
                 if (methodCall.getNameAsString().startsWith("get") && (
                         c.getAnnotationByName("Data").isPresent()
                                 || c.getAnnotationByName("Getter").isPresent())) {
@@ -1276,26 +1278,31 @@ public class Evaluator {
         return null;
     }
 
-    void identifyFieldDeclarations(VariableDeclarator variable) throws IOException, ReflectiveOperationException {
+    void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (variable.getType().isClassOrInterfaceType()) {
-            Type t = variable.getType().asClassOrInterfaceType();
-            String resolvedClass = t.resolve().describe();
-
-            if(finches.get(resolvedClass) != null) {
-                Variable v = new Variable(t);
-                v.setValue(finches.get(resolvedClass));
-                fields.put(variable.getNameAsString(), v);
-            }
-            else if (resolvedClass.startsWith("java")) {
+            ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+            if (imports.isEmpty()) {
                 setupPrimitiveOrBoxedField(variable, t);
             }
             else {
-                CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                if (compilationUnit != null) {
-                    resolveFieldRepresentedByCode(variable, resolvedClass);
-                }
-                else {
-                    logger.debug("Unsolved {}" , resolvedClass);
+                for (ImportWrapper imp : imports) {
+                    String resolvedClass = imp.getNameAsString();
+
+                    if (finches.get(resolvedClass) != null) {
+                        Variable v = new Variable(t);
+                        v.setValue(finches.get(resolvedClass));
+                        fields.put(variable.getNameAsString(), v);
+                    } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
+                        setupPrimitiveOrBoxedField(variable, t);
+                    } else {
+                        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                        if (compilationUnit != null) {
+                            resolveFieldRepresentedByCode(variable, resolvedClass);
+                        } else {
+                            logger.debug("Unsolved {}", resolvedClass);
+                        }
+                    }
                 }
             }
         }
@@ -1329,9 +1336,8 @@ public class Evaluator {
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
-                        CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
                         Evaluator eval = createEvaluator(cname);
-                        eval.setupFields(dep);
+                        eval.setupFields();
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1752,10 +1758,6 @@ public class Evaluator {
         return returnValue;
     }
 
-    public void setupFields(CompilationUnit cu)  {
-        cu.accept(new ControllerFieldVisitor(), null);
-    }
-
     public void setupFields()  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
@@ -1810,24 +1812,11 @@ public class Evaluator {
 
     @Override
     public String toString() {
-        if (cu != null) {
-            Optional<MethodDeclaration> md = cu.findFirst(
-                    MethodDeclaration.class, m -> m.getNameAsString().equals("toString"));
-            if (md.isPresent()) {
-
-                try {
-                    Variable saved = returnValue;
-                    executeMethod(md.get());
-                    String result = returnValue.getValue().toString();
-                    returnValue = saved;
-                    return result;
-                } catch (AntikytheraException | ReflectiveOperationException e) {
-                    return hashCode() + " : " + getClassName() + " could not execute toString()";
-                }
-            }
-        }
-
         return hashCode() + " : " + getClassName();
+    }
+
+    CompilationUnit getCompilationUnit() {
+        return cu;
     }
 }
 
@@ -1854,4 +1843,5 @@ class NumericComparator {
             throw new IllegalArgumentException("Cannot compare " + left + " and " + right);
         }
     }
+
 }

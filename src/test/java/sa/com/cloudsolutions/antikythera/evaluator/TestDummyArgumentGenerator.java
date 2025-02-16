@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -47,9 +46,6 @@ class TestDummyArgumentGenerator {
         Parameter parameter = new Parameter();
         md.addParameter(parameter);
         parameter.addAnnotation("RequestBody");
-        if (type.equals("String")) {
-            value = "";
-        }
 
         helper(type, value, md, parameter);
     }

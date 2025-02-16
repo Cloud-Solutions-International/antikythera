@@ -11,12 +11,9 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 class GraphTest {
@@ -38,8 +35,9 @@ class GraphTest {
         assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
         assertNotNull(gn.getDestination());
 
+        assertEquals(1, Graph.getNodes().size());
         gn.buildNode();
-        // todo need assert
+        assertEquals(1, Graph.getNodes().size());
     }
 
     @Test
