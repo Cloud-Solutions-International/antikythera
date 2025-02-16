@@ -51,7 +51,7 @@ public class TestLoops extends  TestHelper {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Loops.java"));
             compileDependencies();
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Loops");
-            evaluator.setupFields();
+            evaluator.setupFields(cu);
         }
     }
 

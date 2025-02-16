@@ -45,7 +45,7 @@ public class TestAnon extends TestHelper{
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Anon.java"));
             compileDependencies();
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Anon");
-            evaluator.setupFields();
+            evaluator.setupFields(cu);
         }
     }
 }
