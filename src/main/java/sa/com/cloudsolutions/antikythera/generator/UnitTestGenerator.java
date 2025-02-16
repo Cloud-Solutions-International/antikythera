@@ -11,7 +11,6 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -85,10 +84,10 @@ public class UnitTestGenerator extends TestGenerator {
         gen = new CompilationUnit();
         gen.setPackageDeclaration(packageDecl);
         ClassOrInterfaceDeclaration testClass = gen.addClass(className);
-        loadBaseClassFortest(testClass);
+        loadBaseClassForTest(testClass);
     }
 
-    private void loadBaseClassFortest(ClassOrInterfaceDeclaration testClass) {
+    private void loadBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
         String base = Settings.getProperty("base_class", String.class).orElse(null);
         if (base != null) {
             testClass.addExtendedType(base);

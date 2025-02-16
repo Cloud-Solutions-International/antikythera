@@ -582,5 +582,6 @@ public class SpringTestGenerator extends  TestGenerator {
         gen.getType(0).addField("ObjectMapper", "objectMapper");
     }
 
+
 }
 

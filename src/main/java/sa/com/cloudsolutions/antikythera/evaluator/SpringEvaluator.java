@@ -790,7 +790,7 @@ public class SpringEvaluator extends Evaluator {
                         if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
                             for(int i = 0 ; i < 10 ; i++) {
                                 Variable row = createObject(stmt, v, objectCreationExpr);
-                                if(resultToEntity(row, rs)) {
+                                if(SpringEvaluator.resultToEntity(row, rs)) {
                                     ((Collection) variable.getValue()).add(row);
                                 }
                                 else {
@@ -804,7 +804,7 @@ public class SpringEvaluator extends Evaluator {
                 else {
                     ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
                     Variable row = createObject(stmt, v, objectCreationExpr);
-                    if(resultToEntity(row, rs)) {
+                    if(SpringEvaluator.resultToEntity(row, rs)) {
                         return row;
                     } else {
                         return new Variable(null);
@@ -821,7 +821,7 @@ public class SpringEvaluator extends Evaluator {
      * @param variable copy the data from the record into this variable.
      * @param rs the sql result set
      */
-    private boolean resultToEntity(Variable variable, ResultSet rs) {
+    private static boolean resultToEntity(Variable variable, ResultSet rs) {
         try {
             if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
