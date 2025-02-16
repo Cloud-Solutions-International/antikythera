@@ -98,6 +98,8 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private int state = NULL_STATE;
 
+    MethodDeclaration testMethod;
+
     public SpringTestGenerator() {
         gen = new CompilationUnit();
     }
@@ -155,7 +157,7 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
     private void httpWithoutBody(AnnotationExpr annotation, String call, ControllerResponse response)  {
-        final MethodDeclaration testMethod = buildTestMethod(methodUnderTest);
+        testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
         BlockStmt body = getBody(testMethod);
@@ -216,7 +218,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         Type returnType = resp.getType();
 
-        BlockStmt body = getBody(methodUnderTest);
+        BlockStmt body = getBody(testMethod);
 
         if (resp.getBody() != null) {
             if (resp.getBody().getValue() != null && returnType.isClassOrInterfaceType()) {
@@ -290,7 +292,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
     private void httpWithBody(AnnotationExpr annotation, ControllerResponse resp, String call) {
 
-        MethodDeclaration testMethod = buildTestMethod(methodUnderTest);
+        testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makePost = new MethodCallExpr(call);
         BlockStmt body = getBody(testMethod);
 
