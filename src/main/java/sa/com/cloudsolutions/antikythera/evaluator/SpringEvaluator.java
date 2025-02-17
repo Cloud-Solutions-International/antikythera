@@ -322,10 +322,7 @@ public class SpringEvaluator extends Evaluator {
     @Override
     public void identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
         super.identifyFieldDeclarations(field);
-
-        if (field.getType().isClassOrInterfaceType()) {
-            detectRepository(field);
-        }
+        detectRepository(field);
     }
 
     /**
@@ -334,11 +331,12 @@ public class SpringEvaluator extends Evaluator {
      * @throws IOException if the file cannot be read
      */
     private static void detectRepository(VariableDeclarator variable) throws IOException {
-        ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
-        String shortName = t.getNameAsString();
-        if (SpringEvaluator.getRepositories().containsKey(shortName)) {
+        if (variable.getType() == null || !variable.getType().isClassOrInterfaceType()) {
             return;
         }
+
+        ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+        String shortName = t.getNameAsString();
 
         String className = AbstractCompiler.findFullyQualifiedName(variable.findCompilationUnit().get(), shortName);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
@@ -346,6 +344,7 @@ public class SpringEvaluator extends Evaluator {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
             if (typeDecl != null && typeDecl.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+
                 for (var ext : cdecl.getExtendedTypes()) {
                     if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                         /*
@@ -356,12 +355,10 @@ public class SpringEvaluator extends Evaluator {
                         RepositoryParser parser = new RepositoryParser();
                         parser.compile(AbstractCompiler.classToPath(className));
                         parser.processTypes();
-                        if (variable.getType() != null && variable.getType().isClassOrInterfaceType()) {
-                            ClassOrInterfaceType cit = variable.getType().asClassOrInterfaceType();
-                            String fqn = AbstractCompiler.findFullyQualifiedName(cu, cit.getNameAsString());
-                            repositories.put(fqn, parser);
-                            break;
-                        }
+
+                        String fqn = AbstractCompiler.findFullyQualifiedName(cu, t.getNameAsString());
+                        repositories.put(fqn, parser);
+                        break;
                     }
                 }
             }
@@ -588,7 +585,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Setup an if condition so that it will evaluate to true or false in future executions.
+     * Set up an if condition so that it will evaluate to true or false in future executions.
      * @param ifst the if statement to mess with
      * @param state the desired state.
      */
