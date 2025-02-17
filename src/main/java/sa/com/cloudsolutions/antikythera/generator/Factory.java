@@ -59,7 +59,7 @@ public class Factory {
 
     private static TestGenerator createApiTestGenerator(CompilationUnit cu) {
         String className = AbstractCompiler.getPublicType(cu).getFullyQualifiedName().orElse(null);
-        SpringTestGenerator gen = new SpringTestGenerator();
+        SpringTestGenerator gen = new SpringTestGenerator(cu);
         api.put(className, gen);
         return gen;
     }

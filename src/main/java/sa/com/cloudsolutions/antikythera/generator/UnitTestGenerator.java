@@ -33,20 +33,18 @@ import java.util.Map;
 import java.util.Set;
 
 public class UnitTestGenerator extends TestGenerator {
-    private static final Logger logger = LoggerFactory.getLogger(SpringTestGenerator.class);
+    private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
     private final String filePath;
-    private final CompilationUnit compilationUnitUnderTest;
 
-    private MethodDeclaration testMethod;
     private boolean autoWired;
     private String instanceName;
     private Set<Type> mockedFields = new HashSet<>();
 
     public UnitTestGenerator(CompilationUnit cu) {
+        super(cu);
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
-        this.compilationUnitUnderTest = cu;
 
         filePath = basePath.replace("main","test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";

@@ -124,14 +124,11 @@ public class RestControllerParser extends ClassProcessor {
         evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
         evaluator.setOnTest(true);
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         evaluator.addGenerator(generator);
         generator.setCommonPath(getCommonPath());
 
         CompilationUnit gen = generator.getCompilationUnit();
-        ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getNameAsString() + "Test");
-        cdecl.addExtendedType("TestHelper");
-        gen.setPackageDeclaration(pd);
         generator.addBeforeClass();
 
         allImports.addAll(cu.getImports());

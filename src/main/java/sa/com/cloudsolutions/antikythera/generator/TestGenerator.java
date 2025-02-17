@@ -33,6 +33,13 @@ public abstract class TestGenerator {
     protected Asserter asserter;
     protected MethodDeclaration methodUnderTest;
 
+    MethodDeclaration testMethod;
+    protected CompilationUnit compilationUnitUnderTest;
+
+    protected TestGenerator(CompilationUnit cu) {
+        this.compilationUnitUnderTest = cu;
+    }
+
     protected String createTestName(MethodDeclaration md) {
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
@@ -97,10 +104,6 @@ public abstract class TestGenerator {
 
     public CompilationUnit getCompilationUnit() {
         return gen;
-    }
-
-    public void setCompilationUnit(CompilationUnit gen) {
-        this.gen = gen;
     }
 
     public abstract void setPreconditions(List<Expression> expr);

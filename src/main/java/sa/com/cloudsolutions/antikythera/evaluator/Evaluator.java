@@ -1455,7 +1455,7 @@ public class Evaluator {
                             }
                         }
                     }
-                    if (va == null || va.getValue() == null) {
+                    if (va == null) {
                         missing.add(true);
                     }
                 });

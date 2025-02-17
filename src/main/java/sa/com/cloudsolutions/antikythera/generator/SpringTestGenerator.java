@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -98,10 +99,16 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private int state = NULL_STATE;
 
-    MethodDeclaration testMethod;
 
-    public SpringTestGenerator() {
+    public SpringTestGenerator(CompilationUnit cu) {
+        super(cu);
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
+
         gen = new CompilationUnit();
+        cu.getPackageDeclaration().ifPresent(gen::setPackageDeclaration);
+
+        ClassOrInterfaceDeclaration cdecl =  gen.addClass(className);
+        cdecl.addExtendedType("TestHelper");
     }
 
     /**
@@ -185,7 +192,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(testMethod, response);
+        addCheckStatus(response);
         gen.getType(0).addMember(testMethod);
 
     }
@@ -214,7 +221,7 @@ public class SpringTestGenerator extends  TestGenerator {
         httpWithBody(annotation, returnType, "makePost");
     }
 
-     void addCheckStatus(MethodDeclaration mut, ControllerResponse resp) {
+     void addCheckStatus(ControllerResponse resp) {
 
         Type returnType = resp.getType();
 
@@ -228,9 +235,8 @@ public class SpringTestGenerator extends  TestGenerator {
                 } else {
                     respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                 }
-                /* todo the following four lines can be deleted */
-                ImportWrapper wrapper = AbstractCompiler.findImport(mut.findCompilationUnit().get(), respType.toString());
-                if (wrapper != null) {
+
+                for (ImportWrapper wrapper : AbstractCompiler.findImport(compilationUnitUnderTest, respType)) {
                     gen.addImport(wrapper.getImport());
                 }
 
@@ -347,7 +353,7 @@ public class SpringTestGenerator extends  TestGenerator {
                     if (respType.toString().equals("String")) {
                         testForResponseBodyAsString(methodUnderTest, resp, body);
                     } else {
-                        addCheckStatus(testMethod, resp);
+                        addCheckStatus(resp);
                     }
                 }
             }
