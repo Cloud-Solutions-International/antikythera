@@ -1278,26 +1278,31 @@ public class Evaluator {
         return null;
     }
 
-    void identifyFieldDeclarations(VariableDeclarator variable) throws IOException, ReflectiveOperationException {
+    void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (variable.getType().isClassOrInterfaceType()) {
-            Type t = variable.getType().asClassOrInterfaceType();
-            String resolvedClass = t.resolve().describe();
-
-            if(finches.get(resolvedClass) != null) {
-                Variable v = new Variable(t);
-                v.setValue(finches.get(resolvedClass));
-                fields.put(variable.getNameAsString(), v);
-            }
-            else if (resolvedClass.startsWith("java")) {
+            ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+            if (imports.isEmpty()) {
                 setupPrimitiveOrBoxedField(variable, t);
             }
             else {
-                CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                if (compilationUnit != null) {
-                    resolveFieldRepresentedByCode(variable, resolvedClass);
-                }
-                else {
-                    logger.debug("Unsolved {}" , resolvedClass);
+                for (ImportWrapper imp : imports) {
+                    String resolvedClass = imp.getNameAsString();
+
+                    if (finches.get(resolvedClass) != null) {
+                        Variable v = new Variable(t);
+                        v.setValue(finches.get(resolvedClass));
+                        fields.put(variable.getNameAsString(), v);
+                    } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
+                        setupPrimitiveOrBoxedField(variable, t);
+                    } else {
+                        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                        if (compilationUnit != null) {
+                            resolveFieldRepresentedByCode(variable, resolvedClass);
+                        } else {
+                            logger.debug("Unsolved {}", resolvedClass);
+                        }
+                    }
                 }
             }
         }
@@ -1305,7 +1310,6 @@ public class Evaluator {
             resolveNonClassFields(variable);
         }
     }
-
 
     private void setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v = null;
@@ -1539,7 +1543,7 @@ public class Evaluator {
     void executeStatement(Statement stmt) throws Exception {
         if (stmt.isExpressionStmt()) {
             /*
-             * A line of code that is an expression. The expresion itself can fall into various different
+             * A line of code that is an expression. The expression itself can fall into various different
              * categories and we let the evaluateExpression method take care of all that
              */
             evaluateExpression(stmt.asExpressionStmt().getExpression());

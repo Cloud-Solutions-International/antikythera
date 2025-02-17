@@ -38,12 +38,12 @@ public class UnitTestGenerator extends TestGenerator {
 
     private boolean autoWired;
     private String instanceName;
-    private Set<Type> mockedFields = new HashSet<>();
+    private final Set<Type> mockedFields = new HashSet<>();
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
-        String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
+        String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
 
         filePath = basePath.replace("main","test") + File.separator +
@@ -297,25 +297,24 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void mockFields(CompilationUnit cu) {
-        TypeDeclaration<?> t = gen.getType(0);
+        final TypeDeclaration<?> t = gen.getType(0);
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
-            decl.findAll(FieldDeclaration.class).forEach(fd -> {
-                fd.getAnnotationByName("Autowired").ifPresent(ann -> {
-                    if (!mockedFields.contains(fd.getElementType())) {
-                        mockedFields.add(fd.getElementType());
-                        FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                        field.addAnnotation("MockBean");
-                        ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
-                        if (wrapper != null) {
-                            gen.addImport(wrapper.getImport());
-                        }
+            for (FieldDeclaration fd : decl.getFields()) {
+                if (fd.getAnnotationByName("Autowired").isPresent() && !mockedFields.contains(fd.getElementType())) {
+                    mockedFields.add(fd.getElementType());
+                    FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                    field.addAnnotation("MockBean");
+                    ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                    if (wrapper != null) {
+                        gen.addImport(wrapper.getImport());
                     }
-                });
-            });
+                }
+            }
         }
     }
 
+    @Override
     public void save() throws IOException {
         Antikythera.getInstance().writeFile(filePath, gen.toString());
     }
