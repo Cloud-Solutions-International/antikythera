@@ -2,7 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -98,6 +98,18 @@ public class SpringTestGenerator extends  TestGenerator {
      * The current state of the test generation. It will be one of the values above.
      */
     private int state = NULL_STATE;
+
+    public SpringTestGenerator(CompilationUnit cu) {
+        super(cu);
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
+
+        gen = new CompilationUnit();
+        cu.getPackageDeclaration().ifPresent(gen::setPackageDeclaration);
+
+        ClassOrInterfaceDeclaration cdecl =  gen.addClass(className);
+        cdecl.addExtendedType("TestHelper");
+    }
+
     /**
      * Create tests based on the method declaration and return type
      * @param md the descriptor of the method for which we are about to write tests.
