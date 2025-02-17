@@ -1,9 +1,8 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.type.Type;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -52,6 +51,16 @@ public class DepSolverIntegrationTest {
         assertNotNull(cu);
         assertEquals("java.io.Serializable", cu.getImports().get(0).getNameAsString());
         assertTrue(cu.findFirst(FieldDeclaration.class, f -> f.getVariables().get(0).getNameAsString().equals("p")).isPresent());
+    }
+
+    @Test
+    void testMain() throws IOException {
+        DepSolver.main(new String[]{});
+        Map<String, Type> names = DepSolver.getNames();
+        Map<String, CompilationUnit> dependencies = Graph.getDependencies();
+
+        assertFalse(dependencies.isEmpty());
+        assertFalse(names.isEmpty());
     }
 
 }

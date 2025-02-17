@@ -1,13 +1,12 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.CompilationUnit;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -35,10 +34,8 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Test generator for spring applications.
@@ -72,21 +69,7 @@ public class SpringTestGenerator extends  TestGenerator {
      * The URL path component common to all functions in a controller.
      */
     private String commonPath;
-    /**
-     * The names have have already been assigned to various tests.
-     * Because of overloaded methods and the need to write multiple tests for a single end point
-     * we may end up with duplicate method names. To avoid that we add a suffix of the query
-     * string arguments to distinguish overloaded and a alphabetic suffix to identify multiple
-     * tests for the same method.
-     */
-    Set<String> testMethodNames = new HashSet<>();
 
-    /**
-     * The compilation unit that represents the tests being generated.
-     * We use the nodes of a Java Parser AST to build up the class rather than relying on strings
-     *
-     */
-    CompilationUnit gen = new CompilationUnit();
 
     /**
      * The preconditions that need to be met before the test can be executed.
@@ -114,6 +97,11 @@ public class SpringTestGenerator extends  TestGenerator {
      * The current state of the test generation. It will be one of the values above.
      */
     private int state = NULL_STATE;
+
+    public SpringTestGenerator() {
+        gen = new CompilationUnit();
+    }
+
     /**
      * Create tests based on the method declaration and return type
      * @param md the descriptor of the method for which we are about to write tests.
@@ -122,28 +110,30 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     @Override
     public void createTests(MethodDeclaration md, ControllerResponse controllerResponse) {
+        this.methodUnderTest = md;
+
         RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
         for (AnnotationExpr annotation : md.getAnnotations()) {
             if (annotation.getNameAsString().equals("GetMapping") ) {
-                buildGetMethodTests(md, annotation, controllerResponse);
+                buildGetMethodTests(annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("PostMapping")) {
-                buildPostMethodTests(md, annotation, controllerResponse);
+                buildPostMethodTests(annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("DeleteMapping")) {
-                buildDeleteMethodTests(md, annotation, controllerResponse);
+                buildDeleteMethodTests(annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("PutMapping")) {
-                buildPutMethodTests(md, annotation, controllerResponse);
+                buildPutMethodTests(annotation, controllerResponse);
             }
             else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
                 for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
                     if (pair.getNameAsString().equals("method")) {
                         switch(pair.getValue().toString()) {
-                            case "RequestMethod.GET" -> buildGetMethodTests(md, annotation, controllerResponse);
-                            case "RequestMethod.POST" -> buildPostMethodTests(md, annotation, controllerResponse);
-                            case "RequestMethod.PUT" -> buildPutMethodTests(md, annotation, controllerResponse);
-                            case "RequestMethod.DELETE" -> buildDeleteMethodTests(md, annotation, controllerResponse);
+                            case "RequestMethod.GET" -> buildGetMethodTests(annotation, controllerResponse);
+                            case "RequestMethod.POST" -> buildPostMethodTests(annotation, controllerResponse);
+                            case "RequestMethod.PUT" -> buildPutMethodTests(annotation, controllerResponse);
+                            case "RequestMethod.DELETE" -> buildDeleteMethodTests(annotation, controllerResponse);
                             default -> logger.debug("Unknown request method {}", pair.getValue());
                         }
                     }
@@ -152,25 +142,25 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private void buildDeleteMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse response) {
-        httpWithoutBody(md, annotation, "makeDelete", response);
+    private void buildDeleteMethodTests(AnnotationExpr annotation, ControllerResponse response) {
+        httpWithoutBody(annotation, "makeDelete", response);
     }
 
-    private void buildPutMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        httpWithBody(md, annotation, returnType, "makePut");
+    private void buildPutMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+        httpWithBody(annotation, returnType, "makePut");
     }
 
-    private void buildGetMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        httpWithoutBody(md, annotation, "makeGet", returnType);
+    private void buildGetMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+        httpWithoutBody(annotation, "makeGet", returnType);
     }
 
-    private void httpWithoutBody(MethodDeclaration md, AnnotationExpr annotation, String call, ControllerResponse response)  {
-        final MethodDeclaration testMethod = buildTestMethod(md);
+    private void httpWithoutBody(AnnotationExpr annotation, String call, ControllerResponse response)  {
+        final MethodDeclaration testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
         BlockStmt body = getBody(testMethod);
 
-        if(md.getParameters().isEmpty()) {
+        if(methodUnderTest.getParameters().isEmpty()) {
             /*
              * Empty parameters are very easy.
              */
@@ -181,7 +171,7 @@ public class SpringTestGenerator extends  TestGenerator {
              * Non-empty parameters.
              */
             ControllerRequest request = new ControllerRequest();
-            handleURIVariables(md, request);
+            handleURIVariables(request);
 
             request.setPath(getPath(annotation).replace("\"", ""));
 
@@ -193,7 +183,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(md, testMethod, response);
+        addCheckStatus(testMethod, response);
         gen.getType(0).addMember(testMethod);
 
     }
@@ -218,24 +208,15 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private void buildPostMethodTests(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse returnType) {
-        httpWithBody(md, annotation, returnType, "makePost");
+    private void buildPostMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+        httpWithBody(annotation, returnType, "makePost");
     }
 
-
-    private BlockStmt getBody(MethodDeclaration md) {
-        return md.getBody().orElseGet(() -> {
-            BlockStmt blockStmt = new BlockStmt();
-            md.setBody(blockStmt);
-            return blockStmt;
-        });
-    }
-
-    private void addCheckStatus(MethodDeclaration mut, MethodDeclaration md, ControllerResponse resp) {
+     void addCheckStatus(MethodDeclaration mut, ControllerResponse resp) {
 
         Type returnType = resp.getType();
 
-        BlockStmt body = getBody(md);
+        BlockStmt body = getBody(methodUnderTest);
 
         if (resp.getBody() != null) {
             if (resp.getBody().getValue() != null && returnType.isClassOrInterfaceType()) {
@@ -245,6 +226,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 } else {
                     respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                 }
+                /* todo the following four lines can be deleted */
                 ImportWrapper wrapper = AbstractCompiler.findImport(mut.findCompilationUnit().get(), respType.toString());
                 if (wrapper != null) {
                     gen.addImport(wrapper.getImport());
@@ -306,18 +288,18 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
 
-    private void httpWithBody(MethodDeclaration md, AnnotationExpr annotation, ControllerResponse resp, String call) {
+    private void httpWithBody(AnnotationExpr annotation, ControllerResponse resp, String call) {
 
-        MethodDeclaration testMethod = buildTestMethod(md);
+        MethodDeclaration testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makePost = new MethodCallExpr(call);
         BlockStmt body = getBody(testMethod);
 
         ControllerRequest request = new ControllerRequest();
         request.setPath(getPath(annotation).replace("\"", ""));
-        handleURIVariables(md, request);
+        handleURIVariables(request);
 
-        if(md.getParameters().isNonEmpty()) {
-            Parameter requestBody = findRequestBody(md);
+        if(methodUnderTest.getParameters().isNonEmpty()) {
+            Parameter requestBody = findRequestBody(methodUnderTest);
             if(requestBody != null) {
                 String paramClassName = requestBody.getTypeAsString();
 
@@ -327,7 +309,7 @@ public class SpringTestGenerator extends  TestGenerator {
             }
             else {
                 makePost.addArgument(new StringLiteralExpr(""));
-                logger.warn("No RequestBody found for {}", md.getName());
+                logger.warn("No RequestBody found for {}", methodUnderTest.getName());
             }
         }
 
@@ -350,20 +332,20 @@ public class SpringTestGenerator extends  TestGenerator {
             if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                 NodeList<Type> a = returnType.asClassOrInterfaceType().getTypeArguments().get();
                 if (!a.isEmpty() && a.getFirst().isPresent() && a.getFirst().get().toString().equals("String")) {
-                    testForResponseBodyAsString(md, resp, body);
+                    testForResponseBodyAsString(methodUnderTest, resp, body);
                 }
                 else {
                     logger.warn("THIS testing path is not completed");
                 }
             } else {
-                List<String> IncompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
-                if (! IncompatibleReturnTypes.contains(returnType.toString()))
+                List<String> incompatibleReturnTypes = List.of("void", "CompletableFuture", "?");
+                if (! incompatibleReturnTypes.contains(returnType.toString()))
                 {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                     if (respType.toString().equals("String")) {
-                        testForResponseBodyAsString(md, resp, body);
+                        testForResponseBodyAsString(methodUnderTest, resp, body);
                     } else {
-                        addCheckStatus(md, testMethod, resp);
+                        addCheckStatus(testMethod, resp);
                     }
                 }
             }
@@ -472,55 +454,19 @@ public class SpringTestGenerator extends  TestGenerator {
         getBody(testMethod).addStatement(variableDeclarationExpr);
     }
 
-
+    @Override
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
-        MethodDeclaration testMethod = new MethodDeclaration();
+        MethodDeclaration testMethod = super.buildTestMethod(md);
 
         NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();
         testCaseTypeAnnotation.setName("TestCaseType");
         testCaseTypeAnnotation.addPair("types", "{TestType.BVT, TestType.REGRESSION}");
         testMethod.addAnnotation(testCaseTypeAnnotation);
-        testMethod.addAnnotation("Test");
+
         testMethod.addThrownException(JsonProcessingException.class);
 
-        StringBuilder paramNames = new StringBuilder();
-        for(var param : md.getParameters()) {
-            param.getAnnotationByName("PathVariable").ifPresent(ann ->
-                paramNames.append(param.getNameAsString().substring(0, 1).toUpperCase())
-                        .append(param.getNameAsString().substring(1))
-            );
-        }
-
-        md.findAncestor(TypeDeclaration.class).ifPresent(c ->
-        {
-            String comment = String.format("Method under test: %s.%s()\nArgument generator : %s\n",
-                    c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
-            testMethod.setJavadocComment(comment);
-        });
-
-
-        String testName = String.valueOf(md.getName());
-        if (paramNames.isEmpty()) {
-            testName += "Test";
-        } else {
-            testName += "By" + paramNames + "Test";
-
-        }
-
-        if (testMethodNames.contains(testName)) {
-            testName += "_" + (char)('A' + testMethodNames.size()  % 26 -1);
-        }
-        testMethodNames.add(testName);
-        testMethod.setName(testName);
-
-        BlockStmt body = new BlockStmt();
-
-        testMethod.setType(new VoidType());
-
-        testMethod.setBody(body);
         return testMethod;
     }
-
 
     /**
      * Given an annotation for a method in a controller find the full path in the url
@@ -551,11 +497,10 @@ public class SpringTestGenerator extends  TestGenerator {
      * It may happen that the PathVariable annotation will result in the parameter having a
      * different name from the variable name. So we will build that map for better tracking
      *
-     * @param md the method declaration
      * @param request the controller request
      */
-    void handleURIVariables(MethodDeclaration md, ControllerRequest request) {
-        for(var param : md.getParameters()) {
+    void handleURIVariables(ControllerRequest request) {
+        for(var param : methodUnderTest.getParameters()) {
             String nameAsString = param.getNameAsString();
             String queryParam = AbstractCompiler.getRestParameterName(param);
             Variable value = argumentGenerator.getArguments().get(queryParam);
@@ -601,14 +546,6 @@ public class SpringTestGenerator extends  TestGenerator {
         this.commonPath = commonPath;
     }
 
-    @Override
-    public CompilationUnit getCompilationUnit() {
-        return gen;
-    }
-
-    public void setCompilationUnit(CompilationUnit gen) {
-        this.gen = gen;
-    }
 
     @Override
     public void setPreconditions(List<Expression> preconditions) {
@@ -624,5 +561,27 @@ public class SpringTestGenerator extends  TestGenerator {
     public void setBranched(boolean branched) {
         this.branched = branched;
     }
+
+    @Override
+    public void addBeforeClass() {
+        MethodDeclaration md = new MethodDeclaration();
+        md.addAnnotation("BeforeClass");
+        md.setName("setUp");
+        md.setType(new VoidType());
+
+        BlockStmt body = new BlockStmt();
+        body.addStatement("objectMapper = new ObjectMapper();");
+        body.addStatement("objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);");
+        md.setBody(body);
+
+        gen.getType(0).addMember(md);
+        gen.addImport("com.fasterxml.jackson.databind.ObjectMapper");
+        gen.addImport("com.fasterxml.jackson.databind.DeserializationFeature");
+        gen.addImport("org.testng.annotations.BeforeClass");
+
+        gen.getType(0).addField("ObjectMapper", "objectMapper");
+    }
+
+
 }
 

@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import org.junit.platform.commons.function.Try;
 
 public class TryCatch {
     TryCatch() {

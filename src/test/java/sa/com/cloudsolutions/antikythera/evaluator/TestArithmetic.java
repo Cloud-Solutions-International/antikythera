@@ -44,7 +44,7 @@ class TestArithmetic extends  TestHelper {
             compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Arithmetic"));
 
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Arithmetic");
-            evaluator.setupFields(cu);
+            evaluator.setupFields();
         }
     }
 

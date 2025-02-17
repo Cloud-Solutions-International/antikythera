@@ -6,10 +6,8 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
@@ -134,7 +132,7 @@ public class RestControllerParser extends ClassProcessor {
         ClassOrInterfaceDeclaration cdecl = gen.addClass(type.getNameAsString() + "Test");
         cdecl.addExtendedType("TestHelper");
         gen.setPackageDeclaration(pd);
-        addBeforeClass(gen);
+        generator.addBeforeClass();
 
         allImports.addAll(cu.getImports());
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
@@ -163,7 +161,7 @@ public class RestControllerParser extends ClassProcessor {
          * Pass 2 : Generate the tests
          */
         AntikytheraRunTime.reset();
-        evaluator.setupFields(cu);
+        evaluator.setupFields();
         cu.accept(new ControllerMethodVisitor(), null);
 
         for(ImportDeclaration imp : keepImports) {
@@ -193,25 +191,6 @@ public class RestControllerParser extends ClassProcessor {
                 pd.getName().asString(), type.getNameAsString() + "Test.java",
                 gen.toString());
 
-    }
-
-    private void addBeforeClass(CompilationUnit gen) {
-        MethodDeclaration md = new MethodDeclaration();
-        md.addAnnotation("BeforeClass");
-        md.setName("setUp");
-        md.setType(new VoidType());
-
-        BlockStmt body = new BlockStmt();
-        body.addStatement("objectMapper = new ObjectMapper();");
-        body.addStatement("objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);");
-        md.setBody(body);
-
-        gen.getType(0).addMember(md);
-        gen.addImport("com.fasterxml.jackson.databind.ObjectMapper");
-        gen.addImport("com.fasterxml.jackson.databind.DeserializationFeature");
-        gen.addImport("org.testng.annotations.BeforeClass");
-
-        gen.getType(0).addField("ObjectMapper", "objectMapper");
     }
 
     /**
@@ -296,7 +275,7 @@ public class RestControllerParser extends ClassProcessor {
             if (md.isPublic()) {
                 stats.methods++;
                 resolveMethodParameterTypes(md);
-                md.accept(new ReturnStatmentVisitor(), md);
+                md.accept(new ReturnStatementVisitor(), md);
                 md.accept(new StatementVisitor(), md);
             }
         }
@@ -337,7 +316,7 @@ public class RestControllerParser extends ClassProcessor {
          * We will investigate the return to find that out and then based on the condition will taylor the
          * inputs accordingly.
          */
-        class ReturnStatmentVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+        class ReturnStatementVisitor extends VoidVisitorAdapter<MethodDeclaration> {
             /**
              * This method will be called once for each return statment inside the method block.
              *

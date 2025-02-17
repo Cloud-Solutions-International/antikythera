@@ -12,6 +12,7 @@ import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
+import sa.com.cloudsolutions.antikythera.parser.ServicesParser;
 
 import java.io.*;
 import java.nio.channels.Channels;
@@ -20,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Collection;
 import java.util.List;
 
 import java.util.Properties;
@@ -36,16 +38,18 @@ public class Antikythera {
 
     private final String basePackage;
     private final String basePath;
-    private final String controllers;
+    private final Collection<String> controllers;
+    private final Collection<String> services;
     private final String outputPath;
 
     private static Antikythera instance;
 
     private Antikythera() {
-        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-        basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString();
-        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
-        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
+        basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
+        basePackage = Settings.getProperty(Constants.BASE_PACKAGE, String.class).orElse(null);
+        outputPath = Settings.getProperty(Constants.OUTPUT_PATH, String.class).orElse(null);
+        controllers = Settings.getPropertyList(Constants.CONTROLLERS, String.class);
+        services = Settings.getPropertyList(Constants.SERVICES, String.class);
     }
 
     public static Antikythera getInstance() throws IOException {
@@ -164,7 +168,6 @@ public class Antikythera {
                 Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
         }
-
     }
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
@@ -192,27 +195,30 @@ public class Antikythera {
      * @throws XmlPullParserException if attempts to convert the POM file to an xml tree fail
      * @throws EvaluatorException if evaluating java expressions in the AUT code fails.
      */
-    public void generate() throws IOException, XmlPullParserException, EvaluatorException {
-        CopyUtils.createMavenProjectStructure(basePackage, outputPath);
-        copyBaseFiles(outputPath);
+    public void generateApiTests() throws IOException, XmlPullParserException, EvaluatorException {
+        for (String controller : controllers) {
 
-        AbstractCompiler.preProcess();
-
-        String controllersCleaned = controllers.split("#")[0];
-        if (controllersCleaned.matches(".*\\.java$")) {
-            Path path = Paths.get(basePath, controllersCleaned.replace(".", "/").replace("/java", SUFFIX));
-            RestControllerParser processor = new RestControllerParser(path.toFile());
-            processor.start();
-        } else {
-            Path path = Paths.get(basePath, controllersCleaned.replace(".", "/"));
-            RestControllerParser processor = new RestControllerParser(path.toFile());
-            processor.start();
+            String controllersCleaned = controller.split("#")[0];
+            if (controllersCleaned.matches(".*\\.java$")) {
+                Path path = Paths.get(basePath, controllersCleaned.replace(".", "/").replace("/java", SUFFIX));
+                RestControllerParser processor = new RestControllerParser(path.toFile());
+                processor.start();
+            } else {
+                Path path = Paths.get(basePath, controllersCleaned.replace(".", "/"));
+                RestControllerParser processor = new RestControllerParser(path.toFile());
+                processor.start();
+            }
         }
     }
 
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
         String filePath = outputPath + File.separator + SRC + File.separator + "test" + File.separator + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
+
+        writeFile(filePath, content);
+    }
+
+    public void writeFile(String filePath, String content) throws IOException {
         File file = new File(filePath);
         File parentDir = file.getParentFile();
         Files.createDirectories(parentDir.toPath());
@@ -222,11 +228,37 @@ public class Antikythera {
     }
 
     public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
-        Antikythera.getInstance().generate();
+        Antikythera antk = Antikythera.getInstance();
+        antk.preProcess();
+        antk.generateApiTests();
         RestControllerParser.Stats stats = RestControllerParser.getStats();
 
         logger.info("Processed {} controllers", stats.getControllers());
         logger.info("Processed {} methods", stats.getMethods());
         logger.info("Generated {} tests", stats.getTests());
+
+        antk.generateUnitTests();
+    }
+
+    public void preProcess() throws IOException, XmlPullParserException {
+        CopyUtils.createMavenProjectStructure(basePackage, outputPath);
+        copyBaseFiles(outputPath);
+
+        AbstractCompiler.preProcess();
+
+    }
+
+    private void generateUnitTests() throws IOException {
+        for (String service : services) {
+            String[] parts = service.split("#");
+            String servicesCleaned = parts[0];
+            if (parts.length == 2) {
+                ServicesParser processor = new ServicesParser(parts[0]);
+                processor.start(parts[1]);
+            } else {
+                ServicesParser processor = new ServicesParser(servicesCleaned);
+                processor.start();
+            }
+        }
     }
 }

@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IntegrationTestDTOHandler {
     @BeforeAll
-    static void beforeClass() throws IOException, ReflectiveOperationException {
+    static void beforeClass() throws IOException {
         Settings.loadConfigMap();
         AbstractCompiler.reset();
     }
@@ -78,7 +78,7 @@ class IntegrationTestDTOHandler {
         handler.parse(AbstractCompiler.classToPath("sa.com.cloudsolutions.dto.MediumDTO"));
 
         Evaluator eval = new Evaluator("sa.com.cloudsolutions.dto.MediumDTO");
-        eval.setupFields(handler.getCompilationUnit());
+        eval.setupFields();
 
         Variable v = eval.getFields().get("group");
         assertNotNull(v);

@@ -72,7 +72,8 @@ class ProjectGeneratorTest {
 
     @Test
     void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException, EvaluatorException {
-        generator.generate();
+        generator.preProcess();
+        generator.generateApiTests();
 
         String outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 

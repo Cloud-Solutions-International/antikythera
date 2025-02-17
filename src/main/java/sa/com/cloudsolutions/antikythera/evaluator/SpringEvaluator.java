@@ -127,7 +127,7 @@ public class SpringEvaluator extends Evaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         branching.clear();
         md.getParentNode().ifPresent(p -> {
-            if (p instanceof ClassOrInterfaceDeclaration cdecl && cdecl.isAnnotationPresent("RestController")) {
+            if (p instanceof ClassOrInterfaceDeclaration) {
                 currentMethod = md;
             }
         });
@@ -137,7 +137,7 @@ public class SpringEvaluator extends Evaluator {
             for (int i = 0; i < statements.size(); i++) {
                 Statement st = statements.get(i);
                 if (!lines.containsKey(st.hashCode())) {
-                    mockURIVariables(md);
+                    mockMethodArguments(md);
                     executeMethod(md);
                     if (returnFrom != null) {
                         // rewind!
@@ -206,7 +206,7 @@ public class SpringEvaluator extends Evaluator {
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         if (! (e instanceof AntikytheraException ae)) {
             if (catching.isEmpty()) {
-                testForInternalServerError(null,
+                testForInternalError(null,
                         new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
                 throw new AUTException(e.getMessage());
             } else {
@@ -216,7 +216,6 @@ public class SpringEvaluator extends Evaluator {
         else {
             throw ae;
         }
-
     }
 
     /**
@@ -248,11 +247,14 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * The URL contains Path variables, Query string parameters and post bodies. We mock them here
+     * Mocks method arguments.
+     * In the case of a rest api controller, the URL contains Path variables, Query string
+     * parameters and post bodies. We mock them here with the help of the argument generator.
+     * In the case of services and other classes we can use a mocking library.
      * @param md The method declaration representing an HTTP API end point
      * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
-    private void mockURIVariables(MethodDeclaration md) throws ReflectiveOperationException {
+    private void mockMethodArguments(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);
@@ -318,7 +320,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
-    public void identifyFieldDeclarations(VariableDeclarator field) throws IOException, AntikytheraException, ReflectiveOperationException {
+    public void identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
         super.identifyFieldDeclarations(field);
 
         if (field.getType().isClassOrInterfaceType()) {
@@ -338,8 +340,7 @@ public class SpringEvaluator extends Evaluator {
             return;
         }
 
-        String className = t.resolve().describe();
-
+        String className = AbstractCompiler.findFullyQualifiedName(variable.findCompilationUnit().get(), shortName);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
@@ -477,10 +478,9 @@ public class SpringEvaluator extends Evaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 Evaluator eval = new SpringEvaluator(resolvedClass);
-                CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 v = new Variable(eval);
                 AntikytheraRunTime.autoWire(resolvedClass, v);
-                eval.setupFields(dependant);
+                eval.setupFields();
             }
             fields.put(variable.getNameAsString(), v);
 
@@ -502,14 +502,14 @@ public class SpringEvaluator extends Evaluator {
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
-                testForInternalServerError(methodCall, eex);
+                testForInternalError(methodCall, eex);
                 throw eex   ;
             }
         }
         return null;
     }
 
-    private void testForInternalServerError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
+    private void testForInternalError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
         ControllerResponse controllerResponse = new ControllerResponse();
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
@@ -790,7 +790,7 @@ public class SpringEvaluator extends Evaluator {
                         if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
                             for(int i = 0 ; i < 10 ; i++) {
                                 Variable row = createObject(stmt, v, objectCreationExpr);
-                                if(resultToEntity(row, rs)) {
+                                if(SpringEvaluator.resultToEntity(row, rs)) {
                                     ((Collection) variable.getValue()).add(row);
                                 }
                                 else {
@@ -804,7 +804,7 @@ public class SpringEvaluator extends Evaluator {
                 else {
                     ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
                     Variable row = createObject(stmt, v, objectCreationExpr);
-                    if(resultToEntity(row, rs)) {
+                    if(SpringEvaluator.resultToEntity(row, rs)) {
                         return row;
                     } else {
                         return new Variable(null);
@@ -821,7 +821,7 @@ public class SpringEvaluator extends Evaluator {
      * @param variable copy the data from the record into this variable.
      * @param rs the sql result set
      */
-    private boolean resultToEntity(Variable variable, ResultSet rs) {
+    private static boolean resultToEntity(Variable variable, ResultSet rs) {
         try {
             if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());

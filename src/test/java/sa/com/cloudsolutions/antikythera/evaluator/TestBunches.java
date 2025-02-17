@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 // todo in order to make these tests work, need to support multiple paths for base
 public class TestBunches  {
     Evaluator evaluator;
-    AbstractCompiler eval;
+    AbstractCompiler compiler;
 
     private final PrintStream standardOut = System.out;
     private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
@@ -40,13 +40,13 @@ public class TestBunches  {
 
     @BeforeEach
     public void each() throws AntikytheraException, IOException {
-        eval = new TestBunches.CollectionEvaluator();
+        compiler = new TestBunches.CollectionEvaluator();
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testList() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = eval.getCompilationUnit();
+        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration printList = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printList")).orElseThrow();
         evaluator.executeMethod(printList);
         assertTrue(outContent.toString().contains("[one, two]"));
@@ -54,7 +54,7 @@ public class TestBunches  {
 
     @Test
     void testMap() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = eval.getCompilationUnit();
+        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration printMap = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printMap")).orElseThrow();
         evaluator.executeMethod(printMap);
         assertTrue(outContent.toString().contains("{one=1, two=2}"));
@@ -62,7 +62,7 @@ public class TestBunches  {
 
     @Test
     void testWithDTO() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = eval.getCompilationUnit();
+        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTO")).orElseThrow();
         evaluator.executeMethod(withDTO);
         assertTrue(outContent.toString().contains("Bunches.DTO]"));
@@ -71,7 +71,7 @@ public class TestBunches  {
 
     @Test
     void testDTOConstructor() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = eval.getCompilationUnit();
+        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTOConstructor")).orElseThrow();
         evaluator.executeMethod(withDTO);
         assertTrue(outContent.toString().contains("Person]"));

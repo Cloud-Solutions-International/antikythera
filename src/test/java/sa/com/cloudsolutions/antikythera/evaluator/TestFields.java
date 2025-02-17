@@ -64,7 +64,7 @@ class TestFields extends TestHelper {
             parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
             compileDependencies();
             evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Employee");
-            evaluator.setupFields(cu);
+            evaluator.setupFields();
         }
     }
 }
