@@ -940,7 +940,7 @@ public class Evaluator {
                 }
                 else {
                     Evaluator eval = createEvaluator(fullyQualifiedName);
-                    eval.setupFields();
+                    eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
                     v = new Variable(eval);
                 }
             }
@@ -1340,8 +1340,9 @@ public class Evaluator {
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
+                        CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
                         Evaluator eval = createEvaluator(cname);
-                        eval.setupFields();
+                        eval.setupFields(dep);
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1462,7 +1463,7 @@ public class Evaluator {
                             }
                         }
                     }
-                    if (va == null || va.getValue() == null) {
+                    if (va == null) {
                         missing.add(true);
                     }
                 });
@@ -1546,7 +1547,7 @@ public class Evaluator {
     void executeStatement(Statement stmt) throws Exception {
         if (stmt.isExpressionStmt()) {
             /*
-             * A line of code that is an expression. The expresion itself can fall into various different
+             * A line of code that is an expression. The expression itself can fall into various different
              * categories and we let the evaluateExpression method take care of all that
              */
             evaluateExpression(stmt.asExpressionStmt().getExpression());
@@ -1769,7 +1770,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    public void setupFields()  {
+    public void setupFields(CompilationUnit cu)  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 

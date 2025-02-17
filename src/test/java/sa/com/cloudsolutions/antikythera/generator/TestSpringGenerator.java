@@ -56,7 +56,7 @@ class TestSpringGenerator {
 
         md.addParameter(param1);
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.setCommonPath("/api");
 
         MethodDeclaration testMethod = generator.buildTestMethod(md);
@@ -101,11 +101,8 @@ class TestSpringGenerator {
     }
 
     private void testVerbs() {
-        SpringTestGenerator generator =new SpringTestGenerator();
-        generator.setCompilationUnit(cu);
-
+        SpringTestGenerator generator =new SpringTestGenerator(cu);
         generator.setCommonPath("");
-
         generator.createTests(md, response);
 
         CompilationUnit gen = generator.getCompilationUnit();
@@ -131,7 +128,7 @@ class TestSpringGenerator {
         ControllerRequest request = new ControllerRequest();
         request.setPath("/api/test/{param1}");
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.createTests(md, response);
 
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
@@ -162,7 +159,7 @@ class TestSpringGenerator {
         ControllerRequest request = new ControllerRequest();
         request.setPath("/api/test/");
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.createTests(md, response);
 
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();

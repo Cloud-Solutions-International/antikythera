@@ -219,8 +219,8 @@ public class SpringEvaluator extends Evaluator {
      * @param methodCall the method call expression
      * @return the result set
      */
-    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        RepositoryParser repository = repositories.get(name);
+    private RepositoryQuery executeQuery(Expression name, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        RepositoryParser repository = repositories.get(getFieldClass(name));
         if(repository != null) {
             MCEWrapper methodCallWrapper = wrapCallExpression(methodCall);
 
@@ -274,10 +274,7 @@ public class SpringEvaluator extends Evaluator {
     @Override
     public void identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
         super.identifyFieldDeclarations(field);
-
-        if (field.getType().isClassOrInterfaceType()) {
-            detectRepository(field);
-        }
+        detectRepository(field);
     }
 
     /**
@@ -286,11 +283,12 @@ public class SpringEvaluator extends Evaluator {
      * @throws IOException if the file cannot be read
      */
     private static void detectRepository(VariableDeclarator variable) throws IOException {
-        ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
-        String shortName = t.getNameAsString();
-        if (SpringEvaluator.getRepositories().containsKey(shortName)) {
+        if (variable.getType() == null || !variable.getType().isClassOrInterfaceType()) {
             return;
         }
+
+        ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+        String shortName = t.getNameAsString();
 
         String className = AbstractCompiler.findFullyQualifiedName(variable.findCompilationUnit().get(), shortName);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
@@ -298,6 +296,7 @@ public class SpringEvaluator extends Evaluator {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
             if (typeDecl != null && typeDecl.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
+
                 for (var ext : cdecl.getExtendedTypes()) {
                     if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                         /*
@@ -308,7 +307,9 @@ public class SpringEvaluator extends Evaluator {
                         RepositoryParser parser = new RepositoryParser();
                         parser.compile(AbstractCompiler.classToPath(className));
                         parser.processTypes();
-                        repositories.put(variable.getNameAsString(), parser);
+
+                        String fqn = AbstractCompiler.findFullyQualifiedName(cu, t.getNameAsString());
+                        repositories.put(fqn, parser);
                         break;
                     }
                 }
@@ -430,9 +431,10 @@ public class SpringEvaluator extends Evaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 Evaluator eval = new SpringEvaluator(resolvedClass);
+                CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 v = new Variable(eval);
                 AntikytheraRunTime.autoWire(resolvedClass, v);
-                eval.setupFields();
+                eval.setupFields(dependant);
             }
             fields.put(variable.getNameAsString(), v);
 
@@ -447,7 +449,7 @@ public class SpringEvaluator extends Evaluator {
         try {
             if(methodCall.getScope().isPresent()) {
                 Expression scope = methodCall.getScope().get();
-                if(repositories.get(scope.toString()) != null) {
+                if(repositories.containsKey(getFieldClass(scope))) {
                     return executeSource(methodCall);
                 }
             }
@@ -509,7 +511,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Setup an if condition so that it will evaluate to true or false in future executions.
+     * Set up an if condition so that it will evaluate to true or false in future executions.
      * @param ifst the if statement to mess with
      * @param state the desired state.
      */
@@ -664,10 +666,9 @@ public class SpringEvaluator extends Evaluator {
         }
         Expression expression = methodCall.getScope().orElseThrow();
         if (expression.isNameExpr()) {
-            String fieldName = expression.asNameExpr().getNameAsString();
-            RepositoryParser rp = repositories.get(fieldName);
+            RepositoryParser rp = repositories.get(getFieldClass(expression));
             if (rp != null) {
-                RepositoryQuery q = executeQuery(fieldName, methodCall);
+                RepositoryQuery q = executeQuery(expression, methodCall);
                 if (q != null) {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
@@ -774,19 +775,37 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
+    private String getFieldClass(Expression expr) {
+        if (expr.isNameExpr()) {
+            String name = expr.asNameExpr().getNameAsString();
+            Variable v = fields.get(name);
+            if (v != null) {
+                if (v.getType() != null) {
+                    return v.getType().asString();
+                }
+                else if (v.getValue() instanceof Evaluator eval) {
+                    return eval.getClassName();
+                }
+            }
+        }
+        else if (expr.isMethodCallExpr()) {
+            MethodCallExpr methodCall = expr.asMethodCallExpr();
+            Expression scope = methodCall.getScope().orElse(null);
+            if (scope != null && scope.isNameExpr()) {
+                return getFieldClass(scope);
+            }
+        }
+        return null;
+    }
+
     private boolean isRepositoryMethod(ExpressionStmt stmt) {
         Expression expr = stmt.getExpression();
         if (expr.isVariableDeclarationExpr()) {
             VariableDeclarationExpr vdecl = expr.asVariableDeclarationExpr();
             VariableDeclarator v = vdecl.getVariable(0);
             Optional<Expression> init = v.getInitializer();
-            if (init.isPresent() && init.get().isMethodCallExpr()) {
-                MethodCallExpr methodCall = init.get().asMethodCallExpr();
-                Expression scope = methodCall.getScope().orElse(null);
-                if (scope != null && scope.isNameExpr()) {
-                    return repositories.containsKey(scope.asNameExpr().getNameAsString());
-                }
-
+            if (init.isPresent()) {
+                return repositories.containsKey(getFieldClass(init.get()));
             }
         }
         return false;

@@ -198,16 +198,9 @@ public class Antikythera {
     public void generateApiTests() throws IOException, XmlPullParserException, EvaluatorException {
         for (String controller : controllers) {
 
-            String controllersCleaned = controller.split("#")[0];
-            if (controllersCleaned.matches(".*\\.java$")) {
-                Path path = Paths.get(basePath, controllersCleaned.replace(".", "/").replace("/java", SUFFIX));
-                RestControllerParser processor = new RestControllerParser(path.toFile());
-                processor.start();
-            } else {
-                Path path = Paths.get(basePath, controllersCleaned.replace(".", "/"));
-                RestControllerParser processor = new RestControllerParser(path.toFile());
-                processor.start();
-            }
+            String controllersCleaned = controller.replace(".java","").split("#")[0];
+            RestControllerParser processor = new RestControllerParser(controllersCleaned);
+            processor.start();
         }
     }
 

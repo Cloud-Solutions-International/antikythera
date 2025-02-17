@@ -194,10 +194,6 @@ public class RepositoryQuery {
         return methodArguments;
     }
 
-    public void setStatement(Statement statement) {
-        this.statement = statement;
-    }
-
     public Statement getSimplifiedStatement() {
         return simplifiedStatement;
     }

@@ -1,8 +1,10 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.visitor.VoidVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,8 +13,10 @@ import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
-
+import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
+
+import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
@@ -20,7 +24,7 @@ import sa.com.cloudsolutions.antikythera.generator.Factory;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.io.IOException;
-
+import java.util.Map;
 
 public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
@@ -68,7 +72,7 @@ public class ServicesParser {
             });
             solver.dfs();
         }
-        
+
         cu.accept(new VoidVisitorAdapter<Void>() {
             @Override
             public void visit(MethodDeclaration md, Void arg) {
@@ -89,7 +93,7 @@ public class ServicesParser {
         generator.save();
     }
 
-    private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
         evaluator.setArgumentGenerator(gen);
         evaluator.reset();
         evaluator.resetColors();
@@ -111,5 +115,4 @@ public class ServicesParser {
     private boolean checkEligible(MethodDeclaration md) {
         return !md.isPublic();
     }
-
 }
