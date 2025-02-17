@@ -267,8 +267,8 @@ public class SpringEvaluator extends Evaluator {
      * @param methodCall the method call expression
      * @return the result set
      */
-    private RepositoryQuery executeQuery(String name, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        RepositoryParser repository = repositories.get(name);
+    private RepositoryQuery executeQuery(Expression name, MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
+        RepositoryParser repository = repositories.get(getFieldClass(name));
         if(repository != null) {
             MCEWrapper methodCallWrapper = wrapCallExpression(methodCall);
 
@@ -356,8 +356,12 @@ public class SpringEvaluator extends Evaluator {
                         RepositoryParser parser = new RepositoryParser();
                         parser.compile(AbstractCompiler.classToPath(className));
                         parser.processTypes();
-                        repositories.put(variable.getNameAsString(), parser);
-                        break;
+                        if (variable.getType() != null && variable.getType().isClassOrInterfaceType()) {
+                            ClassOrInterfaceType cit = variable.getType().asClassOrInterfaceType();
+                            String fqn = AbstractCompiler.findFullyQualifiedName(cu, cit.getNameAsString());
+                            repositories.put(fqn, parser);
+                            break;
+                        }
                     }
                 }
             }
@@ -496,7 +500,7 @@ public class SpringEvaluator extends Evaluator {
         try {
             if(methodCall.getScope().isPresent()) {
                 Expression scope = methodCall.getScope().get();
-                if(repositories.get(scope.toString()) != null) {
+                if(repositories.containsKey(getFieldClass(scope))) {
                     return executeSource(methodCall);
                 }
             }
@@ -739,10 +743,9 @@ public class SpringEvaluator extends Evaluator {
         }
         Expression expression = methodCall.getScope().orElseThrow();
         if (expression.isNameExpr()) {
-            String fieldName = expression.asNameExpr().getNameAsString();
-            RepositoryParser rp = repositories.get(fieldName);
+            RepositoryParser rp = repositories.get(getFieldClass(expression));
             if (rp != null) {
-                RepositoryQuery q = executeQuery(fieldName, methodCall);
+                RepositoryQuery q = executeQuery(expression, methodCall);
                 if (q != null) {
                     LineOfCode l = findExpressionStatement(methodCall);
                     if (l != null) {
@@ -849,19 +852,37 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
+    private String getFieldClass(Expression expr) {
+        if (expr.isNameExpr()) {
+            String name = expr.asNameExpr().getNameAsString();
+            Variable v = fields.get(name);
+            if (v != null) {
+                if (v.getType() != null) {
+                    return v.getType().asString();
+                }
+                else if (v.getValue() instanceof Evaluator eval) {
+                    return eval.getClassName();
+                }
+            }
+        }
+        else if (expr.isMethodCallExpr()) {
+            MethodCallExpr methodCall = expr.asMethodCallExpr();
+            Expression scope = methodCall.getScope().orElse(null);
+            if (scope != null && scope.isNameExpr()) {
+                return getFieldClass(scope);
+            }
+        }
+        return null;
+    }
+
     private boolean isRepositoryMethod(ExpressionStmt stmt) {
         Expression expr = stmt.getExpression();
         if (expr.isVariableDeclarationExpr()) {
             VariableDeclarationExpr vdecl = expr.asVariableDeclarationExpr();
             VariableDeclarator v = vdecl.getVariable(0);
             Optional<Expression> init = v.getInitializer();
-            if (init.isPresent() && init.get().isMethodCallExpr()) {
-                MethodCallExpr methodCall = init.get().asMethodCallExpr();
-                Expression scope = methodCall.getScope().orElse(null);
-                if (scope != null && scope.isNameExpr()) {
-                    return repositories.containsKey(scope.asNameExpr().getNameAsString());
-                }
-
+            if (init.isPresent()) {
+                return repositories.containsKey(getFieldClass(init.get()));
             }
         }
         return false;

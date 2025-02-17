@@ -22,7 +22,7 @@ class RestControllerParserTest {
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
         String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
-        parser = new RestControllerParser(Paths.get(Settings.getBasePath(),controllers.replaceAll("\\.","/")).toFile());
+        parser = new RestControllerParser("sa.com.cloudsolutions.controller.ComplexController");
     }
 
     @Test
