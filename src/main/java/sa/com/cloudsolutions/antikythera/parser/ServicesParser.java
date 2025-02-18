@@ -40,9 +40,11 @@ public class ServicesParser {
         }
         evaluator = new SpringEvaluator(cls);
         generator = (UnitTestGenerator) Factory.create("unit", cu);
-        evaluator.addGenerator(generator);
 
+        evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
+        evaluator.setupFields(cu);
+
         generator.setupImports();
         generator.addBeforeClass();
     }
