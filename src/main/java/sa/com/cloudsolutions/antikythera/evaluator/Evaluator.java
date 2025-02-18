@@ -1,4 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
+
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
@@ -14,19 +15,10 @@ import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 
-import com.github.javaparser.ast.stmt.WhileStmt;
-import sa.com.cloudsolutions.antikythera.exception.AUTException;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import com.github.javaparser.ast.stmt.IfStmt;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.finch.Finch;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
-
+import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -40,12 +32,21 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import sa.com.cloudsolutions.antikythera.exception.AUTException;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.finch.Finch;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -62,7 +63,6 @@ import java.util.Map;
 import java.io.File;
 import java.util.Optional;
 import java.util.Stack;
-
 
 /**
  * Expression evaluator engine.
@@ -822,7 +822,6 @@ public class Evaluator {
         Variable variable = evaluateScopeChain(chain);
 
         return evaluateMethodCall(variable, methodCall);
-
     }
 
     private Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
@@ -1855,5 +1854,4 @@ class NumericComparator {
             throw new IllegalArgumentException("Cannot compare " + left + " and " + right);
         }
     }
-
 }

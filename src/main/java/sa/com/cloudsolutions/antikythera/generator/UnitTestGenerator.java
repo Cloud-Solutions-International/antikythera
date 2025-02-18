@@ -190,8 +190,11 @@ public class UnitTestGenerator extends TestGenerator {
             }
 
             instanceName =  ClassProcessor.classToInstanceName( classUnderTest.getNameAsString());
-            FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
-            fd.addAnnotation("Autowired");
+
+            if (!testClass.getFieldByName(classUnderTest.getNameAsString()).isPresent()) {
+                FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
+                fd.addAnnotation("Autowired");
+            }
             autoWired = true;
         }
     }

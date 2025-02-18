@@ -247,7 +247,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 as.addArgument("resp");
                 body.addStatement(new ExpressionStmt(as));
 
-                addFieldAsserts(resp, body);
+                asserter.addFieldAsserts(resp, body);
             } else {
                 MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
                 as.addArgument("response.getBody().asString().isEmpty()");
@@ -257,36 +257,6 @@ public class SpringTestGenerator extends  TestGenerator {
         }
         else {
             addHttpStatusCheck(body, resp.getStatusCode());
-        }
-    }
-
-    private static void addFieldAsserts(MethodResponse resp, BlockStmt body) {
-        if (resp.getBody().getValue() instanceof Evaluator ev) {
-            int i = 0;
-            for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
-                try {
-                    if (field.getValue() != null && field.getValue().getValue() != null) {
-                        Variable v = field.getValue();
-                        String getter = "get" + field.getKey().substring(0, 1).toUpperCase() + field.getKey().substring(1);
-                        MethodCallExpr assertEquals = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
-                        assertEquals.addArgument("resp." + getter + "()");
-
-                        if (v.getValue() instanceof String) {
-                            assertEquals.addArgument("\"" + v.getValue() + "\"");
-                        } else {
-                            assertEquals.addArgument(field.getValue().getValue().toString());
-                        }
-                        body.addStatement(new ExpressionStmt(assertEquals));
-                        i++;
-                    }
-                } catch (Exception pex) {
-                    logger.error("Error asserting {}", field.getKey());
-                }
-
-                if (i == 5) {
-                    break;
-                }
-            }
         }
     }
 
