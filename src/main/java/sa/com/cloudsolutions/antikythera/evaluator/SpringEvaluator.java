@@ -239,8 +239,11 @@ public class SpringEvaluator extends Evaluator {
                     if (!(nameAsString.contains("save") || nameAsString.contains("delete") || nameAsString.contains("update"))) {
                         q.getMethodArguments().clear();
                         for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-                            Expression argument = methodCall.getArgument(i);
-                            q.getMethodArguments().add(new QueryMethodArgument(argument, i, evaluateExpression(argument)));
+                            q.getMethodArguments().add(null);
+                        }
+                        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
+                            QueryMethodArgument qa = new QueryMethodArgument(methodCall.getArgument(i), i, AntikytheraRunTime.pop());
+                            q.getMethodArguments().set(i, qa);
                         }
 
                         repository.executeQuery(callable.get());
@@ -670,25 +673,12 @@ public class SpringEvaluator extends Evaluator {
             if (rp != null) {
                 RepositoryQuery q = executeQuery(expression, methodCall);
                 if (q != null) {
-                    LineOfCode l = findExpressionStatement(methodCall);
-                    if (l != null) {
-                        ExpressionStmt stmt = l.getStatement().asExpressionStmt();
-                        if (q.isWriteOps()) {
-                            return evaluateExpression(methodCall.getArgument(0));
-                        }
-                        else {
-                            Variable v = processResult(stmt, q.getResultSet());
-
-                            if (l.getRepositoryQuery() == null) {
-                                l.setRepositoryQuery(q);
-                                l.setPathTaken(LineOfCode.FALSE_PATH);
-                            } else {
-                                l.setPathTaken(LineOfCode.TRUE_PATH);
-                            }
-                            return v;
-                        }
+                    if (q.isWriteOps()) {
+                        return evaluateExpression(methodCall.getArgument(0));
                     }
-                    return null;
+                    else {
+                        return processResult(findExpressionStatement(methodCall), q.getResultSet());
+                    }
                 }
             }
         }
@@ -811,14 +801,14 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
-    private LineOfCode findExpressionStatement(MethodCallExpr methodCall) {
+    private ExpressionStmt findExpressionStatement(MethodCallExpr methodCall) {
         Node n = methodCall;
         while (n != null && !(n instanceof MethodDeclaration)) {
             if (n instanceof ExpressionStmt stmt) {
                 /*
                  * We have found the expression statement corresponding to this query
                  */
-                return branching.get(stmt.hashCode());
+                return stmt;
             }
             n = n.getParentNode().orElse(null);
         }
