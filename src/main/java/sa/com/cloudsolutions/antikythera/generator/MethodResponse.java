@@ -7,7 +7,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ControllerResponse {
+public class MethodResponse {
     Type type;
     Variable response;
     Variable body;
@@ -27,11 +27,11 @@ public class ControllerResponse {
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
     }
 
-    public ControllerResponse() {
+    public MethodResponse() {
 
     }
 
-    public ControllerResponse(Variable v) {
+    public MethodResponse(Variable v) {
         this.response = v;
     }
 

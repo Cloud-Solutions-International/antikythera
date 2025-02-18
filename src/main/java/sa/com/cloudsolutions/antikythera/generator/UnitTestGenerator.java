@@ -107,7 +107,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public void createTests(MethodDeclaration md, ControllerResponse response) {
+    public void createTests(MethodDeclaration md, MethodResponse response) {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
@@ -244,7 +244,7 @@ public class UnitTestGenerator extends TestGenerator {
         body.addStatement(b.toString());
     }
 
-    private void addAsserts(ControllerResponse response) {
+    private void addAsserts(MethodResponse response) {
         Type t = methodUnderTest.getType();
         BlockStmt body = getBody(testMethod);
         if (t != null) {

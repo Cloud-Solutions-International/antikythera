@@ -72,7 +72,7 @@ public abstract class TestGenerator {
      * @param md the method being tested
      * @param response REST API response if this is a controller method
      */
-    public abstract void createTests(MethodDeclaration md, ControllerResponse response);
+    public abstract void createTests(MethodDeclaration md, MethodResponse response);
 
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
         MethodDeclaration testMethod = new MethodDeclaration();

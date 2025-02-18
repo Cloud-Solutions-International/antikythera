@@ -117,7 +117,7 @@ public class SpringTestGenerator extends  TestGenerator {
      *                           ResponseEntity as well as the body of the ResponseEntity.
      */
     @Override
-    public void createTests(MethodDeclaration md, ControllerResponse controllerResponse) {
+    public void createTests(MethodDeclaration md, MethodResponse controllerResponse) {
         this.methodUnderTest = md;
 
         RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
@@ -150,19 +150,19 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private void buildDeleteMethodTests(AnnotationExpr annotation, ControllerResponse response) {
+    private void buildDeleteMethodTests(AnnotationExpr annotation, MethodResponse response) {
         httpWithoutBody(annotation, "makeDelete", response);
     }
 
-    private void buildPutMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+    private void buildPutMethodTests(AnnotationExpr annotation, MethodResponse returnType) {
         httpWithBody(annotation, returnType, "makePut");
     }
 
-    private void buildGetMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+    private void buildGetMethodTests(AnnotationExpr annotation, MethodResponse returnType) {
         httpWithoutBody(annotation, "makeGet", returnType);
     }
 
-    private void httpWithoutBody(AnnotationExpr annotation, String call, ControllerResponse response)  {
+    private void httpWithoutBody(AnnotationExpr annotation, String call, MethodResponse response)  {
         testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
@@ -216,11 +216,11 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private void buildPostMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+    private void buildPostMethodTests(AnnotationExpr annotation, MethodResponse returnType) {
         httpWithBody(annotation, returnType, "makePost");
     }
 
-     void addCheckStatus(ControllerResponse resp) {
+     void addCheckStatus(MethodResponse resp) {
 
         Type returnType = resp.getType();
 
@@ -260,7 +260,7 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private static void addFieldAsserts(ControllerResponse resp, BlockStmt body) {
+    private static void addFieldAsserts(MethodResponse resp, BlockStmt body) {
         if (resp.getBody().getValue() instanceof Evaluator ev) {
             int i = 0;
             for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
@@ -295,7 +295,7 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
 
-    private void httpWithBody(AnnotationExpr annotation, ControllerResponse resp, String call) {
+    private void httpWithBody(AnnotationExpr annotation, MethodResponse resp, String call) {
 
         testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makePost = new MethodCallExpr(call);
@@ -359,7 +359,7 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private static void testForResponseBodyAsString(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
+    private static void testForResponseBodyAsString(MethodDeclaration md, MethodResponse resp, BlockStmt body) {
         body.addStatement("String resp = response.getBody().asString();");
         Object response = resp.getResponse();
         if(response instanceof ResponseEntity<?> re) {

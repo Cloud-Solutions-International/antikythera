@@ -16,7 +16,7 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
-import sa.com.cloudsolutions.antikythera.generator.ControllerResponse;
+import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -143,15 +143,15 @@ public class SpringEvaluator extends Evaluator {
             if (setupParameters(md)) {
                 executeBlock(statements);
             } else {
-                return testForBadRequest(statements);
+                return testForBadRequest();
             }
             return returnValue;
         }
         return null;
     }
 
-    private Variable testForBadRequest(List<Statement> statements) {
-        ControllerResponse cr = new ControllerResponse();
+    private Variable testForBadRequest() {
+        MethodResponse cr = new MethodResponse();
         ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         cr.setResponse(new Variable(response));
 
@@ -340,9 +340,12 @@ public class SpringEvaluator extends Evaluator {
             buildPreconditions();
             super.executeReturnStatement(stmt);
             if (parent.isPresent()) {
-                // the return statement will have a parent no matter what but the optionals approach
-                // requires the use of isPresent.
-                return createTests((ControllerResponse) returnValue.getValue());
+                if (returnValue.getValue() instanceof MethodResponse mr) {
+                    return createTests(mr);
+                }
+                MethodResponse mr = new MethodResponse();
+                mr.setBody(returnValue);
+                createTests(mr);
             }
         }
         else {
@@ -375,7 +378,7 @@ public class SpringEvaluator extends Evaluator {
      * @param response the response from the controller
      * @return a variable that encloses the response
      */
-    private Variable createTests(ControllerResponse response) {
+    private Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
                 generator.createTests(currentMethod, response);
@@ -467,7 +470,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     private void testForInternalError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
-        ControllerResponse controllerResponse = new ControllerResponse();
+        MethodResponse controllerResponse = new MethodResponse();
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
             controllerResponse.setResponse(r);
@@ -824,7 +827,7 @@ public class SpringEvaluator extends Evaluator {
         Variable v = super.createObject(instructionPointer, decl, oce);
         ClassOrInterfaceType type = oce.getType();
         if (type.toString().contains("ResponseEntity")) {
-            ControllerResponse response = new ControllerResponse(v);
+            MethodResponse response = new MethodResponse(v);
             response.setType(type);
 
             Optional<Expression> arg = oce.getArguments().getFirst();
