@@ -174,7 +174,7 @@ public class UnitTestGenerator extends TestGenerator {
         if (!autoWired) {
             gen.addImport("org.springframework.beans.factory.annotation.Autowired");
 
-            for (FieldDeclaration fd : classUnderTest.getFields()) {
+            for (FieldDeclaration fd : testClass.getFields()) {
                 if (fd.getElementType().asString().equals(classUnderTest.getNameAsString())) {
                     autoWired = true;
                     instanceName = fd.getVariable(0).getNameAsString();
