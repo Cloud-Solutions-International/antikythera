@@ -16,7 +16,7 @@ public abstract class Asserter {
 
     public abstract Expression assertNotNull(String variable);
     public abstract void setupImports(CompilationUnit gen);
-    public abstract Expression assertEquals(String lhs, String rhs);
+    public abstract Expression assertEquals(String rhs, String lhs);
 
     public void addFieldAsserts(MethodResponse resp, BlockStmt body) {
         if (resp.getBody() != null && resp.getBody().getValue() instanceof Evaluator ev) {
@@ -45,17 +45,17 @@ public abstract class Asserter {
         Object value = v.getValue();
 
         if (value instanceof String) {
-            return assertEquals("resp." + getter + "()", "\"" + v.getValue() + "\"");
+            return assertEquals("\"" + v.getValue() + "\"", "resp." + getter + "()");
         } if (v.getClazz() != null) {
             try {
                 Method m = v.getClazz().getMethod("size");
                 Object result = m.invoke(value);
-                return assertEquals("resp." + getter + "().size()", result.toString());
+                return assertEquals(result.toString(), "resp." + getter + "().size()");
             } catch (ReflectiveOperationException e) {
                 logger.warn("Could not use reflection for assertion");
             }
         }
-        return assertEquals("resp." + getter + "()",v.getValue().toString());
+        return assertEquals(v.getValue().toString(), "resp." + getter + "()");
 
     }
 }
