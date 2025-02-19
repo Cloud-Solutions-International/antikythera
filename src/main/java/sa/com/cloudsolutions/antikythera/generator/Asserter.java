@@ -1,10 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -16,11 +14,12 @@ import java.util.Map;
 public abstract class Asserter {
     private static final Logger logger = LoggerFactory.getLogger(Asserter.class);
 
-    public abstract void assertNotNull(BlockStmt body, String variable);
+    public abstract Expression assertNotNull(String variable);
     public abstract void setupImports(CompilationUnit gen);
+    public abstract Expression assertEquals(String lhs, String rhs);
 
     public void addFieldAsserts(MethodResponse resp, BlockStmt body) {
-        if (resp.getBody().getValue() instanceof Evaluator ev) {
+        if (resp.getBody() != null && resp.getBody().getValue() instanceof Evaluator ev) {
             int i = 0;
             for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
                 try {
@@ -41,15 +40,22 @@ public abstract class Asserter {
     }
 
 
-    public ExpressionStmt fieldAssertion(String getter, Variable v) {
-        MethodCallExpr assertEquals = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
-        assertEquals.addArgument("resp." + getter + "()");
+    public Expression fieldAssertion(String getter, Variable v) {
 
-        if (v.getValue() instanceof String) {
-            assertEquals.addArgument("\"" + v.getValue() + "\"");
-        } else {
-            assertEquals.addArgument(v.getValue().toString());
+        Object value = v.getValue();
+
+        if (value instanceof String) {
+            return assertEquals("resp." + getter + "()", "\"" + v.getValue() + "\"");
+        } if (v.getClazz() != null) {
+            try {
+                Method m = v.getClazz().getMethod("size");
+                Object result = m.invoke(value);
+                return assertEquals("resp." + getter + "().size()", result.toString());
+            } catch (ReflectiveOperationException e) {
+                logger.warn("Could not use reflection for assertion");
+            }
         }
-        return new ExpressionStmt(assertEquals);
+        return assertEquals("resp." + getter + "()",v.getValue().toString());
+
     }
 }

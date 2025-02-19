@@ -115,7 +115,9 @@ public class UnitTestGenerator extends TestGenerator {
         createInstance();
         mockArguments();
         invokeMethod();
+
         addAsserts(response);
+
     }
 
     private void createInstance() {
@@ -233,7 +235,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         Type t = methodUnderTest.getType();
         if (t != null) {
-            b.append(t.asString() + " result = ");
+            b.append(t.asString() + " resp = ");
         }
         b.append(instanceName + "." + methodUnderTest.getNameAsString() + "(");
         for (int i = 0 ; i < methodUnderTest.getParameters().size(); i++) {
@@ -252,7 +254,8 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         if (t != null) {
             addClassImports(t);
-            asserter.assertNotNull(body, "result");
+            body.addStatement(asserter.assertNotNull("resp"));
+            asserter.addFieldAsserts(response, body);
         }
     }
 
