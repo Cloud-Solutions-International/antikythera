@@ -76,6 +76,12 @@ public class UnitTestGenerator extends TestGenerator {
         for (MethodDeclaration md : remove) {
             gen.getType(0).remove(md);
         }
+
+        for (TypeDeclaration<?> t : gen.getTypes()) {
+            if (t.isClassOrInterfaceDeclaration()) {
+                loadBaseClassForTest(t.asClassOrInterfaceDeclaration());
+            }
+        }
     }
 
     private void createTestClass(String className, String packageDecl) {
@@ -88,7 +94,9 @@ public class UnitTestGenerator extends TestGenerator {
     private void loadBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
         String base = Settings.getProperty("base_class", String.class).orElse(null);
         if (base != null) {
-            testClass.addExtendedType(base);
+            if (!testClass.getExtendedTypes().stream().map(Type::asString).filter(s -> s.equals(base)).findFirst().isPresent()) {
+                testClass.addExtendedType(base);
+            }
             String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
             String helperPath = basePath.replace("main","test") + File.separator +
                     AbstractCompiler.classToPath(base);
