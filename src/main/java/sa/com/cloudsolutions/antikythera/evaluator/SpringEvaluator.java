@@ -124,7 +124,7 @@ public class SpringEvaluator extends Evaluator {
         try {
             NodeList<Statement> statements = md.getBody().orElseThrow().getStatements();
             for (int i = 0; i < branching.size() * 2; i++) {
-                Statement st = statements.get(i);
+
                 mockMethodArguments(md);
                 executeMethod(md);
             }
@@ -339,7 +339,7 @@ public class SpringEvaluator extends Evaluator {
             Optional<Node> parent = stmt.getParentNode();
             buildPreconditions();
             super.executeReturnStatement(stmt);
-            if (parent.isPresent()) {
+            if (parent.isPresent() && returnValue != null) {
                 if (returnValue.getValue() instanceof MethodResponse mr) {
                     return createTests(mr);
                 }
@@ -562,19 +562,13 @@ public class SpringEvaluator extends Evaluator {
                             String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
                             setter.setName("set" + name);
                             setter.setScope(expr);
-                            Variable field = eval.getFields().get(ClassProcessor.classToInstanceName(name));
 
-                            setter.addArgument(
-                                    switch (field.getType().asString()) {
-                                        case "String" -> "\"Hello\"";
-                                        case "int", "Integer" -> "0";
-                                        case "long", "Long" -> "0L";
-                                        case "float", "Float" -> "0.0f";
-                                        case "double", "Double" -> "0.0";
-                                        case "boolean", "Boolean" -> "false";
-                                        default -> "null";
-                                    }
-                            );
+                            if (entry.getValue() == null) {
+                                setter.addArgument("null");
+                            }
+                            else {
+                                setter.addArgument(entry.getValue().toString());
+                            }
                             l.addPrecondition(setter, state);
                         }
                     }
