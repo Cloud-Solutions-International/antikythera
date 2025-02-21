@@ -361,10 +361,7 @@ public class SpringEvaluator extends Evaluator {
     private void buildPreconditions() {
         List<Expression> expressions = new ArrayList<>();
         for (LineOfCode l : branching.values()) {
-            expressions.addAll(l.getPrecondition(false));
-        }
-        for(TestGenerator gen : generators) {
-            gen.setPreconditions(expressions);
+            argumentGenerator.getPreConditions().addAll(l.getPrecondition(false));
         }
     }
 

@@ -71,12 +71,6 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private String commonPath;
 
-
-    /**
-     * The preconditions that need to be met before the test can be executed.
-     */
-    private List<Expression> preConditions;
-
     /**
      * Boolean value indicating if the method under test has any branching.
      */
@@ -86,14 +80,6 @@ public class SpringTestGenerator extends  TestGenerator {
      * We are going to try to generate tests assuming no query strings or post data
      */
     private final int NULL_STATE = 0;
-    /**
-     * Tests will be written providing not null values for query strings or post data.
-     */
-    private final int DUMMY_STATE = 1;
-    /**
-     * Tests will be written with values that were identified from database queries.
-     */
-    private final int ENLIGHTENED_STATE = 2;
     /**
      * The current state of the test generation. It will be one of the values above.
      */
@@ -394,16 +380,16 @@ public class SpringTestGenerator extends  TestGenerator {
                 VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
                 body.addStatement(variableDeclarationExpr);
         }
-        if (preConditions != null) {
-            for (Expression expr : preConditions) {
-                if (expr.isMethodCallExpr()) {
-                    String s = expr.toString();
-                    if (s.contains("set")) {
-                        body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
-                    }
+
+        for (Expression expr : argumentGenerator.getPreConditions()) {
+            if (expr.isMethodCallExpr()) {
+                String s = expr.toString();
+                if (s.contains("set")) {
+                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
                 }
             }
         }
+
         if (cdecl.getNameAsString().equals("MultipartFile")) {
             makePost.addArgument(new NameExpr("req"));
             testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
@@ -521,12 +507,6 @@ public class SpringTestGenerator extends  TestGenerator {
 
     public void setCommonPath(String commonPath) {
         this.commonPath = commonPath;
-    }
-
-
-    @Override
-    public void setPreconditions(List<Expression> preconditions) {
-        this.preConditions = preconditions;
     }
 
     @Override

@@ -8,6 +8,11 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
 
+    public DummyArgumentGenerator() {
+        super();
+        backTracking = true;
+    }
+
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
         Variable v = mockParameter(param);

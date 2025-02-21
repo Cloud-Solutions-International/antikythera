@@ -8,7 +8,6 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import org.slf4j.Logger;
@@ -269,11 +268,6 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void setCommonPath(String commonPath) {
-
-    }
-
-    @Override
-    public void setPreconditions(List<Expression> expr) {
 
     }
 

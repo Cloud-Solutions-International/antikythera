@@ -106,15 +106,9 @@ public abstract class TestGenerator {
         return gen;
     }
 
-    public abstract void setPreconditions(List<Expression> expr);
-
     public abstract boolean isBranched();
 
     public abstract void setBranched(boolean branched);
-
-    public ArgumentGenerator getArgumentGenerator() {
-        return argumentGenerator;
-    }
 
     public abstract void addBeforeClass();
 
