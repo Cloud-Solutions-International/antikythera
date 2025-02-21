@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.springframework.http.ResponseEntity;
-import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -240,7 +239,6 @@ public class SpringTestGenerator extends  TestGenerator {
     private static String createResponseObject(Type respType) {
         return "%s resp = objectMapper.readValue(response.asString(), %s.class);".formatted(respType, respType);
     }
-
 
     private void httpWithBody(AnnotationExpr annotation, MethodResponse resp, String call) {
 

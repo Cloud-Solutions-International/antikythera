@@ -111,7 +111,7 @@ public class Evaluator {
     /**
      * The preconditions that need to be met before the test can be executed.
      */
-    protected final List<Expression> preConditions = new ArrayList<>();
+    protected final Map<MethodDeclaration, List<Expression>> preConditions = new HashMap<>();
 
     static {
         try {
@@ -408,7 +408,7 @@ public class Evaluator {
                 Field field = obj.getClass().getDeclaredField(fieldName);
                 field.setAccessible(true);
                 field.set(obj, v.getValue());
-            } catch (ReflectiveOperationException e) {
+            } catch (ReflectiveOperationException|NullPointerException e) {
                 /*
                  * This is not something that was created with class.forName or byte buddy.
                  */

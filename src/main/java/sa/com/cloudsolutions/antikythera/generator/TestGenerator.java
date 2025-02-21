@@ -149,4 +149,9 @@ public abstract class TestGenerator {
     public void setPreConditions(List<Expression> preConditions) {
         this.preConditions = preConditions;
     }
+
+
+    protected void assertThrows(String invocation, MethodResponse response) {
+        getBody(testMethod).addStatement(asserter.assertThrows(invocation, response));
+    }
 }

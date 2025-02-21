@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import com.github.javaparser.ast.type.Type;
@@ -121,10 +122,15 @@ public class UnitTestGenerator extends TestGenerator {
 
         createInstance();
         mockArguments();
-        invokeMethod();
+        String invocation = invokeMethod();
 
-        addAsserts(response);
-
+        if (response.getException() == null) {
+            getBody(testMethod).addStatement(invocation);
+            addAsserts(response);
+        }
+        else {
+            assertThrows(invocation, response);
+        }
     }
 
     private void createInstance() {
@@ -236,8 +242,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    void invokeMethod() {
-        BlockStmt body = getBody(testMethod);
+    String invokeMethod() {
         StringBuilder b = new StringBuilder();
 
         Type t = methodUnderTest.getType();
@@ -252,8 +257,7 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         b.append(");");
-
-        body.addStatement(b.toString());
+        return b.toString();
     }
 
     private void addAsserts(MethodResponse response) {

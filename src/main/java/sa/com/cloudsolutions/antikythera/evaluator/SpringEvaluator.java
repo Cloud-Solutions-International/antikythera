@@ -43,6 +43,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -113,6 +114,9 @@ public class SpringEvaluator extends Evaluator {
             }
         });
 
+        branching.clear();
+        preConditions.clear();
+
         md.accept(new VoidVisitorAdapter<Void>(){
             @Override
             public void visit(IfStmt stmt, Void arg) {
@@ -139,6 +143,7 @@ public class SpringEvaluator extends Evaluator {
 
             List<Statement> statements = md.getBody().orElseThrow().getStatements();
             if (setupParameters(md)) {
+                applyPreconditions(md);
                 executeBlock(statements);
             } else {
                 return testForBadRequest();
@@ -146,6 +151,12 @@ public class SpringEvaluator extends Evaluator {
             return returnValue;
         }
         return null;
+    }
+
+    private void applyPreconditions(MethodDeclaration md) throws ReflectiveOperationException {
+        for (Expression cond : preConditions.getOrDefault(md, Collections.emptyList())) {
+            evaluateExpression(cond);
+        }
     }
 
     private Variable testForBadRequest() {
@@ -184,8 +195,9 @@ public class SpringEvaluator extends Evaluator {
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         if (! (e instanceof AntikytheraException ae)) {
             if (catching.isEmpty()) {
-                testForInternalError(null,
-                        new EvaluatorException(e.getMessage(), EvaluatorException.INTERNAL_SERVER_ERROR));
+                EvaluatorException ex = new EvaluatorException(e.getMessage(), e);
+                ex.setError(EvaluatorException.INTERNAL_SERVER_ERROR);
+                testForInternalError(null,ex);
                 throw new AUTException(e.getMessage());
             } else {
                 super.handleApplicationException(e);
@@ -209,6 +221,7 @@ public class SpringEvaluator extends Evaluator {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);
         }
+
     }
 
     /**
@@ -454,6 +467,7 @@ public class SpringEvaluator extends Evaluator {
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
             controllerResponse.setResponse(r);
+            controllerResponse.setExecption(eex);
             createTests(controllerResponse);
             returnFrom = methodCall;
         }
@@ -488,10 +502,12 @@ public class SpringEvaluator extends Evaluator {
             }
             case LineOfCode.FALSE_PATH -> {
                 setupIfCondition(ifst, true);
+                l.setPathTaken(LineOfCode.BOTH_PATHS);
                 yield super.ifThenElseBlock(ifst);
             }
             case LineOfCode.TRUE_PATH -> {
                 setupIfCondition(ifst, false);
+                l.setPathTaken(LineOfCode.BOTH_PATHS);
                 yield super.ifThenElseBlock(ifst);
             }
             default -> null;
@@ -560,7 +576,14 @@ public class SpringEvaluator extends Evaluator {
         }
         LineOfCode l = branching.get(ifst.hashCode());
         l.addPrecondition(setter, state);
-        preConditions.add(setter);
+        ifst.findAncestor(MethodDeclaration.class).ifPresent(md -> {
+            List<Expression> expressions = preConditions.get(md);
+            if (expressions == null) {
+                expressions = new ArrayList<>();
+                preConditions.put(md, expressions);
+            }
+            expressions.add(setter);
+        });
     }
 
     /**

@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.type.Type;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +27,8 @@ public class MethodResponse {
         statusCodes.put("CONFLICT", 409);
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
     }
+
+    private EvaluatorException eex;
 
     public MethodResponse() {
 
@@ -64,5 +67,13 @@ public class MethodResponse {
 
     public void setBody(Variable body) {
         this.body = body;
+    }
+
+    public void setExecption(EvaluatorException eex) {
+        this.eex = eex;
+    }
+
+    public EvaluatorException getException() {
+        return eex;
     }
 }
