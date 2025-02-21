@@ -334,7 +334,7 @@ public class AbstractCompiler {
                 Parameter param = callable.getParameter(i);
                 Type argumentType = arguments.get(i);
                 Type paramType = param.getType();
-                if (paramType.equals(argumentType)) {
+                if (paramType.equals(argumentType) || argumentType == null) {
                     continue;
                 }
                 if (argumentType.isPrimitiveType() && argumentType.asString().equals(paramType.asString().toLowerCase())) {
