@@ -122,9 +122,7 @@ public class SpringEvaluator extends Evaluator {
         }, null);
 
         try {
-            NodeList<Statement> statements = md.getBody().orElseThrow().getStatements();
             for (int i = 0; i < branching.size() * 2; i++) {
-
                 mockMethodArguments(md);
                 executeMethod(md);
             }
@@ -363,9 +361,7 @@ public class SpringEvaluator extends Evaluator {
     private void buildPreconditions() {
         List<Expression> expressions = new ArrayList<>();
         for (LineOfCode l : branching.values()) {
-            if(branching.containsKey(l.getStatement())) {
-                expressions.addAll(l.getPrecondition(false));
-            }
+            expressions.addAll(l.getPrecondition(false));
         }
         for(TestGenerator gen : generators) {
             gen.setPreconditions(expressions);
@@ -523,8 +519,6 @@ public class SpringEvaluator extends Evaluator {
      */
     private void setupIfCondition(IfStmt ifst, boolean state)  {
         TruthTable tt = new TruthTable(ifst.getCondition());
-
-        LineOfCode l = branching.get(ifst.hashCode());
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
         if (!values.isEmpty()) {
@@ -557,24 +551,29 @@ public class SpringEvaluator extends Evaluator {
                             }
                         }
 
-                        if (v != null && v.getValue() instanceof Evaluator eval) {
-                            MethodCallExpr setter = new MethodCallExpr();
-                            String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
-                            setter.setName("set" + name);
-                            setter.setScope(expr);
-
-                            if (entry.getValue() == null) {
-                                setter.addArgument("null");
-                            }
-                            else {
-                                setter.addArgument(entry.getValue().toString());
-                            }
-                            l.addPrecondition(setter, state);
+                        if (v != null && v.getValue() instanceof Evaluator) {
+                            setupConditionalVariable(ifst, state, entry, expr);
                         }
                     }
                 }
             }
         }
+    }
+
+    private static void setupConditionalVariable(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
+        MethodCallExpr setter = new MethodCallExpr();
+        String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
+        setter.setName("set" + name);
+        setter.setScope(scope);
+
+        if (entry.getValue() == null) {
+            setter.addArgument("null");
+        }
+        else {
+            setter.addArgument(entry.getValue().toString());
+        }
+        LineOfCode l = branching.get(ifst.hashCode());
+        l.addPrecondition(setter, state);
     }
 
     /**

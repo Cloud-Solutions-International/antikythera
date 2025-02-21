@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
-    private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
 
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
