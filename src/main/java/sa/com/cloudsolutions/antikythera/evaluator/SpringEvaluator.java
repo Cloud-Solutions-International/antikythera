@@ -335,7 +335,6 @@ public class SpringEvaluator extends Evaluator {
         if (AntikytheraRunTime.isControllerClass(getClassName()) || onTest) {
             ReturnStmt stmt = statement.asReturnStmt();
             Optional<Node> parent = stmt.getParentNode();
-            buildPreconditions();
             super.executeReturnStatement(stmt);
             if (parent.isPresent() && returnValue != null) {
                 if (returnValue.getValue() instanceof MethodResponse mr) {
@@ -351,18 +350,6 @@ public class SpringEvaluator extends Evaluator {
         }
 
         return null;
-    }
-
-    /**
-     * Build the list of expressions that will be the precondition for the test.
-     * This is done by looking at the branching statements in the code. The list of expressions
-     * become a part of the test setup.
-     */
-    private void buildPreconditions() {
-        List<Expression> expressions = new ArrayList<>();
-        for (LineOfCode l : branching.values()) {
-            argumentGenerator.getPreConditions().addAll(l.getPrecondition(false));
-        }
     }
 
     /**
@@ -491,9 +478,11 @@ public class SpringEvaluator extends Evaluator {
                 Variable v = super.ifThenElseBlock(ifst);
                 if ((boolean) v.getValue()) {
                     l.setPathTaken(LineOfCode.TRUE_PATH);
+                    setupIfCondition(ifst, false);
                 }
                 else {
                     l.setPathTaken(LineOfCode.FALSE_PATH);
+                    setupIfCondition(ifst, true);
                 }
                 yield v;
             }
@@ -571,6 +560,7 @@ public class SpringEvaluator extends Evaluator {
         }
         LineOfCode l = branching.get(ifst.hashCode());
         l.addPrecondition(setter, state);
+        argumentGenerator.getPreConditions().add(setter);
     }
 
     /**

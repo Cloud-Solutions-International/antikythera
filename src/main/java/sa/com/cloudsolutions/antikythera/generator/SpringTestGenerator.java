@@ -76,15 +76,6 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private boolean branched;
 
-    /**
-     * We are going to try to generate tests assuming no query strings or post data
-     */
-    private final int NULL_STATE = 0;
-    /**
-     * The current state of the test generation. It will be one of the values above.
-     */
-    private int state = NULL_STATE;
-
     public SpringTestGenerator(CompilationUnit cu) {
         super(cu);
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
@@ -381,14 +372,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 body.addStatement(variableDeclarationExpr);
         }
 
-        for (Expression expr : argumentGenerator.getPreConditions()) {
-            if (expr.isMethodCallExpr()) {
-                String s = expr.toString();
-                if (s.contains("set")) {
-                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
-                }
-            }
-        }
+        applyPreconditions(body);
 
         if (cdecl.getNameAsString().equals("MultipartFile")) {
             makePost.addArgument(new NameExpr("req"));
@@ -398,6 +382,17 @@ public class SpringTestGenerator extends  TestGenerator {
             writeValueAsStringCall.addArgument(new NameExpr("req"));
             makePost.addArgument(writeValueAsStringCall);
             testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+        }
+    }
+
+    private void applyPreconditions(BlockStmt body) {
+        for (Expression expr : argumentGenerator.getPreConditions()) {
+            if (expr.isMethodCallExpr()) {
+                String s = expr.toString();
+                if (s.contains("set")) {
+                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
+                }
+            }
         }
     }
 
