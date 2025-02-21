@@ -546,7 +546,7 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    private static void setupConditionalVariable(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
+    private void setupConditionalVariable(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
         setter.setName("set" + name);
@@ -560,7 +560,7 @@ public class SpringEvaluator extends Evaluator {
         }
         LineOfCode l = branching.get(ifst.hashCode());
         l.addPrecondition(setter, state);
-        argumentGenerator.getPreConditions().add(setter);
+        preConditions.add(setter);
     }
 
     /**

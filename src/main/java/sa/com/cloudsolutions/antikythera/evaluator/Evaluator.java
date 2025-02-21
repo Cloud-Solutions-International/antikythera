@@ -107,6 +107,12 @@ public class Evaluator {
 
     protected final Deque<TryStmt> catching = new LinkedList<>();
 
+
+    /**
+     * The preconditions that need to be met before the test can be executed.
+     */
+    protected final List<Expression> preConditions = new ArrayList<>();
+
     static {
         try {
             Evaluator.finches = new HashMap<>();

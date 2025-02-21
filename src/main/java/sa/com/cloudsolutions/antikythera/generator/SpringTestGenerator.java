@@ -386,7 +386,7 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
     private void applyPreconditions(BlockStmt body) {
-        for (Expression expr : argumentGenerator.getPreConditions()) {
+        for (Expression expr : preConditions) {
             if (expr.isMethodCallExpr()) {
                 String s = expr.toString();
                 if (s.contains("set")) {

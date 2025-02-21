@@ -10,7 +10,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
 
     public DummyArgumentGenerator() {
         super();
-        backTracking = true;
     }
 
     @Override
