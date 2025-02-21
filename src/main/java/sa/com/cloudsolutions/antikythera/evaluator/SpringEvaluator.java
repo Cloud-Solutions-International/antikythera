@@ -15,7 +15,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -374,6 +373,7 @@ public class SpringEvaluator extends Evaluator {
     private Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
+                generator.setPreConditions(preConditions.getOrDefault(currentMethod, Collections.emptyList()));
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);

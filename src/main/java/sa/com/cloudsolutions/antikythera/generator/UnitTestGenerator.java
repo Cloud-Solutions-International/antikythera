@@ -8,20 +8,20 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.type.Type;
+
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
-import com.github.javaparser.ast.type.Type;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -31,6 +31,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
@@ -234,6 +237,26 @@ public class UnitTestGenerator extends TestGenerator {
                 }
             }
         }
+        applyPreconditions(body);
+    }
+
+    private void applyPreconditions(BlockStmt body) {
+        for (Expression expr : preConditions) {
+            if (expr.isMethodCallExpr()) {
+                MethodCallExpr mce = expr.asMethodCallExpr();
+                mce.getScope().ifPresent(scope -> {
+                    String name = mce.getNameAsString();
+
+                    if (expr.toString().contains("set")) {
+                        body.addStatement("Mockito.when(%s.%s()).thenReturn(%s);".formatted(
+                                scope.toString(),
+                                name.replace("set","get"),
+                                mce.getArguments().get(0).toString()
+                        ));
+                    }
+                });
+            }
+        }
     }
 
     private void addClassImports(Type t) {
@@ -300,6 +323,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
         gen.addImport("org.mockito.Mockito");
+
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
             mockFields(cu);

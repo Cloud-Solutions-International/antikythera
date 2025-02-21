@@ -150,7 +150,6 @@ public abstract class TestGenerator {
         this.preConditions = preConditions;
     }
 
-
     protected void assertThrows(String invocation, MethodResponse response) {
         getBody(testMethod).addStatement(asserter.assertThrows(invocation, response));
     }
