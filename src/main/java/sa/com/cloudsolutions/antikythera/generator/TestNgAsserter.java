@@ -26,4 +26,9 @@ public class TestNgAsserter extends  Asserter {
         MethodCallExpr assertEquals = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
         return assertEquals;
     }
+
+    @Override
+    public Expression assertThrows(String invocation, MethodResponse response) {
+        throw new RuntimeException("Not implemented");
+    }
 }
