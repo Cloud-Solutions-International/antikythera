@@ -36,7 +36,7 @@ public abstract class TestGenerator {
     MethodDeclaration testMethod;
     protected CompilationUnit compilationUnitUnderTest;
 
-    protected List<Expression> preConditions;
+    protected Set<Expression> preConditions;
 
     protected TestGenerator(CompilationUnit cu) {
         this.compilationUnitUnderTest = cu;
@@ -146,7 +146,7 @@ public abstract class TestGenerator {
         asserter.setupImports(gen);
     }
 
-    public void setPreConditions(List<Expression> preConditions) {
+    public void setPreConditions(Set<Expression> preConditions) {
         this.preConditions = preConditions;
     }
 

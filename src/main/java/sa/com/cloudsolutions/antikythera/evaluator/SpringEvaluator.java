@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -153,7 +154,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     private void applyPreconditions(MethodDeclaration md) throws ReflectiveOperationException {
-        for (Expression cond : preConditions.getOrDefault(md, Collections.emptyList())) {
+        for (Expression cond : preConditions.getOrDefault(md, Collections.emptySet())) {
             evaluateExpression(cond);
         }
     }
@@ -373,7 +374,7 @@ public class SpringEvaluator extends Evaluator {
     private Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(preConditions.getOrDefault(currentMethod, Collections.emptyList()));
+                generator.setPreConditions(preConditions.getOrDefault(currentMethod, Collections.emptySet()));
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);
@@ -577,9 +578,9 @@ public class SpringEvaluator extends Evaluator {
         LineOfCode l = branching.get(ifst.hashCode());
         l.addPrecondition(setter, state);
         ifst.findAncestor(MethodDeclaration.class).ifPresent(md -> {
-            List<Expression> expressions = preConditions.get(md);
+            Set<Expression> expressions = preConditions.get(md);
             if (expressions == null) {
-                expressions = new ArrayList<>();
+                expressions = new HashSet<>();
                 preConditions.put(md, expressions);
             }
             expressions.add(setter);

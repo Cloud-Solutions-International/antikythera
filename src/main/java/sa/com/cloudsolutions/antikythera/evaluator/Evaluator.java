@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.util.Optional;
+import java.util.Set;
 import java.util.Stack;
 
 /**
@@ -111,7 +112,7 @@ public class Evaluator {
     /**
      * The preconditions that need to be met before the test can be executed.
      */
-    protected final Map<MethodDeclaration, List<Expression>> preConditions = new HashMap<>();
+    protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
     static {
         try {
