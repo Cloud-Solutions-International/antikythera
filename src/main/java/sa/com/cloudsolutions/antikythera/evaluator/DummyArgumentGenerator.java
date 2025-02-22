@@ -57,13 +57,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     }
 
     protected Variable mockParameter(Parameter param) {
-        return new Variable(switch (param.getType().asString()) {
-            case "Boolean", "boolean" -> false;
-            case "float", "Float", "double", "Double" -> 0.0;
-            case "Integer", "int" -> 0;
-            case "Long", "long" -> -100L;
-            case "String" -> "Ibuprofen";
-            default -> null;
-        });
+        return Reflect.variableFactory(param.getType().asString());
     }
 }

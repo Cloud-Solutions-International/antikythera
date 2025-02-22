@@ -173,14 +173,73 @@ public class Reflect {
 
     public static Variable variableFactory(String qualifiedName) {
         return switch (qualifiedName) {
-            case "java.util.List", "java.util.ArrayList" ->  new Variable(new ArrayList<>());
-            case "java.util.Map", "java.util.HashMap" ->  new Variable(new HashMap<>());
-            case "java.util.TreeMap" -> new Variable(new TreeMap<>());
-            case "java.util.Set", "java.util.HashSet" ->  new Variable(new HashSet<>());
-            case "java.util.TreeSet" -> new Variable(new TreeSet<>());
-            case "java.util.Optional" ->  new Variable(Optional.empty());
-            case "java.lang.Long" ->  new Variable(0L);
-            default -> null;
+            case "java.util.List", "java.util.ArrayList" -> {
+                Variable v = new Variable(new ArrayList<>());
+                v.setInitializer(new ObjectCreationExpr(null,
+                        new ClassOrInterfaceType("java.util.ArrayList"), NodeList.nodeList()));
+                yield v;
+            }
+            case "java.util.Map", "java.util.HashMap" -> {
+                Variable v = new Variable(new HashMap<>());
+                v.setInitializer(new ObjectCreationExpr(null,
+                        new ClassOrInterfaceType("java.util.HashMap"), NodeList.nodeList()));
+                yield v;
+            }
+            case "java.util.TreeMap" -> {
+                Variable v = new Variable(new TreeMap<>());
+                v.setInitializer(new ObjectCreationExpr(null,
+                        new ClassOrInterfaceType("java.util.TreeMap"), NodeList.nodeList()));
+                yield v;
+            }
+            case "java.util.Set", "java.util.HashSet" -> {
+                Variable v = new Variable(new HashSet<>());
+                v.setInitializer(new ObjectCreationExpr(null,
+                        new ClassOrInterfaceType("java.util.HashSet"), NodeList.nodeList()));
+                yield v;
+            }
+            case "java.util.TreeSet" -> {
+                Variable v = new Variable(new TreeSet<>());
+                v.setInitializer(new ObjectCreationExpr(null,
+                        new ClassOrInterfaceType("java.util.TreeSet"), NodeList.nodeList()));
+                yield v;
+            }
+            case "java.util.Optional" -> {
+                Variable v = new Variable(Optional.empty());
+                v.setInitializer(new ObjectCreationExpr(null,
+                        new ClassOrInterfaceType("java.util.Optional.empty()"), NodeList.nodeList()));
+                yield v;
+            }
+            case "java.lang.Long" -> {
+                Variable v = new Variable(0L);
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Long"), NodeList.nodeList(new StringLiteralExpr("0"))));
+                yield v;
+            }
+            case "Boolean", "boolean" -> {
+                Variable v = new Variable(false);
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Boolean"), NodeList.nodeList(new StringLiteralExpr("false"))));
+                yield v;
+            }
+            case "float", "Float", "double", "Double" -> {
+                Variable v = new Variable(0.0);
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Double"), NodeList.nodeList(new StringLiteralExpr("0.0"))));
+                yield v;
+            }
+            case "Integer", "int" -> {
+                Variable v = new Variable(0);
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Integer"), NodeList.nodeList(new StringLiteralExpr("0"))));
+                yield v;
+            }
+            case "Long", "long" -> {
+                Variable v = new Variable(-100L);
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Long"), NodeList.nodeList(new StringLiteralExpr("-100"))));
+                yield v;
+            }
+            case "String" -> {
+                Variable v = new Variable("Ibuprofen");
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("String"), NodeList.nodeList(new StringLiteralExpr("Ibuprofen"))));
+                yield v;
+            }
+            default -> new Variable(null);
         };
     }
 
