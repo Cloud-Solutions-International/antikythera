@@ -46,6 +46,7 @@ public class UnitTestGenerator extends TestGenerator {
     private final Set<Type> mockedFields = new HashSet<>();
 
     private Consumer<Parameter> mocker;
+    private Consumer<Expression> applyPrecondition;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -69,6 +70,7 @@ public class UnitTestGenerator extends TestGenerator {
             createTestClass(className, packageDecl);
         }
         this.mocker = this::mockWithMockito;
+        this.applyPrecondition = this::applyPreconditionWithMockito;
     }
 
 
@@ -251,22 +253,26 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void applyPreconditions() {
-        BlockStmt body = getBody(testMethod);
         for (Expression expr : preConditions) {
-            if (expr.isMethodCallExpr()) {
-                MethodCallExpr mce = expr.asMethodCallExpr();
-                mce.getScope().ifPresent(scope -> {
-                    String name = mce.getNameAsString();
+            applyPrecondition.accept(expr);
+        }
+    }
 
-                    if (expr.toString().contains("set")) {
-                        body.addStatement("Mockito.when(%s.%s()).thenReturn(%s);".formatted(
-                                scope.toString(),
-                                name.replace("set","get"),
-                                mce.getArguments().get(0).toString()
-                        ));
-                    }
-                });
-            }
+    private void applyPreconditionWithMockito(Expression expr) {
+        BlockStmt body = getBody(testMethod);
+        if (expr.isMethodCallExpr()) {
+            MethodCallExpr mce = expr.asMethodCallExpr();
+            mce.getScope().ifPresent(scope -> {
+                String name = mce.getNameAsString();
+
+                if (expr.toString().contains("set")) {
+                    body.addStatement("Mockito.when(%s.%s()).thenReturn(%s);".formatted(
+                            scope.toString(),
+                            name.replace("set","get"),
+                            mce.getArguments().get(0).toString()
+                    ));
+                }
+            });
         }
     }
 
