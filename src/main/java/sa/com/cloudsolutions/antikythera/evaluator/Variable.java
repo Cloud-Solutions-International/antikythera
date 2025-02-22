@@ -86,10 +86,6 @@ public class Variable {
         }
     }
 
-    public boolean isPrimitive() {
-        return primitive;
-    }
-
     public void setPrimitive(boolean primitive) {
         this.primitive = primitive;
     }

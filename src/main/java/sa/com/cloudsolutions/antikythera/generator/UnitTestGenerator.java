@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -46,7 +47,7 @@ public class UnitTestGenerator extends TestGenerator {
     private String instanceName;
     private final Set<Type> mockedFields = new HashSet<>();
 
-    private Consumer<Parameter> mocker;
+    private BiConsumer<Parameter, Variable> mocker;
     private Consumer<Expression> applyPrecondition;
 
     public UnitTestGenerator(CompilationUnit cu) {
@@ -240,14 +241,17 @@ public class UnitTestGenerator extends TestGenerator {
             String nameAsString = param.getNameAsString();
             Variable value = argumentGenerator.getArguments().get(nameAsString);
             if (value != null ) {
-                mocker.accept(param);
+                mocker.accept(param, value);
             }
         }
         applyPreconditions();
     }
 
-    private void mockWithEvaluator(Parameter param) {
+    private void mockWithEvaluator(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
+        if (v != null && v.getInitializer() != null) {
+            getBody(testMethod).addStatement(param.getTypeAsString() + " " + nameAsString + " = " + v.getInitializer() + ";");
+        }
         Type t = param.getType();
         String fullName = AbstractCompiler.findFullyQualifiedName(compilationUnitUnderTest, t.asString());
         if (fullName != null) {
@@ -261,7 +265,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void mockWithMockito(Parameter param) {
+    private void mockWithMockito(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
