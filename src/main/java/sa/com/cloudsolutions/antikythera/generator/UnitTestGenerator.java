@@ -138,7 +138,8 @@ public class UnitTestGenerator extends TestGenerator {
             addAsserts(response);
         }
         else {
-            assertThrows(invocation, response);
+            String[] parts = invocation.split("=");
+            assertThrows(parts.length == 2 ? parts[1] : parts[0], response);
         }
     }
 
