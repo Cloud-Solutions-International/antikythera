@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -69,8 +70,15 @@ public class UnitTestGenerator extends TestGenerator {
         else {
             createTestClass(className, packageDecl);
         }
-        this.mocker = this::mockWithMockito;
-        this.applyPrecondition = this::applyPreconditionWithMockito;
+
+        if (Settings.getProperty("use_mockito", String.class).isPresent()) {
+            this.mocker = this::mockWithMockito;
+            this.applyPrecondition = this::applyPreconditionWithMockito;
+        }
+        else {
+            this.mocker = this::mockWithEvaluator;
+            this.applyPrecondition = this::applyPreconditionWithEvaluator;
+        }
     }
 
 
@@ -151,12 +159,13 @@ public class UnitTestGenerator extends TestGenerator {
                 autoWireClass(c);
             }
             else {
-                instantiateClass(c);
+                instanceName = ClassProcessor.classToInstanceName(c.getNameAsString());
+                instantiateClass(c, instanceName);
             }
         });
     }
 
-    private void instantiateClass(ClassOrInterfaceDeclaration classUnderTest) {
+    private void instantiateClass(ClassOrInterfaceDeclaration classUnderTest, String instanceName) {
 
         ConstructorDeclaration matched = null;
         String className = classUnderTest.getNameAsString();
@@ -170,7 +179,7 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (matched != null) {
-            StringBuilder b = new StringBuilder(className + " cls " + " = new " + className + "(");
+            StringBuilder b = new StringBuilder(className + " " + instanceName + " " + " = new " + className + "(");
             for (int i = 0; i < matched.getParameters().size(); i++) {
                 b.append("null");
                 if (i < matched.getParameters().size() - 1) {
@@ -180,9 +189,8 @@ public class UnitTestGenerator extends TestGenerator {
             b.append(");");
             getBody(testMethod).addStatement(b.toString());
         } else {
-            getBody(testMethod).addStatement(className + " cls = new " + className + "();");
+            getBody(testMethod).addStatement(className + " " + instanceName + " = new " + className + "();");
         }
-        instanceName = "cls";
     }
 
     private void autoWireClass(ClassOrInterfaceDeclaration classUnderTest) {
@@ -238,6 +246,21 @@ public class UnitTestGenerator extends TestGenerator {
         applyPreconditions();
     }
 
+    private void mockWithEvaluator(Parameter param) {
+        String nameAsString = param.getNameAsString();
+        Type t = param.getType();
+        String fullName = AbstractCompiler.findFullyQualifiedName(compilationUnitUnderTest, t.asString());
+        if (fullName != null) {
+            CompilationUnit cu = Graph.getDependencies().get(fullName);
+            ClassOrInterfaceDeclaration cdecl = AbstractCompiler.getPublicType(cu).asClassOrInterfaceDeclaration();
+            if (cdecl != null) {
+                instantiateClass(cdecl, nameAsString);
+            } else {
+                throw new AntikytheraException("Could not find class for " + t.asString());
+            }
+        }
+    }
+
     private void mockWithMockito(Parameter param) {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
@@ -256,6 +279,11 @@ public class UnitTestGenerator extends TestGenerator {
         for (Expression expr : preConditions) {
             applyPrecondition.accept(expr);
         }
+    }
+
+    private void applyPreconditionWithEvaluator(Expression expr) {
+        BlockStmt body = getBody(testMethod);
+        body.addStatement(expr);
     }
 
     private void applyPreconditionWithMockito(Expression expr) {
