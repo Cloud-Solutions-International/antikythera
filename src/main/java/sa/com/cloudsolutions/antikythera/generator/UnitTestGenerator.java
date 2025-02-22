@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
@@ -31,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,8 @@ public class UnitTestGenerator extends TestGenerator {
     private boolean autoWired;
     private String instanceName;
     private final Set<Type> mockedFields = new HashSet<>();
+
+    private Consumer<Parameter> mocker;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -64,7 +68,9 @@ public class UnitTestGenerator extends TestGenerator {
         else {
             createTestClass(className, packageDecl);
         }
+        this.mocker = this::mockWithMockito;
     }
+
 
     private void loadExisting(File file) throws FileNotFoundException {
         gen = StaticJavaParser.parse(file);
@@ -218,29 +224,33 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     void mockArguments() {
-        BlockStmt body = getBody(testMethod);
-
         for(var param : methodUnderTest.getParameters()) {
             addClassImports(param.getType());
-
             String nameAsString = param.getNameAsString();
             Variable value = argumentGenerator.getArguments().get(nameAsString);
             if (value != null ) {
-                Type t = param.getType();
-                if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                    body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                            " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
-                }
-                else {
-                    body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                            " = Mockito.mock(" + param.getTypeAsString() + ".class);");
-                }
+                mocker.accept(param);
             }
         }
-        applyPreconditions(body);
+        applyPreconditions();
     }
 
-    private void applyPreconditions(BlockStmt body) {
+    private void mockWithMockito(Parameter param) {
+        String nameAsString = param.getNameAsString();
+        BlockStmt body = getBody(testMethod);
+        Type t = param.getType();
+        if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                    " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
+        }
+        else {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                    " = Mockito.mock(" + param.getTypeAsString() + ".class);");
+        }
+    }
+
+    private void applyPreconditions() {
+        BlockStmt body = getBody(testMethod);
         for (Expression expr : preConditions) {
             if (expr.isMethodCallExpr()) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
