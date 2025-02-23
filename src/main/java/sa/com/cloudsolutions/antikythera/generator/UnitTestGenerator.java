@@ -165,7 +165,7 @@ public class UnitTestGenerator extends TestGenerator {
         });
     }
 
-    private void instantiateClass(ClassOrInterfaceDeclaration classUnderTest, String instanceName) {
+    void instantiateClass(ClassOrInterfaceDeclaration classUnderTest, String instanceName) {
 
         ConstructorDeclaration matched = null;
         String className = classUnderTest.getNameAsString();
