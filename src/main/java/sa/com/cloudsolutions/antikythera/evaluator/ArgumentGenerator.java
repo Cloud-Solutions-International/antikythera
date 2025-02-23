@@ -11,10 +11,6 @@ public abstract class ArgumentGenerator {
 
     public abstract void generateArgument(Parameter param) throws ReflectiveOperationException;
 
-    public void addExpression(String name, Expression expr) {
-        arguments.put(name, new Variable(expr));
-    }
-
     public Map<String, Variable> getArguments() {
         return arguments;
     }

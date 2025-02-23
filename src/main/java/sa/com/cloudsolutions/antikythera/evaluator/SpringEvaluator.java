@@ -76,9 +76,7 @@ public class SpringEvaluator extends Evaluator {
      */
     private MethodDeclaration currentMethod;
 
-
     private static final HashMap<Integer, LineOfCode> branching = new HashMap<>();
-
 
     private boolean onTest;
 
@@ -89,10 +87,6 @@ public class SpringEvaluator extends Evaluator {
      */
     public SpringEvaluator(String className) {
         super(className);
-    }
-
-    public static Map<String, RepositoryParser> getRepositories() {
-        return repositories;
     }
 
     /**
@@ -221,7 +215,6 @@ public class SpringEvaluator extends Evaluator {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);
         }
-
     }
 
     /**
