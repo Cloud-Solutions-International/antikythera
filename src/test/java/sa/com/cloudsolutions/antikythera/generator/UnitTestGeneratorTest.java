@@ -26,6 +26,7 @@ class UnitTestGeneratorTest {
     private UnitTestGenerator unitTestGenerator;
     private CompilationUnit cu;
     private ClassOrInterfaceDeclaration classUnderTest;
+    private MethodDeclaration methodUnderTest;
 
     @BeforeAll
     static void beforeClass() throws IOException {
@@ -39,14 +40,21 @@ class UnitTestGeneratorTest {
         cu = new CompilationUnit();
         cu.setPackageDeclaration("sa.com.cloudsolutions.antikythera.generator");
         classUnderTest = cu.addClass("DummyService");
-        classUnderTest.addAnnotation("Service");
         classUnderTest.addField("DummyRepository", "dummyRepository").addAnnotation("Autowired");
 
         unitTestGenerator = new UnitTestGenerator(cu);
+
+        methodUnderTest = new MethodDeclaration();
+        methodUnderTest.setName("dummyMethod");
+        classUnderTest.addMember(methodUnderTest);
+        unitTestGenerator.setArgumentGenerator(new NullArgumentGenerator());
+        unitTestGenerator.setPreConditions(new HashSet<>());
+        unitTestGenerator.setAsserter(new JunitAsserter());
     }
 
     @Test
     void testMockFields() throws IOException {
+        classUnderTest.addAnnotation("Service");
         unitTestGenerator.mockFields();
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
         TypeDeclaration<?> testClass = testCu.getType(0);
@@ -62,15 +70,15 @@ class UnitTestGeneratorTest {
     }
 
     @Test
-    void testCreateInstance() {
-        MethodDeclaration methodUnderTest = new MethodDeclaration();
-        methodUnderTest.setName("dummyMethod");
-        classUnderTest.addMember(methodUnderTest);
-        unitTestGenerator.setArgumentGenerator(new NullArgumentGenerator());
-        unitTestGenerator.setPreConditions(new HashSet<>());
-        unitTestGenerator.setAsserter(new JunitAsserter());
+    void testCreateInstanceA() {
+        classUnderTest.addAnnotation("Service");
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+    }
 
+    @Test
+    void testCreateInstanceB() {
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
     }
 }
