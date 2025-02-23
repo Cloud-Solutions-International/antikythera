@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -44,7 +45,6 @@ public class UnitTestGenerator extends TestGenerator {
 
     private boolean autoWired;
     private String instanceName;
-    private final Set<Type> mockedFields = new HashSet<>();
 
     private BiConsumer<Parameter, Variable> mocker;
     private Consumer<Expression> applyPrecondition;
@@ -124,7 +124,7 @@ public class UnitTestGenerator extends TestGenerator {
                 TypeDeclaration<?> t = AbstractCompiler.getPublicType(cu);
                 for (FieldDeclaration fd : t.getFields()) {
                     if (fd.getAnnotationByName("MockBean").isPresent()) {
-                        mockedFields.add(fd.getElementType());
+                        AntikytheraRunTime.markAsMocked(fd.getElementType());
                     }
                 }
             } catch (FileNotFoundException e) {
@@ -366,7 +366,7 @@ public class UnitTestGenerator extends TestGenerator {
         TypeDeclaration<?> t = gen.getType(0);
 
         for (FieldDeclaration fd : t.getFields()) {
-            mockedFields.add(fd.getElementType());
+            AntikytheraRunTime.markAsMocked(fd.getElementType());
         }
 
         gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
@@ -385,8 +385,8 @@ public class UnitTestGenerator extends TestGenerator {
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             for (FieldDeclaration fd : decl.getFields()) {
-                if (fd.getAnnotationByName("Autowired").isPresent() && !mockedFields.contains(fd.getElementType())) {
-                    mockedFields.add(fd.getElementType());
+                if (fd.getAnnotationByName("Autowired").isPresent() && ! AntikytheraRunTime.isMocked(fd.getElementType())) {
+                    AntikytheraRunTime.markAsMocked(fd.getElementType());
                     FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                     field.addAnnotation("MockBean");
                     ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());

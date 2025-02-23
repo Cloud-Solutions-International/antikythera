@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.type.Type;
 
 import java.util.Deque;
 import java.util.HashMap;
@@ -26,7 +27,7 @@ public class AntikytheraRunTime {
      * Deque is a double-ended queue, which can be used as a stack. It is more
      * efficient than a Stack in java which is synchronized.
      *
-     * WHile it's normal practice to also place the return value of a method call into the
+     * While it's normal practice to also place the return value of a method call into the
      * stack, we are not doing so in here.
      */
     protected static final Deque<Variable> stack = new LinkedList<>();
@@ -40,6 +41,8 @@ public class AntikytheraRunTime {
      * Stores parent classes as keys and child classes as values.
      */
     protected static final Map<String, Set<String>> extensions = new HashMap<>();
+
+    private static final Set<Type> mockedFields = new HashSet<>();
 
     /**
      * Stores the fields that have been autowired.
@@ -103,6 +106,14 @@ public class AntikytheraRunTime {
     public static boolean isAbstractClass(String name) {
         ClassInfo classInfo = resolved.get(name);
         return classInfo != null && classInfo.abstractClass;
+    }
+
+    public static void markAsMocked(Type elementType) {
+        mockedFields.add(elementType);
+    }
+
+    public static boolean isMocked(Type elementType) {
+        return mockedFields.contains(elementType);
     }
 
     static class ClassInfo {
@@ -187,7 +198,7 @@ public class AntikytheraRunTime {
     }
 
     public static Map<String, CompilationUnit> getResolvedClasses() {
-        // iterate through the resolved map and return the classnames and the compation units as a map
+        // iterate through the resolved map and return the classnames and the compilation units as a map
         Map<String, CompilationUnit> resolvedClasses = new HashMap<>();
         for (Map.Entry<String, ClassInfo> entry : resolved.entrySet()) {
             resolvedClasses.put(entry.getKey(), entry.getValue().cu);
