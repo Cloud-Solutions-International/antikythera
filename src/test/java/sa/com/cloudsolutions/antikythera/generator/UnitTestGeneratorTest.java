@@ -81,4 +81,13 @@ class UnitTestGeneratorTest {
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
     }
+
+    @Test
+    void testCreateInstanceC() {
+        ConstructorDeclaration constructor = classUnderTest.addConstructor();
+        constructor.addParameter("String", "param");
+
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+    }
 }
