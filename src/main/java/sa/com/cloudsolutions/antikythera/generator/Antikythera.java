@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -16,15 +17,19 @@ import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
 import java.util.List;
 
+import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.StreamSupport;
 
 public class Antikythera {
     private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
@@ -40,6 +45,7 @@ public class Antikythera {
     private final String outputPath;
 
     private static Antikythera instance;
+    private Model pomModel;
 
     private Antikythera() {
         basePath = Settings.getProperty(Constants.BASE_PATH).toString();
@@ -48,11 +54,17 @@ public class Antikythera {
         controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
     }
 
-    public static Antikythera getInstance() throws IOException {
+    public static Antikythera getInstance() {
         if (instance == null) {
-            Settings.loadConfigMap();
-
-            instance = new Antikythera();
+            try {
+                Settings.loadConfigMap();
+                instance = new Antikythera();
+                instance.readPomFile();
+            } catch (IOException e) {
+                throw new AntikytheraException("Failed to initialize Antikythera", e);
+            } catch (XmlPullParserException xe) {
+                logger.error("Could ")
+            }
         }
         return instance;
     }
@@ -94,23 +106,17 @@ public class Antikythera {
         if (dependencies.length == 0) {
             copyTemplate(POM_XML);
         } else {
-
             Path destinationPath = Path.of(outputPath, POM_XML);
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
-            Path p = basePath.contains("src/main/java")
-                    ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
-                    : Paths.get(basePath, POM_XML);
 
-            Model srcModel = reader.read(new FileReader(p.toFile()));
-
-            List<Dependency> srcDependencies = srcModel.getDependencies();
+            List<Dependency> srcDependencies = pomModel.getDependencies();
             for (String dep : dependencies) {
                 for (Dependency dependency : srcDependencies) {
                     if (dependency.getArtifactId().equals(dep)) {
                         templateModel.addDependency(dependency);
-                        copyDependencyProperties(srcModel, templateModel, dependency);
+                        copyDependencyProperties(pomModel, templateModel, dependency);
                     }
                 }
             }
@@ -118,6 +124,15 @@ public class Antikythera {
             MavenXpp3Writer writer = new MavenXpp3Writer();
             writer.write(new FileWriter(destinationPath.toFile()), templateModel);
         }
+    }
+
+    private void readPomFile() throws IOException, XmlPullParserException {
+        MavenXpp3Reader reader = new MavenXpp3Reader();
+        Path p = basePath.contains("src/main/java")
+                ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
+                : Paths.get(basePath, POM_XML);
+
+        pomModel = reader.read(new FileReader(p.toFile()));
     }
 
     /**
@@ -221,6 +236,41 @@ public class Antikythera {
         }
     }
 
+    public String[] getJarPaths() {
+        List<Dependency> dependencies = pomModel.getDependencies();
+        final Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
+        if (m2.isPresent()) {
+            return dependencies.stream()
+                    .map(dependency -> {
+                        String groupIdPath = dependency.getGroupId().replace('.', '/');
+                        String artifactId = dependency.getArtifactId();
+                        String version = dependency.getVersion();
+
+                        if (version == null || version.isEmpty()) {
+                            version = findLatestVersion(groupIdPath, artifactId, m2.get());
+                        }
+
+                        return Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar").toString();
+                    })
+                    .toArray(String[]::new);
+        }
+        return new String[] {};
+    }
+
+    private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
+        Path artifactPath = Paths.get(m2, groupIdPath, artifactId);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(artifactPath)) {
+            return StreamSupport.stream(stream.spliterator(), false)
+                    .filter(Files::isDirectory)
+                    .map(Path::getFileName)
+                    .map(Path::toString)
+                    .max(Comparator.naturalOrder())
+                    .orElseThrow(() -> new IOException("No versions found for " + artifactId));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to find latest version for " + artifactId, e);
+        }
+    }
+
     public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
         Antikythera.getInstance().generate();
         RestControllerParser.Stats stats = RestControllerParser.getStats();
@@ -229,4 +279,5 @@ public class Antikythera {
         logger.info("Processed {} methods", stats.getMethods());
         logger.info("Generated {} tests", stats.getTests());
     }
+
 }

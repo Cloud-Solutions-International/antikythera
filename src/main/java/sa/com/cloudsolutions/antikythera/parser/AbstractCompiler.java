@@ -44,12 +44,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
+import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -94,16 +97,24 @@ public class AbstractCompiler {
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
         jarSolvers = new ArrayList<>();
 
-        URL[] urls = new URL[Settings.getJarFiles().length];
+        Set<String> jarFiles = new HashSet<>();
+        List<URL> urls = new ArrayList<>();
+        for (String s : Settings.getJarFiles()) {
+            jarFiles.add(s);
+            urls.add(Paths.get(s).toUri().toURL());
+        }
+        for (String s : Antikythera.getInstance().getJarPaths()) {
+            jarFiles.add(s);
+            urls.add(Paths.get(s).toUri().toURL());
+        }
 
-        for(int i = 0 ; i < Settings.getJarFiles().length ; i++) {
-            String jarFile = Settings.getJarFiles()[i];
+        for(String jarFile : jarFiles) {
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
-            urls[i] = Paths.get(jarFile).toUri().toURL();
         }
-        loader = new URLClassLoader(urls);
+
+        loader = new URLClassLoader(urls.toArray(new URL[0]), AbstractCompiler.class.getClassLoader());
 
         Object f = Settings.getProperty("finch");
         if(f != null) {
