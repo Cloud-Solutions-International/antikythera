@@ -67,7 +67,7 @@ public class Reflect {
      * @throws AntikytheraException if something goes wrong with the parser related code
      * @throws ReflectiveOperationException if reflective operations fail
      */
-    public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator)
+    public static ReflectionArguments buildArguments(MethodCallExpr methodCall, ExpressionEvaluator evaluator)
             throws AntikytheraException, ReflectiveOperationException {
         return buildArgumentsCommon(methodCall.getNameAsString(), methodCall.getArguments(), evaluator);
     }
@@ -82,12 +82,12 @@ public class Reflect {
      * @throws AntikytheraException if the reflection arguments cannot be solved
      * @throws ReflectiveOperationException if the reflective methods failed.
      */
-    public static ReflectionArguments buildArguments(ObjectCreationExpr oce, Evaluator evaluator)
+    public static ReflectionArguments buildArguments(ObjectCreationExpr oce, ExpressionEvaluator evaluator)
             throws AntikytheraException, ReflectiveOperationException {
         return buildArgumentsCommon(null, oce.getArguments(), evaluator);
     }
 
-    private static ReflectionArguments buildArgumentsCommon(String methodName, List<Expression> arguments, Evaluator evaluator)
+    private static ReflectionArguments buildArgumentsCommon(String methodName, List<Expression> arguments, ExpressionEvaluator evaluator)
             throws AntikytheraException, ReflectiveOperationException {
         Variable[] argValues = new Variable[arguments.size()];
         Class<?>[] paramTypes = new Class<?>[arguments.size()];

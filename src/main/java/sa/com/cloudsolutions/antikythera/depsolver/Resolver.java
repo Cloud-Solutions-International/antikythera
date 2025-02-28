@@ -27,6 +27,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.ExpressionEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
@@ -312,7 +313,7 @@ public class Resolver {
 
     static GraphNode chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
         if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce) {
-            LinkedList<Expression> chain = Evaluator.findScopeChain(mce);
+            LinkedList<Expression> chain = ExpressionEvaluator.findScopeChain(mce);
 
             if (chain.isEmpty()) {
                 copyMethod(mceWrapper, node);

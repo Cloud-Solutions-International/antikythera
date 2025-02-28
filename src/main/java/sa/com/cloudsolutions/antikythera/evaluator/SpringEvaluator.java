@@ -522,7 +522,7 @@ public class SpringEvaluator extends Evaluator {
             for (var entry : value.entrySet()) {
                 if(entry.getKey().isMethodCallExpr()) {
 
-                    LinkedList<Expression> chain = findScopeChain(entry.getKey());
+                    LinkedList<Expression> chain = ExpressionEvaluator.findScopeChain(entry.getKey());
                     if (!chain.isEmpty()) {
                         Expression expr = chain.getFirst();
                         Variable v = getValue(ifst, expr.toString());
@@ -547,7 +547,7 @@ public class SpringEvaluator extends Evaluator {
                             }
                         }
 
-                        if (v != null && v.getValue() instanceof Evaluator) {
+                        if (v != null && v.getValue() instanceof ExpressionEvaluator) {
                             setupConditionalVariable(ifst, state, entry, expr);
                         }
                     }

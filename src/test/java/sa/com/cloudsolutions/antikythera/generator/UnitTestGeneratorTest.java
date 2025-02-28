@@ -13,8 +13,6 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import org.mockito.Mockito;
-
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Optional;
