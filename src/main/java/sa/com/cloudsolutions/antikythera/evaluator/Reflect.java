@@ -172,6 +172,10 @@ public class Reflect {
     }
 
     public static Variable variableFactory(String qualifiedName) {
+        if (qualifiedName == null) {
+            return null;
+        }
+
         return switch (qualifiedName) {
             case "java.util.List", "java.util.ArrayList" -> {
                 Variable v = new Variable(new ArrayList<>());
@@ -209,11 +213,6 @@ public class Reflect {
                         new ClassOrInterfaceType("java.util.Optional.empty()"), NodeList.nodeList()));
                 yield v;
             }
-            case "java.lang.Long" -> {
-                Variable v = new Variable(0L);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Long"), NodeList.nodeList(new StringLiteralExpr("0"))));
-                yield v;
-            }
             case "Boolean", "boolean" -> {
                 Variable v = new Variable(false);
                 v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Boolean"), NodeList.nodeList(new StringLiteralExpr("false"))));
@@ -229,12 +228,12 @@ public class Reflect {
                 v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Integer"), NodeList.nodeList(new StringLiteralExpr("0"))));
                 yield v;
             }
-            case "Long", "long" -> {
+            case "Long", "long" , "java.lang.Long" -> {
                 Variable v = new Variable(-100L);
                 v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Long"), NodeList.nodeList(new StringLiteralExpr("-100"))));
                 yield v;
             }
-            case "String" -> {
+            case "String", "java.lang.String" -> {
                 Variable v = new Variable("Ibuprofen");
                 v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("String"), NodeList.nodeList(new StringLiteralExpr("Ibuprofen"))));
                 yield v;

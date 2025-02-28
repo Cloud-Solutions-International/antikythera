@@ -56,7 +56,7 @@ public class MockingEvaluator implements ExpressionEvaluator {
             }
             if (cd.findCompilationUnit().isPresent()) {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cd.findCompilationUnit().get(), returnType.toString());
-                return new Variable(Reflect.variableFactory(fqdn));
+                return Reflect.variableFactory(fqdn);
             }
         }
         return null;
