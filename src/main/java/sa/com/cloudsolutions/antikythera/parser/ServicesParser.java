@@ -58,7 +58,6 @@ public class ServicesParser {
             solver.dfs();
         }
         generator.addBeforeClass();
-        writeFiles();
     }
 
     public void start(String method) throws IOException {
@@ -85,10 +84,9 @@ public class ServicesParser {
             }
         }, null);
         generator.addBeforeClass();
-        writeFiles();
     }
 
-    private void writeFiles() throws IOException {
+    public void writeFiles() throws IOException {
         generator.save();
     }
 

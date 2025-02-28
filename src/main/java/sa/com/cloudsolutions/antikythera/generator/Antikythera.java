@@ -248,9 +248,11 @@ public class Antikythera {
             if (parts.length == 2) {
                 ServicesParser processor = new ServicesParser(parts[0]);
                 processor.start(parts[1]);
+                processor.writeFiles();
             } else {
                 ServicesParser processor = new ServicesParser(servicesCleaned);
                 processor.start();
+                processor.writeFiles();
             }
         }
     }

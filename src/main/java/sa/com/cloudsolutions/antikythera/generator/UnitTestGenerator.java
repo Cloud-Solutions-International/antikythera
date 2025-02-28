@@ -103,7 +103,10 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void createTestClass(String className, String packageDecl) {
         gen = new CompilationUnit();
-        gen.setPackageDeclaration(packageDecl);
+        if (packageDecl != null && !packageDecl.isEmpty()) {
+            gen.setPackageDeclaration(packageDecl);
+        }
+
         ClassOrInterfaceDeclaration testClass = gen.addClass(className);
         loadBaseClassForTest(testClass);
     }
