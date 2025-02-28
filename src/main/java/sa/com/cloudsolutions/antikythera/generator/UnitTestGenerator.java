@@ -28,9 +28,12 @@ import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.annotation.ElementType;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -383,11 +386,12 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void mockFields(CompilationUnit cu) {
         final TypeDeclaration<?> t = gen.getType(0);
+        Set<Type> mocks = new HashSet<>();
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             for (FieldDeclaration fd : decl.getFields()) {
-                if (fd.getAnnotationByName("Autowired").isPresent() && ! AntikytheraRunTime.isMocked(fd.getElementType())) {
-                    AntikytheraRunTime.markAsMocked(fd.getElementType());
+                if (fd.getAnnotationByName("Autowired").isPresent() && ! mocks.contains(fd.getElementType())) {
+                    mocks.add(fd.getElementType());
                     FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                     field.addAnnotation("MockBean");
                     ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());

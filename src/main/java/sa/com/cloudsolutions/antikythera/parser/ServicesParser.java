@@ -1,10 +1,14 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
@@ -14,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.generator.Factory;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.io.IOException;
+import java.util.Map;
 
 public class ServicesParser extends DepsolvingParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
@@ -28,13 +33,35 @@ public class ServicesParser extends DepsolvingParser {
         }
         evaluator = new SpringEvaluator(cls);
         generator = (UnitTestGenerator) Factory.create("unit", cu);
+    }
 
+    @Override
+    public void start() throws IOException {
+        super.start();
+
+        this.mockFields();
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
         evaluator.setupFields(cu);
 
         generator.setupImports();
         generator.addBeforeClass();
+    }
+
+    public void mockFields() {
+        for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
+            mockFields(entry.getValue());
+        }
+    }
+
+    private void mockFields(CompilationUnit cu) {
+        for (TypeDeclaration<?> decl : cu.getTypes()) {
+            for (FieldDeclaration fd : decl.getFields()) {
+                if (fd.getAnnotationByName("Autowired").isPresent() && ! AntikytheraRunTime.isMocked(fd.getElementType())) {
+                    AntikytheraRunTime.markAsMocked(fd.getElementType());
+                }
+            }
+        }
     }
 
     @Override
