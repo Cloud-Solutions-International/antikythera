@@ -223,14 +223,9 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
 
         // Create an evaluator instance for the lambda
         ExpressionEvaluator eval = createEvaluator("lambda");
-
-        // Execute the method with parameters from the runtime stack
-        for (Parameter param : lambdaExpr.getParameters()) {
-            Variable arg = AntikytheraRunTime.pop();
-            eval.setLocal(md, param.getNameAsString(), arg);
-        }
-
-        return eval.executeMethod(md);
+        Variable v = new Variable(eval);
+       // v.setType(LambdaExpr);
+        return v;
     }
 
     private Variable evaluateBinaryExpression(Expression expr) throws ReflectiveOperationException {
