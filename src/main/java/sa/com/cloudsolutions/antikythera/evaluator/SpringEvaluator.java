@@ -797,8 +797,9 @@ public class SpringEvaluator extends Evaluator {
             String name = expr.asNameExpr().getNameAsString();
             Variable v = fields.get(name);
             if (v != null) {
-                if (v.getType() != null) {
-                    return v.getType().asString();
+                Type t = v.getType();
+                if (t != null) {
+                    return AbstractCompiler.findFullyQualifiedName(cu, t.asString());
                 }
                 else if (v.getValue() instanceof Evaluator eval) {
                     return eval.getClassName();
