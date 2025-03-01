@@ -21,11 +21,12 @@ import sa.com.cloudsolutions.antikythera.generator.Factory;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.io.IOException;
+import java.util.Set;
 
 
 public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
-
+    Set<MethodDeclaration> methods = new java.util.HashSet<>();
     CompilationUnit cu;
     SpringEvaluator evaluator;
     UnitTestGenerator generator;
@@ -52,11 +53,12 @@ public class ServicesParser {
             decl.findAll(MethodDeclaration.class).forEach(md -> {
                 if (!md.isPrivate()) {
                     Graph.createGraphNode(md);
-
+                    methods.add(md);
                 }
             });
             solver.dfs();
         }
+        eval();
         generator.addBeforeClass();
     }
 
@@ -66,24 +68,19 @@ public class ServicesParser {
             decl.findAll(MethodDeclaration.class).forEach(md -> {
                 if (!md.isPrivate() && md.getNameAsString().equals(method)) {
                     Graph.createGraphNode(md);
+                    methods.add(md);
                 }
             });
             solver.dfs();
         }
-
-        cu.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodDeclaration md, Void arg) {
-                /*
-                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
-                 */
-                if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md, new DummyArgumentGenerator());
-                }
-                super.visit(md, arg);
-            }
-        }, null);
+        eval();
         generator.addBeforeClass();
+    }
+
+    private void eval() {
+        for (MethodDeclaration md : methods) {
+            evaluateMethod(md, new DummyArgumentGenerator());
+        }
     }
 
     public void writeFiles() throws IOException {
