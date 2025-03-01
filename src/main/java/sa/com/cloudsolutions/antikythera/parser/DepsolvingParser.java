@@ -38,21 +38,7 @@ public abstract class DepsolvingParser {
             solver.dfs();
         }
 
-        cu.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodDeclaration md, Void arg) {
-                /*
-                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
-                 */
-                if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md, new NullArgumentGenerator());
-                }
-                super.visit(md, arg);
-            }
-        }, null);
 
     }
-
-    public abstract void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen);
 
 }

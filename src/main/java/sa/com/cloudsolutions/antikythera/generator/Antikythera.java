@@ -34,7 +34,6 @@ public class Antikythera {
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
-    private static final String SUFFIX = ".java";
 
     private final String basePackage;
     private final String basePath;

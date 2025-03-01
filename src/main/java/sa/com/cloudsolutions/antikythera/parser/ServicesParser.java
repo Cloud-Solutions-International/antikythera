@@ -5,12 +5,14 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
@@ -44,7 +46,21 @@ public class ServicesParser extends DepsolvingParser {
     @Override
     public void start(String method) throws IOException {
         super.start(method);
+
         completeSetup();
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(MethodDeclaration md, Void arg) {
+                /*
+                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
+                 */
+                if (md.getNameAsString().equals(method)) {
+                    evaluateMethod(md, new NullArgumentGenerator());
+                }
+                super.visit(md, arg);
+            }
+        }, null);
+
     }
 
     private void completeSetup() {
@@ -74,24 +90,21 @@ public class ServicesParser extends DepsolvingParser {
         }
     }
 
-    @Override
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
-        if (completedSetup) {
-            evaluator.setArgumentGenerator(gen);
-            evaluator.reset();
-            evaluator.resetColors();
-            AntikytheraRunTime.reset();
-            try {
-                evaluator.visit(md);
-            } catch (AntikytheraException | ReflectiveOperationException e) {
-                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-                } else {
-                    throw new GeneratorException(e);
-                }
-            } finally {
-                logger.info(md.getNameAsString());
+        evaluator.setArgumentGenerator(gen);
+        evaluator.reset();
+        evaluator.resetColors();
+        AntikytheraRunTime.reset();
+        try {
+            evaluator.visit(md);
+        } catch (AntikytheraException | ReflectiveOperationException e) {
+            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
+            } else {
+                throw new GeneratorException(e);
             }
+        } finally {
+            logger.info(md.getNameAsString());
         }
     }
 

@@ -75,10 +75,6 @@ public class RestControllerParser extends DepsolvingParser {
         }
     }
 
-    @Override
-    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
-
-    }
 
     private void processRestController(PackageDeclaration pd) throws IOException {
 
