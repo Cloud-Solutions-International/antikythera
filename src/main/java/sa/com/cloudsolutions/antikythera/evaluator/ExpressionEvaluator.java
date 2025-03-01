@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -21,6 +23,8 @@ public interface ExpressionEvaluator {
     Map<String, Variable> getFields();
     Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException;
     Variable executeMethod(MCEWrapper wrapper)  throws ReflectiveOperationException;
+    void setLocal(Node node, String nameAsString, Variable v);
+
     /**
      * People have a nasty habit of chaining a sequence of method calls.
      *
@@ -59,6 +63,5 @@ public interface ExpressionEvaluator {
         }
         return chain;
     }
-
 
 }

@@ -349,5 +349,11 @@ public class Reflect {
     }
 
 
+    public static Object[] buildObjects(ReflectionArguments reflectionArguments, Method method) {
+        return method.getParameterTypes().length == 1 &&
+                method.getParameterTypes()[0].equals(Object[].class) ?
+                new Object[]{reflectionArguments.getArgs()} :
+                reflectionArguments.getArgs();
+    }
 
 }
