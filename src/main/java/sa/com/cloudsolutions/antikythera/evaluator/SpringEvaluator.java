@@ -420,17 +420,24 @@ public class SpringEvaluator extends Evaluator {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
-
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                Evaluator eval = new SpringEvaluator(resolvedClass);
-                CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                v = new Variable(eval);
-                v.setType(variable.getType());
-                AntikytheraRunTime.autoWire(resolvedClass, v);
-                eval.setupFields(dependant);
+                if (AntikytheraRunTime.isMocked(fd.getElementType())) {
+                    ExpressionEvaluator eval = new MockingEvaluator(resolvedClass);
+                    v = new Variable(eval);
+                    v.setType(variable.getType());
+                    AntikytheraRunTime.autoWire(resolvedClass, v);
+                }
+                else {
+                    Evaluator eval = new SpringEvaluator(resolvedClass);
+                    CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                    v = new Variable(eval);
+                    v.setType(variable.getType());
+                    AntikytheraRunTime.autoWire(resolvedClass, v);
+                    eval.setupFields(dependant);
+                }
+                fields.put(variable.getNameAsString(), v);
             }
-            fields.put(variable.getNameAsString(), v);
 
             return true;
         }

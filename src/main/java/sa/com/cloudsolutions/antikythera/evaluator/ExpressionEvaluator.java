@@ -6,21 +6,21 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
 
 public interface ExpressionEvaluator {
-
-    public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException;
-    public CompilationUnit getCompilationUnit();
-    public void setCompilationUnit(CompilationUnit compilationUnit);
-    public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException;
-    public void setupFields(CompilationUnit cu);
-    public Map<String, Variable> getFields();
-    public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException;
-
+    Variable evaluateExpression(Expression expr) throws ReflectiveOperationException;
+    CompilationUnit getCompilationUnit();
+    void setCompilationUnit(CompilationUnit compilationUnit);
+    void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException;
+    void setupFields(CompilationUnit cu);
+    Map<String, Variable> getFields();
+    Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException;
+    Variable executeMethod(MCEWrapper wrapper)  throws ReflectiveOperationException;
     /**
      * People have a nasty habit of chaining a sequence of method calls.
      *
@@ -59,5 +59,6 @@ public interface ExpressionEvaluator {
         }
         return chain;
     }
+
 
 }

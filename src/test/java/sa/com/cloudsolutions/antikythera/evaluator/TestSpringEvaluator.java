@@ -51,7 +51,7 @@ class TestSpringEvaluator {
     @Test
     void testGetFieldClass() {
         SpringEvaluator evaluator = new SpringEvaluator("TestClass");
-
+        evaluator.setCompilationUnit(new CompilationUnit());
         // Test with NameExpr and different Variable types
         NameExpr nameExpr = new NameExpr("testField");
 
@@ -60,7 +60,7 @@ class TestSpringEvaluator {
         Variable typeVariable = new Variable("test");
         typeVariable.setType(stringType);
         evaluator.getFields().put("testField", typeVariable);
-        assertEquals("String", evaluator.getFieldClass(nameExpr));
+        assertEquals("java.lang.String", evaluator.getFieldClass(nameExpr));
 
         // Test with a Variable containing an Evaluator
         SpringEvaluator innerEvaluator = new SpringEvaluator("TestInnerClass");

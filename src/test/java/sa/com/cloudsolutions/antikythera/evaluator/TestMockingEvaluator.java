@@ -30,7 +30,7 @@ class TestMockingEvaluator {
 
     @BeforeEach
     void setUp() {
-        mockingEvaluator = new MockingEvaluator();
+        mockingEvaluator = new MockingEvaluator("");
         cu = new CompilationUnit();
         voidMethod = new MethodDeclaration();
         voidMethod.setType(new VoidType());

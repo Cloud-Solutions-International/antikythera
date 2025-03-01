@@ -68,7 +68,7 @@ import java.util.Stack;
 /**
  * Expression evaluator engine.
  */
-public class Evaluator implements ExpressionEvaluator {
+public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     /**
      * Local variables.
@@ -83,16 +83,6 @@ public class Evaluator implements ExpressionEvaluator {
      */
     protected final Map<String, Variable> fields;
     static Map<String, Object> finches;
-
-    /**
-     * The fully qualified name of the class for which we created this evaluator.
-     */
-    private final String className;
-
-    /**
-     * The compilation unit that is being processed by the expression engine
-     */
-    protected CompilationUnit cu;
 
     /**
      * The most recent return value that was encountered.
@@ -130,8 +120,7 @@ public class Evaluator implements ExpressionEvaluator {
     }
 
     public Evaluator (String className) {
-        this.className = className;
-        cu = AntikytheraRunTime.getCompilationUnit(className);
+        super(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
     }
@@ -929,7 +918,7 @@ public class Evaluator implements ExpressionEvaluator {
                     return evaluateLambda(v, arguments);
                 }
             }
-            if (v.getValue() instanceof Evaluator eval) {
+            if (v.getValue() instanceof ExpressionEvaluator eval) {
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 return eval.executeMethod(wrapper);
             }
@@ -1021,19 +1010,9 @@ public class Evaluator implements ExpressionEvaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-     Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
-
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
-        if (n.isPresent() && n.get().isMethodDeclaration()) {
-            Variable v = executeMethod(n.get().asMethodDeclaration());
-            if (v != null && v.getValue() == null) {
-                v.setType(n.get().asMethodDeclaration().getType());
-            }
-            return v;
-        }
-
-        return null;
+        return super.executeMethod(wrapper);
     }
 
     /**

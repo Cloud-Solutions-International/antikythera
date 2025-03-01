@@ -41,10 +41,10 @@ public class ServicesParser {
 
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
-        evaluator.setupFields(cu);
-
         generator.setupImports();
         generator.addBeforeClass();
+
+        evaluator.setupFields(cu);
     }
 
     public void start() throws IOException {
@@ -59,7 +59,6 @@ public class ServicesParser {
             solver.dfs();
         }
         eval();
-        generator.addBeforeClass();
     }
 
     public void start(String method) throws IOException {
@@ -74,7 +73,6 @@ public class ServicesParser {
             solver.dfs();
         }
         eval();
-        generator.addBeforeClass();
     }
 
     private void eval() {
