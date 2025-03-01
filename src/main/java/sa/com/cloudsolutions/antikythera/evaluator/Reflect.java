@@ -4,7 +4,6 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
@@ -26,7 +25,9 @@ import java.util.TreeSet;
 public class Reflect {
     public static final String BOOLEAN = "boolean";
     public static final String FLOAT = "float";
-    public static final String DOUBLE = "double";
+    public static final String PRIMITIVE_DOUBLE = "double";
+    public static final String INTEGER = "Integer";
+    public static final String DOUBLE = "Double";
     /**
      * Keeps a map of wrapper types to their primitive counterpart
      * for example Integer.class -> int.class
@@ -123,7 +124,7 @@ public class Reflect {
             case "int" -> "java.lang.Integer";
             case "long" -> "java.lang.Long";
             case FLOAT -> "java.lang.Float";
-            case DOUBLE -> "java.lang.Double";
+            case PRIMITIVE_DOUBLE -> "java.lang.Double";
             case "char" -> "java.lang.Character";
             default -> className;
         };
@@ -132,13 +133,21 @@ public class Reflect {
     public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
         return switch (elementType) {
             case "int" -> int.class;
-            case DOUBLE -> double.class;
+            case INTEGER -> Integer.class;
+            case PRIMITIVE_DOUBLE -> double.class;
+            case DOUBLE -> Double.class;
             case BOOLEAN -> boolean.class;
+            case "Boolean" -> Boolean.class;
             case "long" -> long.class;
+            case "Long" -> Long.class;
             case FLOAT -> float.class;
+            case "Float" -> Float.class;
             case "short" -> short.class;
+            case "Short" -> Short.class;
             case "byte" -> byte.class;
+            case "Byte" -> Byte.class;
             case "char" -> char.class;
+            case "Character" -> Character.class;
             default -> Class.forName(elementType);
         };
     }
@@ -161,7 +170,7 @@ public class Reflect {
     public static Object getDefault(String elementType)  {
         return switch (elementType) {
             case "int" -> 0;
-            case DOUBLE -> 0.0;
+            case PRIMITIVE_DOUBLE -> 0.0;
             case BOOLEAN -> false;
             case "long" -> 0L;
             case FLOAT -> 0.0f;
@@ -218,14 +227,14 @@ public class Reflect {
                 v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Boolean"), NodeList.nodeList(new StringLiteralExpr("false"))));
                 yield v;
             }
-            case "float", "Float", "double", "Double" -> {
+            case "float", "Float", "double", DOUBLE -> {
                 Variable v = new Variable(0.0);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Double"), NodeList.nodeList(new StringLiteralExpr("0.0"))));
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType(DOUBLE), NodeList.nodeList(new StringLiteralExpr("0.0"))));
                 yield v;
             }
-            case "Integer", "int" -> {
+            case INTEGER, "int" -> {
                 Variable v = new Variable(0);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Integer"), NodeList.nodeList(new StringLiteralExpr("0"))));
+                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType(INTEGER), NodeList.nodeList(new StringLiteralExpr("0"))));
                 yield v;
             }
             case "Long", "long" , "java.lang.Long" -> {
