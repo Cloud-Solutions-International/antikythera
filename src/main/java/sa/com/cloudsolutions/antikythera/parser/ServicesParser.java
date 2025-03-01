@@ -22,7 +22,7 @@ import java.util.Map;
 
 public class ServicesParser extends DepsolvingParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
-
+    private boolean completedSetup = false;
     private final SpringEvaluator evaluator;
     private final UnitTestGenerator generator;
 
@@ -38,7 +38,16 @@ public class ServicesParser extends DepsolvingParser {
     @Override
     public void start() throws IOException {
         super.start();
+        completeSetup();
+    }
 
+    @Override
+    public void start(String method) throws IOException {
+        super.start(method);
+        completeSetup();
+    }
+
+    private void completeSetup() {
         this.mockFields();
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
@@ -46,6 +55,7 @@ public class ServicesParser extends DepsolvingParser {
 
         generator.setupImports();
         generator.addBeforeClass();
+        completedSetup = true;
     }
 
     public void mockFields() {
@@ -66,20 +76,22 @@ public class ServicesParser extends DepsolvingParser {
 
     @Override
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
-        evaluator.setArgumentGenerator(gen);
-        evaluator.reset();
-        evaluator.resetColors();
-        AntikytheraRunTime.reset();
-        try {
-            evaluator.visit(md);
-        } catch (AntikytheraException | ReflectiveOperationException e) {
-            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-            } else {
-                throw new GeneratorException(e);
+        if (completedSetup) {
+            evaluator.setArgumentGenerator(gen);
+            evaluator.reset();
+            evaluator.resetColors();
+            AntikytheraRunTime.reset();
+            try {
+                evaluator.visit(md);
+            } catch (AntikytheraException | ReflectiveOperationException e) {
+                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
+                } else {
+                    throw new GeneratorException(e);
+                }
+            } finally {
+                logger.info(md.getNameAsString());
             }
-        } finally {
-            logger.info(md.getNameAsString());
         }
     }
 

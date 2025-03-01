@@ -1250,35 +1250,44 @@ public class Evaluator implements ExpressionEvaluator {
     }
 
     void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+        if (AntikytheraRunTime.isMocked(variable.getType())) {
+            String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
+            Variable v = new Variable(new MockingEvaluator(fqdn));
+            fields.put(variable.getNameAsString(), v);
+        }
         if (variable.getType().isClassOrInterfaceType()) {
-            ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
-            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
-            if (imports.isEmpty()) {
-                setupPrimitiveOrBoxedField(variable, t);
-            }
-            else {
-                for (ImportWrapper imp : imports) {
-                    String resolvedClass = imp.getNameAsString();
+            reolveNonPrimitiveFields(variable);
+        }
+        else {
+            resolvePrimitiveFields(variable);
+        }
+    }
 
-                    if (finches.get(resolvedClass) != null) {
-                        Variable v = new Variable(t);
-                        v.setValue(finches.get(resolvedClass));
-                        fields.put(variable.getNameAsString(), v);
-                    } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-                        setupPrimitiveOrBoxedField(variable, t);
+    private void reolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+        ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
+        List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+        if (imports.isEmpty()) {
+            setupPrimitiveOrBoxedField(variable, t);
+        }
+        else {
+            for (ImportWrapper imp : imports) {
+                String resolvedClass = imp.getNameAsString();
+
+                if (finches.get(resolvedClass) != null) {
+                    Variable v = new Variable(t);
+                    v.setValue(finches.get(resolvedClass));
+                    fields.put(variable.getNameAsString(), v);
+                } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
+                    setupPrimitiveOrBoxedField(variable, t);
+                } else {
+                    CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                    if (compilationUnit != null) {
+                        resolveFieldRepresentedByCode(variable, resolvedClass);
                     } else {
-                        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                        if (compilationUnit != null) {
-                            resolveFieldRepresentedByCode(variable, resolvedClass);
-                        } else {
-                            logger.debug("Unsolved {}", resolvedClass);
-                        }
+                        logger.debug("Unsolved {}", resolvedClass);
                     }
                 }
             }
-        }
-        else {
-            resolveNonClassFields(variable);
         }
     }
 
@@ -1350,7 +1359,7 @@ public class Evaluator implements ExpressionEvaluator {
         return false;
     }
 
-    private void resolveNonClassFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    private void resolvePrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if(init.isPresent()) {

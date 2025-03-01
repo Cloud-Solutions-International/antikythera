@@ -10,6 +10,14 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.util.Map;
 
 public class MockingEvaluator implements ExpressionEvaluator {
+    public MockingEvaluator() {
+
+    }
+
+    public MockingEvaluator(String fqdn) {
+
+    }
+
     @Override
     public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException {
         return null;

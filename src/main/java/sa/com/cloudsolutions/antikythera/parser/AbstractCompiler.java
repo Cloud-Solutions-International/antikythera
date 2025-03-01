@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
@@ -163,6 +164,14 @@ public class AbstractCompiler {
                 return getMatchingType(other, name);
 
             }
+        }
+        return null;
+    }
+
+    public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
+        Optional<CompilationUnit> cu = variable.findCompilationUnit();
+        if (cu.isPresent()) {
+            return findFullyQualifiedName(cu.get(), variable.getType().asString());
         }
         return null;
     }

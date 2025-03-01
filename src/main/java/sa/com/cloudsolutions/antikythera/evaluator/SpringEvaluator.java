@@ -297,7 +297,7 @@ public class SpringEvaluator extends Evaluator {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         String shortName = t.getNameAsString();
 
-        String className = AbstractCompiler.findFullyQualifiedName(variable.findCompilationUnit().get(), shortName);
+        String className = AbstractCompiler.findFullyQualifiedTypeName(variable);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
