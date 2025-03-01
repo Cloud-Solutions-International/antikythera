@@ -72,13 +72,6 @@ import java.util.Stack;
  */
 public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
-    /**
-     * Local variables.
-     *
-     * These are specific to a block statement. A block statement may also be an
-     * entire method. The primary key will be the hashcode of the block statement.
-     */
-    private final Map<Integer, Map<String, Variable>> locals ;
 
     /**
      * The fields that were encountered in the current class.
@@ -123,7 +116,6 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
 
     public Evaluator (String className) {
         super(className);
-        locals = new HashMap<>();
         fields = new HashMap<>();
     }
 
@@ -207,8 +199,38 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
             return evaluateExpression(expr.asCastExpr().getExpression());
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
+        } else if (expr.isLambdaExpr()) {
+            return evaluateLambdaExpression(expr.asLambdaExpr());
         }
         return null;
+    }
+
+    private Variable evaluateLambdaExpression(LambdaExpr lambdaExpr) throws ReflectiveOperationException {
+        // Create a synthetic method from the lambda
+        MethodDeclaration md = new MethodDeclaration();
+
+        // Set the method body based on lambda type (expression or block)
+        if (lambdaExpr.getBody().isBlockStmt()) {
+            md.setBody(lambdaExpr.getBody().asBlockStmt());
+        } else {
+            BlockStmt blockStmt = new BlockStmt();
+            blockStmt.addStatement(lambdaExpr.getBody());
+            md.setBody(blockStmt);
+        }
+
+        // Add lambda parameters to method
+        lambdaExpr.getParameters().forEach(md::addParameter);
+
+        // Create an evaluator instance for the lambda
+        ExpressionEvaluator eval = createEvaluator("lambda");
+
+        // Execute the method with parameters from the runtime stack
+        for (Parameter param : lambdaExpr.getParameters()) {
+            Variable arg = AntikytheraRunTime.pop();
+            eval.setLocal(md, param.getNameAsString(), arg);
+        }
+
+        return eval.executeMethod(md);
     }
 
     private Variable evaluateBinaryExpression(Expression expr) throws ReflectiveOperationException {
@@ -698,100 +720,6 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
     }
 
     /**
-     * Find local variable
-     * Does not look at fields. You probably want to call getValue() instead.
-     *
-     * @param node the node representing the current expresion.
-     *             It's primary purpose is to help identify the current block
-     * @param name the name of the variable to look up
-     * @return the Variable if it's found or null.
-     */
-    public Variable getLocal(Node node, String name) {
-        Variable v = null;
-        Node n = node;
-
-        while (true) {
-            BlockStmt block = findBlockStatement(n);
-            int hash = (block != null) ? block.hashCode() : 0;
-            if (hash == 0) {
-                for(Map.Entry<Integer, Map<String, Variable>> entry : locals.entrySet()) {
-                    v = entry.getValue().get(name);
-                    if (v != null) {
-                        return v;
-                    }
-                }
-                break;
-            }
-            else {
-                Map<String, Variable> localsVars = this.locals.get(hash);
-
-                if (localsVars != null) {
-                    v = localsVars.get(name);
-                    if (v != null)
-                        return v;
-                }
-                if (n instanceof MethodDeclaration) {
-                    localsVars = this.locals.get(hash);
-                    if (localsVars != null) {
-                        v = localsVars.get(name);
-                        return v;
-                    }
-                    break;
-                }
-                if (block == null) {
-                    break;
-                }
-                n = block.getParentNode().orElse(null);
-                if (n == null) {
-                    break;
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Sets a local variable
-     * @param node An expression representing the code being currently executed. It will be used to identify the
-     *             encapsulating block.
-     * @param nameAsString the variable name.
-     *                     If the variable is already available as a local it's value will be replaced.
-     * @param v The value to be set for the variable.
-     */
-    void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getLocal(node, nameAsString);
-        if (old != null) {
-            old.setValue(v.getValue());
-        }
-        else {
-            BlockStmt block = findBlockStatement(node);
-            int hash = (block != null) ? block.hashCode() : 0;
-
-            Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
-            localVars.put(nameAsString, v);
-        }
-    }
-
-    /**
-     * Recursively traverse parents to find a block statement.
-     * @param expr the expression to start from
-     * @return the block statement that contains expr
-     */
-    private static BlockStmt findBlockStatement(Node expr) {
-        Node currentNode = expr;
-        while (currentNode != null) {
-            if (currentNode instanceof BlockStmt blockStmt) {
-                return blockStmt;
-            }
-            if (currentNode instanceof MethodDeclaration md) {
-                return md.getBody().orElse(null);
-            }
-            currentNode = currentNode.getParentNode().orElse(null);
-        }
-        return null; // No block statement found
-    }
-
-    /**
      * Evaluate a method call.
      * There are two types of method calls, those that return values and those that do not.
      * The ones that return values will typically reach here through a flow such as initialize
@@ -989,41 +917,43 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
            throw new EvaluatorException("Error evaluating method call: " + reflectionArguments.getMethodName());
        }
 
-       Object[] finalArgs = method.getParameterTypes().length == 1 &&
-           method.getParameterTypes()[0].equals(Object[].class) ?
-           new Object[]{reflectionArguments.getArgs()} :
-           reflectionArguments.getArgs();
+       Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
 
        try {
            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                returnValue.setClazz(method.getReturnType());
            }
-           return returnValue;
+
        } catch (IllegalAccessException e) {
-           try {
-               method.setAccessible(true);
-               returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
-               if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                   returnValue.setClazz(method.getReturnType());
-               }
-               return returnValue;
-           } catch (InaccessibleObjectException ioe) {
-               // If module access fails, try to find a public interface or superclass method
-               Method publicMethod = findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
-               if (publicMethod != null) {
-                   returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
-                   if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                       returnValue.setClazz(publicMethod.getReturnType());
-                   }
-                   return returnValue;
-               }
-               throw e;
-           }
+           invokeinAccessibleMethod(v, reflectionArguments, method);
        }
+       return returnValue;
    }
 
-   private Method findAccessibleMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+
+    private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments, Method method) throws ReflectiveOperationException {
+        Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
+        try {
+            method.setAccessible(true);
+
+            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                returnValue.setClazz(method.getReturnType());
+            }
+        } catch (InaccessibleObjectException ioe) {
+            // If module access fails, try to find a public interface or superclass method
+            Method publicMethod = findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
+            if (publicMethod != null) {
+                returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
+                if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                    returnValue.setClazz(publicMethod.getReturnType());
+                }
+            }
+        }
+    }
+
+    private Method findAccessibleMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
        Method method = Reflect.findMethod(clazz, methodName, paramTypes);
        if (method != null) return method;
 
