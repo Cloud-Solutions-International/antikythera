@@ -1026,7 +1026,11 @@ public class Evaluator implements ExpressionEvaluator {
 
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
-            return executeMethod(n.get().asMethodDeclaration());
+            Variable v = executeMethod(n.get().asMethodDeclaration());
+            if (v != null && v.getValue() == null) {
+                v.setType(n.get().asMethodDeclaration().getType());
+            }
+            return v;
         }
 
         return null;
