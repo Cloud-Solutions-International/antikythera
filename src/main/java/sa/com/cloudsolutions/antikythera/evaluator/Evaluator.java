@@ -167,6 +167,15 @@ public class Evaluator implements ExpressionEvaluator {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             return getValue(expr, name);
+        } else if (expr.isMethodCallExpr()) {
+
+            /*
+             * Method calls are the toughest nuts to crack. Some method calls will be from the Java api
+             * or from other libraries. Or from classes that have not been compiled.
+             */
+            MethodCallExpr methodCall = expr.asMethodCallExpr();
+            return evaluateMethodCall(methodCall);
+
         } else if (expr.isLiteralExpr()) {
             /*
              * Literal expressions are the easiest.
@@ -185,15 +194,6 @@ public class Evaluator implements ExpressionEvaluator {
             return evaluateBinaryExpression(expr);
         } else if (expr.isUnaryExpr()) {
             return  evaluateUnaryExpression(expr);
-        } else if (expr.isMethodCallExpr()) {
-
-            /*
-             * Method calls are the toughest nuts to crack. Some method calls will be from the Java api
-             * or from other libraries. Or from classes that have not been compiled.
-             */
-            MethodCallExpr methodCall = expr.asMethodCallExpr();
-            return evaluateMethodCall(methodCall);
-
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
