@@ -52,7 +52,9 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -978,30 +980,89 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
         return null;
     }
 
-    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-        Class<?> clazz = v.getClazz();
-        String methodName = reflectionArguments.getMethodName();
-        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
-        Object[] args = reflectionArguments.getArgs();
-        Method method = Reflect.findMethod(clazz, methodName, paramTypes);
-        if (method != null) {
-            Object[] finalArgs = args;
-            if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Object[].class)) {
-                finalArgs = new Object[]{args};
-            }
+   Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+       Method method = findAccessibleMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
+       if (method == null) {
+           if (v.getValue() == null) {
+               throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
+           }
+           throw new EvaluatorException("Error evaluating method call: " + reflectionArguments.getMethodName());
+       }
 
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
-            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                returnValue.setClazz(method.getReturnType());
-            }
-            return returnValue;
-        }
+       Object[] finalArgs = method.getParameterTypes().length == 1 &&
+           method.getParameterTypes()[0].equals(Object[].class) ?
+           new Object[]{reflectionArguments.getArgs()} :
+           reflectionArguments.getArgs();
 
-        if(v.getValue() == null) {
-            throw new EvaluatorException("Application NPE: " + methodName, EvaluatorException.NPE);
-        }
-        throw new EvaluatorException("Error evaluating method call: " + methodName);
-    }
+       try {
+           returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+           if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+               returnValue.setClazz(method.getReturnType());
+           }
+           return returnValue;
+       } catch (IllegalAccessException e) {
+           try {
+               method.setAccessible(true);
+               returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+               if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                   returnValue.setClazz(method.getReturnType());
+               }
+               return returnValue;
+           } catch (InaccessibleObjectException ioe) {
+               // If module access fails, try to find a public interface or superclass method
+               Method publicMethod = findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
+               if (publicMethod != null) {
+                   returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
+                   if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                       returnValue.setClazz(publicMethod.getReturnType());
+                   }
+                   return returnValue;
+               }
+               throw e;
+           }
+       }
+   }
+
+   private Method findAccessibleMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+       Method method = Reflect.findMethod(clazz, methodName, paramTypes);
+       if (method != null) return method;
+
+       // Search interfaces
+       for (Class<?> iface : clazz.getInterfaces()) {
+           method = Reflect.findMethod(iface, methodName, paramTypes);
+           if (method != null) return method;
+       }
+
+       // Search superclass if no interface method found
+       Class<?> superclass = clazz.getSuperclass();
+       return superclass != null ? findAccessibleMethod(superclass, methodName, paramTypes) : null;
+   }
+
+   private Method findPublicMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+       // Try public interfaces first
+       for (Class<?> iface : clazz.getInterfaces()) {
+           try {
+               Method method = iface.getMethod(methodName, paramTypes);
+               if (Modifier.isPublic(method.getModifiers())) {
+                   return method;
+               }
+           } catch (NoSuchMethodException ignored) {}
+       }
+
+       // Try superclass hierarchy
+       Class<?> superclass = clazz.getSuperclass();
+       while (superclass != null) {
+           try {
+               Method method = superclass.getMethod(methodName, paramTypes);
+               if (Modifier.isPublic(method.getModifiers())) {
+                   return method;
+               }
+           } catch (NoSuchMethodException ignored) {}
+           superclass = superclass.getSuperclass();
+       }
+
+       return null;
+   }
 
     /**
      * Execute a method call.
