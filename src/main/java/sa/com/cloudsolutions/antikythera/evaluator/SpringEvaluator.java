@@ -426,6 +426,7 @@ public class SpringEvaluator extends Evaluator {
                 Evaluator eval = new SpringEvaluator(resolvedClass);
                 CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 v = new Variable(eval);
+                v.setType(variable.getType());
                 AntikytheraRunTime.autoWire(resolvedClass, v);
                 eval.setupFields(dependant);
             }
@@ -442,8 +443,19 @@ public class SpringEvaluator extends Evaluator {
         try {
             if(methodCall.getScope().isPresent()) {
                 Expression scope = methodCall.getScope().get();
-                if(repositories.containsKey(getFieldClass(scope))) {
-                    return executeSource(methodCall);
+                String fieldClass = getFieldClass(scope);
+                if(repositories.containsKey(fieldClass)) {
+                    boolean isMocked = false;
+                    String fieldName = getFieldName(scope);
+                    if (fieldName != null) {
+                        Variable field = fields.get(fieldName);
+                        if (field != null && field.getType() != null) {
+                            isMocked = AntikytheraRunTime.isMocked(field.getType());
+                        }
+                    }
+                    if (!isMocked) {
+                        return executeSource(methodCall);
+                    }
                 }
             }
             return super.evaluateMethodCall(v, methodCall);
@@ -750,7 +762,9 @@ public class SpringEvaluator extends Evaluator {
                         try {
                             if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
                                 Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
-                                fields.put(fieldName, new Variable(value));
+                                Variable v = new Variable(value);
+                                v.setType(fieldVar.getType());
+                                fields.put(fieldName, v);
                             }
                         } catch (SQLException e) {
                             logger.warn(e.getMessage());
@@ -765,7 +779,20 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
-    private String getFieldClass(Expression expr) {
+    String getFieldName(Expression expr) {
+        if (expr.isNameExpr()) {
+            return expr.asNameExpr().getNameAsString();
+        } else if (expr.isMethodCallExpr()) {
+            MethodCallExpr methodCall = expr.asMethodCallExpr();
+            Expression scope = methodCall.getScope().orElse(null);
+            if (scope != null) {
+                return getFieldName(scope);
+            }
+        }
+        return null;
+    }
+
+    String getFieldClass(Expression expr) {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             Variable v = fields.get(name);
@@ -786,19 +813,6 @@ public class SpringEvaluator extends Evaluator {
             }
         }
         return null;
-    }
-
-    private boolean isRepositoryMethod(ExpressionStmt stmt) {
-        Expression expr = stmt.getExpression();
-        if (expr.isVariableDeclarationExpr()) {
-            VariableDeclarationExpr vdecl = expr.asVariableDeclarationExpr();
-            VariableDeclarator v = vdecl.getVariable(0);
-            Optional<Expression> init = v.getInitializer();
-            if (init.isPresent()) {
-                return repositories.containsKey(getFieldClass(init.get()));
-            }
-        }
-        return false;
     }
 
     private ExpressionStmt findExpressionStatement(MethodCallExpr methodCall) {
