@@ -1257,17 +1257,18 @@ public class Evaluator implements ExpressionEvaluator {
         if (AntikytheraRunTime.isMocked(variable.getType())) {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v = new Variable(new MockingEvaluator(fqdn));
+            v.setType(variable.getType());
             fields.put(variable.getNameAsString(), v);
         }
         if (variable.getType().isClassOrInterfaceType()) {
-            reolveNonPrimitiveFields(variable);
+            resolveNonPrimitiveFields(variable);
         }
         else {
             resolvePrimitiveFields(variable);
         }
     }
 
-    private void reolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    private void resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
         if (imports.isEmpty()) {
@@ -1333,6 +1334,7 @@ public class Evaluator implements ExpressionEvaluator {
         else
         {
             v = new Variable(t, null);
+            v.setType(t);
         }
         fields.put(variable.getNameAsString(), v);
     }
@@ -1351,11 +1353,13 @@ public class Evaluator implements ExpressionEvaluator {
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
                 Variable v = createObject(variable, variable, init.get().asObjectCreationExpr());
+                v.setType(variable.getType());
                 fields.put(variable.getNameAsString(), v);
             }
             else {
                 ExpressionEvaluator eval = createEvaluator(resolvedClass);
                 Variable v = new Variable(eval);
+                v.setType(variable.getType());
                 fields.put(variable.getNameAsString(), v);
             }
             return true;
