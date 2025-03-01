@@ -4,12 +4,14 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.Statement;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -156,4 +158,31 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
         return null;
     }
 
+    public void reset() {
+        locals.clear();
+    }
+
+    protected String getClassName() {
+        return className;
+    }
+
+    @Override
+    public String toString() {
+        return hashCode() + " : " + getClassName();
+    }
+
+    @Override
+    public CompilationUnit getCompilationUnit() {
+        return cu;
+    }
+
+    @Override
+    public void setCompilationUnit(CompilationUnit compilationUnit) {
+        this.cu = compilationUnit;
+    }
+
+    protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException
+    {
+        throw new UnsupportedOperationException("A subclass will have to do this");
+    }
 }

@@ -1722,10 +1722,6 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
-    protected String getClassName() {
-        return className;
-    }
-
     /**
      * Java parser visitor used to setup the fields in the class.
      *
@@ -1761,27 +1757,8 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
         }
     }
 
-    public void reset() {
-        locals.clear();
-    }
 
     public ExpressionEvaluator createEvaluator(String className) {
         return new Evaluator(className);
-    }
-
-
-    @Override
-    public String toString() {
-        return hashCode() + " : " + getClassName();
-    }
-
-    @Override
-    public CompilationUnit getCompilationUnit() {
-        return cu;
-    }
-
-    @Override
-    public void setCompilationUnit(CompilationUnit compilationUnit) {
-        this.cu = compilationUnit;
     }
 }
