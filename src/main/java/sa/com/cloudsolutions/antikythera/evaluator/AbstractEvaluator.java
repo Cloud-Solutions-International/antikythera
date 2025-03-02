@@ -2,20 +2,30 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.MemberValuePair;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 public abstract class AbstractEvaluator implements ExpressionEvaluator {
+    private static final Logger logger = LoggerFactory.getLogger(AbstractEvaluator.class);
 
     /**
      * The fully qualified name of the class for which we created this evaluator.
@@ -36,6 +46,16 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
     protected final Map<Integer, Map<String, Variable>> locals ;
 
 
+    /**
+     * The most recent return value that was encountered.
+     */
+    protected Variable returnValue;
+
+    /**
+     * The parent block of the last executed return statement.
+     */
+    protected Node returnFrom;
+
     public AbstractEvaluator(String className) {
         this.className = className;
         cu = AntikytheraRunTime.getCompilationUnit(className);
@@ -50,6 +70,7 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
      *          feature is not yet implemented.
      */
     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+        returnFrom = null;
 
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
@@ -61,6 +82,69 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
         }
 
         return null;
+    }
+
+    /**
+     * Execute a method represented by the CallableDeclaration
+     * @param cd a callable declaration
+     * @return the result of the method execution. If the method is void, this will be null
+     * @throws AntikytheraException if the method cannot be executed as source
+     * @throws ReflectiveOperationException if various reflective operations associated with the
+     *      method execution fails
+     */
+    public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException {
+        if (cd instanceof MethodDeclaration md) {
+
+            returnFrom = null;
+            returnValue = null;
+
+            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            setupParameters(md);
+
+            executeBlock(statements);
+
+            return returnValue;
+        }
+        return null;
+    }
+
+
+    protected boolean setupParameters(MethodDeclaration md) {
+        NodeList<Parameter> parameters = md.getParameters();
+        ArrayList<Boolean> missing = new ArrayList<>();
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            Parameter p = parameters.get(i);
+            /*
+             * Our implementation differs from a standard Expression Evaluation engine in that we do not
+             * throw an exception if the stack is empty.
+             *
+             * The primary purpose of this is to generate tests. Those tests are sometimes generated for
+             * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
+             * allow the developer to make a few manual edits that's more than enough.
+             */
+            if (AntikytheraRunTime.isEmptyStack()) {
+                logger.warn("Stack is empty");
+                missing.add(true);
+            }
+            else {
+                Variable va = AntikytheraRunTime.pop();
+                setLocal(md.getBody().get(), p.getNameAsString(), va);
+                p.getAnnotationByName("RequestParam").ifPresent(a -> {
+                    if (a.isNormalAnnotationExpr()) {
+                        NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
+                        for (MemberValuePair pair : ne.getPairs()) {
+                            if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
+                                return;
+                            }
+                        }
+                    }
+                    if (va == null) {
+                        missing.add(true);
+                    }
+                });
+            }
+        }
+        return missing.isEmpty();
     }
 
 

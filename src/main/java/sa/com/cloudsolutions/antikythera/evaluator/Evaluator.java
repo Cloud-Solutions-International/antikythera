@@ -79,16 +79,6 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
     protected final Map<String, Variable> fields;
     static Map<String, Object> finches;
 
-    /**
-     * The most recent return value that was encountered.
-     */
-    protected Variable returnValue;
-
-    /**
-     * The parent block of the last executed return statement.
-     */
-    protected Node returnFrom;
-
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
     protected final Deque<TryStmt> catching = new LinkedList<>();
@@ -990,18 +980,6 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
    }
 
     /**
-     * Execute a method call.
-     * @param wrapper the method call expression wrapped so that the argument types are available
-     * @return the result of executing that code.
-     * @throws EvaluatorException if there is an error evaluating the method call or if the
-     *          feature is not yet implemented.
-     */
-     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
-        returnFrom = null;
-        return super.executeMethod(wrapper);
-    }
-
-    /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
      * @param methodCall the method call expression to be executed
@@ -1357,68 +1335,6 @@ public class Evaluator extends AbstractEvaluator implements ExpressionEvaluator 
 
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {
         executeMethod(md);
-    }
-
-    /**
-     * Execute a method represented by the CallableDeclaration
-     * @param cd a callable declaration
-     * @return the result of the method execution. If the method is void, this will be null
-     * @throws AntikytheraException if the method cannot be executed as source
-     * @throws ReflectiveOperationException if various reflective operations associated with the
-     *      method execution fails
-     */
-    public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException {
-        if (cd instanceof MethodDeclaration md) {
-
-            returnFrom = null;
-            returnValue = null;
-
-            List<Statement> statements = md.getBody().orElseThrow().getStatements();
-            setupParameters(md);
-
-            executeBlock(statements);
-
-            return returnValue;
-        }
-        return null;
-    }
-
-    protected boolean setupParameters(MethodDeclaration md) {
-        NodeList<Parameter> parameters = md.getParameters();
-        ArrayList<Boolean> missing = new ArrayList<>();
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Parameter p = parameters.get(i);
-            /*
-             * Our implementation differs from a standard Expression Evaluation engine in that we do not
-             * throw an exception if the stack is empty.
-             *
-             * The primary purpose of this is to generate tests. Those tests are sometimes generated for
-             * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
-             * allow the developer to make a few manual edits that's more than enough.
-             */
-            if (AntikytheraRunTime.isEmptyStack()) {
-                logger.warn("Stack is empty");
-                missing.add(true);
-            }
-            else {
-                Variable va = AntikytheraRunTime.pop();
-                setLocal(md.getBody().get(), p.getNameAsString(), va);
-                p.getAnnotationByName("RequestParam").ifPresent(a -> {
-                    if (a.isNormalAnnotationExpr()) {
-                        NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
-                        for (MemberValuePair pair : ne.getPairs()) {
-                            if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
-                                return;
-                            }
-                        }
-                    }
-                    if (va == null) {
-                        missing.add(true);
-                    }
-                });
-            }
-        }
-        return missing.isEmpty();
     }
 
     /**
