@@ -6,20 +6,38 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.stmt.DoStmt;
+import com.github.javaparser.ast.stmt.ForEachStmt;
+import com.github.javaparser.ast.stmt.ForStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchStmt;
+import com.github.javaparser.ast.stmt.ThrowStmt;
+import com.github.javaparser.ast.stmt.TryStmt;
+import com.github.javaparser.ast.stmt.WhileStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,6 +73,11 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
      * The parent block of the last executed return statement.
      */
     protected Node returnFrom;
+
+    protected LinkedList<Boolean> loops = new LinkedList<>();
+
+    protected final Deque<TryStmt> catching = new LinkedList<>();
+
 
     public AbstractEvaluator(String className) {
         this.className = className;
@@ -107,7 +130,297 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
         }
         return null;
     }
+    /**
+     * Execute a block of statements.
+     * @param statements the collection of statements that make up the block
+     * @throws AntikytheraException if there are situations where we cannot process the block
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
+    protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException {
+        try {
+            for (Statement stmt : statements) {
+                if(loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                    executeStatement(stmt);
+                    if (returnFrom != null) {
+                        break;
+                    }
+                }
+            }
+        } catch (EvaluatorException|ReflectiveOperationException ex) {
+            throw ex;
+        } catch (Exception e) {
+            handleApplicationException(e);
+        }
+    }
 
+
+    protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
+        if(catching.isEmpty()) {
+            throw new AUTException("Unhandled exception", e);
+        }
+        TryStmt t = catching.pollLast();
+        boolean matched = false;
+        for(CatchClause clause : t.getCatchClauses()) {
+            if(clause.getParameter().getType().isClassOrInterfaceType()) {
+                String resolvedClass = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
+                if(resolvedClass.equals(e.getClass().getName())) {
+                    setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                    executeBlock(clause.getBody().getStatements());
+                    if(t.getFinallyBlock().isPresent()) {
+                        executeBlock(t.getFinallyBlock().get().getStatements());
+                    }
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if(!matched) {
+            throw new AUTException("Unhandled exception", e);
+        }
+    }
+
+    /**
+     * Execute a statment.
+     * In the java parser architecture a statement is not always a single line of code. They can be
+     * block statements as well. For example when an IF condition is encountered that counts as
+     * statement. It's child elements the then and else blocks are also block statements.
+     *
+     * @param stmt the statement to execute
+     * @throws Exception if the execution fails.
+     */
+    void executeStatement(Statement stmt) throws Exception {
+        if (stmt.isExpressionStmt()) {
+            /*
+             * A line of code that is an expression. The expression itself can fall into various different
+             * categories and we let the evaluateExpression method take care of all that
+             */
+            evaluateExpression(stmt.asExpressionStmt().getExpression());
+
+        } else if (stmt.isIfStmt()) {
+            /*
+             * If then Else are all treated together
+             */
+            ifThenElseBlock(stmt.asIfStmt());
+
+        } else if (stmt.isTryStmt()) {
+            /*
+             * Try takes a bit of trying
+             */
+            catching.addLast(stmt.asTryStmt());
+            executeBlock(stmt.asTryStmt().getTryBlock().getStatements());
+        } else if (stmt.isThrowStmt()) {
+            /*
+             * Throw is tricky because we need to distinguish between what exceptions were raised by
+             * issues in Antikythera and what are exceptions that are part of the application
+             */
+            executeThrow(stmt);
+        } else if (stmt.isReturnStmt()) {
+            /*
+             * When returning we need to know if a value has been returned.
+             */
+            returnValue = executeReturnStatement(stmt);
+
+        } else if (stmt.isForStmt()) {
+            /*
+             * Traditional for loop
+             */
+            executeForLoop(stmt.asForStmt());
+        } else if (stmt.isForEachStmt()) {
+            /*
+             * Python style for each
+             */
+            executeForEach(stmt);
+        } else if (stmt.isDoStmt()) {
+            /*
+             * It may not be used all that much but we still have to support do while.
+             */
+            executeDoWhile(stmt.asDoStmt());
+
+        } else if(stmt.isSwitchStmt()) {
+            SwitchStmt switchExpr = stmt.asSwitchStmt();
+            System.out.println("switch missing");
+        } else if(stmt.isWhileStmt()) {
+            /*
+             * Old fashioned while statement
+             */
+            executeWhile(stmt.asWhileStmt());
+
+        } else if (stmt.isBlockStmt()) {
+            /*
+             * in C like languages it's possible to have a block that is not directly
+             * associated with a condtional, loop or method etc.
+             */
+            executeBlock(stmt.asBlockStmt().getStatements());
+        } else if (stmt.isBreakStmt()) {
+            /*
+             * Breaking means signalling that the loop has to be ended for that we keep a stack
+             * in with a flag for all the loops that are in our trace
+             */
+            loops.pollLast();
+            loops.addLast(Boolean.FALSE);
+        } else {
+            logger.info("Unhandled statement: {}", stmt);
+        }
+    }
+
+    private void executeForEach(Statement stmt) throws ReflectiveOperationException {
+        loops.addLast(true);
+        ForEachStmt forEachStmt = stmt.asForEachStmt();
+        Variable iter = evaluateExpression(forEachStmt.getIterable());
+        Object arr = iter.getValue();
+        evaluateExpression(forEachStmt.getVariable());
+
+        for(int i = 0; i < Array.getLength(arr) ; i++) {
+            Object value = Array.get(arr, i);
+            for(VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+                Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
+                v.setValue(value);
+            }
+
+            executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+        }
+
+        loops.pollLast();
+    }
+
+    private void executeThrow(Statement stmt) throws Exception {
+        ThrowStmt t = stmt.asThrowStmt();
+        if (t.getExpression().isObjectCreationExpr()) {
+            ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
+            Variable v = createObject(stmt, null, oce);
+            if (v.getValue() instanceof Exception ex) {
+                throw ex;
+            } else {
+                logger.error("Should have an exception");
+            }
+        }
+    }
+
+
+    /**
+     * Create an object using reflection
+     *
+     * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
+     *                           We recursively fetch it's parent until we reach the start of the block. This is
+     *                           needed because local variables are local to a block rather than a method.
+     * @param decl  The variable declaration. Pass null here if you don't want to create local variable.
+     *              This would typically be the case if you have a method call and one of the arguments
+     *              to the method call is a new instance.
+     * @param oce The expression to be evaluated and assigned as the initial value
+     * @return The object that's created will be in the value field of the Variable
+     */
+    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws ReflectiveOperationException {
+        ClassOrInterfaceType type = oce.getType();
+        Variable vx;
+
+        vx = createUsingEvaluator(type, oce, instructionPointer);
+
+        if (vx == null) {
+            vx = createUsingReflection(type, oce);
+            if(vx == null) {
+                vx = createUsingByteBuddy(oce, type);
+            }
+        }
+        if (decl != null) {
+            setLocal(instructionPointer, decl.getNameAsString(), vx);
+        }
+
+        return vx;
+    }
+
+    private void executeForLoop(ForStmt forStmt) throws ReflectiveOperationException {
+        loops.addLast(true);
+
+        for (Node n : forStmt.getInitialization()) {
+            if (n instanceof VariableDeclarationExpr vdecl) {
+                evaluateExpression(vdecl);
+            }
+        }
+        while ((boolean) evaluateExpression(forStmt.getCompare().orElseThrow()).getValue() &&
+                Boolean.TRUE.equals(loops.peekLast())) {
+            executeBlock(forStmt.getBody().asBlockStmt().getStatements());
+            for (Node n : forStmt.getUpdate()) {
+                if(n instanceof Expression e) {
+                    evaluateExpression(e);
+                }
+            }
+        }
+        loops.pollLast();
+    }
+
+    private void executeDoWhile(DoStmt whileStmt) throws ReflectiveOperationException {
+        loops.push(true);
+        do {
+            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+        } while((boolean)evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
+        loops.pollLast();
+    }
+
+    /**
+     * Execute a while loop.
+     * @param whileStmt the while block to execute
+     * @throws AntikytheraException if there is an error in the execution
+     * @throws ReflectiveOperationException if the classes cannot be instantiated as needed with reflection
+     */
+    private void executeWhile(WhileStmt whileStmt) throws ReflectiveOperationException {
+        loops.push(true);
+        while((boolean)evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
+            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+        }
+        loops.pollLast();
+    }
+
+
+    /**
+     * Execute a statement that represents an If - Then or If - Then - Else
+     * @param ifst If / Then statement
+     * @throws Exception
+     */
+    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
+
+        Variable v = evaluateExpression(ifst.getCondition());
+        if ((boolean) v.getValue()) {
+            executeThenBlock(ifst);
+        } else {
+            executeElseBlock(ifst);
+        }
+        return v;
+    }
+
+    private void executeElseBlock(IfStmt ifst) throws Exception {
+        Optional<Statement> elseBlock = ifst.getElseStmt();
+        if(elseBlock.isPresent()) {
+            Statement el = elseBlock.get();
+            if(el.isBlockStmt()) {
+                executeBlock(el.asBlockStmt().getStatements());
+            }
+            else {
+                executeStatement(el);
+            }
+        }
+    }
+
+    private void executeThenBlock(IfStmt ifst) throws Exception {
+        Statement then = ifst.getThenStmt();
+        if (then.isBlockStmt()) {
+            executeBlock(then.asBlockStmt().getStatements());
+        }
+        else {
+            executeStatement(then);
+        }
+    }
+
+    Variable executeReturnStatement(Statement stmt) throws ReflectiveOperationException {
+        Optional<Expression> expr = stmt.asReturnStmt().getExpression();
+        if(expr.isPresent()) {
+            returnValue = evaluateExpression(expr.get());
+        }
+        else {
+            returnValue = null;
+        }
+        returnFrom = stmt.getParentNode().orElse(null);
+        return returnValue;
+    }
 
     protected boolean setupParameters(MethodDeclaration md) {
         NodeList<Parameter> parameters = md.getParameters();
@@ -263,10 +576,5 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
     @Override
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
-    }
-
-    protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException
-    {
-        throw new UnsupportedOperationException("A subclass will have to do this");
     }
 }
