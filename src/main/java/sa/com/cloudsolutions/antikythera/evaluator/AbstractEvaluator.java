@@ -3,15 +3,19 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.ast.stmt.DoStmt;
@@ -24,16 +28,20 @@ import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
@@ -41,6 +49,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Stack;
 
 public abstract class AbstractEvaluator implements ExpressionEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(AbstractEvaluator.class);
@@ -326,6 +335,195 @@ public abstract class AbstractEvaluator implements ExpressionEvaluator {
         }
 
         return vx;
+    }
+
+
+    private Variable createUsingByteBuddy(ObjectCreationExpr oce, ClassOrInterfaceType type) {
+        if (Settings.getProperty("bytebuddy") != null) {
+
+            try {
+                List<Expression> arguments = oce.getArguments();
+                Object[] constructorArgs = new Object[arguments.size()];
+
+                for (int i = 0; i < arguments.size(); i++) {
+                    Variable arg = evaluateExpression(arguments.get(i));
+                    constructorArgs[i] = arg.getValue();
+                }
+
+                // Create the dynamic DTO with the extracted arguments
+                Object instance = DTOBuddy.createDynamicDTO(type, constructorArgs);
+                return new Variable(type, instance);
+            } catch (Exception e) {
+                logger.error("An error occurred in creating a variable with bytebuddy", e);
+            }
+        }
+        return null;
+    }
+
+
+    /**
+     * Create a new object as an evaluator instance.
+     * @param type the class or interface type that we need to create an instance of
+     * @param oce the object creation expression.
+     */
+    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
+        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
+        if (match != null) {
+            ExpressionEvaluator eval = createEvaluator(match.getFullyQualifiedName().get());
+            annonymousOverrides(type, oce, eval);
+            List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
+            if (constructors.isEmpty()) {
+                return new Variable(eval);
+            }
+            MCEWrapper mce = wrapCallExpression(oce);
+
+            Optional<Callable> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
+
+            if (matchingConstructor.isPresent()) {
+                eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
+                return new Variable(eval);
+            }
+            /*
+             * No matching constructor found but in evals the default does not show up. So let's roll
+             */
+            return new Variable(eval);
+        }
+
+        return null;
+    }
+
+    protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
+        MCEWrapper mce = new MCEWrapper(oce);
+        NodeList<Type> argTypes = new NodeList<>();
+        Stack<Type> args = new Stack<>();
+        mce.setArgumentTypes(argTypes);
+
+        for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+            /*
+             * Push method arguments
+             */
+            Variable variable = evaluateExpression(oce.getArguments().get(i));
+            args.push(variable.getType());
+            AntikytheraRunTime.push(variable);
+        }
+
+        while(!args.isEmpty()) {
+            argTypes.add(args.pop());
+        }
+
+        return mce;
+    }
+
+
+    private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, ExpressionEvaluator eval) {
+        TypeDeclaration<?> match;
+        Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
+        if (anonymousClassBody.isPresent()) {
+            /*
+             * Merge the anon class stuff into the parent
+             */
+            CompilationUnit cu = eval.getCompilationUnit().clone();
+            eval.setCompilationUnit(cu);
+            match = AbstractCompiler.getMatchingType(cu, type.getNameAsString());
+            for(BodyDeclaration<?> body : anonymousClassBody.get()) {
+                if (body.isMethodDeclaration() && match != null) {
+                    MethodDeclaration md = body.asMethodDeclaration();
+                    MethodDeclaration replace = null;
+                    for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
+                        if (method.getNameAsString().equals(md.getNameAsString())) {
+                            replace = method;
+                            break;
+                        }
+                    }
+                    if (replace != null) {
+                        replace.replace(md);
+                    }
+                    else {
+                        match.addMember(md);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Create a new object using reflection.
+     * Typically intended for use for classes contained in the standard library.
+     *
+     * @param type the type of the class
+     * @param oce the object creation expression
+     * @return a Variable if the instance could be created or null.
+     */
+    private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
+        try {
+            String resolvedClass = null;
+            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
+            if (importDeclaration != null) {
+                resolvedClass = importDeclaration.getNameAsString();
+            }
+
+
+            Class<?> clazz;
+            try {
+                clazz = Class.forName(resolvedClass);
+            } catch (ClassNotFoundException cnf) {
+                clazz = AbstractCompiler.loadClass(resolvedClass);
+            }
+
+            Class<?> outer = clazz.getEnclosingClass();
+            if (outer != null) {
+                for (Class<?> c : outer.getDeclaredClasses()) {
+                    if (c.getName().equals(resolvedClass)) {
+                        List<Expression> arguments = oce.getArguments();
+                        Class<?>[] paramTypes = new Class<?>[arguments.size() + 1];
+                        Object[] args = new Object[arguments.size() + 1];
+
+                        // todo this is wrong, this should first check for an existing instance in the current scope
+                        // and then if an instance is not found build using the most suitable arguments.
+                        args[0] = outer.getDeclaredConstructors()[0].newInstance();
+                        paramTypes[0] = outer;
+
+                        for (int i = 0; i < arguments.size(); i++) {
+                            Variable vv = evaluateExpression(arguments.get(i));
+                            Class<?> wrapperClass = vv.getValue().getClass();
+                            paramTypes[i + 1] =wrapperClass;
+                            args[i + 1] = vv.getValue();
+                        }
+
+                        Constructor<?> cons = Reflect.findConstructor(c, paramTypes);
+                        if(cons !=  null) {
+                            Object instance = cons.newInstance(args);
+                            return new Variable(type, instance);
+                        }
+                        else {
+                            throw new EvaluatorException("Could not find a constructor for class " + c.getName());
+                        }
+                    }
+                }
+            } else {
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this);
+
+                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getParamTypes());
+                if(cons !=  null) {
+                    Object instance = cons.newInstance(reflectionArguments.getArgs());
+                    return new Variable(type, instance);
+                }
+                else {
+                    throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
+                }
+            }
+
+        } catch (Exception e) {
+            logger.warn("Could not create an instance of type {} using reflection", type);
+            logger.warn("The error was {}", e.getMessage());
+
+        }
+        return null;
+    }
+
+
+    public ExpressionEvaluator createEvaluator(String className) {
+        throw new UnsupportedOperationException("To be implemented by sub classes");
     }
 
     private void executeForLoop(ForStmt forStmt) throws ReflectiveOperationException {
