@@ -40,47 +40,50 @@ public class Toggles {
                     current = cls;
                     name = n.getVariable(0).getNameAsString();
                     System.out.println(cls.getFullyQualifiedName() + " : " + name);
-                    cls.accept(new FieldAccessVisitor(), name);
+                    cls.accept(new FieldAccessVisitor(), toggles);
+                    for (String s : toggles) {
+                        System.out.println("\t" + s);
+                    }
                 });
             }
         }
     }
 
-    private class FieldAccessVisitor extends VoidVisitorAdapter<String> {
+    private class FieldAccessVisitor extends VoidVisitorAdapter<Set<String>> {
         @Override
-        public void visit(MethodCallExpr n, String field) {
-            super.visit(n, field);
-            findConfiguration(n, field);
+        public void visit(MethodCallExpr n, Set<String> toggles) {
+            super.visit(n, toggles);
+            findConfiguration(n, toggles);
         }
 
 
         @Override
-        public void visit(VariableDeclarationExpr n, String arg) {
-            super.visit(n, arg);
+        public void visit(VariableDeclarationExpr n, Set<String> toggles) {
+            super.visit(n, toggles);
             for (VariableDeclarator variableDeclarator : n.getVariables()) {
                 Optional<Expression> initializer = variableDeclarator.getInitializer();
                 if (initializer.isPresent()) {
                     Expression initExpr = initializer.get();
                     if (initExpr.isMethodCallExpr()) {
-                        findConfiguration(initExpr.asMethodCallExpr(), arg);
+                        findConfiguration(initExpr.asMethodCallExpr(), toggles);
                     }
                 }
             }
         }
 
-        private  void findConfiguration(MethodCallExpr n, String field) {
-            if (n.toString().startsWith(field)) {
+        private  void findConfiguration(MethodCallExpr n, Set<String> toggles) {
+            if (n.toString().startsWith(name)) {
                 if (n.getNameAsString().equals("getConfigValue") || n.getNameAsString().equals("isConfigEnable")) {
                     Expression arg = n.getArguments().get(2);
                     if (arg.isStringLiteralExpr()) {
                         StringLiteralExpr s = arg.asStringLiteralExpr();
-                        System.out.println("\t" + s.getValue());
+                        toggles.add(s.getValue());
                         return ;
                     }
                     else if (arg.isNameExpr()) {
                         String toggleName = arg.asNameExpr().getNameAsString();
                         if (current.getFieldByName(arg.toString()).isPresent()) {
-                            System.out.println("\t" + toggleName);
+                            toggles.add(toggleName);
                             return;
                         }
                         else {
@@ -89,7 +92,7 @@ public class Toggles {
                                 if (imp.getField() != null) {
                                     Expression init = imp.getField().getVariable(0).getInitializer().get();
                                     if (init.isStringLiteralExpr()) {
-                                        System.out.println("\t" + init.asStringLiteralExpr().getValue());
+                                        toggles.add(init.asStringLiteralExpr().getValue());
                                         return;
                                     }
                                 }
@@ -97,7 +100,7 @@ public class Toggles {
                         }
                     }
                     else {
-                        System.out.println(arg);
+                        toggles.add(arg.toString());
                         return;
                     }
                     System.out.println("\t*" + arg + " NOT FOUND");
