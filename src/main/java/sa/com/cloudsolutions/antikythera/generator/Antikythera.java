@@ -63,7 +63,7 @@ public class Antikythera {
             } catch (IOException e) {
                 throw new AntikytheraException("Failed to initialize Antikythera", e);
             } catch (XmlPullParserException xe) {
-                logger.error("Could ")
+                logger.error("Could not parse the POM file", xe);
             }
         }
         return instance;
@@ -237,23 +237,26 @@ public class Antikythera {
     }
 
     public String[] getJarPaths() {
-        List<Dependency> dependencies = pomModel.getDependencies();
-        final Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
-        if (m2.isPresent()) {
-            return dependencies.stream()
-                    .map(dependency -> {
-                        String groupIdPath = dependency.getGroupId().replace('.', '/');
-                        String artifactId = dependency.getArtifactId();
-                        String version = dependency.getVersion();
+        if (pomModel != null) {
 
-                        if (version == null || version.isEmpty()) {
-                            version = findLatestVersion(groupIdPath, artifactId, m2.get());
-                        }
+            List<Dependency> dependencies = pomModel.getDependencies();
+            final Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
+            if (m2.isPresent()) {
+                return dependencies.stream()
+                        .map(dependency -> {
+                            String groupIdPath = dependency.getGroupId().replace('.', '/');
+                            String artifactId = dependency.getArtifactId();
+                            String version = dependency.getVersion();
 
-                        return Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar").toString();
-                    })
-                    .toArray(String[]::new);
-        }
+                            if (version == null || version.isEmpty()) {
+                                version = findLatestVersion(groupIdPath, artifactId, m2.get());
+                            }
+
+                            return Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar").toString();
+                        })
+                        .toArray(String[]::new);
+            }
+            }
         return new String[] {};
     }
 
