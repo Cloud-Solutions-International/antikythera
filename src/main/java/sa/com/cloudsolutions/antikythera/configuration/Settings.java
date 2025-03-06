@@ -291,4 +291,8 @@ public class Settings {
             return p.readValueAs(LinkedHashMap.class);
         }
     }
+
+    public static void setProperty(String key, Object value) {
+        props.put(key, value);
+    }
 }

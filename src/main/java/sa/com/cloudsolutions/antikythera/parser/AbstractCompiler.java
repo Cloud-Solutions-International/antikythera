@@ -150,6 +150,7 @@ public class AbstractCompiler {
 
     public static void reset() throws IOException {
         setupParser();
+        AntikytheraRunTime.resetAll();
     }
 
     static TypeDeclaration<?> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
