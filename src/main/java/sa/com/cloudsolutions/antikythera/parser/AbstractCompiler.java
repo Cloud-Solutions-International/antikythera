@@ -730,6 +730,7 @@ public class AbstractCompiler {
      * @throws IOException when the files cannot be precompiled.
      */
     public static void preProcess() throws IOException {
+        System.out.println(Settings.getBasePath());
         try (var paths = Files.walk(Paths.get(Settings.getBasePath()))) {
             List<File> javaFiles = paths
                     .filter(Files::isRegularFile)

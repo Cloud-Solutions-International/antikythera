@@ -1,11 +1,11 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -18,8 +18,10 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.StringReader;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,6 +38,7 @@ public class Toggles {
     private static String project;
     private static String repo;
     private static PrintWriter writer;
+    private Set<String> uniques = new HashSet<>();
 
     private Toggles() throws IOException {
         Settings.loadConfigMap();
@@ -47,36 +50,39 @@ public class Toggles {
             super.visit(n, arg);
             String elementType = n.getElementType().asString();
             if (elementType.endsWith("UtilConfig")) {
-                n.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cls -> {
-                    Set<String> toggles = new HashSet();
-                    current = cls;
-                    name = n.getVariable(0).getNameAsString();
-                    System.out.println(cls.getFullyQualifiedName() + " : " + name);
-                    cls.accept(new FieldAccessVisitor(), toggles);
-                    for (String s : toggles) {
-                        writer.print(project);
-                        writer.print(",");
-                        writer.print(repo);
-                        writer.print(",");
-                        writer.print(cls.getFullyQualifiedName().get());
-                        writer.print(",");
-                        writer.println(s);
-                        System.out.println("\t" + s);
-                    }
-                });
-            }
-//            else if (elementType.endsWith("FeatureTogglesService")) {
 //                n.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cls -> {
 //                    Set<String> toggles = new HashSet();
 //                    current = cls;
 //                    name = n.getVariable(0).getNameAsString();
 //                    System.out.println(cls.getFullyQualifiedName() + " : " + name);
 //                    cls.accept(new FieldAccessVisitor(), toggles);
-//                    for (String s : toggles) {
-//                        System.out.println("\t" + s);
-//                    }
+//                    writeOut(cls, toggles);
 //                });
-//            }
+            }
+            else if (elementType.endsWith("FeatureTogglesService")) {
+                n.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cls -> {
+                    Set<String> toggles = new HashSet();
+                    current = cls;
+                    name = n.getVariable(0).getNameAsString();
+                    System.out.println(cls.getFullyQualifiedName() + " : " + name);
+                    cls.accept(new FieldAccessVisitor(), toggles);
+                    writeOut(cls,toggles);
+                    uniques.addAll(toggles);
+                });
+            }
+        }
+
+        private static void writeOut(ClassOrInterfaceDeclaration cls, Set<String> toggles) {
+            for (String s : toggles) {
+                writer.print(project);
+                writer.print(",");
+                writer.print(repo);
+                writer.print(",");
+                writer.print(cls.getFullyQualifiedName().get());
+                writer.print(",");
+                writer.println(s);
+                System.out.println("\t" + s);
+            }
         }
     }
 
@@ -89,54 +95,88 @@ public class Toggles {
 
 
         @Override
-        public void visit(VariableDeclarationExpr n, Set<String> toggles) {
-            super.visit(n, toggles);
+        public void visit(VariableDeclarationExpr n, Set<String> collected) {
+            super.visit(n, collected);
             for (VariableDeclarator variableDeclarator : n.getVariables()) {
                 Optional<Expression> initializer = variableDeclarator.getInitializer();
                 if (initializer.isPresent()) {
                     Expression initExpr = initializer.get();
                     if (initExpr.isMethodCallExpr()) {
-                        findConfiguration(initExpr.asMethodCallExpr(), toggles);
+                        findConfiguration(initExpr.asMethodCallExpr(), collected);
                     }
                 }
             }
         }
 
-        private  void findConfiguration(MethodCallExpr n, Set<String> toggles) {
+        private  void findConfiguration(MethodCallExpr n, Set<String> collected) {
             if (n.toString().startsWith(name)) {
                 if (n.getNameAsString().equals("getConfigValue") || n.getNameAsString().equals("isConfigEnable")) {
-                    Expression arg = n.getArguments().get(2);
-                    if (arg.isStringLiteralExpr()) {
-                        StringLiteralExpr s = arg.asStringLiteralExpr();
-                        toggles.add(s.getValue());
-                        return ;
-                    }
-                    else if (arg.isNameExpr()) {
-                        String toggleName = arg.asNameExpr().getNameAsString();
-                        if (current.getFieldByName(arg.toString()).isPresent()) {
-                            toggles.add(toggleName);
-                            return;
-                        }
-                        else {
-                            ImportWrapper imp = AbstractCompiler.findImport(n.findCompilationUnit().get(), toggleName);
-                            if (imp != null) {
-                                if (imp.getField() != null) {
-                                    Expression init = imp.getField().getVariable(0).getInitializer().get();
-                                    if (init.isStringLiteralExpr()) {
-                                        toggles.add(init.asStringLiteralExpr().getValue());
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        toggles.add(arg.toString());
-                        return;
-                    }
-                    System.out.println("\t*" + arg + " NOT FOUND");
+                    utilConfig(n, collected);
+                }
+                else {
+                    featureToggles(n, collected);
                 }
             }
+        }
+
+        private void featureToggles(MethodCallExpr n, Set<String> collected) {
+            Optional<Expression> arg = n.getArguments().getFirst();
+            if (arg.isPresent()) {
+                Expression argument = arg.get();
+                extractFromArgument(n, collected, argument);
+            }
+        }
+
+        private void utilConfig(MethodCallExpr n, Set<String> toggles) {
+            Expression arg = n.getArguments().get(2);
+            extractFromArgument(n, toggles, arg);
+        }
+
+        private void extractFromArgument(MethodCallExpr n, Set<String> toggles, Expression arg) {
+            if (arg.isStringLiteralExpr()) {
+                StringLiteralExpr s = arg.asStringLiteralExpr();
+                toggles.add(s.getValue());
+                return;
+            }
+            else if (arg.isNameExpr()) {
+                String toggleName = arg.asNameExpr().getNameAsString();
+                if (current.getFieldByName(arg.toString()).isPresent()) {
+                    toggles.add(toggleName);
+                    return;
+                }
+                else {
+                    ImportWrapper imp = AbstractCompiler.findImport(n.findCompilationUnit().get(), toggleName);
+                    if (imp != null) {
+                        if (imp.getField() != null) {
+                            Expression init = imp.getField().getVariable(0).getInitializer().get();
+                            if (init.isStringLiteralExpr()) {
+                                toggles.add(init.asStringLiteralExpr().getValue());
+                                return;
+                            }
+                        } else if (imp.getImport().isStatic()) {
+                            ImportDeclaration impd = imp.getImport();
+                            Name nn = impd.getName();
+                            nn.getQualifier().ifPresent(q -> {
+                                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(q.asString());
+                                if (cu != null) {
+                                    Optional<ClassOrInterfaceDeclaration> cdecl = cu.getClassByName(q.getIdentifier());
+                                    if (cdecl.isPresent()) {
+                                        System.out.println("DUE");
+                                    }
+                                }
+                            });
+                        }
+                        else {
+                            System.out.println("ff");
+                        }
+                    }
+                }
+            }
+            else {
+                toggles.add(arg.toString());
+                return;
+            }
+            System.out.println("\t*" + arg + " NOT FOUND");
         }
     }
     private void find() {
@@ -148,6 +188,7 @@ public class Toggles {
 
     public static void main(String[] args) throws IOException {
         Toggles t = new Toggles();
+
         writer = new PrintWriter(new File("/tmp/configs.csv"));
         String path = "/home/raditha/workspaces/python/CSI/selenium/repos";
         List<Path> folders = findFolders(Paths.get(path));
@@ -160,12 +201,20 @@ public class Toggles {
                     AbstractCompiler.preProcess();
                     String[] parts = subFolder.toString().split("/");
                     project = parts[parts.length - 2];
-                    repo = parts[parts.length -1];
+                    repo = parts[parts.length - 1];
 
-                    Settings.setProperty(Constants.BASE_PATH, subFolder.toString());
+                    if (Paths.get(Constants.BASE_PATH, subFolder.toString() , "/src/main/java").toFile().exists()) {
+                        Settings.setProperty(Constants.BASE_PATH, subFolder.toString() + "/src/main/java");
+                    }
                     t.find();
                 }
             }
+        }
+        writer.close();
+
+        writer = new PrintWriter("/tmp/uniques.txt");
+        for (String s : t.uniques) {
+            writer.println(s);
         }
         writer.close();
     }
