@@ -36,6 +36,7 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import sa.com.cloudsolutions.antikythera.evaluator.functional.ConsumerEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -229,26 +230,8 @@ public class Evaluator {
     }
 
     private Variable createLambdaExpression(LambdaExpr lambdaExpr)  {
-        // Create a synthetic method from the lambda
-        MethodDeclaration md = new MethodDeclaration();
+        FunctionalEvaluator eval = FunctionEvaluator.create(lambdaExpr, this);
 
-        // Set the method body based on lambda type (expression or block)
-        if (lambdaExpr.getBody().isBlockStmt()) {
-            BlockStmt body = lambdaExpr.getBody().asBlockStmt();
-            md.setBody(body);
-        } else {
-            BlockStmt blockStmt = new BlockStmt();
-            blockStmt.addStatement(lambdaExpr.getBody());
-            md.setBody(blockStmt);
-        }
-        md.setType(new UnknownType());
-
-        // Add lambda parameters to method
-        lambdaExpr.getParameters().forEach(md::addParameter);
-
-        // Create an evaluator instance for the lambda
-        FunctionEvaluator eval = new FunctionEvaluator("lambda");
-        eval.setMethod(md);
         Variable v = new Variable(eval);
         v.setType(new UnknownType());
         return v;
@@ -958,9 +941,6 @@ public class Evaluator {
                 Expression argument = arguments.get(0);
                 if(argument.isMethodReferenceExpr()) {
                     return evaluateMethodReference(v, arguments);
-                }
-                else if (argument.isLambdaExpr()) {
-                    return evaluateLambda(v, arguments);
                 }
             }
             if (v.getValue() instanceof Evaluator eval) {

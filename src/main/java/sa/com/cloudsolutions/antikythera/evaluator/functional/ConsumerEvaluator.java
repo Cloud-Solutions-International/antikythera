@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.evaluator.FunctionalEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.util.function.Consumer;
