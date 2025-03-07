@@ -35,6 +35,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import sa.com.cloudsolutions.antikythera.evaluator.functional.ConsumerEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -68,6 +69,7 @@ import java.io.File;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.Function;
 
 /**
  * Expression evaluator engine.
@@ -245,11 +247,11 @@ public class Evaluator {
         lambdaExpr.getParameters().forEach(md::addParameter);
 
         // Create an evaluator instance for the lambda
-        FunctionalEvaluator eval = new FunctionalEvaluator("lambda");
-        ConsumerEvaluator c = new ConsumerEvaluator();
-        c.setEvaluator(eval);
+        FunctionEvaluator eval = new FunctionEvaluator("lambda");
         eval.setMethod(md);
-        return new Variable(eval);
+        Variable v = new Variable(eval);
+        v.setType(new UnknownType());
+        return v;
     }
 
     private Variable evaluateBinaryExpression(Expression expr) throws ReflectiveOperationException {

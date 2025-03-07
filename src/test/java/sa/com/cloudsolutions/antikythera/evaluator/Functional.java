@@ -10,11 +10,11 @@ public class Functional {
     }
 
     private void greet1() {
-        printHello( a -> "hello " + a );
+        printHello( a -> "Hello " + a );
     }
 
     private void greet2() {
-        printHello( a -> { return "hello " + a; });
+        printHello( a -> { return "Hello " + a; });
     }
 
     public static void main(String[] args) {
