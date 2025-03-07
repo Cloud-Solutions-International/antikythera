@@ -9,7 +9,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.Map;
 
-public class MockingEvaluator extends AbstractEvaluator implements ExpressionEvaluator {
+public class MockingEvaluator extends Evaluator {
 
     public MockingEvaluator(String fqdn) {
         super(fqdn);

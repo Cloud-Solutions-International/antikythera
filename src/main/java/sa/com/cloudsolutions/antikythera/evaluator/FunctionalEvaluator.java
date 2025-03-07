@@ -9,7 +9,7 @@ import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.util.Map;
 
-public class FunctionalEvaluator extends AbstractEvaluator implements ExpressionEvaluator{
+public class FunctionalEvaluator extends Evaluator {
     private MethodDeclaration methodDeclaration;
 
     public FunctionalEvaluator(String className) {

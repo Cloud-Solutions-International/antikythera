@@ -423,7 +423,7 @@ public class SpringEvaluator extends Evaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 if (AntikytheraRunTime.isMocked(fd.getElementType())) {
-                    ExpressionEvaluator eval = new MockingEvaluator(resolvedClass);
+                    Evaluator eval = new MockingEvaluator(resolvedClass);
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
@@ -541,7 +541,7 @@ public class SpringEvaluator extends Evaluator {
             for (var entry : value.entrySet()) {
                 if(entry.getKey().isMethodCallExpr()) {
 
-                    LinkedList<Expression> chain = ExpressionEvaluator.findScopeChain(entry.getKey());
+                    LinkedList<Expression> chain = Evaluator.findScopeChain(entry.getKey());
                     if (!chain.isEmpty()) {
                         Expression expr = chain.getFirst();
                         Variable v = getValue(ifst, expr.toString());
@@ -566,7 +566,7 @@ public class SpringEvaluator extends Evaluator {
                             }
                         }
 
-                        if (v != null && v.getValue() instanceof ExpressionEvaluator) {
+                        if (v != null && v.getValue() instanceof Evaluator) {
                             setupConditionalVariable(ifst, state, entry, expr);
                         }
                     }

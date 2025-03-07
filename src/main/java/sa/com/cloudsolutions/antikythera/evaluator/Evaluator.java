@@ -53,7 +53,9 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -69,7 +71,7 @@ import java.util.Stack;
 /**
  * Expression evaluator engine.
  */
-public class Evaluator implements ExpressionEvaluator {
+public class Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     /**
      * Local variables.
@@ -582,7 +584,7 @@ public class Evaluator implements ExpressionEvaluator {
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
         if (match != null) {
-            ExpressionEvaluator eval = createEvaluator(match.getFullyQualifiedName().get());
+            Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
             annonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
@@ -627,7 +629,7 @@ public class Evaluator implements ExpressionEvaluator {
         return mce;
     }
 
-    private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, ExpressionEvaluator eval) {
+    private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
         TypeDeclaration<?> match;
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
         if (anonymousClassBody.isPresent()) {
@@ -847,7 +849,7 @@ public class Evaluator implements ExpressionEvaluator {
             return null;
         }
 
-        LinkedList<Expression> chain = ExpressionEvaluator.findScopeChain(methodCall);
+        LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
             return executeLocalMethod(methodCall);
@@ -933,7 +935,7 @@ public class Evaluator implements ExpressionEvaluator {
                     v.setClazz(clazz);
                 }
                 else {
-                    ExpressionEvaluator eval = createEvaluator(fullyQualifiedName);
+                    Evaluator eval = createEvaluator(fullyQualifiedName);
                     eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
                     v = new Variable(eval);
                 }
@@ -956,7 +958,7 @@ public class Evaluator implements ExpressionEvaluator {
                     return evaluateLambda(v, arguments);
                 }
             }
-            if (v.getValue() instanceof ExpressionEvaluator eval) {
+            if (v.getValue() instanceof Evaluator eval) {
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 return eval.executeMethod(wrapper);
             }
@@ -971,7 +973,7 @@ public class Evaluator implements ExpressionEvaluator {
 
     private Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
         MethodReferenceExpr rfCall = arguments.get(0).asMethodReferenceExpr();
-        LinkedList<Expression> chain = ExpressionEvaluator.findScopeChain(rfCall);
+        LinkedList<Expression> chain = Evaluator.findScopeChain(rfCall);
 
         if (chain.isEmpty()) {
             return null;
@@ -1006,7 +1008,7 @@ public class Evaluator implements ExpressionEvaluator {
         md.addParameter(lambda.getParameter(0));
 
         if (v.getValue() instanceof Collection<?> c) {
-            ExpressionEvaluator eval = createEvaluator("lambda");
+            Evaluator eval = createEvaluator("lambda");
             for (Object o : c) {
                 AntikytheraRunTime.push(new Variable(o));
                 eval.executeMethod(md);
@@ -1102,7 +1104,6 @@ public class Evaluator implements ExpressionEvaluator {
        return null;
    }
 
-
     /**
      * Execute a method call.
      * @param wrapper the method call expression wrapped so that the argument types are available
@@ -1110,17 +1111,20 @@ public class Evaluator implements ExpressionEvaluator {
      * @throws EvaluatorException if there is an error evaluating the method call or if the
      *          feature is not yet implemented.
      */
-    Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
 
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
-            return executeMethod(n.get().asMethodDeclaration());
+            Variable v = executeMethod(n.get().asMethodDeclaration());
+            if (v != null && v.getValue() == null) {
+                v.setType(n.get().asMethodDeclaration().getType());
+            }
+            return v;
         }
 
         return null;
     }
-
     /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
@@ -1399,7 +1403,7 @@ public class Evaluator implements ExpressionEvaluator {
                     String[] parts = importedName.toString().split("\\.");
 
                     if (importedName.toString().equals(name)) {
-                        ExpressionEvaluator eval = createEvaluator(importedName.toString());
+                        Evaluator eval = createEvaluator(importedName.toString());
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1407,7 +1411,7 @@ public class Evaluator implements ExpressionEvaluator {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
-                        ExpressionEvaluator eval = createEvaluator(cname);
+                        Evaluator eval = createEvaluator(cname);
                         eval.setupFields(dep);
                         v = eval.getFields().get(name);
                         break;
@@ -1442,7 +1446,7 @@ public class Evaluator implements ExpressionEvaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else {
-                ExpressionEvaluator eval = createEvaluator(resolvedClass);
+                Evaluator eval = createEvaluator(resolvedClass);
                 Variable v = new Variable(eval);
                 v.setType(variable.getType());
                 fields.put(variable.getNameAsString(), v);
@@ -1885,7 +1889,7 @@ public class Evaluator implements ExpressionEvaluator {
         locals.clear();
     }
 
-    public ExpressionEvaluator createEvaluator(String className) {
+    public Evaluator createEvaluator(String className) {
         return new Evaluator(className);
     }
 
@@ -1895,13 +1899,51 @@ public class Evaluator implements ExpressionEvaluator {
         return hashCode() + " : " + getClassName();
     }
 
-    @Override
     public CompilationUnit getCompilationUnit() {
         return cu;
     }
 
-    @Override
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
     }
+
+    /**
+     * People have a nasty habit of chaining a sequence of method calls.
+     *
+     * If you are a D3.js programmer, this is probably the only way you do things. Even
+     * Byte Buddy seems to behave the same. But at the end of the day how so you handle this?
+     * You need to place them in a stack and pop them off one by one!
+     *
+     * @param expr
+     * @return
+     */
+    public static LinkedList<Expression> findScopeChain(Expression expr) {
+        LinkedList<Expression> chain = new LinkedList<>();
+        while (true) {
+            if (expr.isMethodCallExpr()) {
+                MethodCallExpr mce = expr.asMethodCallExpr();
+                Optional<Expression> scopeD = mce.getScope();
+                if (scopeD.isEmpty()) {
+                    break;
+                }
+                chain.addLast(scopeD.get());
+                expr = scopeD.get();
+            }
+            else if (expr.isFieldAccessExpr()) {
+                FieldAccessExpr mce = expr.asFieldAccessExpr();
+                chain.addLast(mce.getScope());
+                expr = mce.getScope();
+            }
+            else if (expr.isMethodReferenceExpr()) {
+                MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
+                chain.addLast(mexpr.getScope());
+                expr = mexpr.getScope();
+            }
+            else {
+                break;
+            }
+        }
+        return chain;
+    }
+
 }
