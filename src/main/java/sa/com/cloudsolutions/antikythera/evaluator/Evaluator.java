@@ -34,6 +34,7 @@ import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
+import sa.com.cloudsolutions.antikythera.evaluator.functional.ConsumerEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -245,6 +246,8 @@ public class Evaluator {
 
         // Create an evaluator instance for the lambda
         FunctionalEvaluator eval = new FunctionalEvaluator("lambda");
+        ConsumerEvaluator c = new ConsumerEvaluator();
+        c.setEvaluator(eval);
         eval.setMethod(md);
         return new Variable(eval);
     }
