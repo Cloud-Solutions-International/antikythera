@@ -7,6 +7,7 @@ import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -16,7 +17,7 @@ import java.lang.reflect.Method;
 import java.util.LinkedList;
 import java.util.Optional;
 
-public class FPEvaluator<T> extends Evaluator {
+public abstract class FPEvaluator<T> extends Evaluator {
     protected MethodDeclaration methodDeclaration;
 
     public FPEvaluator(String className) {
@@ -54,12 +55,21 @@ public class FPEvaluator<T> extends Evaluator {
         lambdaExpr.getParameters().forEach(md::addParameter);
 
         if (checkReturnType(enclosure, body, md) ) {
-            FunctionEvaluator eval = new FunctionEvaluator("functional");
+            FPEvaluator<?> eval = switch (md.getParameters().size()) {
+                case 1 -> new FunctionEvaluator("F");
+                case 2 -> new BiFunctionEvaluator("BiF");
+                default -> null;
+            };
             eval.setMethod(md);
             return eval;
         }
         else {
-            ConsumerEvaluator eval = new ConsumerEvaluator("functional");
+            FPEvaluator<?> eval = switch(md.getParameters().size()) {
+                case 1 -> new ConsumerEvaluator("C");
+                case 2 -> new BiFunctionEvaluator("BiC");
+                default -> null;
+            };
+
             eval.setMethod(md);
             return eval;
         }
@@ -135,4 +145,5 @@ public class FPEvaluator<T> extends Evaluator {
         body.addStatement(returnStmt);
     }
 
+    public abstract Type getType();
 }

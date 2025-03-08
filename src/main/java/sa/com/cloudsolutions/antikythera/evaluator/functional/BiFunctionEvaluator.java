@@ -6,28 +6,31 @@ import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
-import java.util.function.Consumer;
+import java.util.function.BiFunction;
 
-public class ConsumerEvaluator<T> extends FPEvaluator implements Consumer<T> {
+public class BiFunctionEvaluator<T, U, R> extends FPEvaluator implements BiFunction<T, U, R> {
 
-    public ConsumerEvaluator(String className) {
+    public BiFunctionEvaluator(String className) {
         super(className);
     }
 
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName("Consumer")
+                .setName("BiFunction")
                 .setTypeArguments(
+                        new WildcardType(),
                         new WildcardType()
                 );
     }
 
     @Override
-    public void accept(T t) {
+    public R apply(T t, U u) {
         AntikytheraRunTime.push(new Variable(t));
+        AntikytheraRunTime.push(new Variable(u));
         try {
-            executeMethod(methodDeclaration);
+            Variable v = executeMethod(methodDeclaration);
+            return (R) v.getValue();
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }

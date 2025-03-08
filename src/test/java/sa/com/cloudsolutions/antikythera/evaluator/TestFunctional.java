@@ -5,7 +5,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -30,13 +30,13 @@ public class TestFunctional extends TestHelper{
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"greet1", "greet2"})
-    void testBiFunction(String name) throws ReflectiveOperationException {
+    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield"})
+    void testBiFunction(String name, String value) throws ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
-        assertEquals("Hello Ashfaloth\n", outContent.toString());
+        assertEquals(value + "\n", outContent.toString());
 
     }
 

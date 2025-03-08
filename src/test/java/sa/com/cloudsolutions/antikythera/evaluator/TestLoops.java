@@ -33,7 +33,7 @@ public class TestLoops extends  TestHelper {
 
     @ParameterizedTest
     @ValueSource(strings = {"forLoop", "forLoopWithBreak", "whileLoop", "doWhileLoop", "forEach","forEach2",
-            "whileLoopWithBreak","forEachLoop","forEachLoopWithBreak", "forLoopWithReturn", "forEach3"})
+            "whileLoopWithBreak","forEachLoop","forEachLoopWithBreak", "forLoopWithReturn", "forEach3", "forEach5"})
     void testLoops(String methodName) throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodName)).orElseThrow();

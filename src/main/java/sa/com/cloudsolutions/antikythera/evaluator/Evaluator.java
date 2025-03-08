@@ -231,7 +231,7 @@ public class Evaluator {
         FPEvaluator<?> eval = FPEvaluator.create(lambdaExpr, this);
 
         Variable v = new Variable(eval);
-        v.setType(new UnknownType());
+        v.setType(eval.getType());
         return v;
     }
 
