@@ -191,69 +191,84 @@ public class Reflect {
         return switch (qualifiedName) {
             case "java.util.List", "java.util.ArrayList" -> {
                 Variable v = new Variable(new ArrayList<>());
-                v.setInitializer(new ObjectCreationExpr(null,
-                        new ClassOrInterfaceType("java.util.ArrayList"), NodeList.nodeList()));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("java.util.ArrayList"))
+                    .setArguments(NodeList.nodeList()));
                 yield v;
             }
             case "java.util.Map", "java.util.HashMap" -> {
                 Variable v = new Variable(new HashMap<>());
-                v.setInitializer(new ObjectCreationExpr(null,
-                        new ClassOrInterfaceType("java.util.HashMap"), NodeList.nodeList()));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("java.util.HashMap"))
+                    .setArguments(NodeList.nodeList()));
                 yield v;
             }
             case "java.util.TreeMap" -> {
                 Variable v = new Variable(new TreeMap<>());
-                v.setInitializer(new ObjectCreationExpr(null,
-                        new ClassOrInterfaceType("java.util.TreeMap"), NodeList.nodeList()));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("java.util.TreeMap"))
+                    .setArguments(NodeList.nodeList()));
                 yield v;
             }
             case "java.util.Set", "java.util.HashSet" -> {
                 Variable v = new Variable(new HashSet<>());
-                v.setInitializer(new ObjectCreationExpr(null,
-                        new ClassOrInterfaceType("java.util.HashSet"), NodeList.nodeList()));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("java.util.HashSet"))
+                    .setArguments(NodeList.nodeList()));
                 yield v;
             }
             case "java.util.TreeSet" -> {
                 Variable v = new Variable(new TreeSet<>());
-                v.setInitializer(new ObjectCreationExpr(null,
-                        new ClassOrInterfaceType("java.util.TreeSet"), NodeList.nodeList()));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("java.util.TreeSet"))
+                    .setArguments(NodeList.nodeList()));
                 yield v;
             }
             case "java.util.Optional" -> {
                 Variable v = new Variable(Optional.empty());
-                v.setInitializer(new ObjectCreationExpr(null,
-                        new ClassOrInterfaceType("java.util.Optional.empty()"), NodeList.nodeList()));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("java.util.Optional"))
+                    .setArguments(NodeList.nodeList()));
                 yield v;
             }
             case "Boolean", "boolean" -> {
                 Variable v = new Variable(false);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Boolean"), NodeList.nodeList(new StringLiteralExpr("false"))));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("Boolean"))
+                    .setArguments(NodeList.nodeList(new StringLiteralExpr("false"))));
                 yield v;
             }
             case "float", "Float", "double", DOUBLE -> {
                 Variable v = new Variable(0.0);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType(DOUBLE), NodeList.nodeList(new StringLiteralExpr("0.0"))));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName(DOUBLE))
+                    .setArguments(NodeList.nodeList(new StringLiteralExpr("0.0"))));
                 yield v;
             }
             case INTEGER, "int" -> {
                 Variable v = new Variable(0);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType(INTEGER), NodeList.nodeList(new StringLiteralExpr("0"))));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName(INTEGER))
+                    .setArguments(NodeList.nodeList(new StringLiteralExpr("0"))));
                 yield v;
             }
-            case "Long", "long" , "java.lang.Long" -> {
+            case "Long", "long", "java.lang.Long" -> {
                 Variable v = new Variable(-100L);
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("Long"), NodeList.nodeList(new StringLiteralExpr("-100"))));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("Long"))
+                    .setArguments(NodeList.nodeList(new StringLiteralExpr("-100"))));
                 yield v;
             }
             case "String", "java.lang.String" -> {
                 Variable v = new Variable("Ibuprofen");
-                v.setInitializer(new ObjectCreationExpr(null, new ClassOrInterfaceType("String"), NodeList.nodeList(new StringLiteralExpr("Ibuprofen"))));
+                v.setInitializer(new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("String"))
+                    .setArguments(NodeList.nodeList(new StringLiteralExpr("Ibuprofen"))));
                 yield v;
             }
             default -> new Variable(null);
         };
     }
-
 
     /**
      * Finds a matching method using parameters.
