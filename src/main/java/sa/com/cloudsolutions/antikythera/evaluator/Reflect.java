@@ -269,7 +269,7 @@ public class Reflect {
 
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
-
+            System.err.println(m.getName());
             if (m.getName().equals(methodName)) {
                 Class<?>[] types = m.getParameterTypes();
                 if(types.length == 1 && types[0].equals(Object[].class)) {

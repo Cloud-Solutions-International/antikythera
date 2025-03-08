@@ -229,7 +229,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable createLambdaExpression(LambdaExpr lambdaExpr)  {
+    private Variable createLambdaExpression(LambdaExpr lambdaExpr) throws ReflectiveOperationException {
         FunctionalEvaluator eval = FunctionEvaluator.create(lambdaExpr, this);
 
         Variable v = new Variable(eval);
@@ -848,7 +848,7 @@ public class Evaluator {
         return evaluateMethodCall(variable, methodCall);
     }
 
-    private Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
+    public Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
         Variable variable = null;
         while(!chain.isEmpty()) {
             Expression expr2 = chain.pollLast();
@@ -1048,7 +1048,7 @@ public class Evaluator {
         }
     }
 
-    private Method findAccessibleMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+    public Method findAccessibleMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
        Method method = Reflect.findMethod(clazz, methodName, paramTypes);
        if (method != null) return method;
 
