@@ -80,6 +80,7 @@ public class BinaryOps {
             case MINUS:
             case MULTIPLY:
             case DIVIDE:
+            case REMAINDER:
                 return Arithmetics.operate(left, right, operator);
 
             default:

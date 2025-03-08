@@ -41,6 +41,7 @@ public class Arithmetics {
             case MINUS -> left.doubleValue() - right.doubleValue();
             case DIVIDE -> left.doubleValue() / right.doubleValue();
             case MULTIPLY -> left.doubleValue() * right.doubleValue();
+            case REMAINDER -> left.doubleValue() % right.doubleValue();
             default ->
                     throw new IllegalArgumentException("Unsupported operator: " + operator);
         };
