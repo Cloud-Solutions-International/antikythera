@@ -51,6 +51,7 @@ import java.util.Optional;
 import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
+import sa.com.cloudsolutions.antikythera.evaluator.ReflectionArguments;
 
 import javax.swing.text.html.Option;
 
@@ -733,7 +734,10 @@ public class AbstractCompiler {
                         if (wrapper != null && wrapper.isExternal()) {
                             try {
                                 Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
-                                Method method = Reflect.findMethod(clazz, methodCall.getMethodName(), methodCall.getArgumentTypesAsClasses());
+                                ReflectionArguments reflectionArguments = new ReflectionArguments(
+                                        methodCall.getMethodName(), new Object[] {}, methodCall.getArgumentTypesAsClasses()
+                                );
+                                Method method = Reflect.findMethod(clazz, reflectionArguments);
                                 if (method != null) {
                                     return Optional.of(new Callable(method));
                                 }

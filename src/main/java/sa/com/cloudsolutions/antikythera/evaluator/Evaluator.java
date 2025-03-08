@@ -964,7 +964,8 @@ public class Evaluator {
 
         Variable variable = evaluateScopeChain(chain);
         if (v.getValue() instanceof Collection<?> c) {
-            Method m = Reflect.findMethod(variable.getClazz(), rfCall.getIdentifier(), new Class[]{c.getClass()});
+            ReflectionArguments reflectionArguments = new ReflectionArguments(rfCall.getIdentifier(), new Object[] {}, new Class[]{c.getClass()});
+            Method m = Reflect.findMethod(variable.getClazz(), reflectionArguments);
             if (m != null) {
                 for(Object o : c) {
                     m.invoke(variable.getValue(), o);
@@ -977,7 +978,7 @@ public class Evaluator {
     }
 
    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-       Method method = findAccessibleMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
+       Method method = findAccessibleMethod(v.getClazz(), reflectionArguments);
        if (method == null) {
            if (v.getValue() == null) {
                throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
@@ -1021,19 +1022,19 @@ public class Evaluator {
         }
     }
 
-    public Method findAccessibleMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
-       Method method = Reflect.findMethod(clazz, methodName, paramTypes);
+    public Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+       Method method = Reflect.findMethod(clazz, reflectionArguments);
        if (method != null) return method;
 
        // Search interfaces
        for (Class<?> iface : clazz.getInterfaces()) {
-           method = Reflect.findMethod(iface, methodName, paramTypes);
+           method = Reflect.findMethod(iface, reflectionArguments);
            if (method != null) return method;
        }
 
        // Search superclass if no interface method found
        Class<?> superclass = clazz.getSuperclass();
-       return superclass != null ? findAccessibleMethod(superclass, methodName, paramTypes) : null;
+       return superclass != null ? findAccessibleMethod(superclass, reflectionArguments) : null;
    }
 
    private Method findPublicMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {

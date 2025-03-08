@@ -258,17 +258,18 @@ public class Reflect {
     /**
      * Finds a matching method using parameters.
      *
-     * This function has side effects. The paramTypes may end up being converted from a boxed to
-     * primitive or vice versa. This is because the Variable class that we use has an Object
-     * representing the value. Whereas some of the methods have parameters that require a primitive
-     * type. Hence the conversion needs to happen.
+     * This function has side effects. The paramTypes in reflectionArguments may end up being
+     * converted from a boxed to primitive or vice versa.
+     * This is because the Variable class that we use has an Object representing the value.
+     * Whereas some of the methods have parameters that require a primitive type.
+     * Hence, the conversion needs to happen.
      *
      * @param clazz the class on which we need to match the method name
-     * @param methodName the name of the method to find
-     * @param paramTypes and array or parameter types.
      * @return a Method instance or null.
      */
-    public static Method findMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+    public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        String methodName = reflectionArguments.getMethodName();
+        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
 
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
