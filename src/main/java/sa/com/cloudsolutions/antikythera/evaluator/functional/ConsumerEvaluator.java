@@ -5,7 +5,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.util.function.Consumer;
 
-public class ConsumerEvaluator<T> extends FunctionalEvaluator implements Consumer<T> {
+public class ConsumerEvaluator<T> extends FPEvaluator implements Consumer<T> {
 
     public ConsumerEvaluator(String className) {
         super(className);
