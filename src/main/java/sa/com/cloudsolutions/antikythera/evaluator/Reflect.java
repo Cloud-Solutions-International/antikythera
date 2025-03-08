@@ -286,8 +286,8 @@ public class Reflect {
                     if (findMatch(paramTypes, types, i) || types[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
-                    if (isLambdaConversion(paramTypes, types, i)) {
-
+                    if (isLambdaConversion(reflectionArguments, types, i)) {
+                        continue;
                     }
                     found = false;
                 }
@@ -365,31 +365,42 @@ public class Reflect {
         return false;
     }
 
-    private static boolean isLambdaConversion(Class<?>[] paramTypes, Class<?>[] types, int i) {
+    private record LambdaInvocationHandler(Object originalLambda,
+                                           Class<?> lambdaClass) implements java.lang.reflect.InvocationHandler {
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (method.getDeclaringClass() == Object.class) {
+                return method.invoke(proxy, args);
+            }
+
+            Method[] methods = lambdaClass.getDeclaredMethods();
+            for (Method m : methods) {
+                if (!m.isDefault() && !Modifier.isStatic(m.getModifiers()) &&
+                        m.getParameterCount() == method.getParameterCount()) {
+                    return m.invoke(originalLambda, args);
+                }
+            }
+            return null;
+        }
+    }
+
+    private static boolean isLambdaConversion(ReflectionArguments reflectionArguments, Class<?>[] types, int i) {
         if (types[i].isAnnotationPresent(FunctionalInterface.class)) {
-            /* inter operability between SAM interfaces and lambda */
+            Class<?>[] paramTypes = reflectionArguments.getParamTypes();
             Class<?>[] interfaces = paramTypes[i].getInterfaces();
+
             for (Class<?> iface : interfaces) {
                 if (iface.equals(types[i])) {
                     return true;
                 }
                 if (iface.isAnnotationPresent(FunctionalInterface.class)) {
-                    // Create proxy implementing the target functional interface
                     Object proxy = Proxy.newProxyInstance(
-                            types[i].getClassLoader(),
-                            new Class<?>[] { types[i] },
-                            (proxyObj, method, args) -> {
-                                // Find and invoke the corresponding method on the original lambda
-                                Method[] methods = paramTypes[i].getDeclaredMethods();
-                                for (Method m : methods) {
-                                    if (!m.isDefault() && !Modifier.isStatic(m.getModifiers())) {
-                                        return m.invoke(proxyObj, args);
-                                    }
-                                }
-                                return null;
-                            }
+                        types[i].getClassLoader(),
+                        new Class<?>[] { types[i] },
+                        new LambdaInvocationHandler(reflectionArguments.getArgs()[i], paramTypes[i])
                     );
-
+                    reflectionArguments.getArgs()[i] = proxy;
                     paramTypes[i] = proxy.getClass();
                     return true;
                 }

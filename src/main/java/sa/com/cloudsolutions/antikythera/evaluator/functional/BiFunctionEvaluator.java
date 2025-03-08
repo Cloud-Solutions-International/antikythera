@@ -25,8 +25,9 @@ public class BiFunctionEvaluator<T, U, R> extends FPEvaluator implements BiFunct
 
     @Override
     public R apply(T t, U u) {
-        AntikytheraRunTime.push(new Variable(t));
         AntikytheraRunTime.push(new Variable(u));
+        AntikytheraRunTime.push(new Variable(t));
+
         try {
             Variable v = executeMethod(methodDeclaration);
             return (R) v.getValue();
