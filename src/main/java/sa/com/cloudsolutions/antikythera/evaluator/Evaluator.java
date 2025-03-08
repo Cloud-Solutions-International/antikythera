@@ -1107,30 +1107,36 @@ public class Evaluator {
                 return executeMethod(mdecl.get().getCallableDeclaration());
             }
             else {
-                ClassOrInterfaceDeclaration c = cdecl.get();
-                if (methodCall.getNameAsString().startsWith("get") && (
-                        c.getAnnotationByName("Data").isPresent()
-                                || c.getAnnotationByName("Getter").isPresent())) {
-                    String field = ClassProcessor.classToInstanceName(
-                            methodCall.getNameAsString().replace("get","")
-                    );
-                    return new Variable(getValue(methodCall, field).getValue());
-                }
-                if (methodCall.getNameAsString().startsWith("set") && (
-                        c.getAnnotationByName("Data").isPresent()
-                                || c.getAnnotationByName("Setter").isPresent())) {
-                    String field = ClassProcessor.classToInstanceName(
-                            methodCall.getNameAsString().replace("set","")
-                    );
-                    return new Variable(getValue(methodCall, field).getValue());
-                }
-                else if (methodCall.getScope().isPresent()){
-                    /*
-                     * At this point we switch to searching for the method call in other classes in the AUT
-                     */
-                    return executeSource(methodCall);
-                }
+                return executeViaDataAnnotation(cdecl.get(), methodCall);
             }
+        }
+        return null;
+    }
+
+    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        if (methodCall.getNameAsString().startsWith("get") && (
+                c.getAnnotationByName("Data").isPresent()
+                        || c.getAnnotationByName("Getter").isPresent())) {
+            String field = ClassProcessor.classToInstanceName(
+                    methodCall.getNameAsString().replace("get","")
+            );
+            return new Variable(getValue(methodCall, field).getValue());
+        }
+        if (methodCall.getNameAsString().startsWith("set") && (
+                c.getAnnotationByName("Data").isPresent()
+                        || c.getAnnotationByName("Setter").isPresent())) {
+            String field = ClassProcessor.classToInstanceName(
+                    methodCall.getNameAsString().replace("set","")
+            );
+            Expression arg = methodCall.getArguments().get(0);
+            fields.put(field, evaluateExpression(arg));
+            return new Variable(getValue(methodCall, field).getValue());
+        }
+        else if (methodCall.getScope().isPresent()){
+            /*
+             * At this point we switch to searching for the method call in other classes in the AUT
+             */
+            return executeSource(methodCall);
         }
         return null;
     }

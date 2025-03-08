@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.BinaryExpr;
@@ -70,5 +71,36 @@ class TestEvaluator {
         evaluator.evaluateMethodCall(methodCall);
         assertTrue(outContent.toString().contains("Hello World"));
         System.setOut(System.out);
+    }
+
+    @Test
+    void executeViaDataAnnotationHandlesGetterAndSetter() throws ReflectiveOperationException {
+        Evaluator evaluator = new Evaluator("");
+
+        // Create a class declaration with @Data annotation
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration()
+            .addAnnotation("Data")
+            .setName("TestClass");
+
+        // Create a getter method call
+        MethodCallExpr getterCall = new MethodCallExpr()
+            .setName("getName");
+
+        // Set up the field value in evaluator
+        Variable nameVar = new Variable("test value");
+        evaluator.getFields().put("name", nameVar);
+
+        // Test getter
+        Variable result = evaluator.executeViaDataAnnotation(classDecl, getterCall);
+        assertEquals("test value", result.getValue());
+
+        // Create a setter method call with argument
+        MethodCallExpr setterCall = new MethodCallExpr()
+            .setName("setName")
+            .addArgument(new StringLiteralExpr("new value"));
+
+        // Test setter
+        result = evaluator.executeViaDataAnnotation(classDecl, setterCall);
+        assertEquals("new value", evaluator.getFields().get("name").getValue());
     }
 }
