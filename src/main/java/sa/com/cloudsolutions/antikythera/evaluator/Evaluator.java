@@ -228,7 +228,7 @@ public class Evaluator {
     }
 
     private Variable createLambdaExpression(LambdaExpr lambdaExpr) throws ReflectiveOperationException {
-        FPEvaluator eval = FunctionEvaluator.create(lambdaExpr, this);
+        FPEvaluator<?> eval = FPEvaluator.create(lambdaExpr, this);
 
         Variable v = new Variable(eval);
         v.setType(new UnknownType());
@@ -974,31 +974,6 @@ public class Evaluator {
         returnValue = new Variable(null);
         return null;
 
-    }
-
-    private Variable evaluateLambda(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
-        LambdaExpr lambda = arguments.get(0).asLambdaExpr();
-        MethodDeclaration md = new MethodDeclaration();
-        if(lambda.getBody().isBlockStmt()) {
-            md.setBody(lambda.getBody().asBlockStmt());
-        }
-        else {
-            BlockStmt blockStmt = new BlockStmt();
-            blockStmt.addStatement(lambda.getBody());
-            md.setBody(blockStmt);
-        }
-
-        md.addParameter(lambda.getParameter(0));
-
-        if (v.getValue() instanceof Collection<?> c) {
-            Evaluator eval = createEvaluator("lambda");
-            for (Object o : c) {
-                AntikytheraRunTime.push(new Variable(o));
-                eval.executeMethod(md);
-            }
-        }
-        returnValue = new Variable(null);
-        return null;
     }
 
    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
