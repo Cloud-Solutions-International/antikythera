@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -38,6 +39,24 @@ public class TestFunctional extends TestHelper{
         assertNull(v.getValue());
         assertEquals(value + "\n", outContent.toString());
 
+    }
+
+    @Test
+    void testAscending() throws ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("sorting1")).orElseThrow();
+        Variable v = evaluator.executeMethod(method);
+        assertNull(v.getValue());
+        assertEquals("0123456789\n", outContent.toString());
+    }
+
+    @Test
+    void testDescending() throws ReflectiveOperationException {
+        CompilationUnit cu = compiler.getCompilationUnit();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("sorting2")).orElseThrow();
+        Variable v = evaluator.executeMethod(method);
+        assertNull(v.getValue());
+        assertEquals("9876543210\n", outContent.toString());
     }
 
     class TestFunctionalCompiler extends ClassProcessor {

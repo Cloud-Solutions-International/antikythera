@@ -11,6 +11,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -343,6 +344,18 @@ public class Reflect {
         if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
             paramTypes[i] = primitiveToWrapper.get(types[i]);
             return true;
+        }
+        if (types[i].isAnnotationPresent(FunctionalInterface.class)) {
+            /* inter operability between SAM interfaces and lambda */
+            Class<?>[] interfaces = paramTypes[i].getInterfaces();
+            for (Class<?> iface : interfaces) {
+                if (iface.equals(types[i])) {
+                    return true;
+                }
+                if (iface.isAnnotationPresent(FunctionalInterface.class)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
