@@ -66,7 +66,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         else {
             FPEvaluator<?> eval = switch(md.getParameters().size()) {
                 case 1 -> new ConsumerEvaluator("C");
-                case 2 -> new BiFunctionEvaluator("BiC");
+                case 2 -> new BiConsumerEvaluator<>("BiC");
                 default -> null;
             };
 

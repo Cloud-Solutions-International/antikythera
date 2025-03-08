@@ -52,6 +52,8 @@ import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 
+import javax.swing.text.html.Option;
+
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
  */
@@ -349,6 +351,10 @@ public class AbstractCompiler {
                 if (argumentType.isPrimitiveType() && argumentType.asString().equals(paramType.asString().toLowerCase())) {
                     continue;
                 }
+                if(argumentType.isClassOrInterfaceType() && paramType.isClassOrInterfaceType() && classMatch(argumentType, paramType))
+                {
+                    continue;
+                }
                 if (! (paramType.equals(argumentType)
                         || paramType.toString().equals("java.lang.Object")
                         || argumentType.getElementType().isUnknownType()
@@ -360,6 +366,26 @@ public class AbstractCompiler {
             return Optional.of(callable);
         }
         return Optional.empty();
+    }
+
+    private static boolean classMatch(Type argumentType, Type paramType) {
+        ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
+        ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
+
+        if (pt.getNameAsString().equals(at.getNameAsString())) {
+            Optional<NodeList<Type>> args1 = pt.getTypeArguments();
+            Optional<NodeList<Type>> args2 = at.getTypeArguments();
+            if (args1.isPresent()) {
+                if (args2.isPresent()) {
+                    return args1.get().size()  == args2.get().size();
+                }
+            }
+            else {
+                return args2.isEmpty();
+            }
+            return true;
+        }
+        return false;
     }
 
     /**

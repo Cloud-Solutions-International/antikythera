@@ -19,8 +19,7 @@ public class BiFunctionEvaluator<T, U, R> extends FPEvaluator implements BiFunct
         return new ClassOrInterfaceType()
                 .setName("BiFunction")
                 .setTypeArguments(
-                        new WildcardType(),
-                        new WildcardType()
+                        new WildcardType(),new WildcardType(),new WildcardType()
                 );
     }
 
