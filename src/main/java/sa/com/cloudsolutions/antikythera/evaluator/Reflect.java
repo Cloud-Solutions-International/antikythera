@@ -14,6 +14,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -283,6 +285,9 @@ public class Reflect {
                     if (findMatch(paramTypes, types, i) || types[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
+                    if (isLambdaConversion(paramTypes, types, i)) {
+
+                    }
                     found = false;
                 }
                 if (found) {
@@ -330,6 +335,16 @@ public class Reflect {
     }
 
 
+    /**
+     * Determine if parameters match.
+     * This method does part of it's job through side effects, hence the reason that arrays are
+     * passed as arguments instead of single values.
+     *
+     * @param paramTypes
+     * @param types
+     * @param i
+     * @return
+     */
     private static boolean findMatch(Class<?>[] paramTypes, Class<?>[] types, int i) {
         if (types[i].isAssignableFrom(paramTypes[i])) {
             return true;
@@ -345,6 +360,11 @@ public class Reflect {
             paramTypes[i] = primitiveToWrapper.get(types[i]);
             return true;
         }
+
+        return false;
+    }
+
+    private static boolean isLambdaConversion(Class<?>[] paramTypes, Class<?>[] types, int i) {
         if (types[i].isAnnotationPresent(FunctionalInterface.class)) {
             /* inter operability between SAM interfaces and lambda */
             Class<?>[] interfaces = paramTypes[i].getInterfaces();
@@ -353,13 +373,29 @@ public class Reflect {
                     return true;
                 }
                 if (iface.isAnnotationPresent(FunctionalInterface.class)) {
+                    // Create proxy implementing the target functional interface
+                    Object proxy = Proxy.newProxyInstance(
+                            types[i].getClassLoader(),
+                            new Class<?>[] { types[i] },
+                            (proxyObj, method, args) -> {
+                                // Find and invoke the corresponding method on the original lambda
+                                Method[] methods = paramTypes[i].getDeclaredMethods();
+                                for (Method m : methods) {
+                                    if (!m.isDefault() && !Modifier.isStatic(m.getModifiers())) {
+                                        return m.invoke(proxyObj, args);
+                                    }
+                                }
+                                return null;
+                            }
+                    );
+
+                    paramTypes[i] = proxy.getClass();
                     return true;
                 }
             }
         }
         return false;
     }
-
 
     public static Object[] buildObjects(ReflectionArguments reflectionArguments, Method method) {
         return method.getParameterTypes().length == 1 &&
