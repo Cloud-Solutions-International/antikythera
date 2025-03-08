@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -21,6 +23,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -134,5 +137,48 @@ class TestSpringEvaluator {
         assertNotNull(result);
         assertTrue(result.getValue() instanceof MethodResponse);
         assertEquals(response, result.getValue());
+    }
+
+    @Test
+    void testAutoWireWithAutowiredField()  {
+        String testClass = """
+            @Component
+            public class TestClass {
+                @Autowired
+                private TestRepository testRepo;
+            }
+            """;
+
+        CompilationUnit cu = StaticJavaParser.parse(testClass);
+        AntikytheraRunTime.addClass("TestClass", cu);
+        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        evaluator.setCompilationUnit(cu);
+
+        // Get the field from the parsed class
+        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
+        VariableDeclarator variable = fieldDecl.getVariable(0);
+        assertTrue(evaluator.autoWire(variable, "TestClass"));
+
+    }
+
+    @Test
+    void testAutoWireWithout()  {
+        String testClass = """
+            @Component
+            public class TestClass {
+                private TestRepository testRepo;
+            }
+            """;
+
+        CompilationUnit cu = StaticJavaParser.parse(testClass);
+        AntikytheraRunTime.addClass("TestClass", cu);
+        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        evaluator.setCompilationUnit(cu);
+
+        // Get the field from the parsed class
+        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
+        VariableDeclarator variable = fieldDecl.getVariable(0);
+        assertFalse(evaluator.autoWire(variable, "TestClass"));
+
     }
 }
