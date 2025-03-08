@@ -44,6 +44,7 @@ public class MockingEvaluator extends Evaluator {
     @Override
     public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException {
         if (cd instanceof MethodDeclaration md) {
+            setupParameters(md);
             Type returnType = md.getType();
             if (returnType.isVoidType()) {
                 return null;
