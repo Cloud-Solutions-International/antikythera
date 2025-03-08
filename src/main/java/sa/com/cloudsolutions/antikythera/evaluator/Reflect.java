@@ -183,93 +183,63 @@ public class Reflect {
         };
     }
 
+    private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
+        Variable v = new Variable(initialValue);
+        ObjectCreationExpr expr = new ObjectCreationExpr()
+            .setType(new ClassOrInterfaceType().setName(typeName));
+
+        if (stringValue != null) {
+            expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
+        } else {
+            expr.setArguments(NodeList.nodeList());
+        }
+
+        v.setInitializer(expr);
+        return v;
+    }
+
     public static Variable variableFactory(String qualifiedName) {
         if (qualifiedName == null) {
             return null;
         }
 
         return switch (qualifiedName) {
-            case "java.util.List", "java.util.ArrayList" -> {
-                Variable v = new Variable(new ArrayList<>());
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("java.util.ArrayList"))
-                    .setArguments(NodeList.nodeList()));
-                yield v;
-            }
-            case "java.util.Map", "java.util.HashMap" -> {
-                Variable v = new Variable(new HashMap<>());
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("java.util.HashMap"))
-                    .setArguments(NodeList.nodeList()));
-                yield v;
-            }
-            case "java.util.TreeMap" -> {
-                Variable v = new Variable(new TreeMap<>());
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("java.util.TreeMap"))
-                    .setArguments(NodeList.nodeList()));
-                yield v;
-            }
-            case "java.util.Set", "java.util.HashSet" -> {
-                Variable v = new Variable(new HashSet<>());
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("java.util.HashSet"))
-                    .setArguments(NodeList.nodeList()));
-                yield v;
-            }
-            case "java.util.TreeSet" -> {
-                Variable v = new Variable(new TreeSet<>());
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("java.util.TreeSet"))
-                    .setArguments(NodeList.nodeList()));
-                yield v;
-            }
-            case "java.util.Optional" -> {
-                Variable v = new Variable(Optional.empty());
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("java.util.Optional"))
-                    .setArguments(NodeList.nodeList()));
-                yield v;
-            }
-            case "Boolean", "boolean" -> {
-                Variable v = new Variable(false);
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("Boolean"))
-                    .setArguments(NodeList.nodeList(new StringLiteralExpr("false"))));
-                yield v;
-            }
-            case "float", "Float", "double", DOUBLE -> {
-                Variable v = new Variable(0.0);
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(DOUBLE))
-                    .setArguments(NodeList.nodeList(new StringLiteralExpr("0.0"))));
-                yield v;
-            }
-            case INTEGER, "int" -> {
-                Variable v = new Variable(0);
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(INTEGER))
-                    .setArguments(NodeList.nodeList(new StringLiteralExpr("0"))));
-                yield v;
-            }
-            case "Long", "long", "java.lang.Long" -> {
-                Variable v = new Variable(-100L);
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("Long"))
-                    .setArguments(NodeList.nodeList(new StringLiteralExpr("-100"))));
-                yield v;
-            }
-            case "String", "java.lang.String" -> {
-                Variable v = new Variable("Ibuprofen");
-                v.setInitializer(new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("String"))
-                    .setArguments(NodeList.nodeList(new StringLiteralExpr("Ibuprofen"))));
-                yield v;
-            }
+            case "java.util.List", "java.util.ArrayList" ->
+                createVariable(new ArrayList<>(), "java.util.ArrayList", null);
+
+            case "java.util.Map", "java.util.HashMap" ->
+                createVariable(new HashMap<>(), "java.util.HashMap", null);
+
+            case "java.util.TreeMap" ->
+                createVariable(new TreeMap<>(), "java.util.TreeMap", null);
+
+            case "java.util.Set", "java.util.HashSet" ->
+                createVariable(new HashSet<>(), "java.util.HashSet", null);
+
+            case "java.util.TreeSet" ->
+                createVariable(new TreeSet<>(), "java.util.TreeSet", null);
+
+            case "java.util.Optional" ->
+                createVariable(Optional.empty(), "java.util.Optional", null);
+
+            case "Boolean", "boolean" ->
+                createVariable(false, "Boolean", "false");
+
+            case "float", "Float", "double", DOUBLE ->
+                createVariable(0.0, DOUBLE, "0.0");
+
+            case INTEGER, "int" ->
+                createVariable(0, INTEGER, "0");
+
+            case "Long", "long", "java.lang.Long" ->
+                createVariable(-100L, "Long", "-100");
+
+            case "String", "java.lang.String" ->
+                createVariable("Ibuprofen", "String", "Ibuprofen");
+
             default -> new Variable(null);
         };
     }
-
     /**
      * Finds a matching method using parameters.
      *
