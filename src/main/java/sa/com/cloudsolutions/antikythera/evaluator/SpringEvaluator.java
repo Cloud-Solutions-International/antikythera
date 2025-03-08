@@ -451,7 +451,7 @@ public class SpringEvaluator extends Evaluator {
             if(methodCall.getScope().isPresent()) {
                 Expression scope = methodCall.getScope().get();
                 String fieldClass = getFieldClass(scope);
-                if(repositories.containsKey(fieldClass)) {
+                if(repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
                     boolean isMocked = false;
                     String fieldName = getFieldName(scope);
                     if (fieldName != null) {

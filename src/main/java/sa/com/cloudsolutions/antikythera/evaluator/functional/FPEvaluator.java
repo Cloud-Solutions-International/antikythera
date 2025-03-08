@@ -118,22 +118,27 @@ public abstract class FPEvaluator<T> extends Evaluator {
     }
 
     private static boolean checkScopedMethod(Evaluator enclosure, BlockStmt body, MethodDeclaration md, LinkedList<Expression> chain, Statement last) throws ReflectiveOperationException {
-        Variable v = enclosure.evaluateScopeChain(chain);
-        if (v != null) {
-            if (v.getValue() instanceof Evaluator e) {
+        try {
+            Variable v = enclosure.evaluateScopeChain(chain);
+            if (v != null) {
+                if (v.getValue() instanceof Evaluator e) {
 
-            }
-            else {
-                Class<?> clz = v.getClazz();
-                for (Method m : clz.getMethods()) {
-                    if (m.getName().equals(md.getNameAsString())) {
-                        if (!m.getReturnType().equals(Void.TYPE)) {
-                            addReturnStatement(body, last);
-                            return true;
+                } else {
+                    Class<?> clz = v.getClazz();
+                    for (Method m : clz.getMethods()) {
+                        if (m.getName().equals(md.getNameAsString())) {
+                            if (!m.getReturnType().equals(Void.TYPE)) {
+                                addReturnStatement(body, last);
+                                return true;
+                            }
                         }
                     }
                 }
             }
+        } catch (NullPointerException npe) {
+            // there are some scopes that cannot be resolved for example
+            // Collections.sort(list, (a,b) -> a.getValue().compareTo(b.getValue()));
+            // we will leave these for now
         }
         return false;
     }

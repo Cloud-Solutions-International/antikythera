@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -51,7 +52,12 @@ public class MockingEvaluator extends Evaluator {
                 return Reflect.variableFactory(returnType.toString());
             }
             if (cd.findCompilationUnit().isPresent()) {
-                String fqdn = AbstractCompiler.findFullyQualifiedName(cd.findCompilationUnit().get(), returnType.toString());
+                CompilationUnit cu1 = cd.findCompilationUnit().get();
+                if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                    String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.asClassOrInterfaceType().getNameAsString());
+                    return Reflect.variableFactory(fqdn);
+                }
+                String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
                 return Reflect.variableFactory(fqdn);
             }
         }
