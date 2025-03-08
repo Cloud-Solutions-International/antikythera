@@ -364,7 +364,7 @@ public class SpringEvaluator extends Evaluator {
      * @param response the response from the controller
      * @return a variable that encloses the response
      */
-    private Variable createTests(MethodResponse response) {
+    Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
                 generator.setPreConditions(preConditions.getOrDefault(currentMethod, Collections.emptySet()));
