@@ -30,11 +30,9 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
-import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -69,6 +67,7 @@ import java.io.File;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.Consumer;
 
 /**
  * Expression evaluator engine.
@@ -1370,23 +1369,28 @@ public class Evaluator {
             }
             else {
                 Variable va = AntikytheraRunTime.pop();
-                setLocal(md.getBody().get(), p.getNameAsString(), va);
-                p.getAnnotationByName("RequestParam").ifPresent(a -> {
-                    if (a.isNormalAnnotationExpr()) {
-                        NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
-                        for (MemberValuePair pair : ne.getPairs()) {
-                            if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
-                                return;
-                            }
-                        }
-                    }
-                    if (va == null) {
-                        missing.add(true);
-                    }
-                });
+                if (md.getBody().isPresent()) {
+                    // repository methods for example don't have bodies
+                    setLocal(md.getBody().get(), p.getNameAsString(), va);
+                    p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
+                }
             }
         }
         return missing.isEmpty();
+    }
+
+    private static void setupRequestParam(AnnotationExpr a , Variable va, ArrayList<Boolean> missing) {
+        if (a.isNormalAnnotationExpr()) {
+            NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
+            for (MemberValuePair pair : ne.getPairs()) {
+                if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
+                    return;
+                }
+            }
+        }
+        if (va == null) {
+            missing.add(true);
+        }
     }
 
     /**
