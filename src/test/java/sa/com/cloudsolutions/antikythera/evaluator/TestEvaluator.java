@@ -74,7 +74,7 @@ class TestEvaluator {
     }
 
     @Test
-    void executeViaDataAnnotationHandlesGetterAndSetter() throws ReflectiveOperationException {
+    void executeViaDataAnnotation() throws ReflectiveOperationException {
         Evaluator evaluator = new Evaluator("");
 
         // Create a class declaration with @Data annotation
@@ -82,25 +82,38 @@ class TestEvaluator {
             .addAnnotation("Data")
             .setName("TestClass");
 
-        // Create a getter method call
+
+        annotationHelper(evaluator, classDecl);
+    }
+
+    @Test
+    void executeViaGetterSetterAnnotation() throws ReflectiveOperationException {
+        Evaluator evaluator = new Evaluator("");
+
+        // Create a class declaration with @Data annotation
+        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration()
+                .addAnnotation("Setter").addAnnotation("Getter")
+                .setName("TestClass");
+
+
+        annotationHelper(evaluator, classDecl);
+    }
+
+    private static void annotationHelper(Evaluator evaluator, ClassOrInterfaceDeclaration classDecl) throws ReflectiveOperationException {
         MethodCallExpr getterCall = new MethodCallExpr()
             .setName("getName");
 
-        // Set up the field value in evaluator
         Variable nameVar = new Variable("test value");
         evaluator.getFields().put("name", nameVar);
 
-        // Test getter
         Variable result = evaluator.executeViaDataAnnotation(classDecl, getterCall);
         assertEquals("test value", result.getValue());
 
-        // Create a setter method call with argument
         MethodCallExpr setterCall = new MethodCallExpr()
             .setName("setName")
             .addArgument(new StringLiteralExpr("new value"));
 
-        // Test setter
-        result = evaluator.executeViaDataAnnotation(classDecl, setterCall);
+        evaluator.executeViaDataAnnotation(classDecl, setterCall);
         assertEquals("new value", evaluator.getFields().get("name").getValue());
     }
 }
