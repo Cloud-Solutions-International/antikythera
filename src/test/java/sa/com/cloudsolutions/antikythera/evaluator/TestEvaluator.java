@@ -17,6 +17,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.finch.Finch;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.ByteArrayOutputStream;
@@ -175,9 +176,9 @@ class TestEvaluatorWithFinches extends TestHelper {
 
     @Test
     void testFinching() throws ClassNotFoundException {
-        Evaluator.finches = null;
+        Finch.clear();
         new Evaluator("");
-        assertEquals(1, Evaluator.finches.size());
+        assertNotNull(Finch.getFinch("sa.com.cloudsolutions.Hello"));
     }
 
     @Test
@@ -192,7 +193,7 @@ class TestEvaluatorWithFinches extends TestHelper {
         CompilationUnit cu = StaticJavaParser.parse(cls);
         AntikytheraRunTime.addClass("TestClass", cu);
 
-        Evaluator.finches = null;
+        Finch.clear();
         Evaluator eval = new Evaluator("TestClass");
         eval.setupFields(cu);
 

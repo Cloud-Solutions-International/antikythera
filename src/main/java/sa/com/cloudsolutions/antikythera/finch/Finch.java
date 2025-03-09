@@ -1,5 +1,8 @@
 package sa.com.cloudsolutions.antikythera.finch;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import java.io.File;
@@ -9,6 +12,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +22,8 @@ import java.util.Map;
  *
  */
 public class Finch {
-    static Map<String, Object> classes = new HashMap<>();
+    static Map<String, Object> finches;
+    private static final Logger logger = LoggerFactory.getLogger(Finch.class);
 
     public static void main(String[] args) throws Exception {
 
@@ -32,6 +37,21 @@ public class Finch {
         Map<String, Object> classes = loadClasses(sourceDir);
         for (String cls : classes.keySet()) {
             System.out.println(cls);
+        }
+    }
+
+    public static void loadFinches() {
+        try {
+            if (Finch.finches == null) {
+                Finch.finches = new HashMap<>();
+                Collection<String> scouts = Settings.getPropertyList("finch", String.class);
+                for (String scout : scouts) {
+                    Map<String, Object> finches = Finch.loadClasses(new File(scout));
+                    Finch.finches.putAll(finches);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Finches could not be loaded {}", e.getMessage());
         }
     }
 
@@ -76,5 +96,13 @@ public class Finch {
                 fileList.add(file.getPath());
             }
         }
+    }
+
+    public static Object getFinch(String resolvedClass) {
+        return finches.get(resolvedClass);
+    }
+
+    public static void clear() {
+        finches = null;
     }
 }

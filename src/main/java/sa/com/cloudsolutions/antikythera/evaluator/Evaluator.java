@@ -85,7 +85,6 @@ public class Evaluator {
      * The fields that were encountered in the current class.
      */
     protected final Map<String, Variable> fields;
-    static Map<String, Object> finches;
 
     /**
      * The fully qualified name of the class for which we created this evaluator.
@@ -121,22 +120,7 @@ public class Evaluator {
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
-        if (finches == null) {
-            loadFinches();
-        }
-    }
-
-    static void loadFinches() {
-        try {
-            Evaluator.finches = new HashMap<>();
-            Collection<String> scouts = Settings.getPropertyList("finch", String.class);
-            for(String scout : scouts) {
-                Map<String, Object> finches = Finch.loadClasses(new File(scout));
-                Evaluator.finches.putAll(finches);
-            }
-        } catch (Exception e) {
-            logger.warn("Finches could not be loaded {}", e.getMessage());
-        }
+        Finch.loadFinches();
     }
 
     /**
@@ -1208,10 +1192,10 @@ public class Evaluator {
         else {
             for (ImportWrapper imp : imports) {
                 String resolvedClass = imp.getNameAsString();
-
-                if (finches.get(resolvedClass) != null) {
+                Object f = Finch.getFinch(resolvedClass);
+                if (f != null) {
                     Variable v = new Variable(t);
-                    v.setValue(finches.get(resolvedClass));
+                    v.setValue(f);
                     fields.put(variable.getNameAsString(), v);
                 } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
                     setupPrimitiveOrBoxedField(variable, t);
@@ -1312,13 +1296,8 @@ public class Evaluator {
         fields.put(variable.getNameAsString(), v);
     }
 
-
     public Map<String, Variable> getFields() {
         return fields;
-    }
-
-    public Map<String, Object> getFinches() {
-        return finches;
     }
 
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {
