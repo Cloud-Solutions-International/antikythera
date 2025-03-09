@@ -84,6 +84,8 @@ public class AntikytheraRunTime {
 
     public static void reset() {
         stack.clear();
+        mockedFields.clear();
+        autowired.clear();
     }
 
     public static void push(Variable variable) {
