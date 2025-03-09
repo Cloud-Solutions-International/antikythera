@@ -348,16 +348,6 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public boolean isBranched() {
-        return false;
-    }
-
-    @Override
-    public void setBranched(boolean branched) {
-
-    }
-
-    @Override
     public void addBeforeClass() {
         mockFields();
     }

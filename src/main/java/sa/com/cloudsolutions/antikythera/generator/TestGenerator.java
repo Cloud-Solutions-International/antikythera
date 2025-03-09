@@ -108,10 +108,6 @@ public abstract class TestGenerator {
         return gen;
     }
 
-    public abstract boolean isBranched();
-
-    public abstract void setBranched(boolean branched);
-
     public abstract void addBeforeClass();
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {

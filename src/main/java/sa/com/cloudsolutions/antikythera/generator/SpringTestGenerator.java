@@ -70,11 +70,6 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private String commonPath;
 
-    /**
-     * Boolean value indicating if the method under test has any branching.
-     */
-    private boolean branched;
-
     public SpringTestGenerator(CompilationUnit cu) {
         super(cu);
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
@@ -500,16 +495,6 @@ public class SpringTestGenerator extends  TestGenerator {
 
     public void setCommonPath(String commonPath) {
         this.commonPath = commonPath;
-    }
-
-    @Override
-    public boolean isBranched() {
-        return branched;
-    }
-
-    @Override
-    public void setBranched(boolean branched) {
-        this.branched = branched;
     }
 
     @Override

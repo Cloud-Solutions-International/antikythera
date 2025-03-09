@@ -681,11 +681,6 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     Variable executeSource(MethodCallExpr methodCall) throws AntikytheraException, ReflectiveOperationException {
-        if (AntikytheraRunTime.isControllerClass(getClassName())) {
-            for(TestGenerator gen : generators) {
-                gen.setBranched(false);
-            }
-        }
         Expression expression = methodCall.getScope().orElseThrow();
         if (expression.isNameExpr()) {
             RepositoryParser rp = repositories.get(getFieldClass(expression));
