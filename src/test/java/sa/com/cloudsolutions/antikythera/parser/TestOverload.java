@@ -2,18 +2,14 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.PrimitiveType;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
 import sa.com.cloudsolutions.antikythera.depsolver.Resolver;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;

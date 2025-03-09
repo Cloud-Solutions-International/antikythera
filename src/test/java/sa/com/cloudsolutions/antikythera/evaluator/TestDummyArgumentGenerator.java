@@ -36,10 +36,10 @@ class TestDummyArgumentGenerator {
     @ParameterizedTest
     @CsvSource({"String, Ibuprofen", "int, 0", "Boolean, false", "Double, 0.0", "Float, 0.0", "Long, -100," +
             "List, java.util.ArrayList", "Map, {}", "Set, []"})
-    void testGenerateArgumentBody(String type, Object value) throws ReflectiveOperationException, IOException {
+    void testGenerateArgumentBody(String type, Object value) throws ReflectiveOperationException{
 
-        TestLocalsCompiler compiler = new TestLocalsCompiler();
-        CompilationUnit cu = compiler.getCompilationUnit();
+
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
         cu.addImport("java.util.Map");
         cu.addImport("java.util.Set");
         MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).get();
@@ -62,12 +62,4 @@ class TestDummyArgumentGenerator {
         assertNotNull(v);
         assertEquals(value, v.getValue().toString());
     }
-
-     class TestLocalsCompiler extends AbstractCompiler {
-
-        protected TestLocalsCompiler() throws IOException {
-            compile("sa/com/cloudsolutions/antikythera/evaluator/Hello.java");
-        }
-    }
-
 }

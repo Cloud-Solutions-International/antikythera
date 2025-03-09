@@ -1,8 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -12,30 +15,32 @@ import java.io.PrintStream;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestLocals extends TestHelper {
+class TestLocals extends TestHelper {
+    private final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Locals";
+    CompilationUnit cu;
+
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
+    }
+
     @BeforeEach
-    public void each() throws AntikytheraException, IOException {
-        compiler = new TestLocalsCompiler();
+    void each() throws AntikytheraException {
+        cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        evaluator = new Evaluator(SAMPLE_CLASS);
+
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testScope() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration doStuff = compiler.getCompilationUnit()
+        MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
         evaluator.executeMethod(doStuff);
         assertEquals("10,20,100\n20,30,200\n", outContent.toString());
     }
 
-    class TestLocalsCompiler extends AbstractCompiler {
-
-        protected TestLocalsCompiler() throws IOException {
-            File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Locals.java");
-            cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
-            evaluator.setupFields(cu);
-        }
-    }
 }
