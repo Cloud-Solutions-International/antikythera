@@ -467,27 +467,18 @@ public class Evaluator {
     private Variable initializeVariable(VariableDeclarator decl, Expression init) throws ReflectiveOperationException {
         Variable v;
         if (init.isMethodCallExpr()) {
-            MethodCallExpr methodCall = init.asMethodCallExpr();
-            v = evaluateMethodCall(methodCall);
-            if (v != null) {
-                v.setType(decl.getType());
-                setLocal(decl, decl.getNameAsString(), v);
-            }
-        }
-        else if(init.isObjectCreationExpr()) {
+            v = evaluateMethodCall(init.asMethodCallExpr());
+        } else if (init.isObjectCreationExpr()) {
             v = createObject(init, decl, init.asObjectCreationExpr());
-            if (v != null) {
-                v.setType(decl.getType());
-                setLocal(decl, decl.getNameAsString(), v);
-            }
-        }
-        else {
+        } else {
             v = evaluateExpression(init);
-            if (v != null) {
-                v.setType(decl.getType());
-                setLocal(decl, decl.getNameAsString(), v);
-            }
         }
+
+        if (v != null) {
+            v.setType(decl.getType());
+            setLocal(decl, decl.getNameAsString(), v);
+        }
+
         return v;
     }
 
@@ -505,9 +496,7 @@ public class Evaluator {
      */
     Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
-        Variable vx;
-
-        vx = createUsingEvaluator(type, oce, instructionPointer);
+        Variable vx = createUsingEvaluator(type, oce, instructionPointer);
 
         if (vx == null) {
             vx = createUsingReflection(type, oce);
