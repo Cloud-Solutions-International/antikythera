@@ -948,8 +948,8 @@ public class Evaluator {
 
     }
 
-   Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-       Method method = findAccessibleMethod(v.getClazz(), reflectionArguments);
+    Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+       Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
        if (method == null) {
            if (v.getValue() == null) {
                throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
@@ -969,7 +969,7 @@ public class Evaluator {
            invokeinAccessibleMethod(v, reflectionArguments, method);
        }
        return returnValue;
-   }
+    }
 
 
     private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments, Method method) throws ReflectiveOperationException {
@@ -992,21 +992,6 @@ public class Evaluator {
             }
         }
     }
-
-    public Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
-       Method method = Reflect.findMethod(clazz, reflectionArguments);
-       if (method != null) return method;
-
-       // Search interfaces
-       for (Class<?> iface : clazz.getInterfaces()) {
-           method = Reflect.findMethod(iface, reflectionArguments);
-           if (method != null) return method;
-       }
-
-       // Search superclass if no interface method found
-       Class<?> superclass = clazz.getSuperclass();
-       return superclass != null ? findAccessibleMethod(superclass, reflectionArguments) : null;
-   }
 
     /**
      * Execute a method call.

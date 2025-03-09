@@ -401,6 +401,20 @@ public class Reflect {
                 reflectionArguments.getArgs();
     }
 
+    public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        Method method = Reflect.findMethod(clazz, reflectionArguments);
+        if (method != null) return method;
+
+        // Search interfaces
+        for (Class<?> iface : clazz.getInterfaces()) {
+            method = Reflect.findMethod(iface, reflectionArguments);
+            if (method != null) return method;
+        }
+
+        // Search superclass if no interface method found
+        Class<?> superclass = clazz.getSuperclass();
+        return superclass != null ? findAccessibleMethod(superclass, reflectionArguments) : null;
+    }
 
     public static Method findPublicMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
         // Try public interfaces first
