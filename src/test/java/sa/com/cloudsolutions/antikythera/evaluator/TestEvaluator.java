@@ -1,6 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import org.junit.jupiter.api.BeforeAll;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.BinaryExpr;
@@ -12,14 +18,26 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator {
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
+    }
+
     @Test
     void evaluateExpressionReturnsIntegerLiteral() throws AntikytheraException, ReflectiveOperationException {
         Evaluator evaluator = new Evaluator("");
@@ -115,5 +133,46 @@ class TestEvaluator {
 
         evaluator.executeViaDataAnnotation(classDecl, setterCall);
         assertEquals("new value", evaluator.getFields().get("name").getValue());
+    }
+
+    @Test
+    void testResolveNonPrimitiveFields() throws ReflectiveOperationException, IOException {
+        String testClass = """
+            import java.util.List;
+            import java.util.ArrayList;
+            
+            public class TestClass {
+                private List<String> stringList;
+                private ArrayList<Integer> intList;
+                private String text = "test";
+                private Integer number = 42;
+            }
+            """;
+
+        CompilationUnit cu = StaticJavaParser.parse(testClass);
+        Evaluator evaluator = new Evaluator("TestClass");
+        evaluator.setCompilationUnit(cu);
+
+        for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+            for (VariableDeclarator vd : field.getVariables()) {
+                evaluator.identifyFieldDeclarations(vd);
+            }
+        }
+
+        Map<String, Variable> resolvedFields = evaluator.getFields();
+
+        assertNotNull(resolvedFields.get("stringList"));
+        assertTrue(resolvedFields.get("stringList").getType().isClassOrInterfaceType());
+        assertEquals("List", resolvedFields.get("stringList").getType().asClassOrInterfaceType().getNameAsString());
+
+        assertNotNull(resolvedFields.get("intList"));
+        assertTrue(resolvedFields.get("intList").getType().isClassOrInterfaceType());
+        assertEquals("ArrayList", resolvedFields.get("intList").getType().asClassOrInterfaceType().getNameAsString());
+
+        assertNotNull(resolvedFields.get("text"));
+        assertEquals("test", resolvedFields.get("text").getValue());
+
+        assertNotNull(resolvedFields.get("number"));
+        assertEquals(42, resolvedFields.get("number").getValue());
     }
 }

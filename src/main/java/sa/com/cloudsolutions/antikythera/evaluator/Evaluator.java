@@ -1456,7 +1456,7 @@ public class Evaluator {
     }
 
     /**
-     * Execute a statment.
+     * Execute a statement.
      * In the java parser architecture a statement is not always a single line of code. They can be
      * block statements as well. For example when an IF condition is encountered that counts as
      * statement. It's child elements the then and else blocks are also block statements.
@@ -1468,7 +1468,7 @@ public class Evaluator {
         if (stmt.isExpressionStmt()) {
             /*
              * A line of code that is an expression. The expression itself can fall into various different
-             * categories and we let the evaluateExpression method take care of all that
+             * categories, and we let the evaluateExpression method take care of all that
              */
             evaluateExpression(stmt.asExpressionStmt().getExpression());
 
