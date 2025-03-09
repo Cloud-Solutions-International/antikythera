@@ -196,7 +196,6 @@ public class AbstractCompiler {
             return true;
         }
 
-        logger.debug("\t{}", relativePath);
         Path sourcePath = Paths.get(Settings.getBasePath(), relativePath);
 
         File file = sourcePath.toFile();

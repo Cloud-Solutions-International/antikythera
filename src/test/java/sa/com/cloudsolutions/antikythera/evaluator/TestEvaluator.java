@@ -4,7 +4,6 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.BinaryExpr;
@@ -29,6 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator extends TestHelper {
+
+    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.evaluator.KitchenSink";
+
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
@@ -37,9 +39,9 @@ class TestEvaluator extends TestHelper {
     }
 
     @BeforeEach
-    public void each() throws Exception {
-        compiler = new KitchenSinkCompiler();
-        System.setOut(new PrintStream(outContent));
+    void each() {
+        evaluator = new Evaluator(CLASS_UNDER_TEST);
+        evaluator.setupFields(AntikytheraRunTime.getCompilationUnit(CLASS_UNDER_TEST));
     }
 
     @Test
@@ -157,14 +159,5 @@ class TestEvaluator extends TestHelper {
 
         assertNotNull(resolvedFields.get("number"));
         assertEquals(42, resolvedFields.get("number").getValue());
-    }
-
-
-    class KitchenSinkCompiler extends ClassProcessor {
-        protected KitchenSinkCompiler() throws IOException, AntikytheraException {
-            parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink.java"));
-            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink");
-            evaluator.setupFields(cu);
-        }
     }
 }
