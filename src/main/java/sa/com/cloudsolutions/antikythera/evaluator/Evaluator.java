@@ -983,7 +983,7 @@ public class Evaluator {
             }
         } catch (InaccessibleObjectException ioe) {
             // If module access fails, try to find a public interface or superclass method
-            Method publicMethod = findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
+            Method publicMethod = Reflect.findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
             if (publicMethod != null) {
                 returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
                 if (returnValue.getValue() == null && returnValue.getClazz() == null) {
@@ -1006,32 +1006,6 @@ public class Evaluator {
        // Search superclass if no interface method found
        Class<?> superclass = clazz.getSuperclass();
        return superclass != null ? findAccessibleMethod(superclass, reflectionArguments) : null;
-   }
-
-   private Method findPublicMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
-       // Try public interfaces first
-       for (Class<?> iface : clazz.getInterfaces()) {
-           try {
-               Method method = iface.getMethod(methodName, paramTypes);
-               if (Modifier.isPublic(method.getModifiers())) {
-                   return method;
-               }
-           } catch (NoSuchMethodException ignored) {}
-       }
-
-       // Try superclass hierarchy
-       Class<?> superclass = clazz.getSuperclass();
-       while (superclass != null) {
-           try {
-               Method method = superclass.getMethod(methodName, paramTypes);
-               if (Modifier.isPublic(method.getModifiers())) {
-                   return method;
-               }
-           } catch (NoSuchMethodException ignored) {}
-           superclass = superclass.getSuperclass();
-       }
-
-       return null;
    }
 
     /**

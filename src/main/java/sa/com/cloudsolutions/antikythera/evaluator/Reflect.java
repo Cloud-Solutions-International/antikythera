@@ -401,4 +401,31 @@ public class Reflect {
                 reflectionArguments.getArgs();
     }
 
+
+    public static Method findPublicMethod(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+        // Try public interfaces first
+        for (Class<?> iface : clazz.getInterfaces()) {
+            try {
+                Method method = iface.getMethod(methodName, paramTypes);
+                if (Modifier.isPublic(method.getModifiers())) {
+                    return method;
+                }
+            } catch (NoSuchMethodException ignored) {}
+        }
+
+        // Try superclass hierarchy
+        Class<?> superclass = clazz.getSuperclass();
+        while (superclass != null) {
+            try {
+                Method method = superclass.getMethod(methodName, paramTypes);
+                if (Modifier.isPublic(method.getModifiers())) {
+                    return method;
+                }
+            } catch (NoSuchMethodException ignored) {}
+            superclass = superclass.getSuperclass();
+        }
+
+        return null;
+    }
+
 }
