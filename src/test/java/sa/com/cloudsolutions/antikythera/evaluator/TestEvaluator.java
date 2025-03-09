@@ -1,12 +1,10 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.BinaryExpr;
@@ -30,12 +28,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestEvaluator {
+class TestEvaluator extends TestHelper {
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+    }
+
+    @BeforeEach
+    public void each() throws Exception {
+        compiler = new KitchenSinkCompiler();
+        System.setOut(new PrintStream(outContent));
     }
 
     @Test
@@ -136,28 +140,7 @@ class TestEvaluator {
     }
 
     @Test
-    void testResolveNonPrimitiveFields() throws ReflectiveOperationException, IOException {
-        String testClass = """
-            import java.util.List;
-            import java.util.ArrayList;
-            
-            public class TestClass {
-                private List<String> stringList;
-                private ArrayList<Integer> intList;
-                private String text = "test";
-                private Integer number = 42;
-            }
-            """;
-
-        CompilationUnit cu = StaticJavaParser.parse(testClass);
-        Evaluator evaluator = new Evaluator("TestClass");
-        evaluator.setCompilationUnit(cu);
-
-        for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-            for (VariableDeclarator vd : field.getVariables()) {
-                evaluator.identifyFieldDeclarations(vd);
-            }
-        }
+    void testResolveNonPrimitiveFields()  {
 
         Map<String, Variable> resolvedFields = evaluator.getFields();
 
@@ -174,5 +157,14 @@ class TestEvaluator {
 
         assertNotNull(resolvedFields.get("number"));
         assertEquals(42, resolvedFields.get("number").getValue());
+    }
+
+
+    class KitchenSinkCompiler extends ClassProcessor {
+        protected KitchenSinkCompiler() throws IOException, AntikytheraException {
+            parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink.java"));
+            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink");
+            evaluator.setupFields(cu);
+        }
     }
 }
