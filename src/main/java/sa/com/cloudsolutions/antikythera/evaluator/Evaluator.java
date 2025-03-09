@@ -110,33 +110,33 @@ public class Evaluator {
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
     protected final Deque<TryStmt> catching = new LinkedList<>();
-
-
     /**
      * The preconditions that need to be met before the test can be executed.
      */
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
-    static {
-        try {
-            Evaluator.finches = new HashMap<>();
-            List<String> scouts = (List<String>) Settings.getProperty("finch");
-            if(scouts != null) {
-                for(String scout : scouts) {
-                    Map<String, Object> finches = Finch.loadClasses(new File(scout));
-                    Evaluator.finches.putAll(finches);
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Finches could not be loaded {}", e.getMessage());
-        }
-    }
 
     public Evaluator (String className) {
         this.className = className;
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
+        if (finches == null) {
+            loadFinches();
+        }
+    }
+
+    static void loadFinches() {
+        try {
+            Evaluator.finches = new HashMap<>();
+            Collection<String> scouts = Settings.getPropertyList("finch", String.class);
+            for(String scout : scouts) {
+                Map<String, Object> finches = Finch.loadClasses(new File(scout));
+                Evaluator.finches.putAll(finches);
+            }
+        } catch (Exception e) {
+            logger.warn("Finches could not be loaded {}", e.getMessage());
+        }
     }
 
     /**
@@ -1199,7 +1199,7 @@ public class Evaluator {
         }
     }
 
-    private void resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    void resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
         if (imports.isEmpty()) {

@@ -45,6 +45,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -109,13 +110,12 @@ public class AbstractCompiler {
         }
         loader = new URLClassLoader(urls);
 
-        Object f = Settings.getProperty("finch");
-        if(f != null) {
-            List<String> finch = (List<String>) f;
-            for(String path : finch) {
-                combinedTypeSolver.add(new JavaParserTypeSolver(path));
-            }
+        Collection<String> finch = Settings.getPropertyList("finch", String.class);
+
+        for(String path : finch) {
+            combinedTypeSolver.add(new JavaParserTypeSolver(path));
         }
+
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         javaParser = new JavaParser(parserConfiguration);
