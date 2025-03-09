@@ -67,7 +67,6 @@ import java.io.File;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
-import java.util.function.Consumer;
 
 /**
  * Expression evaluator engine.
