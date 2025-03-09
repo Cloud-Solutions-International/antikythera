@@ -6,7 +6,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestReflect {
+class TestReflect {
 
     @ParameterizedTest()
     @ValueSource(strings = {"int","double","float","short","byte","char","boolean"})

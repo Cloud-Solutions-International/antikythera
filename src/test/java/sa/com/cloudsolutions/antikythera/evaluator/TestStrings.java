@@ -1,10 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
+import org.junit.jupiter.api.BeforeAll;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,9 +16,20 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestStrings extends TestHelper{
+    CompilationUnit cu;
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Hello";
+
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
+    }
+
     @BeforeEach
-    public void each() throws Exception {
-        compiler = new HelloEvaluator();
+    void each()  {
+        cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
     }
 
@@ -23,7 +37,7 @@ class TestStrings extends TestHelper{
     void testUpperCase() throws AntikytheraException, ReflectiveOperationException {
         Variable u = new Variable("upper cased");
         AntikytheraRunTime.push(u);
-        MethodDeclaration helloUpper = compiler.getCompilationUnit()
+        MethodDeclaration helloUpper = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloUpper")).orElseThrow();
         evaluator.executeMethod(helloUpper);
 
@@ -32,7 +46,7 @@ class TestStrings extends TestHelper{
 
     @Test
     void testHello() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration helloWorld = compiler.getCompilationUnit()
+        MethodDeclaration helloWorld = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
         evaluator.executeMethod(helloWorld);
 
@@ -41,7 +55,7 @@ class TestStrings extends TestHelper{
 
     @Test
     void testLongChain() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration helloWorld = compiler.getCompilationUnit()
+        MethodDeclaration helloWorld = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("longChain")).orElseThrow();
         evaluator.executeMethod(helloWorld);
 
@@ -49,7 +63,7 @@ class TestStrings extends TestHelper{
     }
     @Test
     void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration helloName = compiler.getCompilationUnit()
+        MethodDeclaration helloName = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloName")).orElseThrow();
         Variable v = new Variable("Cloud Solutions");
         AntikytheraRunTime.push(v);
@@ -61,20 +75,10 @@ class TestStrings extends TestHelper{
     void testChained() throws AntikytheraException, ReflectiveOperationException {
         Variable v = new Variable("World");
         AntikytheraRunTime.push(v);
-        MethodDeclaration helloChained = compiler.getCompilationUnit()
+        MethodDeclaration helloChained = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloChained")).orElseThrow();
         evaluator.executeMethod(helloChained);
 
         assertTrue(outContent.toString().contains("Hello, ORLD"));
-    }
-
-    class HelloEvaluator extends AbstractCompiler {
-
-        protected HelloEvaluator() throws IOException, ReflectiveOperationException{
-            File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Hello.java");
-            cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Hello");
-            evaluator.setupFields(cu);
-        }
     }
 }

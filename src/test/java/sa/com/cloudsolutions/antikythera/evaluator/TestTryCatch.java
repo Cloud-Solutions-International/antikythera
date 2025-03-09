@@ -1,9 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
@@ -19,16 +22,27 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestTryCatch extends TestHelper {
+    CompilationUnit cu;
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.TryCatch";
+
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
+    }
+
     @BeforeEach
-    public void each() throws AntikytheraException, IOException {
-        compiler = new TryCatchCompiler();
+    void each() throws AntikytheraException {
+        cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testNPE() throws AntikytheraException, ReflectiveOperationException {
 
-        MethodDeclaration doStuff = compiler.getCompilationUnit()
+        MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("tryNPE")).orElseThrow();
         evaluator.executeMethod(doStuff);
 
@@ -40,7 +54,7 @@ class TestTryCatch extends TestHelper {
     @Test
     void testNested() throws AntikytheraException, ReflectiveOperationException {
 
-        MethodDeclaration doStuff = compiler.getCompilationUnit()
+        MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("nested")).orElseThrow();
         evaluator.executeMethod(doStuff);
 
@@ -55,7 +69,7 @@ class TestTryCatch extends TestHelper {
     @Test
     void testThrowing()  {
 
-        MethodDeclaration doStuff = compiler.getCompilationUnit()
+        MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("throwTantrum")).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(1));
@@ -67,7 +81,7 @@ class TestTryCatch extends TestHelper {
     @Test
     void testNotThrowing()  {
 
-        MethodDeclaration doStuff = compiler.getCompilationUnit()
+        MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("throwTantrum")).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(2));
@@ -76,13 +90,4 @@ class TestTryCatch extends TestHelper {
         assertTrue(outContent.toString().contains("No tantrum thrown\n"));
     }
 
-    class TryCatchCompiler extends AbstractCompiler {
-
-        protected TryCatchCompiler() throws IOException {
-            File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/TryCatch.java");
-            cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
-            evaluator.setupFields(cu);
-        }
-    }
 }
