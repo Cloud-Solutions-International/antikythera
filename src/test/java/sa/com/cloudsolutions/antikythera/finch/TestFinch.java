@@ -27,8 +27,8 @@ class TestFinch {
         assertTrue(loadedClasses.containsKey("sa.com.cloudsolutions.Hello"));
 
         // Verify instance creation
-        Object instance = loadedClasses.get("sa.com.cloudsolutions.finch.TestFinch");
+        Object instance = loadedClasses.get("sa.com.cloudsolutions.Hello");
         assertNotNull(instance);
-        assertEquals("sa.com.cloudsolutions.finch.TestFinch", instance.getClass().getName());
+        assertEquals("sa.com.cloudsolutions.Hello", instance.getClass().getName());
     }
 }

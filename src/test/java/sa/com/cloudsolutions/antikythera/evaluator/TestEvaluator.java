@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -160,4 +162,42 @@ class TestEvaluator extends TestHelper {
         assertNotNull(resolvedFields.get("number"));
         assertEquals(42, resolvedFields.get("number").getValue());
     }
+}
+
+class TestEvaluatorWithFinches extends TestHelper {
+
+    @BeforeAll
+    static void setup() throws IOException, ClassNotFoundException {
+        Settings.loadConfigMap(new File("src/test/resources/finches.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
+    }
+
+    @Test
+    void testFinching() throws ClassNotFoundException {
+        Evaluator.finches = null;
+        new Evaluator("");
+        assertEquals(1, Evaluator.finches.size());
+    }
+
+    @Test
+    void testResolveNonPrimitiveField() {
+        String cls = """
+                import sa.com.cloudsolutions.Hello;
+                
+                class TestClass {
+                    Hello hello;
+                }
+                """;
+        CompilationUnit cu = StaticJavaParser.parse(cls);
+        AntikytheraRunTime.addClass("TestClass", cu);
+
+        Evaluator.finches = null;
+        Evaluator eval = new Evaluator("TestClass");
+        eval.setupFields(cu);
+
+        Variable v = eval.getFields().get("hello");
+        assertNotNull(v);
+    }
+
 }

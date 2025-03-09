@@ -1,4 +1,4 @@
-package com.sa.cloudsolutions;
+package sa.com.cloudsolutions;
 
 public class Hello {
     public String sayHello() {
