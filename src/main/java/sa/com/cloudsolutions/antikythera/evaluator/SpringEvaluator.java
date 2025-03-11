@@ -416,7 +416,7 @@ public class SpringEvaluator extends Evaluator {
         return autoWire(variable, resolvedClass);
     }
 
-     boolean autoWire(VariableDeclarator variable, String resolvedClass) {
+     boolean    autoWire(VariableDeclarator variable, String resolvedClass) {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {

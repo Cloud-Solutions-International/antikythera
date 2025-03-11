@@ -1,10 +1,18 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestReflect {
 
@@ -21,4 +29,20 @@ class TestReflect {
         Class<?> clazz = Reflect.getComponentClass(s);
         assertEquals(clazz.getName(), "java.lang." + s);
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        "boolean,java.lang.Boolean",
+        "int,java.lang.Integer",
+        "long,java.lang.Long",
+        "float,java.lang.Float",
+        "double,java.lang.Double",
+        "char,java.lang.Character",
+        "String,String"  // non-primitive case
+    })
+    void testPrimitiveToWrapper(String primitive, String expected) {
+        String result = Reflect.primitiveToWrapper(primitive);
+        assertEquals(expected, result);
+    }
+
 }
