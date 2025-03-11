@@ -55,7 +55,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -63,7 +62,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.io.File;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
@@ -74,10 +72,10 @@ import java.util.Stack;
 public class Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     /**
-     * Local variables.
+     * <p>Local variables.</p>
      *
-     * These are specific to a block statement. A block statement may also be an
-     * entire method. The primary key will be the hashcode of the block statement.
+     * <p>These are specific to a block statement. A block statement may also be an
+     * entire method. The primary key will be the hashcode of the block statement.</p>
      */
     private final Map<Integer, Map<String, Variable>> locals ;
 
@@ -124,10 +122,10 @@ public class Evaluator {
     }
 
     /**
-     * Get the value for the given variable in the current scope.
+     * <p>Get the value for the given variable in the current scope.</p>
      *
      * The variable may have been defined as a local (which could be a variable defined in the current block
-     * or an argument to the function) or a field.
+     * or an argument to the function, or in the enclosing block) or a field.
      *
      * @param n a node depicting the current statement. It will be used to identify the current block
      * @param name the name of the variable.
@@ -142,7 +140,7 @@ public class Evaluator {
     }
 
     /**
-     * Evaluate an expression.
+     * <p>Evaluate an expression.</p>
      *
      * This is a recursive process, evaluating a particular expression might result in this method being called
      * again and again either directly or indirectly.
@@ -1123,11 +1121,12 @@ public class Evaluator {
             v.setType(variable.getType());
             fields.put(variable.getNameAsString(), v);
         }
-        if (variable.getType().isClassOrInterfaceType()) {
-            resolveNonPrimitiveFields(variable);
-        }
         else {
-            resolvePrimitiveFields(variable);
+            if (variable.getType().isClassOrInterfaceType()) {
+                resolveNonPrimitiveFields(variable);
+            } else {
+                resolvePrimitiveFields(variable);
+            }
         }
     }
 

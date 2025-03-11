@@ -47,7 +47,7 @@ public class ServicesParser {
         evaluator.setupFields(cu);
     }
 
-    public void start() throws IOException {
+    public void start() {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
@@ -61,7 +61,7 @@ public class ServicesParser {
         eval();
     }
 
-    public void start(String method) throws IOException {
+    public void start(String method) {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {

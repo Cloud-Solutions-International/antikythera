@@ -33,7 +33,7 @@ public class Reflect {
     public static final String DOUBLE = "Double";
     /**
      * Keeps a map of wrapper types to their primitive counterpart
-     * for example Integer.class -> int.class
+     * for example : Integer.class -> int.class
      */
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
     /**
