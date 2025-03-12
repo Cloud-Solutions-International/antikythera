@@ -34,6 +34,7 @@ public class Antikythera {
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
+    private static final String SUFFIX = ".java";
 
     private final String basePackage;
     private final String basePath;
@@ -42,6 +43,7 @@ public class Antikythera {
     private final String outputPath;
 
     private static Antikythera instance;
+    private Model pomModel;
 
     private Antikythera() {
         basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
@@ -51,11 +53,17 @@ public class Antikythera {
         services = Settings.getPropertyList(Constants.SERVICES, String.class);
     }
 
-    public static Antikythera getInstance() throws IOException {
+    public static Antikythera getInstance() {
         if (instance == null) {
-            Settings.loadConfigMap();
-
-            instance = new Antikythera();
+            try {
+                Settings.loadConfigMap();
+                instance = new Antikythera();
+                instance.readPomFile();
+            } catch (IOException e) {
+                throw new AntikytheraException("Failed to initialize Antikythera", e);
+            } catch (XmlPullParserException xe) {
+                logger.error("Could not parse the POM file", xe);
+            }
         }
         return instance;
     }
@@ -167,6 +175,7 @@ public class Antikythera {
                 Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
         }
+
     }
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
@@ -216,6 +225,44 @@ public class Antikythera {
         Files.createDirectories(parentDir.toPath());
         try (FileWriter writer = new FileWriter(file)) {
             writer.write(content);
+        }
+    }
+
+    public String[] getJarPaths() {
+        if (pomModel != null) {
+
+            List<Dependency> dependencies = pomModel.getDependencies();
+            final Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
+            if (m2.isPresent()) {
+                return dependencies.stream()
+                        .map(dependency -> {
+                            String groupIdPath = dependency.getGroupId().replace('.', '/');
+                            String artifactId = dependency.getArtifactId();
+                            String version = dependency.getVersion();
+
+                            if (version == null || version.isEmpty()) {
+                                version = findLatestVersion(groupIdPath, artifactId, m2.get());
+                            }
+
+                            return Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar").toString();
+                        })
+                        .toArray(String[]::new);
+            }
+            }
+        return new String[] {};
+    }
+
+    private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
+        Path artifactPath = Paths.get(m2, groupIdPath, artifactId);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(artifactPath)) {
+            return StreamSupport.stream(stream.spliterator(), false)
+                    .filter(Files::isDirectory)
+                    .map(Path::getFileName)
+                    .map(Path::toString)
+                    .max(Comparator.naturalOrder())
+                    .orElseThrow(() -> new IOException("No versions found for " + artifactId));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to find latest version for " + artifactId, e);
         }
     }
 

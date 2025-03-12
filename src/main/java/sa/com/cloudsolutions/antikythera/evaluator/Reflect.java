@@ -275,7 +275,7 @@ public class Reflect {
                 if(types.length == 1 && types[0].equals(Object[].class)) {
                     return m;
                 }
-                if (types.length != paramTypes.length) {
+                if (paramTypes == null || types.length != paramTypes.length) {
                     continue;
                 }
                 boolean found = true;

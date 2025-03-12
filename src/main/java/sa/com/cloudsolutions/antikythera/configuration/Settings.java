@@ -44,12 +44,14 @@ public class Settings {
      * @throws IOException if the file could not be read.
      */
     public static void loadConfigMap() throws IOException {
-        props = new HashMap<>();
-        File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
-        if (yamlFile.exists()) {
-            loadYamlConfig(yamlFile);
-        } else {
-            throw new FileNotFoundException(yamlFile.getPath());
+        if (props == null) {
+            props = new HashMap<>();
+            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
+            if (yamlFile.exists()) {
+                loadYamlConfig(yamlFile);
+            } else {
+                throw new FileNotFoundException(yamlFile.getPath());
+            }
         }
     }
 
