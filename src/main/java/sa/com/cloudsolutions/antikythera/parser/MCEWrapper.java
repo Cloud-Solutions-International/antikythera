@@ -22,7 +22,7 @@ public class MCEWrapper {
      */
     NodeList<Type> argumentTypes;
 
-    public MCEWrapper() {
+    protected MCEWrapper() {
     }
 
     public MCEWrapper(NodeWithArguments<?> oce) {

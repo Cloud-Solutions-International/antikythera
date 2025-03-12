@@ -399,7 +399,7 @@ public class Resolver {
      *              in the MCEWrapper will be null.
      */
     public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce)  {
-        MCEWrapper mw = new MCEWrapper();
+        MCEWrapper mw = new MCEWrapper(mce);
         NodeList<Type> types = new NodeList<>();
 
         NodeList<Expression> arguments = mce.getArguments();
@@ -411,7 +411,6 @@ public class Resolver {
             mw.setArgumentTypes(types);
         }
 
-        mw.setMethodCallExpr(mce);
         return mw;
     }
 

@@ -5,11 +5,14 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.util.Map;
+import java.util.Optional;
 
 public class MockingEvaluator extends Evaluator {
 
@@ -62,17 +65,6 @@ public class MockingEvaluator extends Evaluator {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
                 return Reflect.variableFactory(fqdn);
             }
-        }
-        return null;
-    }
-
-    @Override
-    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
-        if (cu != null) {
-            return super.executeMethod(wrapper);
-        }
-        else {
-
         }
         return null;
     }

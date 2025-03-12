@@ -911,10 +911,22 @@ public class Evaluator {
                 }
             }
             if (v.getValue() instanceof Evaluator eval) {
-                MCEWrapper wrapper = wrapCallExpression(methodCall);
-                return eval.executeMethod(wrapper);
+                if (eval.getCompilationUnit() != null) {
+                    MCEWrapper wrapper = wrapCallExpression(methodCall);
+                    return eval.executeMethod(wrapper);
+                }
+                else {
+                    ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+                    return reflectiveMethodCall(v, reflectionArguments);
+                }
             }
 
+            /*
+             * while there maybe some similarities in functionality, this flow and the else cannot
+             * be combined because of the way in which arguments are passed to the method. With
+             * reflection, we pass them directly to the invoke() method of the reflection api, OTH
+             * with the evaluator, we need to push arguments to the stack.
+             */
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
@@ -1119,6 +1131,9 @@ public class Evaluator {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v = new Variable(new MockingEvaluator(fqdn));
             v.setType(variable.getType());
+            if (AntikytheraRunTime.getCompilationUnit(fqdn) == null) {
+                v.setClazz(Reflect.getComponentClass(fqdn));
+            }
             fields.put(variable.getNameAsString(), v);
         }
         else {
