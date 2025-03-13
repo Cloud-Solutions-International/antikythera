@@ -17,14 +17,14 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestFunctional extends TestHelper{
+class TestFunctional extends TestHelper{
     @BeforeAll
-    public static void setup() throws IOException {
+    static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
     }
 
     @BeforeEach
-    public void each() throws Exception {
+    void each() throws Exception {
         compiler = new TestFunctionalCompiler();
         System.setOut(new PrintStream(outContent));
     }
