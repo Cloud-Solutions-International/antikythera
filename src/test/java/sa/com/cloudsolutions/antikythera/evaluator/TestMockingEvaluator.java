@@ -66,6 +66,6 @@ class TestMockingEvaluator {
         unknownMethod.setParentNode(cu);
 
         Variable result = mockingEvaluator.executeMethod(unknownMethod);
-        assertNull(result);
+        assertNull(result.getValue());
     }
 }
