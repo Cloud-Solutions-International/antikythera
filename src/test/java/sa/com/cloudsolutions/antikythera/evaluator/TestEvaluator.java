@@ -163,6 +163,7 @@ class TestEvaluator extends TestHelper {
         assertNotNull(resolvedFields.get("number"));
         assertEquals(42, resolvedFields.get("number").getValue());
     }
+
 }
 
 class TestEvaluatorWithFinches extends TestHelper {

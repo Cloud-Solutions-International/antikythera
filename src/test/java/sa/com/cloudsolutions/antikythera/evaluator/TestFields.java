@@ -52,6 +52,13 @@ class TestFields extends TestHelper {
     }
 
     @Test
+    void testPublic() throws  AntikytheraException, ReflectiveOperationException {
+        MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("publicAccess")).orElseThrow();
+        evaluator.executeMethod(ts);
+        assertEquals("Hornblower\n", outContent.toString() );
+    }
+
+    @Test
     void testChains() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("chained")).orElseThrow();
         Variable v = evaluator.executeMethod(ts);

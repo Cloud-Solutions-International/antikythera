@@ -21,6 +21,10 @@ public class Employee implements Serializable {
         System.out.println(p.getAddress());
     }
 
+    public void publicAccess() {
+        System.out.println(p.name);
+    }
+
     public void thisAccess() {
         System.out.println(this.p.getName());
     }

@@ -311,7 +311,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
+    Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
 
         if (cu != null) {
@@ -340,18 +340,22 @@ public class Evaluator {
                     }
                 }
             }
-            else {
-                logger.warn("Could not resolve {} for field access", fae.getScope());
+            Variable v = evaluateExpression(fae.getScope());
+            if (v != null && v.getValue() instanceof  Evaluator eval) {
+                return eval.getFields().get(fae.getNameAsString());
             }
+            logger.warn("Could not resolve {} for field access", fae.getScope());
         }
         else {
+            throw new AntikytheraException("THIS CODE IS A DELETION CANDIDATE");
+            /*
             Variable v = getFields().get(fae.getScope().toString());
             if (v != null) {
                 Object obj = v.getValue();
                 Field field = obj.getClass().getDeclaredField(fae.getNameAsString());
                 field.setAccessible(true);
                 return new Variable(field.get(obj));
-            }
+            }*/
         }
         return null;
     }
