@@ -341,7 +341,7 @@ public class SpringEvaluator extends Evaluator {
         if (AntikytheraRunTime.isControllerClass(getClassName()) || onTest) {
             ReturnStmt stmt = statement.asReturnStmt();
             Optional<Node> parent = stmt.getParentNode();
-            super.executeReturnStatement(stmt);
+            Variable v = super.executeReturnStatement(stmt);
             if (parent.isPresent() && returnValue != null) {
                 if (returnValue.getValue() instanceof MethodResponse mr) {
                     return createTests(mr);
@@ -350,12 +350,11 @@ public class SpringEvaluator extends Evaluator {
                 mr.setBody(returnValue);
                 createTests(mr);
             }
+            return v;
         }
         else {
             return super.executeReturnStatement(statement);
         }
-
-        return null;
     }
 
     /**

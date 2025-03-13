@@ -44,8 +44,11 @@ public class MockingEvaluator extends Evaluator {
             if (returnType.isVoidType()) {
                 return null;
             }
-            if (returnType.isPrimitiveType()) {
-                return Reflect.variableFactory(returnType.toString());
+            if (returnType.isClassOrInterfaceType()) {
+                Variable v = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
+                if (v != null) {
+                    return v;
+                }
             }
             if (cd.findCompilationUnit().isPresent()) {
                 CompilationUnit cu1 = cd.findCompilationUnit().get();

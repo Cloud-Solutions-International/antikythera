@@ -186,7 +186,7 @@ public class Reflect {
     }
 
     public static Object getDefault(Class<?> returnType) {
-        if (returnType.equals(String.class)) return "";
+        if (returnType.equals(String.class)) return "0";
         if (returnType.equals(Integer.class) || returnType.equals(int.class)) return 0;
         if (returnType.equals(Long.class) || returnType.equals(long.class)) return 0L;
         if (returnType.equals(Boolean.class) || returnType.equals(boolean.class)) return false;
@@ -224,16 +224,16 @@ public class Reflect {
         }
 
         return switch (qualifiedName) {
-            case "java.util.List", "java.util.ArrayList" ->
+            case "List", "java.util.List", "java.util.ArrayList" ->
                 createVariable(new ArrayList<>(), "java.util.ArrayList", null);
 
-            case "java.util.Map", "java.util.HashMap" ->
+            case "Map", "java.util.Map", "java.util.HashMap" ->
                 createVariable(new HashMap<>(), "java.util.HashMap", null);
 
             case "java.util.TreeMap" ->
                 createVariable(new TreeMap<>(), "java.util.TreeMap", null);
 
-            case "java.util.Set", "java.util.HashSet" ->
+            case "Set", "java.util.Set", "java.util.HashSet" ->
                 createVariable(new HashSet<>(), "java.util.HashSet", null);
 
             case "java.util.TreeSet" ->
