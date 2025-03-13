@@ -45,12 +45,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
+import sa.com.cloudsolutions.antikythera.evaluator.ReflectionArguments;
+import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
