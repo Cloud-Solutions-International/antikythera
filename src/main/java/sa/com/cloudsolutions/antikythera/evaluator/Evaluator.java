@@ -1534,34 +1534,14 @@ public class Evaluator {
 
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {
-            executeThenBlock(ifst);
+            executeStatement(ifst.getThenStmt());
         } else {
-            executeElseBlock(ifst);
+            Optional<Statement> elseBlock = ifst.getElseStmt();
+            if(elseBlock.isPresent()) {
+                executeStatement(elseBlock.get());
+            }
         }
         return v;
-    }
-
-    private void executeElseBlock(IfStmt ifst) throws Exception {
-        Optional<Statement> elseBlock = ifst.getElseStmt();
-        if(elseBlock.isPresent()) {
-            Statement el = elseBlock.get();
-            if(el.isBlockStmt()) {
-                executeBlock(el.asBlockStmt().getStatements());
-            }
-            else {
-                executeStatement(el);
-            }
-        }
-    }
-
-    private void executeThenBlock(IfStmt ifst) throws Exception {
-        Statement then = ifst.getThenStmt();
-        if (then.isBlockStmt()) {
-            executeBlock(then.asBlockStmt().getStatements());
-        }
-        else {
-            executeStatement(then);
-        }
     }
 
     protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
