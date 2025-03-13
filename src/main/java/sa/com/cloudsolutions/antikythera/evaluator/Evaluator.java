@@ -35,6 +35,7 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
@@ -1151,7 +1152,7 @@ public class Evaluator {
     private static Variable useMockito(String fqdn) throws ClassNotFoundException {
         Variable v;
         Class<?> cls = AbstractCompiler.loadClass(fqdn);
-        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).lenient()));
+        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
         v.setClazz(cls);
         return v;
     }
@@ -1168,7 +1169,7 @@ public class Evaluator {
                 Object obj = Reflect.getDefault(returnType);
                 if (obj == null) {
                     Class<?> cls = AbstractCompiler.loadClass(clsName);
-                    return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).lenient());
+                    return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT));
                 }
                 return obj;
             }
