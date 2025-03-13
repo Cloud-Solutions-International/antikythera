@@ -16,11 +16,6 @@ public class MockingEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException {
-        return null;
-    }
-
-    @Override
     public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException {
     }
 

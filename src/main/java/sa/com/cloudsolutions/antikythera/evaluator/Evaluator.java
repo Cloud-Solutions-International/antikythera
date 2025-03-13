@@ -1127,7 +1127,7 @@ public class Evaluator {
     private static Variable useMockito(String fqdn) throws ClassNotFoundException {
         Variable v;
         Class<?> cls = AbstractCompiler.loadClass(fqdn);
-        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler())));
+        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).lenient()));
         v.setClazz(cls);
         return v;
     }
@@ -1142,7 +1142,7 @@ public class Evaluator {
             }
             else {
                 Class<?> cls = AbstractCompiler.loadClass(clsName);
-                return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()));
+                return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).lenient());
             }
         }
     }
