@@ -192,7 +192,7 @@ public class SpringEvaluator extends Evaluator {
                 EvaluatorException ex = new EvaluatorException(e.getMessage(), e);
                 ex.setError(EvaluatorException.INTERNAL_SERVER_ERROR);
                 testForInternalError(null,ex);
-                throw new AUTException(e.getMessage());
+                throw new AUTException(e);
             } else {
                 super.handleApplicationException(e);
             }

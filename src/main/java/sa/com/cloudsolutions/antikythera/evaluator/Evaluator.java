@@ -960,14 +960,8 @@ public class Evaluator {
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
        Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
-       if (method == null) {
-           if (v.getValue() == null) {
-               throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
-           }
-           throw new EvaluatorException("Error evaluating method call: " + reflectionArguments.getMethodName());
-       }
-
-       Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
+        validateReflectiveMethod(v, reflectionArguments, method);
+        Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
 
        try {
            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
@@ -979,6 +973,15 @@ public class Evaluator {
            invokeinAccessibleMethod(v, reflectionArguments, method);
        }
        return returnValue;
+    }
+
+    private static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
+        if (method == null) {
+            if (v.getValue() == null) {
+                throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
+            }
+            throw new EvaluatorException("Error evaluating method call: " + reflectionArguments.getMethodName());
+        }
     }
 
 
