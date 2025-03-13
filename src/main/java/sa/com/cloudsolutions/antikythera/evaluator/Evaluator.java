@@ -33,6 +33,9 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -65,6 +68,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
+
+import static org.mockito.Mockito.withSettings;
 
 /**
  * Expression evaluator engine.
@@ -914,7 +919,7 @@ public class Evaluator {
                     return evaluateMethodReference(v, arguments);
                 }
             }
-            if (v.getValue() instanceof Evaluator eval) {
+            if (v.getValue() instanceof Evaluator eval && eval.getCompilationUnit() != null) {
                 return eval.executeLocalMethod(methodCall);
             }
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
@@ -1100,11 +1105,14 @@ public class Evaluator {
     void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (AntikytheraRunTime.isMocked(variable.getType())) {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
-            Variable v = new Variable(new MockingEvaluator(fqdn));
-            v.setType(variable.getType());
-            if (AntikytheraRunTime.getCompilationUnit(fqdn) == null) {
-                v.setClazz(Reflect.getComponentClass(fqdn));
+            Variable v;
+            if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
+                v = new Variable(new MockingEvaluator(fqdn));
             }
+            else {
+                v = useMockito(fqdn);
+            }
+            v.setType(variable.getType());
             fields.put(variable.getNameAsString(), v);
         }
         else {
@@ -1116,6 +1124,28 @@ public class Evaluator {
         }
     }
 
+    private static Variable useMockito(String fqdn) throws ClassNotFoundException {
+        Variable v;
+        Class<?> cls = AbstractCompiler.loadClass(fqdn);
+        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler())));
+        v.setClazz(cls);
+        return v;
+    }
+
+    private static class MockReturnValueHandler implements Answer<Object> {
+        @Override
+        public Object answer(InvocationOnMock invocation) throws Throwable {
+            Class<?> returnType = invocation.getMethod().getReturnType();
+            String clsName = returnType.getName();
+            if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
+                return new Evaluator(clsName);
+            }
+            else {
+                Class<?> cls = AbstractCompiler.loadClass(clsName);
+                return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()));
+            }
+        }
+    }
     void resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
