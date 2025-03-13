@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -138,11 +137,11 @@ class TestSpringEvaluator {
 
         // Verify interactions
         verify(mockGenerator).setPreConditions(any());
-        verify(mockGenerator).createTests(eq(methodDecl), eq(response));
+        verify(mockGenerator).createTests(methodDecl, response);
 
         // Verify result
         assertNotNull(result);
-        assertTrue(result.getValue() instanceof MethodResponse);
+        assertInstanceOf(MethodResponse.class, result.getValue());
         assertEquals(response, result.getValue());
     }
 
