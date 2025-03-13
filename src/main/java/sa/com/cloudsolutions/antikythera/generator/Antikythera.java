@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -17,16 +18,20 @@ import sa.com.cloudsolutions.antikythera.parser.ServicesParser;
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 
+import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.StreamSupport;
 
 public class Antikythera {
     private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
@@ -105,23 +110,17 @@ public class Antikythera {
         if (dependencies.length == 0) {
             copyTemplate(POM_XML);
         } else {
-
             Path destinationPath = Path.of(outputPath, POM_XML);
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
-            Path p = basePath.contains("src/main/java")
-                    ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
-                    : Paths.get(basePath, POM_XML);
 
-            Model srcModel = reader.read(new FileReader(p.toFile()));
-
-            List<Dependency> srcDependencies = srcModel.getDependencies();
+            List<Dependency> srcDependencies = pomModel.getDependencies();
             for (String dep : dependencies) {
                 for (Dependency dependency : srcDependencies) {
                     if (dependency.getArtifactId().equals(dep)) {
                         templateModel.addDependency(dependency);
-                        copyDependencyProperties(srcModel, templateModel, dependency);
+                        copyDependencyProperties(pomModel, templateModel, dependency);
                     }
                 }
             }
@@ -129,6 +128,15 @@ public class Antikythera {
             MavenXpp3Writer writer = new MavenXpp3Writer();
             writer.write(new FileWriter(destinationPath.toFile()), templateModel);
         }
+    }
+
+    private void readPomFile() throws IOException, XmlPullParserException {
+        MavenXpp3Reader reader = new MavenXpp3Reader();
+        Path p = basePath.contains("src/main/java")
+                ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
+                : Paths.get(basePath, POM_XML);
+
+        pomModel = reader.read(new FileReader(p.toFile()));
     }
 
     /**
