@@ -358,27 +358,7 @@ public class Resolver {
             Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
             if (fd.isPresent()) {
-                Type field = fd.get().getElementType();
-                gn.addField(fd.get());
-
-                if (field != null) {
-                    for (AnnotationExpr ann : field.getAnnotations()) {
-                        ImportUtils.addImport(gn, ann.getNameAsString());
-                    }
-
-                    Type elementType = field.getElementType();
-                    if (elementType.isClassOrInterfaceType()) {
-                        Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
-                        if (types.isPresent()) {
-                            for (Type type : types.get()) {
-                                ImportUtils.addImport(gn, type);
-                            }
-                        }
-                        gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
-                    } else {
-                        gn = ImportUtils.addImport(gn, elementType);
-                    }
-                }
+                gn = findFieldNode(gn, fd.get());
             }
             else {
                 gn = ImportUtils.addImport(gn, nameExpr.getName().toString());
@@ -402,6 +382,31 @@ public class Resolver {
             }
             else {
                 gn = ImportUtils.addImport(gn, t.asString());
+            }
+        }
+        return gn;
+    }
+
+    private static GraphNode findFieldNode(GraphNode gn, FieldDeclaration fd) {
+        Type field = fd.getElementType();
+        gn.addField(fd);
+
+        if (field != null) {
+            for (AnnotationExpr ann : field.getAnnotations()) {
+                ImportUtils.addImport(gn, ann.getNameAsString());
+            }
+
+            Type elementType = field.getElementType();
+            if (elementType.isClassOrInterfaceType()) {
+                Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
+                if (types.isPresent()) {
+                    for (Type type : types.get()) {
+                        ImportUtils.addImport(gn, type);
+                    }
+                }
+                gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
+            } else {
+                gn = ImportUtils.addImport(gn, elementType);
             }
         }
         return gn;
