@@ -1,9 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -11,6 +13,9 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.lang.reflect.Method;
@@ -29,14 +34,14 @@ public abstract class FPEvaluator<T> extends Evaluator {
     }
 
     @Override
-    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+    public Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
         returnFrom = null;
-        if (wrapper.getMethodName().equals("apply")) {
+        if (methodCall.getNameAsString().equals("apply")) {
+            wrapCallExpression(methodCall);
             return executeMethod(methodDeclaration);
         }
         throw new UnsupportedOperationException("Not yet implemented");
     }
-
 
     public static FPEvaluator create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
         // Create a synthetic method from the lambda

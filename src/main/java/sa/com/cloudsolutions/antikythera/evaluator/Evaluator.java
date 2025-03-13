@@ -915,31 +915,16 @@ public class Evaluator {
                 }
             }
             if (v.getValue() instanceof Evaluator eval) {
-                if (eval.getCompilationUnit() != null) {
-                    MCEWrapper wrapper = wrapCallExpression(methodCall);
-                    return eval.executeMethod(wrapper);
-                }
-                else {
-                    ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
-                    return reflectiveMethodCall(v, reflectionArguments);
-                }
+                return eval.executeLocalMethod(methodCall);
             }
-
-            /*
-             * while there maybe some similarities in functionality, this flow and the else cannot
-             * be combined because of the way in which arguments are passed to the method. With
-             * reflection, we pass them directly to the invoke() method of the reflection api, OTH
-             * with the evaluator, we need to push arguments to the stack.
-             */
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
-            MCEWrapper wrapper = wrapCallExpression(methodCall);
-            return executeMethod(wrapper);
+            return executeLocalMethod(methodCall);
         }
     }
 
-    private Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
+    Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
         MethodReferenceExpr rfCall = arguments.get(0).asMethodReferenceExpr();
         LinkedList<Expression> chain = Evaluator.findScopeChain(rfCall);
 
@@ -1011,27 +996,6 @@ public class Evaluator {
     }
 
     /**
-     * Execute a method call.
-     * @param wrapper the method call expression wrapped so that the argument types are available
-     * @return the result of executing that code.
-     * @throws EvaluatorException if there is an error evaluating the method call or if the
-     *          feature is not yet implemented.
-     */
-    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
-        returnFrom = null;
-
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
-        if (n.isPresent() && n.get().isMethodDeclaration()) {
-            Variable v = executeMethod(n.get().asMethodDeclaration());
-            if (v != null && v.getValue() == null) {
-                v.setType(n.get().asMethodDeclaration().getType());
-            }
-            return v;
-        }
-
-        return null;
-    }
-    /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
      * @param methodCall the method call expression to be executed
@@ -1039,7 +1003,7 @@ public class Evaluator {
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors
      */
-    Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
+    public Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
         returnFrom = null;
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {
@@ -1691,7 +1655,7 @@ public class Evaluator {
 
     @Override
     public String toString() {
-        return hashCode() + " : " + getClassName();
+        return getClass().getName() + " : " + getClassName();
     }
 
     public CompilationUnit getCompilationUnit() {
