@@ -277,6 +277,10 @@ public class Settings {
         return (String) props.get(Constants.BASE_PATH);
     }
 
+    public static String getOutputPath() {
+        return (String) props.get(Constants.OUTPUT_PATH);
+    }
+
     public static String[] getArtifacts() {
         return getDependencies("artifact_ids");
     }

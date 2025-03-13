@@ -39,21 +39,14 @@ public class Antikythera {
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
-    private static final String SUFFIX = ".java";
 
-    private final String basePackage;
-    private final String basePath;
     private final Collection<String> controllers;
     private final Collection<String> services;
-    private final String outputPath;
 
     private static Antikythera instance;
     private Model pomModel;
 
     private Antikythera() {
-        basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
-        basePackage = Settings.getProperty(Constants.BASE_PACKAGE, String.class).orElse(null);
-        outputPath = Settings.getProperty(Constants.OUTPUT_PATH, String.class).orElse(null);
         controllers = Settings.getPropertyList(Constants.CONTROLLERS, String.class);
         services = Settings.getPropertyList(Constants.SERVICES, String.class);
     }
@@ -81,10 +74,10 @@ public class Antikythera {
      * @throws IOException thrown if the copy operation failed
      */
     private void copyTemplate(String filename, String... subPath) throws IOException {
-        Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
+        Path destinationPath = Path.of(Settings.getOutputPath(), subPath);     // Path where template file should be copied into
         Files.createDirectories(destinationPath);
         try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/"+filename);
-            FileOutputStream destStream = new FileOutputStream(new File(destinationPath + File.separator + filename));
+            FileOutputStream destStream = new FileOutputStream(destinationPath + File.separator + filename);
             FileChannel destChannel = destStream.getChannel()) {
             if (sourceStream == null) {
                 throw new IOException("Template file not found");
@@ -110,7 +103,7 @@ public class Antikythera {
         if (dependencies.length == 0) {
             copyTemplate(POM_XML);
         } else {
-            Path destinationPath = Path.of(outputPath, POM_XML);
+            Path destinationPath = Path.of(Settings.getOutputPath(), POM_XML);
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
@@ -132,9 +125,17 @@ public class Antikythera {
 
     private void readPomFile() throws IOException, XmlPullParserException {
         MavenXpp3Reader reader = new MavenXpp3Reader();
-        Path p = basePath.contains("src/main/java")
-                ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
-                : Paths.get(basePath, POM_XML);
+        String basePath = Settings.getBasePath();
+        Path p = null;
+        if (basePath.contains("src/main/java")) {
+            p = Paths.get(basePath.replace("/src/main/java", ""), POM_XML);
+        }
+        else if (basePath.contains("src/test/java")) {
+            p = Paths.get(basePath.replace("/src/test/java", ""), POM_XML);
+        }
+        else {
+            p = Paths.get(basePath, POM_XML);
+        }
 
         pomModel = reader.read(new FileReader(p.toFile()));
     }
@@ -221,7 +222,7 @@ public class Antikythera {
     }
 
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
-        String filePath = outputPath + File.separator + SRC + File.separator + "test" + File.separator + "java"
+        String filePath = Settings.getOutputPath() + File.separator + SRC + File.separator + "test" + File.separator + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
 
         writeFile(filePath, content);
@@ -288,8 +289,8 @@ public class Antikythera {
     }
 
     public void preProcess() throws IOException, XmlPullParserException {
-        CopyUtils.createMavenProjectStructure(basePackage, outputPath);
-        copyBaseFiles(outputPath);
+        CopyUtils.createMavenProjectStructure(Settings.getBasePackage(), Settings.getOutputPath());
+        copyBaseFiles(Settings.getOutputPath());
 
         AbstractCompiler.preProcess();
 
@@ -298,16 +299,13 @@ public class Antikythera {
     private void generateUnitTests() throws IOException {
         for (String service : services) {
             String[] parts = service.split("#");
-            String servicesCleaned = parts[0];
+            ServicesParser processor = new ServicesParser(parts[0]);
             if (parts.length == 2) {
-                ServicesParser processor = new ServicesParser(parts[0]);
                 processor.start(parts[1]);
-                processor.writeFiles();
             } else {
-                ServicesParser processor = new ServicesParser(servicesCleaned);
                 processor.start();
-                processor.writeFiles();
             }
+            processor.writeFiles();
         }
     }
 }
