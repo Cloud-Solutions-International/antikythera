@@ -10,6 +10,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
@@ -151,7 +152,7 @@ public class Reflect {
             case "Byte" -> Byte.class;
             case "char" -> char.class;
             case "Character" -> Character.class;
-            default -> Class.forName(elementType);
+            default -> AbstractCompiler.loadClass(elementType);
         };
     }
 

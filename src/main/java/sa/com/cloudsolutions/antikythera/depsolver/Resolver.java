@@ -390,7 +390,10 @@ public class Resolver {
                 Optional<NodeList<Type>> types = ct.getTypeArguments();
                 if (types.isPresent()) {
                     for (Type type : types.get()) {
-                        gn = ImportUtils.addImport(gn, type);
+                        GraphNode n = ImportUtils.addImport(gn, type);
+                        if (n != null) {
+                            gn = n;
+                        }
                     }
                 }
                 else {

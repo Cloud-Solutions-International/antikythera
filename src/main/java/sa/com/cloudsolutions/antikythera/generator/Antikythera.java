@@ -290,7 +290,7 @@ public class Antikythera {
                     .max(Comparator.naturalOrder())
                     .orElseThrow(() -> new IOException("No versions found for " + artifactId));
         } catch (IOException e) {
-            throw new RuntimeException("Failed to find latest version for " + artifactId, e);
+            throw new AntikytheraException("Failed to find latest version for " + artifactId, e);
         }
     }
 
