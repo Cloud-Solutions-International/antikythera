@@ -385,7 +385,21 @@ public class Resolver {
             }
         }
         else {
-            gn = ImportUtils.addImport(gn, t.asString());
+            if (t.isClassOrInterfaceType()) {
+                ClassOrInterfaceType ct = t.asClassOrInterfaceType();
+                Optional<NodeList<Type>> types = ct.getTypeArguments();
+                if (types.isPresent()) {
+                    for (Type type : types.get()) {
+                        gn = ImportUtils.addImport(gn, type);
+                    }
+                }
+                else {
+                    gn = ImportUtils.addImport(gn, t.asString());
+                }
+            }
+            else {
+                gn = ImportUtils.addImport(gn, t.asString());
+            }
         }
         return gn;
     }
@@ -522,6 +536,9 @@ public class Resolver {
                         }
                     }
                 }
+            }
+            else {
+                
             }
         }
     }

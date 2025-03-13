@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
@@ -17,16 +18,20 @@ import sa.com.cloudsolutions.antikythera.parser.ServicesParser;
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 
+import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.StreamSupport;
 
 public class Antikythera {
     private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
@@ -35,27 +40,28 @@ public class Antikythera {
     public static final String SRC = "src";
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
 
-    private final String basePackage;
-    private final String basePath;
     private final Collection<String> controllers;
     private final Collection<String> services;
-    private final String outputPath;
 
     private static Antikythera instance;
+    private Model pomModel;
 
     private Antikythera() {
-        basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
-        basePackage = Settings.getProperty(Constants.BASE_PACKAGE, String.class).orElse(null);
-        outputPath = Settings.getProperty(Constants.OUTPUT_PATH, String.class).orElse(null);
         controllers = Settings.getPropertyList(Constants.CONTROLLERS, String.class);
         services = Settings.getPropertyList(Constants.SERVICES, String.class);
     }
 
-    public static Antikythera getInstance() throws IOException {
+    public static Antikythera getInstance() {
         if (instance == null) {
-            Settings.loadConfigMap();
-
-            instance = new Antikythera();
+            try {
+                Settings.loadConfigMap();
+                instance = new Antikythera();
+                instance.readPomFile();
+            } catch (IOException e) {
+                throw new AntikytheraException("Failed to initialize Antikythera", e);
+            } catch (XmlPullParserException xe) {
+                logger.error("Could not parse the POM file", xe);
+            }
         }
         return instance;
     }
@@ -68,10 +74,10 @@ public class Antikythera {
      * @throws IOException thrown if the copy operation failed
      */
     private void copyTemplate(String filename, String... subPath) throws IOException {
-        Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
+        Path destinationPath = Path.of(Settings.getOutputPath(), subPath);     // Path where template file should be copied into
         Files.createDirectories(destinationPath);
         try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/"+filename);
-            FileOutputStream destStream = new FileOutputStream(new File(destinationPath + File.separator + filename));
+            FileOutputStream destStream = new FileOutputStream(destinationPath + File.separator + filename);
             FileChannel destChannel = destStream.getChannel()) {
             if (sourceStream == null) {
                 throw new IOException("Template file not found");
@@ -97,23 +103,17 @@ public class Antikythera {
         if (dependencies.length == 0) {
             copyTemplate(POM_XML);
         } else {
-
-            Path destinationPath = Path.of(outputPath, POM_XML);
+            Path destinationPath = Path.of(Settings.getOutputPath(), POM_XML);
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
-            Path p = basePath.contains("src/main/java")
-                    ? Paths.get(basePath.replace("/src/main/java", ""), POM_XML)
-                    : Paths.get(basePath, POM_XML);
 
-            Model srcModel = reader.read(new FileReader(p.toFile()));
-
-            List<Dependency> srcDependencies = srcModel.getDependencies();
+            List<Dependency> srcDependencies = pomModel.getDependencies();
             for (String dep : dependencies) {
                 for (Dependency dependency : srcDependencies) {
                     if (dependency.getArtifactId().equals(dep)) {
                         templateModel.addDependency(dependency);
-                        copyDependencyProperties(srcModel, templateModel, dependency);
+                        copyDependencyProperties(pomModel, templateModel, dependency);
                     }
                 }
             }
@@ -121,6 +121,23 @@ public class Antikythera {
             MavenXpp3Writer writer = new MavenXpp3Writer();
             writer.write(new FileWriter(destinationPath.toFile()), templateModel);
         }
+    }
+
+    private void readPomFile() throws IOException, XmlPullParserException {
+        MavenXpp3Reader reader = new MavenXpp3Reader();
+        String basePath = Settings.getBasePath();
+        Path p = null;
+        if (basePath.contains("src/main/java")) {
+            p = Paths.get(basePath.replace("/src/main/java", ""), POM_XML);
+        }
+        else if (basePath.contains("src/test/java")) {
+            p = Paths.get(basePath.replace("/src/test/java", ""), POM_XML);
+        }
+        else {
+            p = Paths.get(basePath, POM_XML);
+        }
+
+        pomModel = reader.read(new FileReader(p.toFile()));
     }
 
     /**
@@ -167,6 +184,7 @@ public class Antikythera {
                 Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
         }
+
     }
 
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
@@ -204,7 +222,7 @@ public class Antikythera {
     }
 
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
-        String filePath = outputPath + File.separator + SRC + File.separator + "test" + File.separator + "java"
+        String filePath = Settings.getOutputPath() + File.separator + SRC + File.separator + "test" + File.separator + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
 
         writeFile(filePath, content);
@@ -216,6 +234,44 @@ public class Antikythera {
         Files.createDirectories(parentDir.toPath());
         try (FileWriter writer = new FileWriter(file)) {
             writer.write(content);
+        }
+    }
+
+    public String[] getJarPaths() {
+        if (pomModel != null) {
+
+            List<Dependency> dependencies = pomModel.getDependencies();
+            final Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
+            if (m2.isPresent()) {
+                return dependencies.stream()
+                        .map(dependency -> {
+                            String groupIdPath = dependency.getGroupId().replace('.', '/');
+                            String artifactId = dependency.getArtifactId();
+                            String version = dependency.getVersion();
+
+                            if (version == null || version.isEmpty()) {
+                                version = findLatestVersion(groupIdPath, artifactId, m2.get());
+                            }
+
+                            return Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar").toString();
+                        })
+                        .toArray(String[]::new);
+            }
+            }
+        return new String[] {};
+    }
+
+    private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
+        Path artifactPath = Paths.get(m2, groupIdPath, artifactId);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(artifactPath)) {
+            return StreamSupport.stream(stream.spliterator(), false)
+                    .filter(Files::isDirectory)
+                    .map(Path::getFileName)
+                    .map(Path::toString)
+                    .max(Comparator.naturalOrder())
+                    .orElseThrow(() -> new IOException("No versions found for " + artifactId));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to find latest version for " + artifactId, e);
         }
     }
 
@@ -233,8 +289,8 @@ public class Antikythera {
     }
 
     public void preProcess() throws IOException, XmlPullParserException {
-        CopyUtils.createMavenProjectStructure(basePackage, outputPath);
-        copyBaseFiles(outputPath);
+        CopyUtils.createMavenProjectStructure(Settings.getBasePackage(), Settings.getOutputPath());
+        copyBaseFiles(Settings.getOutputPath());
 
         AbstractCompiler.preProcess();
 
@@ -243,16 +299,13 @@ public class Antikythera {
     private void generateUnitTests() throws IOException {
         for (String service : services) {
             String[] parts = service.split("#");
-            String servicesCleaned = parts[0];
+            ServicesParser processor = new ServicesParser(parts[0]);
             if (parts.length == 2) {
-                ServicesParser processor = new ServicesParser(parts[0]);
                 processor.start(parts[1]);
-                processor.writeFiles();
             } else {
-                ServicesParser processor = new ServicesParser(servicesCleaned);
                 processor.start();
-                processor.writeFiles();
             }
+            processor.writeFiles();
         }
     }
 }
