@@ -1,21 +1,26 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 import sa.com.cloudsolutions.antikythera.parser.ServicesParser;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.DirectoryStream;
@@ -23,10 +28,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
-
 import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
@@ -34,16 +39,13 @@ import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 
 public class Antikythera {
-    private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
-
     public static final String POM_XML = "pom.xml";
     public static final String SRC = "src";
+    private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
-
+    private static Antikythera instance;
     private final Collection<String> controllers;
     private final Collection<String> services;
-
-    private static Antikythera instance;
     private Model pomModel;
 
     private Antikythera() {
@@ -66,19 +68,52 @@ public class Antikythera {
         return instance;
     }
 
+    public static void copyFolder(Path source, Path destination) throws IOException {
+        if (!Files.exists(destination)) {
+            Files.createDirectories(destination);
+        }
+
+        var paths = Files.walk(source).iterator();
+        while (paths.hasNext()) {
+            Path sourcePath = paths.next();
+            Path targetPath = destination.resolve(source.relativize(sourcePath));
+            if (Files.isDirectory(sourcePath)) {
+                if (!Files.exists(targetPath)) {
+                    Files.createDirectories(targetPath);
+                }
+            } else {
+                Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+
+    }
+
+    public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
+        Antikythera antk = Antikythera.getInstance();
+        antk.preProcess();
+        antk.generateApiTests();
+        RestControllerParser.Stats stats = RestControllerParser.getStats();
+
+        logger.info("Processed {} controllers", stats.getControllers());
+        logger.info("Processed {} methods", stats.getMethods());
+        logger.info("Generated {} tests", stats.getTests());
+
+        antk.generateUnitTests();
+    }
 
     /**
      * Copy template file to the specified path
+     *
      * @param filename the name of the template file to copy
-     * @param subPath the path components
+     * @param subPath  the path components
      * @throws IOException thrown if the copy operation failed
      */
     private void copyTemplate(String filename, String... subPath) throws IOException {
         Path destinationPath = Path.of(Settings.getOutputPath(), subPath);     // Path where template file should be copied into
         Files.createDirectories(destinationPath);
-        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/"+filename);
-            FileOutputStream destStream = new FileOutputStream(destinationPath + File.separator + filename);
-            FileChannel destChannel = destStream.getChannel()) {
+        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/" + filename);
+             FileOutputStream destStream = new FileOutputStream(destinationPath + File.separator + filename);
+             FileChannel destChannel = destStream.getChannel()) {
             if (sourceStream == null) {
                 throw new IOException("Template file not found");
             }
@@ -88,14 +123,15 @@ public class Antikythera {
 
     /**
      * Copy the pom.xml file to the specified path injecting the dependencies as needed.
-     *
+     * <p>
      * The configuration file needs to have a dependencies section that provides the list of
      * artifactids that need to be included in the output pom file. If these dependencies
      * require any variables, those are copied as well.
-     *
+     * <p>
      * The primary source file is the file from the template folder. The dependencies are
      * supposed to be listed in the pom file of the application under test.
-     * @throws IOException if the POM file cannot be copied
+     *
+     * @throws IOException            if the POM file cannot be copied
      * @throws XmlPullParserException if the POM file cannot be converted to an XML Tree
      */
     public void copyPom() throws IOException, XmlPullParserException {
@@ -129,11 +165,9 @@ public class Antikythera {
         Path p = null;
         if (basePath.contains("src/main/java")) {
             p = Paths.get(basePath.replace("/src/main/java", ""), POM_XML);
-        }
-        else if (basePath.contains("src/test/java")) {
+        } else if (basePath.contains("src/test/java")) {
             p = Paths.get(basePath.replace("/src/test/java", ""), POM_XML);
-        }
-        else {
+        } else {
             p = Paths.get(basePath, POM_XML);
         }
 
@@ -143,9 +177,9 @@ public class Antikythera {
     /**
      * Copy the properties of the dependency from the source model to the template model
      *
-     * @param srcModel the pom file model from the application under test
+     * @param srcModel      the pom file model from the application under test
      * @param templateModel from the template folder
-     * @param dependency the dependency that may or may not have a property
+     * @param dependency    the dependency that may or may not have a property
      */
     private void copyDependencyProperties(Model srcModel, Model templateModel, Dependency dependency) {
         Properties srcProperties = srcModel.getProperties();
@@ -167,35 +201,15 @@ public class Antikythera {
         }
     }
 
-    public static void copyFolder(Path source, Path destination) throws IOException {
-        if (!Files.exists(destination)) {
-            Files.createDirectories(destination);
-        }
-
-        var paths = Files.walk(source).iterator();
-        while (paths.hasNext()) {
-            Path sourcePath = paths.next();
-            Path targetPath = destination.resolve(source.relativize(sourcePath));
-            if (Files.isDirectory(sourcePath)) {
-                if (!Files.exists(targetPath)) {
-                    Files.createDirectories(targetPath);
-                }
-            } else {
-                Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-        }
-
-    }
-
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
-        String testPath = PACKAGE_PATH.replace("main","test");
+        String testPath = PACKAGE_PATH.replace("main", "test");
         copyPom();
         copyTemplate("TestHelper.java", testPath, "base");
-        copyTemplate("Configurations.java", testPath,  "configurations");
+        copyTemplate("Configurations.java", testPath, "configurations");
 
         Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
         Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get(SRC,"test", "resources"), pathToCopy);
+        copyFolder(Paths.get(SRC, "test", "resources"), pathToCopy);
 
         pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "constants");
         Files.createDirectories(pathToCopy);
@@ -207,15 +221,16 @@ public class Antikythera {
 
     /**
      * Generate tests for the controllers
-     * @throws IOException if any of the files associated with the application under test cannot be read, or
-     *      if the output folder cannot be written to
+     *
+     * @throws IOException            if any of the files associated with the application under test cannot be read, or
+     *                                if the output folder cannot be written to
      * @throws XmlPullParserException if attempts to convert the POM file to an xml tree fail
-     * @throws EvaluatorException if evaluating java expressions in the AUT code fails.
+     * @throws EvaluatorException     if evaluating java expressions in the AUT code fails.
      */
     public void generateApiTests() throws IOException, XmlPullParserException, EvaluatorException {
         for (String controller : controllers) {
 
-            String controllersCleaned = controller.replace(".java","").split("#")[0];
+            String controllersCleaned = controller.replace(".java", "").split("#")[0];
             RestControllerParser processor = new RestControllerParser(controllersCleaned);
             processor.start();
         }
@@ -238,27 +253,31 @@ public class Antikythera {
     }
 
     public String[] getJarPaths() {
+        List<String> jarPaths = new ArrayList<>();
+
         if (pomModel != null) {
-
             List<Dependency> dependencies = pomModel.getDependencies();
-            final Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
+            Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
+
             if (m2.isPresent()) {
-                return dependencies.stream()
-                        .map(dependency -> {
-                            String groupIdPath = dependency.getGroupId().replace('.', '/');
-                            String artifactId = dependency.getArtifactId();
-                            String version = dependency.getVersion();
+                for (Dependency dependency : dependencies) {
+                    String groupIdPath = dependency.getGroupId().replace('.', '/');
+                    String artifactId = dependency.getArtifactId();
+                    String version = dependency.getVersion();
 
-                            if (version == null || version.isEmpty()) {
-                                version = findLatestVersion(groupIdPath, artifactId, m2.get());
-                            }
-
-                            return Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar").toString();
-                        })
-                        .toArray(String[]::new);
+                    if (version == null || version.isEmpty()) {
+                        version = findLatestVersion(groupIdPath, artifactId, m2.get());
+                    }
+                    Path p = Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar");
+                    if (!Files.exists(p)) {
+                        continue;
+                    }
+                    String jarPath = p.toString();
+                    jarPaths.add(jarPath);
+                }
             }
-            }
-        return new String[] {};
+        }
+        return jarPaths.toArray(new String[0]);
     }
 
     private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
@@ -273,19 +292,6 @@ public class Antikythera {
         } catch (IOException e) {
             throw new RuntimeException("Failed to find latest version for " + artifactId, e);
         }
-    }
-
-    public static void main(String[] args) throws IOException, XmlPullParserException, EvaluatorException {
-        Antikythera antk = Antikythera.getInstance();
-        antk.preProcess();
-        antk.generateApiTests();
-        RestControllerParser.Stats stats = RestControllerParser.getStats();
-
-        logger.info("Processed {} controllers", stats.getControllers());
-        logger.info("Processed {} methods", stats.getMethods());
-        logger.info("Generated {} tests", stats.getTests());
-
-        antk.generateUnitTests();
     }
 
     public void preProcess() throws IOException, XmlPullParserException {
