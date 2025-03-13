@@ -920,12 +920,14 @@ public class Evaluator {
                 }
             }
             if (v.getValue() instanceof Evaluator eval && eval.getCompilationUnit() != null) {
-                return eval.executeLocalMethod(methodCall);
+                MCEWrapper wrapper = wrapCallExpression(methodCall);
+                return eval.executeMethod(wrapper);
             }
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
-            return executeLocalMethod(methodCall);
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            return executeMethod(wrapper);
         }
     }
 
@@ -998,6 +1000,28 @@ public class Evaluator {
                 }
             }
         }
+    }
+
+    /**
+     * Execute a method call.
+     * @param wrapper the method call expression wrapped so that the argument types are available
+     * @return the result of executing that code.
+     * @throws EvaluatorException if there is an error evaluating the method call or if the
+     *          feature is not yet implemented.
+     */
+    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+        returnFrom = null;
+
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+        if (n.isPresent() && n.get().isMethodDeclaration()) {
+            Variable v = executeMethod(n.get().asMethodDeclaration());
+            if (v != null && v.getValue() == null) {
+                v.setType(n.get().asMethodDeclaration().getType());
+            }
+            return v;
+        }
+
+        return null;
     }
 
     /**
@@ -1141,8 +1165,12 @@ public class Evaluator {
                 return new Evaluator(clsName);
             }
             else {
-                Class<?> cls = AbstractCompiler.loadClass(clsName);
-                return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).lenient());
+                Object obj = Reflect.getDefault(returnType);
+                if (obj == null) {
+                    Class<?> cls = AbstractCompiler.loadClass(clsName);
+                    return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).lenient());
+                }
+                return obj;
             }
         }
     }

@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -182,6 +183,24 @@ public class Reflect {
             case "byte", "char" -> 0x0;
             default -> null;
         };
+    }
+
+    public static Object getDefault(Class<?> returnType) {
+        if (returnType.equals(String.class)) return "";
+        if (returnType.equals(Integer.class) || returnType.equals(int.class)) return 0;
+        if (returnType.equals(Long.class) || returnType.equals(long.class)) return 0L;
+        if (returnType.equals(Boolean.class) || returnType.equals(boolean.class)) return false;
+        if (returnType.equals(Double.class) || returnType.equals(double.class)) return 0.0;
+        if (returnType.equals(Float.class) || returnType.equals(float.class)) return 0.0f;
+        if (returnType.equals(Byte.class) || returnType.equals(byte.class)) return (byte)0;
+        if (returnType.equals(Short.class) || returnType.equals(short.class)) return (short)0;
+        if (returnType.equals(Character.class) || returnType.equals(char.class)) return '\0';
+
+        // Handle common collections
+        if (returnType.equals(List.class)) return new ArrayList<>();
+        if (returnType.equals(Map.class)) return new HashMap<>();
+        if (returnType.equals(Set.class)) return new HashSet<>();
+        return null;
     }
 
     private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
