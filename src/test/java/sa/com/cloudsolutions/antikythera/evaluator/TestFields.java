@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,22 +19,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestFields extends TestHelper {
 
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Employee";
+    CompilationUnit cu;
+
     @BeforeAll
-    public static void setup() throws IOException, ReflectiveOperationException {
+    static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
 
     @BeforeEach
-    public void each() throws Exception {
-        compiler = new TestFieldsCompiler();
+    void each()  {
+        cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testPrintNumberField() throws  AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("toString")).orElseThrow();
         Variable v = evaluator.executeMethod(ts);
         assertTrue(v.getValue().toString().contains("Hornblower"));
@@ -43,28 +46,23 @@ class TestFields extends TestHelper {
 
     @Test
     void testAccessor() throws  AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("simpleAccess")).orElseThrow();
         evaluator.executeMethod(ts);
         assertEquals("Hornblower\nnull\nColombo\n", outContent.toString() );
     }
 
     @Test
+    void testPublic() throws  AntikytheraException, ReflectiveOperationException {
+        MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("publicAccess")).orElseThrow();
+        evaluator.executeMethod(ts);
+        assertEquals("Hornblower\n", outContent.toString() );
+    }
+
+    @Test
     void testChains() throws AntikytheraException, ReflectiveOperationException {
-        CompilationUnit cu = compiler.getCompilationUnit();
         MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("chained")).orElseThrow();
         Variable v = evaluator.executeMethod(ts);
         assertNull(v.getValue());
         assertEquals("false\n", outContent.toString() );
-
-    }
-
-    class TestFieldsCompiler extends ClassProcessor {
-        protected TestFieldsCompiler() throws IOException, AntikytheraException {
-            parse(classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
-            compileDependencies();
-            evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Employee");
-            evaluator.setupFields();
-        }
     }
 }

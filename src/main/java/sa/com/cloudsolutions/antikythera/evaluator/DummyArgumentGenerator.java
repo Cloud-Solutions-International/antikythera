@@ -7,7 +7,10 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
-    private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
+
+    public DummyArgumentGenerator() {
+        super();
+    }
 
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
@@ -46,7 +49,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 }
             } else {
                 Evaluator o = new SpringEvaluator(fullClassName);
-                o.setupFields();
+                o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
                 v = new Variable(o);
             }
         }
@@ -54,13 +57,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     }
 
     protected Variable mockParameter(Parameter param) {
-        return new Variable(switch (param.getType().asString()) {
-            case "Boolean", "boolean" -> false;
-            case "float", "Float", "double", "Double" -> 0.0;
-            case "Integer", "int" -> 0;
-            case "Long", "long" -> -100L;
-            case "String" -> "Ibuprofen";
-            default -> null;
-        });
+        return Reflect.variableFactory(param.getType().asString());
     }
 }

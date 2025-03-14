@@ -2,8 +2,8 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.springframework.http.ResponseEntity;
-import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -70,36 +70,15 @@ public class SpringTestGenerator extends  TestGenerator {
      */
     private String commonPath;
 
+    public SpringTestGenerator(CompilationUnit cu) {
+        super(cu);
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
 
-    /**
-     * The preconditions that need to be met before the test can be executed.
-     */
-    private List<Expression> preConditions;
-
-    /**
-     * Boolean value indicating if the method under test has any branching.
-     */
-    private boolean branched;
-
-    /**
-     * We are going to try to generate tests assuming no query strings or post data
-     */
-    private final int NULL_STATE = 0;
-    /**
-     * Tests will be written providing not null values for query strings or post data.
-     */
-    private final int DUMMY_STATE = 1;
-    /**
-     * Tests will be written with values that were identified from database queries.
-     */
-    private final int ENLIGHTENED_STATE = 2;
-    /**
-     * The current state of the test generation. It will be one of the values above.
-     */
-    private int state = NULL_STATE;
-
-    public SpringTestGenerator() {
         gen = new CompilationUnit();
+        cu.getPackageDeclaration().ifPresent(gen::setPackageDeclaration);
+
+        ClassOrInterfaceDeclaration cdecl =  gen.addClass(className);
+        cdecl.addExtendedType("TestHelper");
     }
 
     /**
@@ -109,7 +88,7 @@ public class SpringTestGenerator extends  TestGenerator {
      *                           ResponseEntity as well as the body of the ResponseEntity.
      */
     @Override
-    public void createTests(MethodDeclaration md, ControllerResponse controllerResponse) {
+    public void createTests(MethodDeclaration md, MethodResponse controllerResponse) {
         this.methodUnderTest = md;
 
         RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
@@ -142,20 +121,20 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private void buildDeleteMethodTests(AnnotationExpr annotation, ControllerResponse response) {
+    private void buildDeleteMethodTests(AnnotationExpr annotation, MethodResponse response) {
         httpWithoutBody(annotation, "makeDelete", response);
     }
 
-    private void buildPutMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+    private void buildPutMethodTests(AnnotationExpr annotation, MethodResponse returnType) {
         httpWithBody(annotation, returnType, "makePut");
     }
 
-    private void buildGetMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+    private void buildGetMethodTests(AnnotationExpr annotation, MethodResponse returnType) {
         httpWithoutBody(annotation, "makeGet", returnType);
     }
 
-    private void httpWithoutBody(AnnotationExpr annotation, String call, ControllerResponse response)  {
-        final MethodDeclaration testMethod = buildTestMethod(methodUnderTest);
+    private void httpWithoutBody(AnnotationExpr annotation, String call, MethodResponse response)  {
+        testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
         BlockStmt body = getBody(testMethod);
@@ -183,7 +162,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
         body.addStatement(new ExpressionStmt(assignExpr));
 
-        addCheckStatus(testMethod, response);
+        addCheckStatus(response);
         gen.getType(0).addMember(testMethod);
 
     }
@@ -208,15 +187,15 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private void buildPostMethodTests(AnnotationExpr annotation, ControllerResponse returnType) {
+    private void buildPostMethodTests(AnnotationExpr annotation, MethodResponse returnType) {
         httpWithBody(annotation, returnType, "makePost");
     }
 
-     void addCheckStatus(MethodDeclaration mut, ControllerResponse resp) {
+     void addCheckStatus(MethodResponse resp) {
 
         Type returnType = resp.getType();
 
-        BlockStmt body = getBody(methodUnderTest);
+        BlockStmt body = getBody(testMethod);
 
         if (resp.getBody() != null) {
             if (resp.getBody().getValue() != null && returnType.isClassOrInterfaceType()) {
@@ -226,9 +205,8 @@ public class SpringTestGenerator extends  TestGenerator {
                 } else {
                     respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                 }
-                /* todo the following four lines can be deleted */
-                ImportWrapper wrapper = AbstractCompiler.findImport(mut.findCompilationUnit().get(), respType.toString());
-                if (wrapper != null) {
+
+                for (ImportWrapper wrapper : AbstractCompiler.findImport(compilationUnitUnderTest, respType)) {
                     gen.addImport(wrapper.getImport());
                 }
 
@@ -240,7 +218,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 as.addArgument("resp");
                 body.addStatement(new ExpressionStmt(as));
 
-                addFieldAsserts(resp, body);
+                asserter.addFieldAsserts(resp, body);
             } else {
                 MethodCallExpr as = new MethodCallExpr(new NameExpr("Assert"), "assertTrue");
                 as.addArgument("response.getBody().asString().isEmpty()");
@@ -253,44 +231,13 @@ public class SpringTestGenerator extends  TestGenerator {
         }
     }
 
-    private static void addFieldAsserts(ControllerResponse resp, BlockStmt body) {
-        if (resp.getBody().getValue() instanceof Evaluator ev) {
-            int i = 0;
-            for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
-                try {
-                    if (field.getValue() != null && field.getValue().getValue() != null) {
-                        Variable v = field.getValue();
-                        String getter = "get" + field.getKey().substring(0, 1).toUpperCase() + field.getKey().substring(1);
-                        MethodCallExpr assertEquals = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
-                        assertEquals.addArgument("resp." + getter + "()");
-
-                        if (v.getValue() instanceof String) {
-                            assertEquals.addArgument("\"" + v.getValue() + "\"");
-                        } else {
-                            assertEquals.addArgument(field.getValue().getValue().toString());
-                        }
-                        body.addStatement(new ExpressionStmt(assertEquals));
-                        i++;
-                    }
-                } catch (Exception pex) {
-                    logger.error("Error asserting {}", field.getKey());
-                }
-
-                if (i == 5) {
-                    break;
-                }
-            }
-        }
-    }
-
     private static String createResponseObject(Type respType) {
         return "%s resp = objectMapper.readValue(response.asString(), %s.class);".formatted(respType, respType);
     }
 
+    private void httpWithBody(AnnotationExpr annotation, MethodResponse resp, String call) {
 
-    private void httpWithBody(AnnotationExpr annotation, ControllerResponse resp, String call) {
-
-        MethodDeclaration testMethod = buildTestMethod(methodUnderTest);
+        testMethod = buildTestMethod(methodUnderTest);
         MethodCallExpr makePost = new MethodCallExpr(call);
         BlockStmt body = getBody(testMethod);
 
@@ -345,14 +292,14 @@ public class SpringTestGenerator extends  TestGenerator {
                     if (respType.toString().equals("String")) {
                         testForResponseBodyAsString(methodUnderTest, resp, body);
                     } else {
-                        addCheckStatus(testMethod, resp);
+                        addCheckStatus(resp);
                     }
                 }
             }
         }
     }
 
-    private static void testForResponseBodyAsString(MethodDeclaration md, ControllerResponse resp, BlockStmt body) {
+    private static void testForResponseBodyAsString(MethodDeclaration md, MethodResponse resp, BlockStmt body) {
         body.addStatement("String resp = response.getBody().asString();");
         Object response = resp.getResponse();
         if(response instanceof ResponseEntity<?> re) {
@@ -417,16 +364,9 @@ public class SpringTestGenerator extends  TestGenerator {
                 VariableDeclarationExpr variableDeclarationExpr = new VariableDeclarationExpr(variableDeclarator);
                 body.addStatement(variableDeclarationExpr);
         }
-        if (preConditions != null) {
-            for (Expression expr : preConditions) {
-                if (expr.isMethodCallExpr()) {
-                    String s = expr.toString();
-                    if (s.contains("set")) {
-                        body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
-                    }
-                }
-            }
-        }
+
+        applyPreconditions(body);
+
         if (cdecl.getNameAsString().equals("MultipartFile")) {
             makePost.addArgument(new NameExpr("req"));
             testMethod.addThrownException(new ClassOrInterfaceType(null, "IOException"));
@@ -435,6 +375,17 @@ public class SpringTestGenerator extends  TestGenerator {
             writeValueAsStringCall.addArgument(new NameExpr("req"));
             makePost.addArgument(writeValueAsStringCall);
             testMethod.addThrownException(new ClassOrInterfaceType(null, "JsonProcessingException"));
+        }
+    }
+
+    private void applyPreconditions(BlockStmt body) {
+        for (Expression expr : preConditions) {
+            if (expr.isMethodCallExpr()) {
+                String s = expr.toString();
+                if (s.contains("set")) {
+                    body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");
+                }
+            }
         }
     }
 
@@ -544,22 +495,6 @@ public class SpringTestGenerator extends  TestGenerator {
 
     public void setCommonPath(String commonPath) {
         this.commonPath = commonPath;
-    }
-
-
-    @Override
-    public void setPreconditions(List<Expression> preconditions) {
-        this.preConditions = preconditions;
-    }
-
-    @Override
-    public boolean isBranched() {
-        return branched;
-    }
-
-    @Override
-    public void setBranched(boolean branched) {
-        this.branched = branched;
     }
 
     @Override

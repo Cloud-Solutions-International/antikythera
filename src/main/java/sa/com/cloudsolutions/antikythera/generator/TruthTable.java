@@ -345,7 +345,10 @@ public class TruthTable {
             return getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
             return null;
+        } else if (condition.isEnclosedExpr()) {
+            return evaluateCondition(condition.asEnclosedExpr().getInner(), truthValues);
         }
+
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
     }
 

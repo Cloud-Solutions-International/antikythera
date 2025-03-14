@@ -22,6 +22,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
+import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -357,34 +358,56 @@ public class Resolver {
             Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
             if (fd.isPresent()) {
-                Type field = fd.get().getElementType();
-                gn.addField(fd.get());
-
-                if (field != null) {
-                    for (AnnotationExpr ann : field.getAnnotations()) {
-                        ImportUtils.addImport(gn, ann.getNameAsString());
-                    }
-
-                    Type elementType = field.getElementType();
-                    if (elementType.isClassOrInterfaceType()) {
-                        Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
-                        if (types.isPresent()) {
-                            for (Type type : types.get()) {
-                                ImportUtils.addImport(gn, type);
-                            }
-                        }
-                        gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
-                    } else {
-                        gn = ImportUtils.addImport(gn, elementType);
-                    }
-                }
+                gn = findFieldNode(gn, fd.get());
             }
             else {
                 gn = ImportUtils.addImport(gn, nameExpr.getName().toString());
             }
         }
         else {
-            gn = ImportUtils.addImport(gn, t.asString());
+            if (t.isClassOrInterfaceType()) {
+                ClassOrInterfaceType ct = t.asClassOrInterfaceType();
+                Optional<NodeList<Type>> types = ct.getTypeArguments();
+                if (types.isPresent()) {
+                    for (Type type : types.get()) {
+                        GraphNode n = ImportUtils.addImport(gn, type);
+                        if (n != null) {
+                            gn = n;
+                        }
+                    }
+                }
+                else {
+                    gn = ImportUtils.addImport(gn, t.asString());
+                }
+            }
+            else {
+                gn = ImportUtils.addImport(gn, t.asString());
+            }
+        }
+        return gn;
+    }
+
+    private static GraphNode findFieldNode(GraphNode gn, FieldDeclaration fd) {
+        Type field = fd.getElementType();
+        gn.addField(fd);
+
+        if (field != null) {
+            for (AnnotationExpr ann : field.getAnnotations()) {
+                ImportUtils.addImport(gn, ann.getNameAsString());
+            }
+
+            Type elementType = field.getElementType();
+            if (elementType.isClassOrInterfaceType()) {
+                Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
+                if (types.isPresent()) {
+                    for (Type type : types.get()) {
+                        ImportUtils.addImport(gn, type);
+                    }
+                }
+                gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
+            } else {
+                gn = ImportUtils.addImport(gn, elementType);
+            }
         }
         return gn;
     }
@@ -398,7 +421,7 @@ public class Resolver {
      *              in the MCEWrapper will be null.
      */
     public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce)  {
-        MCEWrapper mw = new MCEWrapper();
+        MCEWrapper mw = new MCEWrapper(mce);
         NodeList<Type> types = new NodeList<>();
 
         NodeList<Expression> arguments = mce.getArguments();
@@ -410,7 +433,6 @@ public class Resolver {
             mw.setArgumentTypes(types);
         }
 
-        mw.setMethodCallExpr(mce);
         return mw;
     }
 
@@ -523,6 +545,9 @@ public class Resolver {
                     }
                 }
             }
+            else {
+                
+            }
         }
     }
 
@@ -617,6 +642,20 @@ public class Resolver {
             }
             else {
                 ImportUtils.addImport(node, arg.asNameExpr().getNameAsString());
+            }
+        }
+    }
+
+    public static void resolveReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
+        TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
+        Expression expression = returnStmt.getExpression().orElse(null);
+        if (expression != null && from != null && expression.isObjectCreationExpr()) {
+            ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
+            if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
+                for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
+                    // todo finish this off
+                    //solveTypeDependencies(from, typeArg);
+                }
             }
         }
     }

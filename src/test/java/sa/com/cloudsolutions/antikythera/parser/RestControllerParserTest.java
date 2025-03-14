@@ -8,7 +8,6 @@ import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -22,7 +21,7 @@ class RestControllerParserTest {
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
         String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
-        parser = new RestControllerParser(Paths.get(Settings.getBasePath(),controllers.replaceAll("\\.","/")).toFile());
+        parser = new RestControllerParser("sa.com.cloudsolutions.controller.ComplexController");
     }
 
     @Test

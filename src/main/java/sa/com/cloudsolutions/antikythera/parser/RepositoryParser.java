@@ -442,7 +442,6 @@ public class RepositoryParser extends ClassProcessor {
         if (q == null) {
             if (repoMethod.isMethodDeclaration()) {
                 queryFromMethodDeclaration(repoMethod.asMethodDeclaration());
-
             }
             else {
                 parseNonAnnotatedMethod(repoMethod);

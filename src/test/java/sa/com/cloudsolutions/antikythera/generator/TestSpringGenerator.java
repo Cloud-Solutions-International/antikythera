@@ -8,7 +8,6 @@ import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -24,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSpringGenerator {
     MethodDeclaration md;
-    ControllerResponse response;
+    MethodResponse response;
     CompilationUnit cu;
 
     @BeforeAll
@@ -38,7 +37,7 @@ class TestSpringGenerator {
         md = new MethodDeclaration();
         BlockStmt body = new BlockStmt();
         md.setBody(body);
-        response = new ControllerResponse();
+        response = new MethodResponse();
         cu = StaticJavaParser.parse("public class TestDummyFile {}");
     }
 
@@ -56,7 +55,7 @@ class TestSpringGenerator {
 
         md.addParameter(param1);
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.setCommonPath("/api");
 
         MethodDeclaration testMethod = generator.buildTestMethod(md);
@@ -101,11 +100,8 @@ class TestSpringGenerator {
     }
 
     private void testVerbs() {
-        SpringTestGenerator generator =new SpringTestGenerator();
-        generator.setCompilationUnit(cu);
-
+        SpringTestGenerator generator =new SpringTestGenerator(cu);
         generator.setCommonPath("");
-
         generator.createTests(md, response);
 
         CompilationUnit gen = generator.getCompilationUnit();
@@ -131,7 +127,7 @@ class TestSpringGenerator {
         ControllerRequest request = new ControllerRequest();
         request.setPath("/api/test/{param1}");
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.createTests(md, response);
 
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
@@ -162,7 +158,7 @@ class TestSpringGenerator {
         ControllerRequest request = new ControllerRequest();
         request.setPath("/api/test/");
 
-        SpringTestGenerator generator = new SpringTestGenerator();
+        SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.createTests(md, response);
 
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();

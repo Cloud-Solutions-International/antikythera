@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
@@ -44,12 +45,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
+import sa.com.cloudsolutions.antikythera.evaluator.ReflectionArguments;
+import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -94,24 +100,31 @@ public class AbstractCompiler {
         combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
         jarSolvers = new ArrayList<>();
 
-        URL[] urls = new URL[Settings.getJarFiles().length];
+        Set<String> jarFiles = new HashSet<>();
+        List<URL> urls = new ArrayList<>();
+        for (String s : Settings.getJarFiles()) {
+            jarFiles.add(s);
+            urls.add(Paths.get(s).toUri().toURL());
+        }
+        for (String s : Antikythera.getInstance().getJarPaths()) {
+            jarFiles.add(s);
+            urls.add(Paths.get(s).toUri().toURL());
+        }
 
-        for(int i = 0 ; i < Settings.getJarFiles().length ; i++) {
-            String jarFile = Settings.getJarFiles()[i];
+        for(String jarFile : jarFiles) {
             JarTypeSolver jarSolver = new JarTypeSolver(jarFile);
             jarSolvers.add(jarSolver);
             combinedTypeSolver.add(jarSolver);
-            urls[i] = Paths.get(jarFile).toUri().toURL();
         }
-        loader = new URLClassLoader(urls);
 
-        Object f = Settings.getProperty("finch");
-        if(f != null) {
-            List<String> finch = (List<String>) f;
-            for(String path : finch) {
-                combinedTypeSolver.add(new JavaParserTypeSolver(path));
-            }
+        loader = new URLClassLoader(urls.toArray(new URL[0]), AbstractCompiler.class.getClassLoader());
+
+        Collection<String> finch = Settings.getPropertyList("finch", String.class);
+
+        for(String path : finch) {
+            combinedTypeSolver.add(new JavaParserTypeSolver(path));
         }
+
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
         javaParser = new JavaParser(parserConfiguration);
@@ -167,6 +180,14 @@ public class AbstractCompiler {
         return null;
     }
 
+    public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
+        Optional<CompilationUnit> cu = variable.findCompilationUnit();
+        if (cu.isPresent()) {
+            return findFullyQualifiedName(cu.get(), variable.getType().asString());
+        }
+        return null;
+    }
+
     /**
      * Creates a compilation unit from the source code at the relative path.
      *
@@ -184,7 +205,6 @@ public class AbstractCompiler {
             return true;
         }
 
-        logger.debug("\t{}", relativePath);
         Path sourcePath = Paths.get(Settings.getBasePath(), relativePath);
 
         File file = sourcePath.toFile();
@@ -334,10 +354,14 @@ public class AbstractCompiler {
                 Parameter param = callable.getParameter(i);
                 Type argumentType = arguments.get(i);
                 Type paramType = param.getType();
-                if (paramType.equals(argumentType)) {
+                if (paramType.equals(argumentType) || argumentType == null) {
                     continue;
                 }
                 if (argumentType.isPrimitiveType() && argumentType.asString().equals(paramType.asString().toLowerCase())) {
+                    continue;
+                }
+                if(argumentType.isClassOrInterfaceType() && paramType.isClassOrInterfaceType() && classMatch(argumentType, paramType))
+                {
                     continue;
                 }
                 if (! (paramType.equals(argumentType)
@@ -351,6 +375,26 @@ public class AbstractCompiler {
             return Optional.of(callable);
         }
         return Optional.empty();
+    }
+
+    private static boolean classMatch(Type argumentType, Type paramType) {
+        ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
+        ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
+
+        if (pt.getNameAsString().equals(at.getNameAsString())) {
+            Optional<NodeList<Type>> args1 = pt.getTypeArguments();
+            Optional<NodeList<Type>> args2 = at.getTypeArguments();
+            if (args1.isPresent()) {
+                if (args2.isPresent()) {
+                    return args1.get().size()  == args2.get().size();
+                }
+            }
+            else {
+                return args2.isEmpty();
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -698,7 +742,10 @@ public class AbstractCompiler {
                         if (wrapper != null && wrapper.isExternal()) {
                             try {
                                 Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
-                                Method method = Reflect.findMethod(clazz, methodCall.getMethodName(), methodCall.getArgumentTypesAsClasses());
+                                ReflectionArguments reflectionArguments = new ReflectionArguments(
+                                        methodCall.getMethodName(), new Object[] {}, methodCall.getArgumentTypesAsClasses()
+                                );
+                                Method method = Reflect.findMethod(clazz, reflectionArguments);
                                 if (method != null) {
                                     return Optional.of(new Callable(method));
                                 }

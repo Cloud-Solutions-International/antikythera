@@ -3,11 +3,12 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.type.Type;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class ControllerResponse {
+public class MethodResponse {
     Type type;
     Variable response;
     Variable body;
@@ -27,11 +28,13 @@ public class ControllerResponse {
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
     }
 
-    public ControllerResponse() {
+    private EvaluatorException eex;
+
+    public MethodResponse() {
 
     }
 
-    public ControllerResponse(Variable v) {
+    public MethodResponse(Variable v) {
         this.response = v;
     }
 
@@ -64,5 +67,13 @@ public class ControllerResponse {
 
     public void setBody(Variable body) {
         this.body = body;
+    }
+
+    public void setExecption(EvaluatorException eex) {
+        this.eex = eex;
+    }
+
+    public EvaluatorException getException() {
+        return eex;
     }
 }

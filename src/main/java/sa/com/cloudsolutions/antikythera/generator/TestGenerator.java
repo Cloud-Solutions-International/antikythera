@@ -33,6 +33,15 @@ public abstract class TestGenerator {
     protected Asserter asserter;
     protected MethodDeclaration methodUnderTest;
 
+    MethodDeclaration testMethod;
+    protected CompilationUnit compilationUnitUnderTest;
+
+    protected Set<Expression> preConditions;
+
+    protected TestGenerator(CompilationUnit cu) {
+        this.compilationUnitUnderTest = cu;
+    }
+
     protected String createTestName(MethodDeclaration md) {
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
@@ -65,7 +74,7 @@ public abstract class TestGenerator {
      * @param md the method being tested
      * @param response REST API response if this is a controller method
      */
-    public abstract void createTests(MethodDeclaration md, ControllerResponse response);
+    public abstract void createTests(MethodDeclaration md, MethodResponse response);
 
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
         MethodDeclaration testMethod = new MethodDeclaration();
@@ -97,20 +106,6 @@ public abstract class TestGenerator {
 
     public CompilationUnit getCompilationUnit() {
         return gen;
-    }
-
-    public void setCompilationUnit(CompilationUnit gen) {
-        this.gen = gen;
-    }
-
-    public abstract void setPreconditions(List<Expression> expr);
-
-    public abstract boolean isBranched();
-
-    public abstract void setBranched(boolean branched);
-
-    public ArgumentGenerator getArgumentGenerator() {
-        return argumentGenerator;
     }
 
     public abstract void addBeforeClass();
@@ -145,5 +140,13 @@ public abstract class TestGenerator {
 
     public void setupImports() {
         asserter.setupImports(gen);
+    }
+
+    public void setPreConditions(Set<Expression> preConditions) {
+        this.preConditions = preConditions;
+    }
+
+    protected void assertThrows(String invocation, MethodResponse response) {
+        getBody(testMethod).addStatement(asserter.assertThrows(invocation, response));
     }
 }

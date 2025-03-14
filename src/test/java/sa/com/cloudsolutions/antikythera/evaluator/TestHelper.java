@@ -18,14 +18,14 @@ public class TestHelper {
     protected final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
 
     @AfterEach
-    public void tearDown() {
+    void tearDown() {
         System.setOut(standardOut);
         AntikytheraRunTime.reset();
         DepSolver.getNames().clear();
     }
 
     @BeforeAll
-    public static void setup() throws IOException, ReflectiveOperationException {
+    static void setup() throws IOException, ReflectiveOperationException {
         Settings.loadConfigMap();
     }
 }

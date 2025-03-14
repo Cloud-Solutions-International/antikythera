@@ -17,6 +17,8 @@ public class Service {
     @Autowired
     private DepartmentRepository departmentRepository;
 
+    private int notAutoWired = 0;
+
     public void queries1() {
         Optional<Person> p = personRepository.findById(1L);
         List<Person> personList = personRepository.findAll();

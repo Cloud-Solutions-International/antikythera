@@ -4,14 +4,15 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+
 import org.slf4j.Logger;
+
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
-
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -20,11 +21,12 @@ import sa.com.cloudsolutions.antikythera.generator.Factory;
 import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 
 import java.io.IOException;
+import java.util.Set;
 
 
 public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
-
+    Set<MethodDeclaration> methods = new java.util.HashSet<>();
     CompilationUnit cu;
     SpringEvaluator evaluator;
     UnitTestGenerator generator;
@@ -36,60 +38,54 @@ public class ServicesParser {
         }
         evaluator = new SpringEvaluator(cls);
         generator = (UnitTestGenerator) Factory.create("unit", cu);
-        evaluator.addGenerator(generator);
 
+        evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
         generator.setupImports();
         generator.addBeforeClass();
+
+        evaluator.setupFields(cu);
     }
 
-    public void start() throws IOException {
+    public void start() {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
                 if (!md.isPrivate()) {
                     Graph.createGraphNode(md);
-
+                    methods.add(md);
                 }
             });
             solver.dfs();
         }
-        generator.addBeforeClass();
-        writeFiles();
+        eval();
     }
 
-    public void start(String method) throws IOException {
+    public void start(String method) {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
                 if (!md.isPrivate() && md.getNameAsString().equals(method)) {
                     Graph.createGraphNode(md);
+                    methods.add(md);
                 }
             });
             solver.dfs();
         }
-        
-        cu.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodDeclaration md, Void arg) {
-                /*
-                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
-                 */
-                if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md, new DummyArgumentGenerator());
-                }
-                super.visit(md, arg);
-            }
-        }, null);
-        generator.addBeforeClass();
-        writeFiles();
+        eval();
     }
 
-    private void writeFiles() throws IOException {
+    private void eval() {
+        for (MethodDeclaration md : methods) {
+            evaluateMethod(md, new DummyArgumentGenerator());
+        }
+    }
+
+    public void writeFiles() throws IOException {
         generator.save();
     }
 
-    private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
         evaluator.setArgumentGenerator(gen);
         evaluator.reset();
         evaluator.resetColors();
@@ -111,5 +107,4 @@ public class ServicesParser {
     private boolean checkEligible(MethodDeclaration md) {
         return !md.isPublic();
     }
-
 }
