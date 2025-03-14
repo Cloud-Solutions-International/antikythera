@@ -643,15 +643,9 @@ public class Evaluator {
                         : importDeclaration.getNameAsString();
             }
 
-
-            Class<?> clazz;
-            try {
-                clazz = Class.forName(resolvedClass);
-            } catch (ClassNotFoundException cnf) {
-                clazz = AbstractCompiler.loadClass(resolvedClass);
-            }
-
+            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
             Class<?> outer = clazz.getEnclosingClass();
+
             if (outer != null) {
                 for (Class<?> c : outer.getDeclaredClasses()) {
                     if (c.getName().equals(resolvedClass)) {
@@ -839,7 +833,7 @@ public class Evaluator {
                  * When we get here the getValue should have returned to us a valid field. That means
                  * we will have an evaluator instance as the 'value' in the variable v
                  */
-                if (variable.getClazz().equals(System.class)) {
+                if (variable.getClazz() != null && variable.getClazz().equals(System.class)) {
                     Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
                     variable = new Variable(field.get(null));
                 }
@@ -1177,6 +1171,7 @@ public class Evaluator {
             }
         }
     }
+
     void resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);

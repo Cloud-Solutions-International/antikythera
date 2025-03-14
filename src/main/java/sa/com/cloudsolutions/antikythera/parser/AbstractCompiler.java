@@ -158,7 +158,11 @@ public class AbstractCompiler {
     }
 
     public static Class<?> loadClass(String resolvedClass) throws ClassNotFoundException {
-        return loader.loadClass(resolvedClass);
+        try {
+            return Class.forName(resolvedClass);
+        } catch (ClassNotFoundException cnf) {
+            return loader.loadClass(resolvedClass);
+        }
     }
 
     public static void reset() throws IOException {
@@ -574,7 +578,7 @@ public class AbstractCompiler {
 
                 String fullClassName = impName + "." + className;
                 try {
-                    Class<?> clazz =Class.forName(fullClassName);
+                    Class.forName(fullClassName);
                     /*
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked so this is the correct import.
