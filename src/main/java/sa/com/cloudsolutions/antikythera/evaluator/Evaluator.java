@@ -37,6 +37,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
+import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -209,6 +210,8 @@ public class Evaluator {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isLambdaExpr()) {
             return createLambdaExpression(expr.asLambdaExpr());
+        } else if (expr.isMethodReferenceExpr()) {
+            return evaluateMethodReference(expr.asMethodReferenceExpr());
         }
         return null;
     }
@@ -859,20 +862,29 @@ public class Evaluator {
                 variable = new Variable(this);
             }
             else if (expr2.isTypeExpr()) {
-                /*
-                 * todo  : fix this hack.
-                 *  currently only supports System related stuff.
-                 */
                 String s = expr2.toString();
-                variable = new Variable(switch (s) {
-                    case "System.out" -> System.out;
-                    case "System.err" -> System.err;
-                    case "System.in" -> System.in;
-                    default -> throw new IllegalArgumentException("Unexpected value: " + s);
-                });
+                variable = new Variable(findScopeType(s));
             }
         }
         return variable;
+    }
+
+    private Object findScopeType(String s) {
+        return switch (s) {
+            case "System.out" -> System.out;
+            case "System.err" -> System.err;
+            case "System.in" -> System.in;
+            default -> {
+                String fullQulifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQulifiedName);
+                if (cu != null) {
+                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
+                    yield createEvaluator(typeDecl.getFullyQualifiedName().get());
+                } else {
+                    yield null;
+                }
+            }
+        };
     }
 
     private Variable resolveExpression(NameExpr expr) {
@@ -908,14 +920,6 @@ public class Evaluator {
 
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
         if (v != null) {
-            NodeList<Expression> arguments = methodCall.getArguments();
-            if(arguments.isNonEmpty())
-            {
-                Expression argument = arguments.get(0);
-                if(argument.isMethodReferenceExpr()) {
-                    return evaluateMethodReference(v, arguments);
-                }
-            }
             if (v.getValue() instanceof Evaluator eval && eval.getCompilationUnit() != null) {
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 return eval.executeMethod(wrapper);
@@ -928,27 +932,25 @@ public class Evaluator {
         }
     }
 
-    Variable evaluateMethodReference(Variable v, NodeList<Expression> arguments) throws ReflectiveOperationException {
-        MethodReferenceExpr rfCall = arguments.get(0).asMethodReferenceExpr();
-        LinkedList<Expression> chain = Evaluator.findScopeChain(rfCall);
-
+    Variable evaluateMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
+        LinkedList<Expression> chain = Evaluator.findScopeChain(expr);
         if (chain.isEmpty()) {
             return null;
         }
-
         Variable variable = evaluateScopeChain(chain);
-        if (v.getValue() instanceof Collection<?> c) {
-            ReflectionArguments reflectionArguments = new ReflectionArguments(rfCall.getIdentifier(), new Object[] {}, new Class[]{c.getClass()});
-            Method m = Reflect.findMethod(variable.getClazz(), reflectionArguments);
-            if (m != null) {
-                for(Object o : c) {
-                    m.invoke(variable.getValue(), o);
-                }
+        if (variable != null) {
+            if (variable.getValue() instanceof  Evaluator eval) {
+                FPEvaluator<?> fp = FPEvaluator.create(expr, eval);
+                Variable v = new Variable(fp);
+                v.setType(fp.getType());
+                returnValue = v;
+                return v;
+            }
+            else {
+
             }
         }
-        returnValue = new Variable(null);
         return null;
-
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {

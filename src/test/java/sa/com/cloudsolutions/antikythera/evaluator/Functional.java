@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class Functional {
 
@@ -45,6 +46,14 @@ public class Functional {
         System.out.println();
     }
 
+    private void people() {
+        Person a = new Person("A");
+        Person b = new Person("B");
+        List<Person> people = List.of(a, b);
+        List<String> names = people.stream().map(Person::getName).collect(Collectors.toList());
+        System.out.println(names);
+
+    }
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
@@ -52,6 +61,7 @@ public class Functional {
         f.greet3();
         f.sorting1();
         f.sorting2();
+        f.people();
     }
 
 }
