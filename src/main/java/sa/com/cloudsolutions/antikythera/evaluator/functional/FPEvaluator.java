@@ -1,11 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -13,10 +14,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.parser.Callable;
-import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.lang.reflect.Method;
 import java.util.LinkedList;
@@ -43,7 +41,26 @@ public abstract class FPEvaluator<T> extends Evaluator {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public static FPEvaluator create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
+    public static FPEvaluator<?> create(MethodReferenceExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
+        CompilationUnit cu = enclosure.getCompilationUnit();
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, lambdaExpr.getScope().toString());
+        MethodDeclaration md = cdecl.findFirst(
+                MethodDeclaration.class, mx -> mx.getNameAsString().equals(lambdaExpr.getIdentifier())
+        ).orElseThrow();
+
+        BlockStmt body;
+        if (md.getBody().isPresent()) {
+            body = md.getBody().get();
+        } else {
+            body = new BlockStmt();
+            md.setBody(body);
+        }
+        md.setType(new UnknownType());
+
+        return createEvaluator(enclosure, md, body);
+    }
+
+    public static FPEvaluator<?> create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
         // Create a synthetic method from the lambda
         MethodDeclaration md = new MethodDeclaration();
 
@@ -59,10 +76,15 @@ public abstract class FPEvaluator<T> extends Evaluator {
         md.setType(new UnknownType());
         lambdaExpr.getParameters().forEach(md::addParameter);
 
+        return createEvaluator(enclosure, md, body);
+    }
+
+    private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md, BlockStmt body) throws ReflectiveOperationException {
         if (checkReturnType(enclosure, body, md) ) {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
-                case 1 -> new FunctionEvaluator("F");
-                case 2 -> new BiFunctionEvaluator("BiF");
+                case 0 -> new SupplierEvaluator<>("S");
+                case 1 -> new FunctionEvaluator<>("F");
+                case 2 -> new BiFunctionEvaluator<>("BiF");
                 default -> null;
             };
             eval.setMethod(md);
@@ -70,7 +92,8 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
         else {
             FPEvaluator<?> eval = switch(md.getParameters().size()) {
-                case 1 -> new ConsumerEvaluator("C");
+                case 0 -> new RunnableEvaluator("R");
+                case 1 -> new ConsumerEvaluator<>("C");
                 case 2 -> new BiConsumerEvaluator<>("BiC");
                 default -> null;
             };

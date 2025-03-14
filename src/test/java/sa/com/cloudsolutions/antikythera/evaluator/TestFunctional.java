@@ -38,7 +38,9 @@ class TestFunctional extends TestHelper{
     }
 
     @ParameterizedTest
-    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield"})
+    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield",
+        "sorting1, 0123456789", "sorting2, 9876543210"
+    })
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
@@ -48,18 +50,10 @@ class TestFunctional extends TestHelper{
     }
 
     @Test
-    void testAscending() throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("sorting1")).orElseThrow();
+    void testPeople() throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("people")).orElseThrow();
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
-        assertEquals("0123456789\n", outContent.toString());
-    }
-
-    @Test
-    void testDescending() throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("sorting2")).orElseThrow();
-        Variable v = evaluator.executeMethod(method);
-        assertNull(v.getValue());
-        assertEquals("9876543210\n", outContent.toString());
+        assertEquals("[A, B]\n", outContent.toString());
     }
 }

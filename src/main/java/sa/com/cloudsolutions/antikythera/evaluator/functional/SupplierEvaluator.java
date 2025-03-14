@@ -3,14 +3,13 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> {
+public class SupplierEvaluator<T> extends FPEvaluator implements Supplier<T> {
 
-    public ConsumerEvaluator(String className) {
+    public SupplierEvaluator(String className) {
         super(className);
     }
 
@@ -24,10 +23,10 @@ public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> 
     }
 
     @Override
-    public void accept(T t) {
-        AntikytheraRunTime.push(new Variable(t));
+    public T get() {
         try {
-            executeMethod(methodDeclaration);
+            Variable v = executeMethod(methodDeclaration);
+            return (T) v.getValue();
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
