@@ -25,9 +25,13 @@ public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> 
 
     @Override
     public void accept(T t) {
-        AntikytheraRunTime.push(new Variable(t));
+
         try {
-            executeMethod(methodDeclaration);
+            if (methodDeclaration != null) {
+                executeMethod(methodDeclaration);
+                AntikytheraRunTime.push(new Variable(t));
+            }
+            method.invoke(object, t);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }

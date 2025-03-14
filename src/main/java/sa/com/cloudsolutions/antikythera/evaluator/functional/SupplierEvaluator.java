@@ -4,6 +4,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Supplier;
 
@@ -25,10 +26,13 @@ public class SupplierEvaluator<T> extends FPEvaluator implements Supplier<T> {
     @Override
     public T get() {
         try {
-            Variable v = executeMethod(methodDeclaration);
-            return (T) v.getValue();
+            if (methodDeclaration != null) {
+                Variable v = executeMethod(methodDeclaration);
+                return (T) v.getValue();
+            }
+            return (T) method.invoke(object);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            throw new AntikytheraException(e);
         }
     }
 }

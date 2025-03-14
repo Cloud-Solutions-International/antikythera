@@ -21,13 +21,28 @@ import java.util.LinkedList;
 import java.util.Optional;
 
 public abstract class FPEvaluator<T> extends Evaluator {
+    /**
+     * The Method declaration to execute if this method is available in source code
+     * will take precedence over the method defined below. In other words, if both a method and a
+     * methodDeclration have been defined , the methodDeclaration will be executed rather than
+     * the method.
+     */
     protected MethodDeclaration methodDeclaration;
+    /**
+     * A method from a compiled java class to be executed if a methodDeclaration is not found.
+     */
+    protected Method method;
+
+    /**
+     * If method is defined by methodDeclaration is undefined invoke the method on the object
+     */
+    protected Object object;
 
     public FPEvaluator(String className) {
         super(className);
     }
 
-    public void setMethod(MethodDeclaration methodDeclaration) {
+    public void setMethodDeclaration(MethodDeclaration methodDeclaration) {
         this.methodDeclaration = methodDeclaration;
     }
 
@@ -87,7 +102,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
                 case 2 -> new BiFunctionEvaluator<>("BiF");
                 default -> null;
             };
-            eval.setMethod(md);
+            eval.setMethodDeclaration(md);
             return eval;
         }
         else {
@@ -98,7 +113,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
                 default -> null;
             };
 
-            eval.setMethod(md);
+            eval.setMethodDeclaration(md);
             return eval;
         }
     }

@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 public class RunnableEvaluator extends FPEvaluator implements Runnable {
 
@@ -22,9 +23,12 @@ public class RunnableEvaluator extends FPEvaluator implements Runnable {
     @Override
     public void run() {
         try {
-            executeMethod(methodDeclaration);
+            if (methodDeclaration != null) {
+                executeMethod(methodDeclaration);
+            }
+            method.invoke(object);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            throw new AntikytheraException(e);
         }
     }
 }

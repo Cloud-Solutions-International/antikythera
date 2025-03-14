@@ -5,6 +5,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 
 import java.util.function.Function;
@@ -25,12 +26,16 @@ public class FunctionEvaluator<T,R> extends FPEvaluator implements Function<T,R>
 
     @Override
     public R apply(T t) {
-        AntikytheraRunTime.push(new Variable(t));
+
         try {
-            Variable v = executeMethod(methodDeclaration);
-            return (R) v.getValue();
+            if (methodDeclaration != null) {
+                AntikytheraRunTime.push(new Variable(t));
+                Variable v = executeMethod(methodDeclaration);
+                return (R) v.getValue();
+            }
+            return (R) method.invoke(object, t);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            throw new AntikytheraException(e);
         }
     }
 }
