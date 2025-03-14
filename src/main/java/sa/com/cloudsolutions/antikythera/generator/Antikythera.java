@@ -282,18 +282,44 @@ public class Antikythera {
 
     private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
         Path artifactPath = Paths.get(m2, groupIdPath, artifactId);
+
+        if (!Files.exists(artifactPath) || !Files.isDirectory(artifactPath)) {
+            return null;
+        }
+
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(artifactPath)) {
-            return StreamSupport.stream(stream.spliterator(), false)
-                    .filter(Files::isDirectory)
-                    .map(Path::getFileName)
-                    .map(Path::toString)
-                    .max(Comparator.naturalOrder())
-                    .orElseThrow(() -> new IOException("No versions found for " + artifactId));
+            List<String> versions = new ArrayList<>();
+            for (Path path : stream) {
+                if (Files.isDirectory(path)) {
+                    String version = path.getFileName().toString();
+                    Path p = Paths.get(m2, groupIdPath, artifactId, version, artifactId + "-" + version + ".jar");
+                    if (! (version.startsWith("${") || version.equals("unknown")) && Files.exists(p)) {
+                        versions.add(version);
+                    }
+                }
+            }
+
+            return versions.stream().max(this::compareVersions).orElse(null);
         } catch (IOException e) {
-            throw new AntikytheraException("Failed to find latest version for " + artifactId, e);
+            return null;
         }
     }
 
+
+    private int compareVersions(String v1, String v2) {
+        String[] parts1 = v1.split("\\.");
+        String[] parts2 = v2.split("\\.");
+
+        int length = Math.max(parts1.length, parts2.length);
+        for (int i = 0; i < length; i++) {
+            int part1 = i < parts1.length ? Integer.parseInt(parts1[i]) : 0;
+            int part2 = i < parts2.length ? Integer.parseInt(parts2[i]) : 0;
+            if (part1 != part2) {
+                return Integer.compare(part1, part2);
+            }
+        }
+        return 0;
+    }
     public void preProcess() throws IOException, XmlPullParserException {
         CopyUtils.createMavenProjectStructure(Settings.getBasePackage(), Settings.getOutputPath());
         copyBaseFiles(Settings.getOutputPath());

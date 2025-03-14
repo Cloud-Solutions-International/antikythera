@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class TestSpringEvaluator {
@@ -124,7 +126,7 @@ class TestSpringEvaluator {
 
         // Create test data
         MethodDeclaration methodDecl = new MethodDeclaration()
-            .setName("testMethod");
+                .setName("testMethod");
         currentMethodField.set(evaluator, methodDecl);
 
         // Create a method response
@@ -146,7 +148,7 @@ class TestSpringEvaluator {
     }
 
     @Test
-    void testAutoWireWithAutowiredField()  {
+    void testAutoWireWithAutowiredField() {
         SpringEvaluator evaluator = new SpringEvaluator("sa.com.cloudsolutions.service.Service");
         CompilationUnit cu = evaluator.getCompilationUnit();
 
@@ -158,7 +160,7 @@ class TestSpringEvaluator {
     }
 
     @Test
-    void testAutoWireWithMock()  {
+    void testAutoWireWithMock() {
         SpringEvaluator evaluator = new SpringEvaluator("sa.com.cloudsolutions.service.Service");
         CompilationUnit cu = evaluator.getCompilationUnit();
 
@@ -173,13 +175,13 @@ class TestSpringEvaluator {
     }
 
     @Test
-    void testAutoWireWithout()  {
+    void testAutoWireWithout() {
         String testClass = """
-            @Component
-            public class TestClass {
-                private TestRepository testRepo;
-            }
-            """;
+                @Component
+                public class TestClass {
+                    private TestRepository testRepo;
+                }
+                """;
 
         CompilationUnit cu = StaticJavaParser.parse(testClass);
         AntikytheraRunTime.addClass("TestClass", cu);
@@ -190,6 +192,27 @@ class TestSpringEvaluator {
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         assertFalse(evaluator.autoWire(variable, "TestClass"));
+    }
+}
 
+class TestSpringEvaluatorAgain {
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
+    }
+
+    @Test
+    void argumentGeneratorTest() throws ReflectiveOperationException {
+        String cls = "sa.com.cloudsolutions.antikythera.evaluator.Functional";
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("printHello")).get();
+        SpringEvaluator eval = new SpringEvaluator(cls);
+
+        ArgumentGenerator argGen = mock(ArgumentGenerator.class);
+        eval.setArgumentGenerator(argGen);
+        eval.mockMethodArguments(md);
+
+        verify(argGen, times(1)).generateArgument(any());
     }
 }

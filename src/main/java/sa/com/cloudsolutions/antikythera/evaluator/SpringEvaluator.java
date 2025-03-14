@@ -210,7 +210,7 @@ public class SpringEvaluator extends Evaluator {
      * @param md The method declaration representing an HTTP API end point
      * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
-    private void mockMethodArguments(MethodDeclaration md) throws ReflectiveOperationException {
+    void mockMethodArguments(MethodDeclaration md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);
