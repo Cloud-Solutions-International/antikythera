@@ -964,7 +964,7 @@ public class Evaluator {
     Variable evaluateMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
         Expression scope = expr.getScope();
         LinkedList<Expression> chain = Evaluator.findScopeChain(scope);
-        Variable variable;
+        Variable variable = null;
 
         if (chain.isEmpty()) {
             if (scope.isTypeExpr()) {
@@ -988,8 +988,11 @@ public class Evaluator {
                     return new Variable(clazz);
                 }
                 else {
-                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, parts[0]);
-                    variable = new Variable(createEvaluator(typeDecl.getFullyQualifiedName().get()));
+                    FPEvaluator<?> fp = FPEvaluator.create(expr, this);
+                    Variable v = new Variable(fp);
+                    v.setType(fp.getType());
+                    returnValue = v;
+                    return v;
                 }
             }
             else {
