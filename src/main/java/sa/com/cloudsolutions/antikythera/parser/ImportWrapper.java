@@ -12,6 +12,10 @@ public class ImportWrapper {
     private TypeDeclaration<?> type;
     private FieldDeclaration fieldDeclaration;
     private MethodDeclaration methodDeclaration;
+    /**
+     * If the import is a wild card import this will represent the actual full import classname
+     */
+    private ImportDeclaration simplified;
 
     public ImportWrapper(ImportDeclaration imp, boolean isExternal) {
         this.imp = imp;
@@ -62,5 +66,13 @@ public class ImportWrapper {
 
     public void setMethodDeclaration(MethodDeclaration methodDeclaration) {
         this.methodDeclaration = methodDeclaration;
+    }
+
+    public void setSimplified(ImportDeclaration decl) {
+        this.simplified = decl;
+    }
+
+    public ImportDeclaration getSimplified() {
+        return simplified;
     }
 }

@@ -638,7 +638,9 @@ public class Evaluator {
             String resolvedClass = null;
             ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
             if (importDeclaration != null) {
-                resolvedClass = importDeclaration.getNameAsString();
+                resolvedClass = importDeclaration.getImport().isAsterisk()
+                        ? importDeclaration.getSimplified().getNameAsString()
+                        : importDeclaration.getNameAsString();
             }
 
 

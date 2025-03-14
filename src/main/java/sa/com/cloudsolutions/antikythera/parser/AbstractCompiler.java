@@ -579,7 +579,10 @@ public class AbstractCompiler {
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked so this is the correct import.
                      */
-                    return new ImportWrapper(imp, true);
+                    ImportWrapper wrapper = new ImportWrapper(imp, true);
+                    ImportDeclaration decl = new ImportDeclaration(fullClassName, imp.isStatic(), false);
+                    wrapper.setSimplified(decl);
+                    return wrapper;
                 } catch (ClassNotFoundException e) {
                     try {
                         AbstractCompiler.loadClass(fullClassName);
