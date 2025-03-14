@@ -973,17 +973,23 @@ public class Evaluator {
 
                 CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fqn);
                 if (target == null) {
-                    variable = new Variable(AbstractCompiler.loadClass(fqn));
+                    Class<?> clazz = AbstractCompiler.loadClass(fqn);
+
+                    if (parts.length == 2) {
+                        try {
+                            Field field = clazz.getField(parts[1]);
+                            return new Variable(field.get(null)); // Get the actual static field value
+
+
+                        } catch (NoSuchFieldException | IllegalAccessException e) {
+                            logger.warn("Could not access field {} on class {}", parts[1], clazz.getName());
+                        }
+                    }
+                    return new Variable(clazz);
                 }
                 else {
                     TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, parts[0]);
                     variable = new Variable(createEvaluator(typeDecl.getFullyQualifiedName().get()));
-                }
-                if (parts.length == 2) {
-                    // we are having a static method invocation or a static field access
-                }
-                else {
-
                 }
             }
             else {
