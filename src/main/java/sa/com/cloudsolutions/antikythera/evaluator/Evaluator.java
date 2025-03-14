@@ -869,23 +869,52 @@ public class Evaluator {
         return variable;
     }
 
-    private Object findScopeType(String s) {
-        return switch (s) {
-            case "System.out" -> System.out;
-            case "System.err" -> System.err;
-            case "System.in" -> System.in;
-            default -> {
-                String fullQulifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQulifiedName);
-                if (cu != null) {
-                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
-                    yield createEvaluator(typeDecl.getFullyQualifiedName().get());
-                } else {
-                    yield null;
+    private Object findScopeType(String s) throws ClassNotFoundException {
+        // Split the scope string to separate class and field names (e.g., "System.out" -> ["System", "out"])
+        String[] parts = s.split("\\.");
+
+        if (parts.length > 1) {
+            // Get the class name (first part)
+            String className = parts[0];
+            String fullQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, className);
+
+            try {
+                // Try to load the class
+                Class<?> clazz = Class.forName(fullQualifiedName != null ? fullQualifiedName : className);
+
+                // If there's a field reference (like System.out)
+                if (parts.length == 2) {
+                    try {
+                        Field field = clazz.getField(parts[1]);
+                        return field.get(null); // Get static field value
+                    } catch (NoSuchFieldException | IllegalAccessException e) {
+                        // If not a field, continue with normal class processing
+                    }
                 }
+                return clazz;
+
+            } catch (ClassNotFoundException e) {
+                // Try to find in compilation units if class not found in classpath
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQualifiedName);
+                if (cu != null) {
+                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, className);
+                    return createEvaluator(typeDecl.getFullyQualifiedName().get());
+                }
+                throw e;
             }
-        };
+        }
+
+        // Single word scope - try normal class resolution
+        String fullQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQualifiedName);
+        if (cu != null) {
+            TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
+            return createEvaluator(typeDecl.getFullyQualifiedName().get());
+        } else {
+            return Class.forName(fullQualifiedName != null ? fullQualifiedName : s);
+        }
     }
+
 
     private Variable resolveExpression(NameExpr expr) {
         if(expr.getNameAsString().equals("System")) {
@@ -933,11 +962,37 @@ public class Evaluator {
     }
 
     Variable evaluateMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
-        LinkedList<Expression> chain = Evaluator.findScopeChain(expr);
+        Expression scope = expr.getScope();
+        LinkedList<Expression> chain = Evaluator.findScopeChain(scope);
+        Variable variable;
+
         if (chain.isEmpty()) {
-            return null;
+            if (scope.isTypeExpr()) {
+                String[] parts = scope.toString().split("\\.");
+                String fqn = AbstractCompiler.findFullyQualifiedName(this.cu, parts[0]);
+
+                CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fqn);
+                if (target == null) {
+                    variable = new Variable(AbstractCompiler.loadClass(fqn));
+                }
+                else {
+                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, parts[0]);
+                    variable = new Variable(createEvaluator(typeDecl.getFullyQualifiedName().get()));
+                }
+                if (parts.length == 2) {
+                    // we are having a static method invocation or a static field access
+                }
+                else {
+
+                }
+            }
+            else {
+                return null;
+            }
         }
-        Variable variable = evaluateScopeChain(chain);
+        else {
+            variable = evaluateScopeChain(chain);
+        }
         if (variable != null) {
             if (variable.getValue() instanceof  Evaluator eval) {
                 FPEvaluator<?> fp = FPEvaluator.create(expr, eval);
@@ -947,14 +1002,14 @@ public class Evaluator {
                 return v;
             }
             else {
-
+                return variable;
             }
         }
         return null;
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-       Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
+        Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
         validateReflectiveMethod(v, reflectionArguments, method);
         Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
 
@@ -1734,7 +1789,7 @@ public class Evaluator {
             else if (expr.isMethodReferenceExpr()) {
                 MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
                 chain.addLast(mexpr.getScope());
-                expr = mexpr.getScope();
+                break;
             }
             else {
                 break;

@@ -54,6 +54,13 @@ public class Functional {
         System.out.println(names);
 
     }
+
+    private void lengths() {
+        List<String> words = List.of("Hello", "World");
+        words.forEach(word -> System.out.print(word.length()));
+        System.out.println();
+
+    }
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
@@ -62,6 +69,7 @@ public class Functional {
         f.sorting1();
         f.sorting2();
         f.people();
+        f.lengths();
     }
 
 }

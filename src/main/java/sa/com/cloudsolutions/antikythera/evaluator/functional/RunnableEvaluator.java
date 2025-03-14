@@ -13,7 +13,7 @@ public class RunnableEvaluator extends FPEvaluator implements Runnable {
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName("Consumer")
+                .setName("Runnable")
                 .setTypeArguments(
                         new WildcardType()
                 );

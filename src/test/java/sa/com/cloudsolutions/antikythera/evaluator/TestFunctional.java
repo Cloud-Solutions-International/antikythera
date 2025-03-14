@@ -39,7 +39,7 @@ class TestFunctional extends TestHelper{
 
     @ParameterizedTest
     @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield",
-        "sorting1, 0123456789", "sorting2, 9876543210"
+        "sorting1, 0123456789", "sorting2, 9876543210","lengths, 55"
     })
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();

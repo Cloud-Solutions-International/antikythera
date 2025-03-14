@@ -12,7 +12,6 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -260,6 +259,7 @@ public class Reflect {
             default -> new Variable(null);
         };
     }
+
     /**
      * Finds a matching method using parameters.
      *
