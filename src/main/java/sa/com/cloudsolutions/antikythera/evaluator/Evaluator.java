@@ -1282,7 +1282,7 @@ public class Evaluator {
             v.setType(variable.getType());
         }
         else {
-            v = new Variable(variable.getType());
+            v = new Variable(variable.getType(), Reflect.getDefault(variable.getType().toString()));
         }
         v.setPrimitive(true);
         fields.put(variable.getNameAsString(), v);
