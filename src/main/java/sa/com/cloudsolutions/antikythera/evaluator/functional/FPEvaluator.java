@@ -262,6 +262,8 @@ public abstract class FPEvaluator<T> extends Evaluator {
             // there are some scopes that cannot be resolved for example
             // Collections.sort(list, (a,b) -> a.getValue().compareTo(b.getValue()));
             // we will leave these for now
+        } finally {
+            scopeResolutions.removeLast();
         }
         return false;
     }

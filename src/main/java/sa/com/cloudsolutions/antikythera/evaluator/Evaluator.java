@@ -37,7 +37,6 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
-import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -61,7 +60,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -114,11 +112,13 @@ public class Evaluator {
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
     protected final Deque<TryStmt> catching = new LinkedList<>();
+
     /**
      * The preconditions that need to be met before the test can be executed.
      */
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
+    protected final static LinkedList<Variable> scopeResolutions = new LinkedList<>();
 
     public Evaluator (String className) {
         this.className = className;
@@ -821,7 +821,9 @@ public class Evaluator {
 
         Variable variable = evaluateScopeChain(chain);
 
-        return evaluateMethodCall(variable, methodCall);
+        Variable result = evaluateMethodCall(variable, methodCall);
+        scopeResolutions.removeLast();
+        return result;
     }
 
     public Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
@@ -866,6 +868,7 @@ public class Evaluator {
                 variable = new Variable(findScopeType(s));
             }
         }
+        scopeResolutions.addLast(variable);
         return variable;
     }
 
