@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -49,9 +50,10 @@ class TestFunctional extends TestHelper{
 
     }
 
-    @Test
-    void testPeople() throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("people")).orElseThrow();
+    @ParameterizedTest
+    @ValueSource(strings = {"people1","people2","people3"})
+    void testPeople(String name) throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
         assertEquals("[A, B]\n", outContent.toString());

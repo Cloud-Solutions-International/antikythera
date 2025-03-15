@@ -46,14 +46,32 @@ public class Functional {
         System.out.println();
     }
 
-    private void people() {
+    private void people1() {
         Person a = new Person("A");
         Person b = new Person("B");
         List<Person> people = List.of(a, b);
         List<String> names = people.stream().map(Person::getName).collect(Collectors.toList());
         System.out.println(names);
-
     }
+
+    private void people2() {
+        Person a = new Person("A");
+        Person b = new Person("B");
+        List<Person> people = List.of(a, b);
+        List<String> names = people.stream().map( p -> p.getName()).collect(Collectors.toList());
+        System.out.println(names);
+    }
+
+    private void people3() {
+        Person a = new Person("A");
+        Person b = new Person("B");
+        List<Person> people = List.of(a, b);
+        List<String> names = new ArrayList();
+
+        people.forEach(p -> names.add(p.getName()));
+        System.out.println(names);
+    }
+
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
@@ -61,7 +79,9 @@ public class Functional {
         f.greet3();
         f.sorting1();
         f.sorting2();
-        f.people();
+        f.people1();
+        f.people2();
+        f.people3();
     }
 
 }
