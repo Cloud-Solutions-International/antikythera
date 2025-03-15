@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -22,6 +23,8 @@ import java.util.Optional;
 
 public abstract class FPEvaluator<T> extends Evaluator {
     protected MethodDeclaration methodDeclaration;
+    protected Evaluator enclosure;
+    Expression expr;
 
     public FPEvaluator(String className) {
         super(className);
@@ -57,7 +60,10 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
         md.setType(new UnknownType());
 
-        return createEvaluator(enclosure, md, body);
+        FPEvaluator<?> fp = createEvaluator(enclosure, md, body);
+        fp.enclosure = enclosure;
+        fp.expr = lambdaExpr;
+        return fp;
     }
 
     public static FPEvaluator<?> create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
@@ -76,7 +82,19 @@ public abstract class FPEvaluator<T> extends Evaluator {
         md.setType(new UnknownType());
         lambdaExpr.getParameters().forEach(md::addParameter);
 
-        return createEvaluator(enclosure, md, body);
+        FPEvaluator<?> fp = createEvaluator(enclosure, md, body);
+        fp.enclosure = enclosure;
+        fp.expr = lambdaExpr;
+        return fp;
+    }
+
+    @Override
+    public Variable getValue(Node n, String name) {
+        Variable v = super.getValue(n, name);
+        if (v == null) {
+            return enclosure.getValue(expr, name);
+        }
+        return v;
     }
 
     private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md, BlockStmt body) throws ReflectiveOperationException {

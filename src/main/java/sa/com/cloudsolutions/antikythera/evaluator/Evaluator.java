@@ -148,7 +148,7 @@ public class Evaluator {
      * @param name the name of the variable.
      * @return the value for the variable in the current scope
      */
-    protected Variable getValue(Node n, String name) {
+    public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
         if (value == null && fields.get(name) != null) {
             return fields.get(name);
