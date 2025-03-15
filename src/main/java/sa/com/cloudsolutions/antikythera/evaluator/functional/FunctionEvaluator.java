@@ -10,7 +10,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Function;
 
-public class FunctionEvaluator<T,R> extends FPEvaluator implements Function<T,R> {
+public class FunctionEvaluator<T,R> extends FPEvaluator<T> implements Function<T,R> {
+    public FunctionEvaluator() {
+        this(FUNCTION);
+    }
     public FunctionEvaluator(String className) {
         super(className);
     }

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
@@ -14,13 +15,23 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.LinkedList;
 import java.util.Optional;
 
 public abstract class FPEvaluator<T> extends Evaluator {
+    public static final String SUPPLIER = "java.util.function.Supplier";
+    public static final String FUNCTION = "java.util.function.Function";
+    public static final String BI_FUNCTION = "java.util.function.BiFunction";
+    public static final String RUNNABLE = "java.lang.Runnable";
+    public static final String CONSUMER = "java.util.function.Consumer";
+    public static final String BI_CONSUMER = "java.util.function.BiConsumer";
+
     /**
      * The Method declaration to execute if this method is available in source code
      * will take precedence over the method defined below. In other words, if both a method and a
@@ -56,11 +67,80 @@ public abstract class FPEvaluator<T> extends Evaluator {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public static FPEvaluator<?> create(MethodReferenceExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
+    public static FPEvaluator<?> create(MethodReferenceExpr methodRef, Field field) throws ReflectiveOperationException {
+        Object obj = field.get(null);
+        Class<?> clazz = obj.getClass();
+        FPEvaluator<?> eval = null;
+
+        if (methodRef.getParentNode().isPresent() && methodRef.getParentNode().get() instanceof MethodCallExpr mce) {
+            TypeDeclaration<?> cdecl = mce.findAncestor(TypeDeclaration.class).orElseThrow();
+            for (MethodDeclaration md : cdecl.getMethodsByName(methodRef.getIdentifier())) {
+                for (Parameter param : md.getParameters()) {
+                    if (param.findCompilationUnit().isPresent()) {
+
+                    }
+                    else {
+                        eval = findSAM(mce, param);
+                    }
+                }
+            }
+        }
+        else {
+            throw new AntikytheraException("A method reference has to be an argument to a method call");
+        }
+
+        if (eval != null) {
+            for (Method m : clazz.getMethods()) {
+                if (m.getName().equals(methodRef.getIdentifier())) {
+                    for (Class<?> p : m.getParameterTypes()) {
+                        if (p.getName().equals(eval.getClassName())) {
+                            eval.method = m;
+                            eval.object = obj;
+                            return eval;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static FPEvaluator<?> findSAM(MethodCallExpr mce, Parameter param) throws ClassNotFoundException {
+        String fqn = AbstractCompiler.findFullyQualifiedName(
+                mce.findCompilationUnit().orElseThrow(), param.getNameAsString());
+        Class<?> clazz = AbstractCompiler.loadClass(fqn);
+        for (Class<?> iface : clazz.getInterfaces()) {
+            if (iface.isAnnotationPresent(FunctionalInterface.class)) {
+                switch (iface.getName()) {
+                    case SUPPLIER -> {
+                        return new SupplierEvaluator<>();
+                    }
+                    case FUNCTION -> {
+                        return new FunctionEvaluator<>();
+                    }
+                    case BI_FUNCTION -> {
+                        return new BiFunctionEvaluator<>();
+                    }
+                    case RUNNABLE -> {
+                        return new RunnableEvaluator();
+                    }
+                    case CONSUMER -> {
+                        return new ConsumerEvaluator<>();
+                    }
+                    case BI_CONSUMER -> {
+                        return new BiConsumerEvaluator<>();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public static FPEvaluator<?> create(MethodReferenceExpr methodRef, Evaluator enclosure) throws ReflectiveOperationException {
         CompilationUnit cu = enclosure.getCompilationUnit();
-        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, lambdaExpr.getScope().toString());
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, methodRef.getScope().toString());
         MethodDeclaration md = cdecl.findFirst(
-                MethodDeclaration.class, mx -> mx.getNameAsString().equals(lambdaExpr.getIdentifier())
+                MethodDeclaration.class, mx -> mx.getNameAsString().equals(methodRef.getIdentifier())
         ).orElseThrow();
 
         BlockStmt body;
@@ -97,9 +177,9 @@ public abstract class FPEvaluator<T> extends Evaluator {
     private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md, BlockStmt body) throws ReflectiveOperationException {
         if (checkReturnType(enclosure, body, md) ) {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
-                case 0 -> new SupplierEvaluator<>("S");
-                case 1 -> new FunctionEvaluator<>("F");
-                case 2 -> new BiFunctionEvaluator<>("BiF");
+                case 0 -> new SupplierEvaluator<>();
+                case 1 -> new FunctionEvaluator<>();
+                case 2 -> new BiFunctionEvaluator<>();
                 default -> null;
             };
             eval.setMethodDeclaration(md);
@@ -107,9 +187,9 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
         else {
             FPEvaluator<?> eval = switch(md.getParameters().size()) {
-                case 0 -> new RunnableEvaluator("R");
-                case 1 -> new ConsumerEvaluator<>("C");
-                case 2 -> new BiConsumerEvaluator<>("BiC");
+                case 0 -> new RunnableEvaluator();
+                case 1 -> new ConsumerEvaluator<>();
+                case 2 -> new BiConsumerEvaluator<>();
                 default -> null;
             };
 

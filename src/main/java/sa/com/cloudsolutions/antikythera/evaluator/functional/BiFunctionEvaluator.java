@@ -9,8 +9,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.BiFunction;
 
-public class BiFunctionEvaluator<T, U, R> extends FPEvaluator implements BiFunction<T, U, R> {
-
+public class BiFunctionEvaluator<T, U, R> extends FPEvaluator<T> implements BiFunction<T, U, R> {
+    public BiFunctionEvaluator() {
+        this(BI_FUNCTION);
+    }
     public BiFunctionEvaluator(String className) {
         super(className);
     }

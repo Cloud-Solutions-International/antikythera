@@ -9,7 +9,11 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.BiConsumer;
 
-public class BiConsumerEvaluator<T, U> extends FPEvaluator implements BiConsumer<T, U> {
+public class BiConsumerEvaluator<T, U> extends FPEvaluator<T> implements BiConsumer<T, U> {
+    public BiConsumerEvaluator() {
+        this(BI_CONSUMER);
+    }
+
     public BiConsumerEvaluator(String className) {
         super(className);
     }

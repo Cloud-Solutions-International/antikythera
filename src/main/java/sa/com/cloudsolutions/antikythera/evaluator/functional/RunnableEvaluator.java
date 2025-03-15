@@ -6,7 +6,9 @@ import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 public class RunnableEvaluator extends FPEvaluator implements Runnable {
-
+    public RunnableEvaluator() {
+        this(RUNNABLE);
+    }
     public RunnableEvaluator(String className) {
         super(className);
     }

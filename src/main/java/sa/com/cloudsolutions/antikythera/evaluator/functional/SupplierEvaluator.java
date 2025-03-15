@@ -8,8 +8,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Supplier;
 
-public class SupplierEvaluator<T> extends FPEvaluator implements Supplier<T> {
-
+public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> {
+    public SupplierEvaluator() {
+        this(SUPPLIER);
+    }
     public SupplierEvaluator(String className) {
         super(className);
     }

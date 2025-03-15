@@ -964,7 +964,7 @@ public class Evaluator {
     Variable evaluateMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
         Expression scope = expr.getScope();
         LinkedList<Expression> chain = Evaluator.findScopeChain(scope);
-        Variable variable = null;
+        Variable variable;
 
         if (chain.isEmpty()) {
             if (scope.isTypeExpr()) {
@@ -976,23 +976,14 @@ public class Evaluator {
                     Class<?> clazz = AbstractCompiler.loadClass(fqn);
 
                     if (parts.length == 2) {
-                        try {
-                            Field field = clazz.getField(parts[1]);
-                            return new Variable(field.get(null)); // Get the actual static field value
-
-
-                        } catch (NoSuchFieldException | IllegalAccessException e) {
-                            logger.warn("Could not access field {} on class {}", parts[1], clazz.getName());
-                        }
+                        Field field = clazz.getField(parts[1]);
+                        FPEvaluator<?> fp = FPEvaluator.create(expr, field);
                     }
                     return new Variable(clazz);
                 }
                 else {
-                    FPEvaluator<?> fp = FPEvaluator.create(expr, this);
-                    Variable v = new Variable(fp);
-                    v.setType(fp.getType());
-                    returnValue = v;
-                    return v;
+                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, parts[0]);
+                    variable = new Variable(createEvaluator(typeDecl.getFullyQualifiedName().get()));
                 }
             }
             else {
