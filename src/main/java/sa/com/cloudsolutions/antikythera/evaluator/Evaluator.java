@@ -37,8 +37,9 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
-import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -61,7 +62,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -70,6 +71,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 import static org.mockito.Mockito.withSettings;
 
@@ -211,7 +221,7 @@ public class Evaluator {
         } else if (expr.isLambdaExpr()) {
             return createLambdaExpression(expr.asLambdaExpr());
         } else if (expr.isMethodReferenceExpr()) {
-            return evaluateMethodReference(expr.asMethodReferenceExpr());
+            return convertMethodReference(expr.asMethodReferenceExpr());
         }
         return null;
     }
@@ -932,27 +942,101 @@ public class Evaluator {
         }
     }
 
-    Variable evaluateMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
-        LinkedList<Expression> chain = Evaluator.findScopeChain(expr);
-        if (chain.isEmpty()) {
-            return null;
-        }
-        Variable variable = evaluateScopeChain(chain);
-        if (variable != null) {
-            if (variable.getValue() instanceof  Evaluator eval) {
-                FPEvaluator<?> fp = FPEvaluator.create(expr, eval);
-                Variable v = new Variable(fp);
-                v.setType(fp.getType());
-                returnValue = v;
-                return v;
-            }
-            else {
-
-            }
-        }
-        return null;
+    Variable convertMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
+        Expression scope = expr.getScope();
+        LambdaExpr lambda = FunctionalConverter.convertToLambda(expr);
+        return createLambdaExpression(lambda);
     }
 
+    private Class<?> findFunctionalInterface(LambdaExpr lambda) throws ReflectiveOperationException {
+        // Get parameter count and types
+        int paramCount = lambda.getParameters().size();
+
+        // Get return type by analyzing the lambda body
+        Class<?> returnType;
+        if (lambda.getBody().isBlockStmt()) {
+            BlockStmt body = lambda.getBody().asBlockStmt();
+            if (body.getStatements().isEmpty()) {
+                returnType = void.class;
+            } else if (body.getStatements().get(0).isReturnStmt()) {
+                returnType = evaluateExpression(body.getStatements().get(0).asReturnStmt()
+                    .getExpression().get()).getClazz();
+            } else {
+                returnType = void.class;
+            }
+        } else {
+            returnType = evaluateExpression(lambda.getBody().asExpressionStmt()
+                .getExpression()).getClazz();
+        }
+
+        // Match against common functional interfaces
+        if (paramCount == 0) {
+            if (returnType == void.class) {
+                return Runnable.class;
+            }
+            if (returnType == boolean.class || returnType == Boolean.class) {
+                return BooleanSupplier.class;
+            }
+            return Supplier.class;
+        }
+
+        if (paramCount == 1) {
+            if (returnType == void.class) {
+                return Consumer.class;
+            }
+            if (returnType == boolean.class || returnType == Boolean.class) {
+                return Predicate.class;
+            }
+            if (returnType == int.class || returnType == Integer.class) {
+                return ToIntFunction.class;
+            }
+            return Function.class;
+        }
+
+        if (paramCount == 2) {
+            if (returnType == void.class) {
+                return BiConsumer.class;
+            }
+            if (returnType == boolean.class || returnType == Boolean.class) {
+                return BiPredicate.class;
+            }
+            if (returnType == int.class) {
+                return Comparator.class;
+            }
+            return BiFunction.class;
+        }
+
+        // For non-standard cases, try to find a matching interface
+        String[] commonPackages = {"java.util.function", "java.util"};
+        for (String pkg : commonPackages) {
+            try {
+                String name = pkg + "." + findFunctionalInterfaceName(paramCount, returnType);
+                return Class.forName(name);
+            } catch (ClassNotFoundException ignored) {
+                // Continue searching
+            }
+        }
+
+        throw new ReflectiveOperationException("No matching functional interface found for lambda with "
+            + paramCount + " parameters and return type " + returnType);
+    }
+
+    private String findFunctionalInterfaceName(int paramCount, Class<?> returnType) {
+        String prefix = switch (paramCount) {
+            case 0 -> "";
+            case 1 -> returnType == void.class ? "Consumer" : "Function";
+            case 2 -> returnType == void.class ? "BiConsumer" : "BiFunction";
+            default -> "Function";
+        };
+
+        String typeName = returnType == boolean.class || returnType == Boolean.class ? "Predicate"
+            : returnType == int.class ? "IntFunction"
+            : returnType == long.class ? "LongFunction"
+            : returnType == double.class ? "DoubleFunction"
+            : "";
+
+        return prefix + typeName;
+    }
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
        Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
         validateReflectiveMethod(v, reflectionArguments, method);
