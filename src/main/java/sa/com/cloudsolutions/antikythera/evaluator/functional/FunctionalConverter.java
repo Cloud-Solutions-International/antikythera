@@ -1,18 +1,27 @@
 package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import org.checkerframework.checker.units.qual.N;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.lang.reflect.Method;
+import java.util.Optional;
 
 public class FunctionalConverter {
 
@@ -27,16 +36,38 @@ public class FunctionalConverter {
 
         MethodCallExpr call = new MethodCallExpr();
         call.setName(methodName);
-        if (methodRef.getScope() != null && methodRef.getScope().asTypeExpr().toString().startsWith("System")) {
-            call.setScope(methodRef.getScope());
-        }
-        else {
-            call.setScope(new NameExpr("arg"));
-        }
+
+        Expression scope = methodRef.getScope();
 
         BlockStmt body = new BlockStmt();
 
         if (outerScope != null) {
+            if (scope != null && scope.isTypeExpr()) {
+                TypeExpr typeExpr = scope.asTypeExpr();
+                if (typeExpr.toString().startsWith("System")) {
+                    call.setScope(scope);
+                    call.addArgument(new NameExpr("arg"));
+                }
+                else {
+                    call.setScope(new NameExpr("arg"));
+                    CompilationUnit cu = methodRef.findCompilationUnit().orElseThrow();
+                    String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeExpr.toString());
+                    if (fqn != null) {
+                        CompilationUnit typeCu = AntikytheraRunTime.getCompilationUnit(fqn);
+                        if (typeCu != null) {
+                            Optional<MethodDeclaration> md = typeCu.findFirst(MethodDeclaration.class,
+                                    m -> m.getNameAsString().equals(methodName));
+                            if (md.isPresent()) {
+                                for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
+                                    call.addArgument(new NameExpr("arg" + i));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
             methodRef.getParentNode().ifPresent(parent -> {
                 if (parent instanceof MethodCallExpr mce) {
                     String name = mce.getNameAsString();
@@ -61,7 +92,7 @@ public class FunctionalConverter {
                                     } else {
                                         body.addStatement(call);
                                     }
-                                    if (functionalMethod.getParameterCount() != 0) {
+                                    if (functionalMethod.getParameterCount() > 1) {
                                         call.addArgument(new NameExpr("arg"));
                                     }
                                     break;
@@ -74,6 +105,7 @@ public class FunctionalConverter {
         }
         else {
             body.addStatement(new ReturnStmt(call));
+            call.setScope(new NameExpr("arg"));
         }
 
         return new LambdaExpr(parameters, body);
