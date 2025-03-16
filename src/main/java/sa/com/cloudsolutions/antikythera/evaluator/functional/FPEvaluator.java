@@ -100,9 +100,9 @@ public abstract class FPEvaluator<T> extends Evaluator {
     private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md, BlockStmt body) throws ReflectiveOperationException {
         if (checkReturnType(enclosure, body, md) ) {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
-                case 0 -> new SupplierEvaluator<>("S");
-                case 1 -> new FunctionEvaluator<>("F");
-                case 2 -> new BiFunctionEvaluator<>("BiF");
+                case 0 -> new SupplierEvaluator<>("java.util.function.Supplier");
+                case 1 -> new FunctionEvaluator<>("java.util.function.Function");
+                case 2 -> new BiFunctionEvaluator<>("java.util.function.BiFunction");
                 default -> null;
             };
             eval.setMethod(md);
@@ -110,9 +110,9 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
         else {
             FPEvaluator<?> eval = switch(md.getParameters().size()) {
-                case 0 -> new RunnableEvaluator("R");
-                case 1 -> new ConsumerEvaluator<>("C");
-                case 2 -> new BiConsumerEvaluator<>("BiC");
+                case 0 -> new RunnableEvaluator("java.lang.Runnable");
+                case 1 -> new ConsumerEvaluator<>("java.util.function.Consumer");
+                case 2 -> new BiConsumerEvaluator<>("java.util.function.BiConsumer");
                 default -> null;
             };
 

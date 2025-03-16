@@ -5,11 +5,12 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 
 import java.util.function.Function;
 
-public class FunctionEvaluator<T,R> extends FPEvaluator implements Function<T,R> {
+public class FunctionEvaluator<T,R> extends FPEvaluator<T> implements Function<T,R> {
     public FunctionEvaluator(String className) {
         super(className);
     }
@@ -17,7 +18,7 @@ public class FunctionEvaluator<T,R> extends FPEvaluator implements Function<T,R>
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName("Function")
+                .setName(getClassName())
                 .setTypeArguments(
                         new WildcardType(), new WildcardType()
                 );
@@ -30,7 +31,7 @@ public class FunctionEvaluator<T,R> extends FPEvaluator implements Function<T,R>
             Variable v = executeMethod(methodDeclaration);
             return (R) v.getValue();
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            throw new AntikytheraException(e);
         }
     }
 }

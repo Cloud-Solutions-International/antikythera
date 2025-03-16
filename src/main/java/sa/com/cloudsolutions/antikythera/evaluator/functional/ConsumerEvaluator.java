@@ -5,6 +5,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Consumer;
 
@@ -17,7 +18,7 @@ public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> 
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName("Consumer")
+                .setName(getClassName())
                 .setTypeArguments(
                         new WildcardType()
                 );
@@ -29,7 +30,7 @@ public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> 
         try {
             executeMethod(methodDeclaration);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            throw new AntikytheraException(e);
         }
     }
 }
