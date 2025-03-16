@@ -60,7 +60,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
         md.setType(new UnknownType());
 
-        FPEvaluator<?> fp = createEvaluator(enclosure, md, body);
+        FPEvaluator<?> fp = createEvaluator(enclosure, md);
         fp.enclosure = enclosure;
         fp.expr = lambdaExpr;
         return fp;
@@ -82,7 +82,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         md.setType(new UnknownType());
         lambdaExpr.getParameters().forEach(md::addParameter);
 
-        FPEvaluator<?> fp = createEvaluator(enclosure, md, body);
+        FPEvaluator<?> fp = createEvaluator(enclosure, md);
         fp.enclosure = enclosure;
         fp.expr = lambdaExpr;
         return fp;
@@ -97,8 +97,8 @@ public abstract class FPEvaluator<T> extends Evaluator {
         return v;
     }
 
-    private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md, BlockStmt body) throws ReflectiveOperationException {
-        if (checkReturnType(enclosure, body, md) ) {
+    private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md) throws ReflectiveOperationException {
+        if (checkReturnType(enclosure, md) ) {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
                 case 0 -> new SupplierEvaluator<>("java.util.function.Supplier");
                 case 1 -> new FunctionEvaluator<>("java.util.function.Function");
@@ -121,7 +121,8 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
     }
 
-    private static boolean checkReturnType(Evaluator enclosure, BlockStmt body, MethodDeclaration md) throws ReflectiveOperationException {
+    private static boolean checkReturnType(Evaluator enclosure, MethodDeclaration md) throws ReflectiveOperationException {
+        BlockStmt body = md.getBody().orElseThrow();
         if (!body.findFirst(ReturnStmt.class).isPresent()) {
             Statement last = body.getStatements().get(body.getStatements().size() - 1);
             if (last.isExpressionStmt()) {
