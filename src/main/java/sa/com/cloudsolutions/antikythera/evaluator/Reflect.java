@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -12,11 +11,11 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
@@ -29,10 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 public class Reflect {
     public static final String BOOLEAN = "boolean";
@@ -471,41 +466,6 @@ public class Reflect {
         }
 
         return null;
-    }
-
-    private static class FunctionalInvocationHandler implements InvocationHandler {
-        private final FPEvaluator<?> evaluator;
-
-        FunctionalInvocationHandler(FPEvaluator<?> evaluator) {
-            this.evaluator = evaluator;
-        }
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            if (method.getDeclaringClass() == Object.class) {
-                return method.invoke(this, args);
-            }
-
-            if (evaluator instanceof BiConsumer bc) {
-                bc.accept(args[0], args[1]);
-                return null;
-            }
-            if (evaluator instanceof Function f) {
-                return f.apply(args[0]);
-            }
-            if (evaluator instanceof Consumer c) {
-                c.accept(args[0]);
-                return null;
-            }
-            if (evaluator instanceof Runnable r) {
-                r.run();
-                return null;
-            }
-            if (evaluator instanceof Supplier s) {
-                return s.get();
-            }
-            return null;
-        }
     }
 
 }
