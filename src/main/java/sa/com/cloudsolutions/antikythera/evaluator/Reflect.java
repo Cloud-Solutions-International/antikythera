@@ -400,6 +400,14 @@ public class Reflect {
                 }
             }
         }
+        if (argumentType.isAnnotationPresent(FunctionalInterface.class)) {
+            for (Class<?> iface2 : paramTypes[i].getInterfaces()) {
+                if (iface2.isAnnotationPresent(FunctionalInterface.class)) {
+                    return true;
+                }
+            }
+            return paramTypes[i].isAnnotationPresent(FunctionalInterface.class);
+        }
         return false;
     }
 
