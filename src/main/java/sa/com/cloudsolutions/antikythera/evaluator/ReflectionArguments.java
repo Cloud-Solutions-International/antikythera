@@ -4,6 +4,8 @@ public class ReflectionArguments {
     private final String methodName;
     private Object[] args;
     private final Class<?>[] paramTypes;
+    private Evaluator enclosure;
+    private Variable scope;
 
     public ReflectionArguments(String methodName, Object[] args, Class<?>[] paramTypes) {
         this.methodName = methodName;
@@ -25,5 +27,21 @@ public class ReflectionArguments {
 
     public Class<?>[] getParamTypes() {
         return paramTypes;
+    }
+
+    public Variable getScope() {
+        return scope;
+    }
+
+    public void setScope(Variable scope) {
+        this.scope = scope;
+    }
+
+    public Evaluator getEnclosure() {
+        return enclosure;
+    }
+
+    public void setEnclosure(Evaluator enclosure) {
+        this.enclosure = enclosure;
     }
 }

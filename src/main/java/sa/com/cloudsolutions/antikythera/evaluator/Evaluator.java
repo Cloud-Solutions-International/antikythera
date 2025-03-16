@@ -689,7 +689,7 @@ public class Evaluator {
                     }
                 }
             } else {
-                ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this);
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
                 Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getParamTypes());
                 if(cons !=  null) {
@@ -934,7 +934,7 @@ public class Evaluator {
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 return eval.executeMethod(wrapper);
             }
-            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this);
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
