@@ -399,21 +399,30 @@ public class Reflect {
      * @return
      */
     private static boolean findMatch(Class<?>[] paramTypes, Class<?>[] types, int i) {
-        if (types[i].isAssignableFrom(paramTypes[i])) {
+        Class<?> argumentType = types[i];
+        if (argumentType.isAssignableFrom(paramTypes[i])) {
             return true;
         }
-        if (types[i].equals(paramTypes[i])) {
+        if (argumentType.equals(paramTypes[i])) {
             return true;
         }
-        if (wrapperToPrimitive.get(types[i]) != null && wrapperToPrimitive.get(types[i]).equals(paramTypes[i])) {
-            paramTypes[i] = wrapperToPrimitive.get(types[i]);
+        if (wrapperToPrimitive.get(argumentType) != null && wrapperToPrimitive.get(argumentType).equals(paramTypes[i])) {
+            paramTypes[i] = wrapperToPrimitive.get(argumentType);
             return true;
         }
-        if(primitiveToWrapper.get(types[i]) != null && primitiveToWrapper.get(types[i]).equals(paramTypes[i])) {
-            paramTypes[i] = primitiveToWrapper.get(types[i]);
+        if(primitiveToWrapper.get(argumentType) != null && primitiveToWrapper.get(argumentType).equals(paramTypes[i])) {
+            paramTypes[i] = primitiveToWrapper.get(argumentType);
             return true;
         }
 
+        for (Class<?> iface : argumentType.getInterfaces()) {
+            for (Class<?> iface2 : paramTypes[i].getInterfaces()) {
+                if (iface.equals(iface2))
+                {
+                    return iface.isAnnotationPresent(FunctionalInterface.class) && iface2.isAnnotationPresent(FunctionalInterface.class);
+                }
+            }
+        }
         return false;
     }
 
