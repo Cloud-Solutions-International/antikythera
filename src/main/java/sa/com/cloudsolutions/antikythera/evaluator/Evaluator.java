@@ -943,100 +943,10 @@ public class Evaluator {
     }
 
     Variable convertMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
-        Expression scope = expr.getScope();
         LambdaExpr lambda = FunctionalConverter.convertToLambda(expr);
         return createLambdaExpression(lambda);
     }
 
-    private Class<?> findFunctionalInterface(LambdaExpr lambda) throws ReflectiveOperationException {
-        // Get parameter count and types
-        int paramCount = lambda.getParameters().size();
-
-        // Get return type by analyzing the lambda body
-        Class<?> returnType;
-        if (lambda.getBody().isBlockStmt()) {
-            BlockStmt body = lambda.getBody().asBlockStmt();
-            if (body.getStatements().isEmpty()) {
-                returnType = void.class;
-            } else if (body.getStatements().get(0).isReturnStmt()) {
-                returnType = evaluateExpression(body.getStatements().get(0).asReturnStmt()
-                    .getExpression().get()).getClazz();
-            } else {
-                returnType = void.class;
-            }
-        } else {
-            returnType = evaluateExpression(lambda.getBody().asExpressionStmt()
-                .getExpression()).getClazz();
-        }
-
-        // Match against common functional interfaces
-        if (paramCount == 0) {
-            if (returnType == void.class) {
-                return Runnable.class;
-            }
-            if (returnType == boolean.class || returnType == Boolean.class) {
-                return BooleanSupplier.class;
-            }
-            return Supplier.class;
-        }
-
-        if (paramCount == 1) {
-            if (returnType == void.class) {
-                return Consumer.class;
-            }
-            if (returnType == boolean.class || returnType == Boolean.class) {
-                return Predicate.class;
-            }
-            if (returnType == int.class || returnType == Integer.class) {
-                return ToIntFunction.class;
-            }
-            return Function.class;
-        }
-
-        if (paramCount == 2) {
-            if (returnType == void.class) {
-                return BiConsumer.class;
-            }
-            if (returnType == boolean.class || returnType == Boolean.class) {
-                return BiPredicate.class;
-            }
-            if (returnType == int.class) {
-                return Comparator.class;
-            }
-            return BiFunction.class;
-        }
-
-        // For non-standard cases, try to find a matching interface
-        String[] commonPackages = {"java.util.function", "java.util"};
-        for (String pkg : commonPackages) {
-            try {
-                String name = pkg + "." + findFunctionalInterfaceName(paramCount, returnType);
-                return Class.forName(name);
-            } catch (ClassNotFoundException ignored) {
-                // Continue searching
-            }
-        }
-
-        throw new ReflectiveOperationException("No matching functional interface found for lambda with "
-            + paramCount + " parameters and return type " + returnType);
-    }
-
-    private String findFunctionalInterfaceName(int paramCount, Class<?> returnType) {
-        String prefix = switch (paramCount) {
-            case 0 -> "";
-            case 1 -> returnType == void.class ? "Consumer" : "Function";
-            case 2 -> returnType == void.class ? "BiConsumer" : "BiFunction";
-            default -> "Function";
-        };
-
-        String typeName = returnType == boolean.class || returnType == Boolean.class ? "Predicate"
-            : returnType == int.class ? "IntFunction"
-            : returnType == long.class ? "LongFunction"
-            : returnType == double.class ? "DoubleFunction"
-            : "";
-
-        return prefix + typeName;
-    }
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
        Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
         validateReflectiveMethod(v, reflectionArguments, method);
