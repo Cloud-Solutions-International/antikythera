@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
@@ -22,15 +21,13 @@ public class FunctionalConverter {
      */
     public static LambdaExpr convertToLambda(MethodReferenceExpr methodRef, Variable outerScope) {
         String methodName = methodRef.getIdentifier();
-        Expression methodScope = methodRef.getScope();
 
         NodeList<Parameter> parameters = new NodeList<>();
         parameters.add(new Parameter(new ClassOrInterfaceType("Object"), "arg"));
 
         MethodCallExpr call = new MethodCallExpr();
         call.setName(methodName);
-        call.setScope(methodScope);
-        call.addArgument(new NameExpr("arg"));
+        call.setScope(new NameExpr("arg"));
 
         BlockStmt body = new BlockStmt();
 
