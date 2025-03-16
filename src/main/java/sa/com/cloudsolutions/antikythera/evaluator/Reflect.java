@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -10,6 +11,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.LambdaInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -104,13 +106,27 @@ public class Reflect {
         Object[] args = new Object[arguments.size()];
 
         for (int i = 0; i < arguments.size(); i++) {
-            argValues[i] = evaluator.evaluateExpression(arguments.get(i));
+            Expression expr = arguments.get(i);
+            if (expr.isMethodReferenceExpr()) {
+                expr = FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr());
+            }
+            if (expr.isLambdaExpr()) {
+                LambdaExpr lambdaExpr = expr.asLambdaExpr();
+                FPEvaluator<?> eval = FPEvaluator.create(lambdaExpr, evaluator, scope);
+
+                Variable v = new Variable(eval);
+                v.setType(eval.getType());
+                argValues[i] = v;
+            }
+            else {
+                argValues[i] = evaluator.evaluateExpression(expr);
+            }
+
             if (argValues[i] != null) {
                 args[i] = argValues[i].getValue();
-                if (argValues[i].getClazz() != null ) {
+                if (argValues[i].getClazz() != null) {
                     paramTypes[i] = argValues[i].getClazz();
-                }
-                else if (args[i] != null) {
+                } else if (args[i] != null) {
                     paramTypes[i] = argValues[i].getValue().getClass();
                 }
             } else {

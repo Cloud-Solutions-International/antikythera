@@ -218,21 +218,10 @@ public class Evaluator {
             return evaluateExpression(expr.asCastExpr().getExpression());
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
-        } else if (expr.isLambdaExpr()) {
-            return createLambdaExpression(expr.asLambdaExpr());
-        } else if (expr.isMethodReferenceExpr()) {
-            return convertMethodReference(expr.asMethodReferenceExpr());
         }
         return null;
     }
 
-    private Variable createLambdaExpression(LambdaExpr lambdaExpr) throws ReflectiveOperationException {
-        FPEvaluator<?> eval = FPEvaluator.create(lambdaExpr, this);
-
-        Variable v = new Variable(eval);
-        v.setType(eval.getType());
-        return v;
-    }
 
     private Variable evaluateBinaryExpression(Expression expr) throws ReflectiveOperationException {
         BinaryExpr binaryExpr = expr.asBinaryExpr();
@@ -940,11 +929,6 @@ public class Evaluator {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             return executeMethod(wrapper);
         }
-    }
-
-    Variable convertMethodReference(MethodReferenceExpr expr) throws ReflectiveOperationException {
-        LambdaExpr lambda = FunctionalConverter.convertToLambda(expr);
-        return createLambdaExpression(lambda);
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {

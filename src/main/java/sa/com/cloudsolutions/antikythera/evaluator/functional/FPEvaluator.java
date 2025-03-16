@@ -37,7 +37,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
     @Override
     public Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
         returnFrom = null;
-        if (methodCall.getNameAsString().equals("apply")) {
+        if (methodCall.getNameAsString().equals("apply") || methodCall.getNameAsString().equals("accept")) {
             wrapCallExpression(methodCall);
             return executeMethod(methodDeclaration);
         }
@@ -66,7 +66,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         return fp;
     }
 
-    public static FPEvaluator<?> create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
+    public static FPEvaluator<?> create(LambdaExpr lambdaExpr, Evaluator enclosure, Variable scope) throws ReflectiveOperationException {
         // Create a synthetic method from the lambda
         MethodDeclaration md = new MethodDeclaration();
 
