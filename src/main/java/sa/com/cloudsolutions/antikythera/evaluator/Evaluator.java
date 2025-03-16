@@ -649,22 +649,22 @@ public class Evaluator {
                 for (Class<?> c : outer.getDeclaredClasses()) {
                     if (c.getName().equals(resolvedClass)) {
                         List<Expression> arguments = oce.getArguments();
-                        Class<?>[] paramTypes = new Class<?>[arguments.size() + 1];
+                        Class<?>[] argumentTypes = new Class<?>[arguments.size() + 1];
                         Object[] args = new Object[arguments.size() + 1];
 
                         // todo this is wrong, this should first check for an existing instance in the current scope
                         // and then if an instance is not found build using the most suitable arguments.
                         args[0] = outer.getDeclaredConstructors()[0].newInstance();
-                        paramTypes[0] = outer;
+                        argumentTypes[0] = outer;
 
                         for (int i = 0; i < arguments.size(); i++) {
                             Variable vv = evaluateExpression(arguments.get(i));
                             Class<?> wrapperClass = vv.getValue().getClass();
-                            paramTypes[i + 1] =wrapperClass;
+                            argumentTypes[i + 1] =wrapperClass;
                             args[i + 1] = vv.getValue();
                         }
 
-                        Constructor<?> cons = Reflect.findConstructor(c, paramTypes);
+                        Constructor<?> cons = Reflect.findConstructor(c, argumentTypes, args);
                         if(cons !=  null) {
                             Object instance = cons.newInstance(args);
                             return new Variable(type, instance);
@@ -677,7 +677,8 @@ public class Evaluator {
             } else {
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
-                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes());
+                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
+                        reflectionArguments.getArguments());
                 if(cons !=  null) {
                     Object instance = cons.newInstance(reflectionArguments.getArguments());
                     return new Variable(type, instance);

@@ -314,7 +314,8 @@ public class Reflect {
                 }
                 boolean found = true;
                 for (int i = 0; i < argumentTypes.length; i++) {
-                    if (matchArgumentVsParameter(argumentTypes, parameterTypes, i) || parameterTypes[i].getName().equals("java.lang.Object")) {
+                    if (matchArgumentVsParameter(argumentTypes, parameterTypes, reflectionArguments.getArguments(), i) ||
+                            parameterTypes[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
                     found = false;
@@ -330,22 +331,22 @@ public class Reflect {
     /**
      * Find a constructor matching the given parameters.
      * <p>
-     * This method has side effects. The paramTypes may end up being converted from a boxed to primitive
+     * This method has side effects. The argumentTypes may end up being converted from a boxed to primitive
      * or vice verce
      *
      * @param clazz      the Class for which we need to find a constructor
-     * @param paramTypes the types of the parameters we are looking for.
+     * @param argumentTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
-    public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] paramTypes) {
+    public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] argumentTypes, Object[] arguments) {
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
-            Class<?>[] types = c.getParameterTypes();
-            if (types.length != paramTypes.length) {
+            Class<?>[] parameterTypes = c.getParameterTypes();
+            if (parameterTypes.length != argumentTypes.length) {
                 continue;
             }
             boolean found = true;
-            for (int i = 0; i < paramTypes.length; i++) {
-                if (matchArgumentVsParameter(paramTypes, types, i)) continue;
+            for (int i = 0; i < argumentTypes.length; i++) {
+                if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i)) continue;
                 found = false;
             }
             if (found) {
@@ -367,14 +368,13 @@ public class Reflect {
      *          arrays are used because the function operates via side effects.
      * @return true if a match has been found.
      */
-    private static boolean matchArgumentVsParameter(Class<?>[] argumentTypes, Class<?>[] parameterTypes, int i) {
+    private static boolean matchArgumentVsParameter(Class<?>[] argumentTypes, Class<?>[] parameterTypes,
+                                                    Object[] arguments, int i) {
         Class<?> parameterType = parameterTypes[i];
-        if (parameterType.isAssignableFrom(argumentTypes[i])) {
+        if (parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
             return true;
         }
-        if (parameterType.equals(argumentTypes[i])) {
-            return true;
-        }
+
         if (wrapperToPrimitive.get(parameterType) != null && wrapperToPrimitive.get(parameterType).equals(argumentTypes[i])) {
             argumentTypes[i] = wrapperToPrimitive.get(parameterType);
             return true;
@@ -384,13 +384,6 @@ public class Reflect {
             return true;
         }
 
-        for (Class<?> iface : parameterType.getInterfaces()) {
-            for (Class<?> iface2 : argumentTypes[i].getInterfaces()) {
-                if (iface.equals(iface2)) {
-                    return iface.isAnnotationPresent(FunctionalInterface.class) && iface2.isAnnotationPresent(FunctionalInterface.class);
-                }
-            }
-        }
         if (parameterType.isAnnotationPresent(FunctionalInterface.class)) {
             for (Class<?> iface2 : argumentTypes[i].getInterfaces()) {
                 if (iface2.isAnnotationPresent(FunctionalInterface.class)) {
