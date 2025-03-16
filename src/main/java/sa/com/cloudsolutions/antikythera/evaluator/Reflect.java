@@ -145,14 +145,26 @@ public class Reflect {
 
     private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
         Class<?> functional = getFunctionalInterface(argumentTypes[i]);
-        if (args[i] instanceof FPEvaluator<?> && functional != null) {
-            Object proxy = Proxy.newProxyInstance(
-                    argumentTypes[i].getClassLoader(),
-                    new Class<?>[]{functional},
-                    new FunctionalInvocationHandler((FPEvaluator<?>) args[i])
-            );
-            args[i] = proxy;
-            argumentTypes[i] = functional;
+        if (functional != null) {
+            FPEvaluator<?> evaluator = null;
+
+            // Check if the argument is already a proxy
+            if (Proxy.isProxyClass(args[i].getClass())) {
+                FunctionalInvocationHandler handler = (FunctionalInvocationHandler) Proxy.getInvocationHandler(args[i]);
+                evaluator = handler.getEvaluator();
+            } else if (args[i] instanceof FPEvaluator<?>) {
+                evaluator = (FPEvaluator<?>) args[i];
+            }
+
+            if (evaluator != null) {
+                Object proxy = Proxy.newProxyInstance(
+                        argumentTypes[i].getClassLoader(),
+                        new Class<?>[]{functional},
+                        new FunctionalInvocationHandler(evaluator)
+                );
+                args[i] = proxy;
+                argumentTypes[i] = functional;
+            }
         }
     }
 
@@ -387,15 +399,19 @@ public class Reflect {
         if (parameterType.isAnnotationPresent(FunctionalInterface.class)) {
             for (Class<?> iface2 : argumentTypes[i].getInterfaces()) {
                 if (iface2.isAnnotationPresent(FunctionalInterface.class)) {
+                    dynamicProxy(argumentTypes, i, arguments);
                     return true;
                 }
             }
-            return argumentTypes[i].isAnnotationPresent(FunctionalInterface.class);
+            if (argumentTypes[i].isAnnotationPresent(FunctionalInterface.class)) {
+                dynamicProxy(parameterTypes, i, arguments);
+                return true;
+            }
         }
         return false;
     }
 
-    private static Class<?> getFunctionalInterface(Class cls) {
+    private static Class<?> getFunctionalInterface(Class<?> cls) {
         for (Class<?> iface : cls.getInterfaces()) {
             if (iface.isAnnotationPresent(FunctionalInterface.class)) {
                 return iface;
