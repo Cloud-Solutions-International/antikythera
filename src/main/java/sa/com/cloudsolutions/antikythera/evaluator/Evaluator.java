@@ -679,7 +679,7 @@ public class Evaluator {
 
                 Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes());
                 if(cons !=  null) {
-                    Object instance = cons.newInstance(reflectionArguments.getArgs());
+                    Object instance = cons.newInstance(reflectionArguments.getArguments());
                     return new Variable(type, instance);
                 }
                 else {
