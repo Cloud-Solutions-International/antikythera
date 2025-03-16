@@ -10,11 +10,14 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.type.VoidType;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
 import java.util.LinkedList;
@@ -58,6 +61,17 @@ public abstract class FPEvaluator<T> extends Evaluator {
         }
         md.setType(new VoidType());
 
+        if (lambdaExpr.getBody().findFirst(ReturnStmt.class).isPresent()) {
+            md.setType(new ClassOrInterfaceType("Object"));
+        }
+        else {
+            if (isReturning(lambdaExpr)) {
+                md.setType(new ClassOrInterfaceType("Object"));
+                Statement last = body.getStatements().get(body.getStatements().size() - 1);
+                addReturnStatement(body, last);
+            }
+        }
+
         for (Parameter param : lambdaExpr.getParameters()) {
             md.addParameter(param);
             if (param.getType() instanceof UnknownType) {
@@ -65,7 +79,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
             }
         }
 
-        FPEvaluator<?> fp = createEvaluator(enclosure, md);
+        FPEvaluator<?> fp = createEvaluator(md);
         fp.enclosure = enclosure;
         fp.expr = lambdaExpr;
 
@@ -83,8 +97,8 @@ public abstract class FPEvaluator<T> extends Evaluator {
         return v;
     }
 
-    private static FPEvaluator<?> createEvaluator(Evaluator enclosure, MethodDeclaration md) throws ReflectiveOperationException {
-        if (checkReturnType(enclosure, md) ) {
+    private static FPEvaluator<?> createEvaluator(MethodDeclaration md)  {
+        if (md.getBody().orElseThrow().findFirst(ReturnStmt.class).isPresent()) {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
                 case 0 -> new SupplierEvaluator<>("java.util.function.Supplier");
                 case 1 -> new FunctionEvaluator<>("java.util.function.Function");
@@ -105,6 +119,28 @@ public abstract class FPEvaluator<T> extends Evaluator {
             eval.setMethod(md);
             return eval;
         }
+    }
+
+    private static boolean isReturning(LambdaExpr lambdaExpr)  {
+        // we need to treat this separatenly
+        // a lambda with a single statement and a lambda with a body we have to tackle
+        // onw tiha  body will have a return statement if it is required to return something
+        // one without a body may or may not have a return statement. if it does not have a
+        // return statement it may still be returning something, that we can find out either by
+        // looking at the method that is it being tied to. filter and map will return stuff while
+        // foreach does not.
+        // alternatively we can look at the return type of the method itself. If it is not void
+        // that method is going to return something.
+        Node parent = lambdaExpr.getParentNode().orElseThrow();
+        if (parent instanceof MethodCallExpr mce) {
+            String name = mce.getNameAsString();
+            return switch(name) {
+                case "map","filter","sorted","reduce","anyMatch","allMatch","noneMatch",
+                     "findFirst","findAny" -> true;
+                default -> false;
+            };
+        }
+        return false;
     }
 
     private static boolean checkReturnType(Evaluator enclosure, MethodDeclaration md) throws ReflectiveOperationException {
