@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
@@ -106,9 +107,6 @@ public class Reflect {
             argValues[i] = evaluator.evaluateExpression(arguments.get(i));
             if (argValues[i] != null) {
                 args[i] = argValues[i].getValue();
-                if (args[i] instanceof FPEvaluator<?>) {
-
-                }
                 if (argValues[i].getClazz() != null ) {
                     paramTypes[i] = argValues[i].getClazz();
                 }
@@ -124,12 +122,55 @@ public class Reflect {
                     paramTypes[i] = Object.class;
                 }
             }
+
+            Class<?> functional = getFunctionalInterface(paramTypes[i]);
+
+            if (args[i] instanceof FPEvaluator<?> && functional != null) {
+                Object proxy = Proxy.newProxyInstance(
+                        paramTypes[i].getClassLoader(),
+                        new Class<?>[] { functional },
+                        new FunctionalInvocationHandler((FPEvaluator<?>) args[i])
+                );
+                args[i] = proxy;
+                paramTypes[i] = functional;
+            }
+
         }
 
         ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, paramTypes);
         reflectionArguments.setScope(scope);
         reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
+    }
+
+
+    private static class FunctionalInvocationHandler implements InvocationHandler {
+        private final FPEvaluator<?> evaluator;
+
+        FunctionalInvocationHandler(FPEvaluator<?> evaluator) {
+            this.evaluator = evaluator;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (method.getDeclaringClass() == Object.class) {
+                return method.invoke(this, args);
+            }
+
+            // Delegate the method call to the FPEvaluator
+            return evaluator.executeLocalMethod(createMethodCall(method, args));
+        }
+
+        private MethodCallExpr createMethodCall(Method method, Object[] args) {
+            MethodCallExpr call = new MethodCallExpr();
+            call.setName(method.getName());
+            if (args != null) {
+                for (Object arg : args) {
+                    call.addArgument(arg.toString());
+                }
+            }
+            return call;
+        }
     }
 
     public static String primitiveToWrapper(String className) {
@@ -377,6 +418,18 @@ public class Reflect {
         }
 
         return false;
+    }
+
+    private static Class<?> getFunctionalInterface(Class cls) {
+        for (Class<?> iface : cls.getInterfaces()) {
+            if (iface.isAnnotationPresent(FunctionalInterface.class)) {
+                return iface;
+            }
+        }
+        if (cls.isAnnotationPresent(FunctionalInterface.class)) {
+            return cls;
+        }
+        return null;
     }
 
     private static boolean isLambdaConversion(ReflectionArguments reflectionArguments, Class<?>[] types, int i) {
