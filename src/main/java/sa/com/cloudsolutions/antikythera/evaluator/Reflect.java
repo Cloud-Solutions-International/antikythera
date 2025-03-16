@@ -341,9 +341,6 @@ public class Reflect {
                     if (findMatch(paramTypes, types, i) || types[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
-                    if (isLambdaConversion(reflectionArguments, types, i)) {
-                        continue;
-                    }
                     found = false;
                 }
                 if (found) {
@@ -430,30 +427,6 @@ public class Reflect {
             return cls;
         }
         return null;
-    }
-
-    private static boolean isLambdaConversion(ReflectionArguments reflectionArguments, Class<?>[] types, int i) {
-        if (types[i].isAnnotationPresent(FunctionalInterface.class)) {
-            Class<?>[] paramTypes = reflectionArguments.getParamTypes();
-            Class<?>[] interfaces = paramTypes[i].getInterfaces();
-
-            for (Class<?> iface : interfaces) {
-                if (iface.equals(types[i])) {
-                    return true;
-                }
-                if (iface.isAnnotationPresent(FunctionalInterface.class)) {
-                    Object proxy = Proxy.newProxyInstance(
-                        types[i].getClassLoader(),
-                        new Class<?>[] { types[i] },
-                        new LambdaInvocationHandler(reflectionArguments.getArgs()[i], paramTypes[i])
-                    );
-                    reflectionArguments.getArgs()[i] = proxy;
-                    paramTypes[i] = proxy.getClass();
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     public static Object[] buildObjects(ReflectionArguments reflectionArguments, Method method) {
