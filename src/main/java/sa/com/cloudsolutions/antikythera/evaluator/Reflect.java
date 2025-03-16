@@ -134,24 +134,26 @@ public class Reflect {
                 }
             }
 
-            Class<?> functional = getFunctionalInterface(argumentTypes[i]);
-
-            if (args[i] instanceof FPEvaluator<?> && functional != null) {
-                Object proxy = Proxy.newProxyInstance(
-                        argumentTypes[i].getClassLoader(),
-                        new Class<?>[]{functional},
-                        new FunctionalInvocationHandler((FPEvaluator<?>) args[i])
-                );
-                args[i] = proxy;
-                argumentTypes[i] = functional;
-            }
-
+            dynamicProxy(argumentTypes, i, args);
         }
 
         ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, argumentTypes);
         reflectionArguments.setScope(scope);
         reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
+    }
+
+    private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
+        Class<?> functional = getFunctionalInterface(argumentTypes[i]);
+        if (args[i] instanceof FPEvaluator<?> && functional != null) {
+            Object proxy = Proxy.newProxyInstance(
+                    argumentTypes[i].getClassLoader(),
+                    new Class<?>[]{functional},
+                    new FunctionalInvocationHandler((FPEvaluator<?>) args[i])
+            );
+            args[i] = proxy;
+            argumentTypes[i] = functional;
+        }
     }
 
     public static String primitiveToWrapper(String className) {
@@ -298,21 +300,21 @@ public class Reflect {
      */
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
-        Class<?>[] paramTypes = reflectionArguments.getArgumentTypes();
+        Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
 
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
             if (m.getName().equals(methodName)) {
-                Class<?>[] types = m.getParameterTypes();
-                if (types.length == 1 && types[0].equals(Object[].class)) {
+                Class<?>[] parameterTypes = m.getParameterTypes();
+                if (parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class)) {
                     return m;
                 }
-                if (paramTypes == null || types.length != paramTypes.length) {
+                if (argumentTypes == null || parameterTypes.length != argumentTypes.length) {
                     continue;
                 }
                 boolean found = true;
-                for (int i = 0; i < paramTypes.length; i++) {
-                    if (findMatch(paramTypes, types, i) || types[i].getName().equals("java.lang.Object")) {
+                for (int i = 0; i < argumentTypes.length; i++) {
+                    if (matchArgumentVsParameter(argumentTypes, parameterTypes, i) || parameterTypes[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
                     found = false;
@@ -343,7 +345,7 @@ public class Reflect {
             }
             boolean found = true;
             for (int i = 0; i < paramTypes.length; i++) {
-                if (findMatch(paramTypes, types, i)) continue;
+                if (matchArgumentVsParameter(paramTypes, types, i)) continue;
                 found = false;
             }
             if (found) {
@@ -354,46 +356,48 @@ public class Reflect {
     }
 
     /**
-     * Determine if parameters match.
-     * This method does part of it's job through side effects, hence the reason that arrays are
-     * passed as arguments instead of single values.
+     * <p>Determine if the ith parameter matches the ith argument</p>
      *
-     * @param paramTypes
-     * @param types
-     * @param i
-     * @return
+     * <p>This method does part of it's job through side effects, hence the reason that arrays are
+     * passed as arguments instead of single values.</p>
+     *
+     * @param argumentTypes the array of types that we are trying to pass in as arguments
+     * @param parameterTypes the array of types that the function is expecting as parameters
+     * @param i the position in the array that we are looking at.
+     *          arrays are used because the function operates via side effects.
+     * @return true if a match has been found.
      */
-    private static boolean findMatch(Class<?>[] paramTypes, Class<?>[] types, int i) {
-        Class<?> argumentType = types[i];
-        if (argumentType.isAssignableFrom(paramTypes[i])) {
+    private static boolean matchArgumentVsParameter(Class<?>[] argumentTypes, Class<?>[] parameterTypes, int i) {
+        Class<?> parameterType = parameterTypes[i];
+        if (parameterType.isAssignableFrom(argumentTypes[i])) {
             return true;
         }
-        if (argumentType.equals(paramTypes[i])) {
+        if (parameterType.equals(argumentTypes[i])) {
             return true;
         }
-        if (wrapperToPrimitive.get(argumentType) != null && wrapperToPrimitive.get(argumentType).equals(paramTypes[i])) {
-            paramTypes[i] = wrapperToPrimitive.get(argumentType);
+        if (wrapperToPrimitive.get(parameterType) != null && wrapperToPrimitive.get(parameterType).equals(argumentTypes[i])) {
+            argumentTypes[i] = wrapperToPrimitive.get(parameterType);
             return true;
         }
-        if (primitiveToWrapper.get(argumentType) != null && primitiveToWrapper.get(argumentType).equals(paramTypes[i])) {
-            paramTypes[i] = primitiveToWrapper.get(argumentType);
+        if (primitiveToWrapper.get(parameterType) != null && primitiveToWrapper.get(parameterType).equals(argumentTypes[i])) {
+            argumentTypes[i] = primitiveToWrapper.get(parameterType);
             return true;
         }
 
-        for (Class<?> iface : argumentType.getInterfaces()) {
-            for (Class<?> iface2 : paramTypes[i].getInterfaces()) {
+        for (Class<?> iface : parameterType.getInterfaces()) {
+            for (Class<?> iface2 : argumentTypes[i].getInterfaces()) {
                 if (iface.equals(iface2)) {
                     return iface.isAnnotationPresent(FunctionalInterface.class) && iface2.isAnnotationPresent(FunctionalInterface.class);
                 }
             }
         }
-        if (argumentType.isAnnotationPresent(FunctionalInterface.class)) {
-            for (Class<?> iface2 : paramTypes[i].getInterfaces()) {
+        if (parameterType.isAnnotationPresent(FunctionalInterface.class)) {
+            for (Class<?> iface2 : argumentTypes[i].getInterfaces()) {
                 if (iface2.isAnnotationPresent(FunctionalInterface.class)) {
                     return true;
                 }
             }
-            return paramTypes[i].isAnnotationPresent(FunctionalInterface.class);
+            return argumentTypes[i].isAnnotationPresent(FunctionalInterface.class);
         }
         return false;
     }
