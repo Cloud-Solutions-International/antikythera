@@ -9,6 +9,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.LambdaInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -105,6 +106,9 @@ public class Reflect {
             argValues[i] = evaluator.evaluateExpression(arguments.get(i));
             if (argValues[i] != null) {
                 args[i] = argValues[i].getValue();
+                if (args[i] instanceof FPEvaluator<?>) {
+                    System.out.println("FP");
+                }
                 if (argValues[i].getClazz() != null ) {
                     paramTypes[i] = argValues[i].getClazz();
                 }

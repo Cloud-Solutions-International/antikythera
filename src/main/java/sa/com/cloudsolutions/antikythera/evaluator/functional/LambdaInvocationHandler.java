@@ -4,7 +4,7 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
-public record LambdaInvocationHandler(Object originalLambda,
+public record LambdaInvocationHandler(Object invocationTarget,
                                        Class<?> lambdaClass) implements java.lang.reflect.InvocationHandler {
 
     @Override
@@ -17,7 +17,7 @@ public record LambdaInvocationHandler(Object originalLambda,
         for (Method m : methods) {
             if (!m.isDefault() && !Modifier.isStatic(m.getModifiers()) &&
                     m.getParameterCount() == method.getParameterCount()) {
-                return m.invoke(originalLambda, args);
+                return m.invoke(invocationTarget, args);
             }
         }
         return null;
