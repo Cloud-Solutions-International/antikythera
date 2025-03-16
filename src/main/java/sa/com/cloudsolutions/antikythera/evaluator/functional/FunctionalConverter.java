@@ -27,7 +27,12 @@ public class FunctionalConverter {
 
         MethodCallExpr call = new MethodCallExpr();
         call.setName(methodName);
-        call.setScope(new NameExpr("arg"));
+        if (methodRef.getScope() != null && methodRef.getScope().asTypeExpr().toString().startsWith("System")) {
+            call.setScope(methodRef.getScope());
+        }
+        else {
+            call.setScope(new NameExpr("arg"));
+        }
 
         BlockStmt body = new BlockStmt();
 
@@ -55,6 +60,9 @@ public class FunctionalConverter {
                                         body.addStatement(new ReturnStmt(call));
                                     } else {
                                         body.addStatement(call);
+                                    }
+                                    if (functionalMethod.getParameterCount() != 0) {
+                                        call.addArgument(new NameExpr("arg"));
                                     }
                                     break;
                                 }
