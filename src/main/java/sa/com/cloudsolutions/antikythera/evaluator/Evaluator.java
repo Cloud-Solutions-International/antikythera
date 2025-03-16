@@ -584,9 +584,17 @@ public class Evaluator {
             /*
              * Push method arguments
              */
-            Variable variable = evaluateExpression(oce.getArguments().get(i));
-            args.push(variable.getType());
-            AntikytheraRunTime.push(variable);
+            Expression expr = oce.getArguments().get(i);
+            if (expr.isLambdaExpr()) {
+                Variable variable = FPEvaluator.create(expr.asLambdaExpr(), this);
+                args.push(variable.getType());
+                AntikytheraRunTime.push(variable);
+            }
+            else {
+                Variable variable = evaluateExpression(expr);
+                args.push(variable.getType());
+                AntikytheraRunTime.push(variable);
+            }
         }
 
         while(!args.isEmpty()) {
