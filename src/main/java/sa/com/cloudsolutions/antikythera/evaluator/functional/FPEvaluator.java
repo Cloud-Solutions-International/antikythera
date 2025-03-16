@@ -4,11 +4,9 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -17,7 +15,6 @@ import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
 import java.util.LinkedList;
@@ -46,7 +43,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public static FPEvaluator<?> create(LambdaExpr lambdaExpr, Evaluator enclosure, Variable scope) throws ReflectiveOperationException {
+    public static Variable create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
         // Create a synthetic method from the lambda
         MethodDeclaration md = new MethodDeclaration();
 
@@ -71,7 +68,10 @@ public abstract class FPEvaluator<T> extends Evaluator {
         FPEvaluator<?> fp = createEvaluator(enclosure, md);
         fp.enclosure = enclosure;
         fp.expr = lambdaExpr;
-        return fp;
+
+        Variable v = new Variable(fp);
+        v.setType(fp.getType());
+        return v;
     }
 
     @Override

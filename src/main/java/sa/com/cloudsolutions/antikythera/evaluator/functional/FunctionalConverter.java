@@ -59,6 +59,7 @@ public class FunctionalConverter {
                                     } else {
                                         body.addStatement(call);
                                     }
+                                    break;
                                 }
                             }
                         }

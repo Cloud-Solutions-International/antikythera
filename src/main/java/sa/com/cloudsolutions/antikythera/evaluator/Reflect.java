@@ -117,12 +117,7 @@ public class Reflect {
                 expr = FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), scope);
             }
             if (expr.isLambdaExpr()) {
-                LambdaExpr lambdaExpr = expr.asLambdaExpr();
-                FPEvaluator<?> eval = FPEvaluator.create(lambdaExpr, evaluator, scope);
-
-                Variable v = new Variable(eval);
-                v.setType(eval.getType());
-                argValues[i] = v;
+                argValues[i] = FPEvaluator.create(expr.asLambdaExpr(), evaluator);
             } else {
                 argValues[i] = evaluator.evaluateExpression(expr);
             }
