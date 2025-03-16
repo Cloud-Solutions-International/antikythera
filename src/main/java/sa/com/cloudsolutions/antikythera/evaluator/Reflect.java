@@ -108,7 +108,7 @@ public class Reflect {
         for (int i = 0; i < arguments.size(); i++) {
             Expression expr = arguments.get(i);
             if (expr.isMethodReferenceExpr()) {
-                expr = FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr());
+                expr = FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), scope);
             }
             if (expr.isLambdaExpr()) {
                 LambdaExpr lambdaExpr = expr.asLambdaExpr();

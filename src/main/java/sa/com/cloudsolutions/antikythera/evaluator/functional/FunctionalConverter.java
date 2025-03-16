@@ -10,45 +10,73 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.Map;
 
 public class FunctionalConverter {
-    private static final Map<String, Class<?>> PRIMITIVE_TYPES = Map.of(
-        "int", int.class,
-        "long", long.class,
-        "double", double.class,
-        "boolean", boolean.class,
-        "void", void.class
-    );
 
     /**
      * Converts a MethodReferenceExpr to a LambdaExpr
      */
-    public static LambdaExpr convertToLambda(MethodReferenceExpr methodRef) {
-        // Find target method based on scope and identifier
+    public static LambdaExpr convertToLambda(MethodReferenceExpr methodRef, Variable outerScope) {
         String methodName = methodRef.getIdentifier();
-        Expression scope = methodRef.getScope();
+        Expression methodScope = methodRef.getScope();
 
-        // Create parameter list based on functional interface
         NodeList<Parameter> parameters = new NodeList<>();
         parameters.add(new Parameter(new ClassOrInterfaceType("Object"), "arg"));
 
-        // Create method call with parameters
         MethodCallExpr call = new MethodCallExpr();
         call.setName(methodName);
-        call.setScope(scope);
+        call.setScope(methodScope);
         call.addArgument(new NameExpr("arg"));
 
-        // Create lambda body
         BlockStmt body = new BlockStmt();
-        body.addStatement(new ReturnStmt(call));
 
-        // Create lambda expression
+        if (outerScope != null) {
+            methodRef.getParentNode().ifPresent(parent -> {
+                if (parent instanceof MethodCallExpr mce) {
+                    String name = mce.getNameAsString();
+                    int pos = -1;
+                    for (int i = 0 ; i < mce.getArguments().size() ; i++) {
+                        if (mce.getArguments().get(i).equals(methodRef)) {
+                            pos = i;
+                        }
+                    }
+                    if (outerScope.getValue() instanceof Evaluator eval) {
+
+                    }
+                    else {
+                        Class<?> clazz = outerScope.getClazz();
+                        for (Method m : clazz.getMethods()) {
+                            if (m.getName().equals(name) && m.getParameterCount() == mce.getArguments().size()) {
+                                Class<?> param = m.getParameterTypes()[pos];
+                                if (param.isInterface() && param.isAnnotationPresent(FunctionalInterface.class)) {
+                                    Method functionalMethod = getFunctionalInterfaceMethod(param);
+                                    if (functionalMethod != null && functionalMethod.getReturnType() != void.class) {
+                                        body.addStatement(new ReturnStmt(call));
+                                    } else {
+                                        body.addStatement(call);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        else {
+            body.addStatement(new ReturnStmt(call));
+        }
+
         return new LambdaExpr(parameters, body);
+    }
+
+    private static Method getFunctionalInterfaceMethod(Class<?> functionalInterface) {
+        return java.util.Arrays.stream(functionalInterface.getMethods())
+                .filter(m -> m.isDefault() == false && !m.getDeclaringClass().equals(Object.class))
+                .findFirst()
+                .orElse(null);
     }
 }
