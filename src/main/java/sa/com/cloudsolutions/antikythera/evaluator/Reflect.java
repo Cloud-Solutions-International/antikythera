@@ -9,6 +9,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.LambdaInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -368,26 +369,6 @@ public class Reflect {
         }
 
         return false;
-    }
-
-    private record LambdaInvocationHandler(Object originalLambda,
-                                           Class<?> lambdaClass) implements java.lang.reflect.InvocationHandler {
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            if (method.getDeclaringClass() == Object.class) {
-                return method.invoke(proxy, args);
-            }
-
-            Method[] methods = lambdaClass.getDeclaredMethods();
-            for (Method m : methods) {
-                if (!m.isDefault() && !Modifier.isStatic(m.getModifiers()) &&
-                        m.getParameterCount() == method.getParameterCount()) {
-                    return m.invoke(originalLambda, args);
-                }
-            }
-            return null;
-        }
     }
 
     private static boolean isLambdaConversion(ReflectionArguments reflectionArguments, Class<?>[] types, int i) {
