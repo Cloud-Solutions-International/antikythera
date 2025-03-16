@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
@@ -13,6 +14,7 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
+import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -79,8 +81,14 @@ public abstract class FPEvaluator<T> extends Evaluator {
             body.addStatement(lambdaExpr.getBody());
             md.setBody(body);
         }
-        md.setType(new UnknownType());
-        lambdaExpr.getParameters().forEach(md::addParameter);
+        md.setType(new VoidType());
+
+        for (Parameter param : lambdaExpr.getParameters()) {
+            md.addParameter(param);
+            if (param.getType() instanceof UnknownType) {
+                param.setType("Object");
+            }
+        }
 
         FPEvaluator<?> fp = createEvaluator(enclosure, md);
         fp.enclosure = enclosure;

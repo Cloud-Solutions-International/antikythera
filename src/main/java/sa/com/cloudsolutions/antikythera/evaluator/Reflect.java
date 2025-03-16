@@ -10,13 +10,12 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.BiConsumerEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
-import sa.com.cloudsolutions.antikythera.evaluator.functional.LambdaInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -31,6 +30,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class Reflect {
     public static final String BOOLEAN = "boolean";
@@ -48,6 +51,7 @@ public class Reflect {
      * here int.class -> Integer.class
      */
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
+
     static {
         /*
          * of course those maps are absolutely no use unless we can fill them up
@@ -61,21 +65,23 @@ public class Reflect {
         wrapperToPrimitive.put(Byte.class, byte.class);
         wrapperToPrimitive.put(Character.class, char.class);
 
-        for(Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
+        for (Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
             primitiveToWrapper.put(entry.getValue(), entry.getKey());
         }
     }
 
-    private Reflect() {}
+    private Reflect() {
+    }
 
     /**
      * Build the suitable set of arguments for use with a reflective  method call
+     *
      * @param methodCall ObjectCreationExpr from java parser , which will be used as the basis for finding the
-     *      *            method to be called along with it's arguments.
+     *                   *            method to be called along with it's arguments.
      * @param evaluator  the evaluator to use to evaluate the arguments if any
      * @return A ReflectionArguments object which contains all the information required to execute a method
-     *          using reflection.
-     * @throws AntikytheraException if something goes wrong with the parser related code
+     * using reflection.
+     * @throws AntikytheraException         if something goes wrong with the parser related code
      * @throws ReflectiveOperationException if reflective operations fail
      */
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator, Variable scope)
@@ -85,12 +91,13 @@ public class Reflect {
 
     /**
      * Build the set of arguments to be used with instantiating a class using reflection.
-     * @param oce ObjectCreationExpr from java parser , which will be used as the basis for finding the right
-     *            constructor to use.
+     *
+     * @param oce       ObjectCreationExpr from java parser , which will be used as the basis for finding the right
+     *                  constructor to use.
      * @param evaluator the evaluator to use to evaluate the arguments if any
      * @return A ReflectionArguments object which contains all the information required to execute a method
-     *      *          using reflection.
-     * @throws AntikytheraException if the reflection arguments cannot be solved
+     * *          using reflection.
+     * @throws AntikytheraException         if the reflection arguments cannot be solved
      * @throws ReflectiveOperationException if the reflective methods failed.
      */
     public static ReflectionArguments buildArguments(ObjectCreationExpr oce, Evaluator evaluator, Variable scope)
@@ -117,8 +124,7 @@ public class Reflect {
                 Variable v = new Variable(eval);
                 v.setType(eval.getType());
                 argValues[i] = v;
-            }
-            else {
+            } else {
                 argValues[i] = evaluator.evaluateExpression(expr);
             }
 
@@ -144,7 +150,7 @@ public class Reflect {
             if (args[i] instanceof FPEvaluator<?> && functional != null) {
                 Object proxy = Proxy.newProxyInstance(
                         paramTypes[i].getClassLoader(),
-                        new Class<?>[] { functional },
+                        new Class<?>[]{functional},
                         new FunctionalInvocationHandler((FPEvaluator<?>) args[i])
                 );
                 args[i] = proxy;
@@ -157,36 +163,6 @@ public class Reflect {
         reflectionArguments.setScope(scope);
         reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
-    }
-
-
-    private static class FunctionalInvocationHandler implements InvocationHandler {
-        private final FPEvaluator<?> evaluator;
-
-        FunctionalInvocationHandler(FPEvaluator<?> evaluator) {
-            this.evaluator = evaluator;
-        }
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            if (method.getDeclaringClass() == Object.class) {
-                return method.invoke(this, args);
-            }
-
-            // Delegate the method call to the FPEvaluator
-            return evaluator.executeLocalMethod(createMethodCall(method, args));
-        }
-
-        private MethodCallExpr createMethodCall(Method method, Object[] args) {
-            MethodCallExpr call = new MethodCallExpr();
-            call.setName(method.getName());
-            if (args != null) {
-                for (Object arg : args) {
-                    call.addArgument(arg.toString());
-                }
-            }
-            return call;
-        }
     }
 
     public static String primitiveToWrapper(String className) {
@@ -225,20 +201,20 @@ public class Reflect {
 
     public static Type getComponentType(Class<?> clazz) {
         return switch (clazz.getName()) {
-            case "int","java.lang.Integer" -> PrimitiveType.intType();
-            case "double","java.lang.Double" -> PrimitiveType.doubleType();
-            case "boolean","java.lang.Boolean" -> PrimitiveType.booleanType();
-            case "long","java.lang.Long","java.lang.BigDecimal" -> PrimitiveType.longType();
-            case "float","java.lang.Float" -> PrimitiveType.floatType();
-            case "short","java.lang.Short" -> PrimitiveType.shortType();
-            case "byte","java.lang.Byte" -> PrimitiveType.byteType();
-            case "char","java.lang.Character" -> PrimitiveType.charType();
+            case "int", "java.lang.Integer" -> PrimitiveType.intType();
+            case "double", "java.lang.Double" -> PrimitiveType.doubleType();
+            case "boolean", "java.lang.Boolean" -> PrimitiveType.booleanType();
+            case "long", "java.lang.Long", "java.lang.BigDecimal" -> PrimitiveType.longType();
+            case "float", "java.lang.Float" -> PrimitiveType.floatType();
+            case "short", "java.lang.Short" -> PrimitiveType.shortType();
+            case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
+            case "char", "java.lang.Character" -> PrimitiveType.charType();
             case "java.lang.String" -> new ClassOrInterfaceType("String");
             default -> null;
         };
     }
 
-    public static Object getDefault(String elementType)  {
+    public static Object getDefault(String elementType) {
         return switch (elementType) {
             case "int" -> 0;
             case PRIMITIVE_DOUBLE -> 0.0;
@@ -258,8 +234,8 @@ public class Reflect {
         if (returnType.equals(Boolean.class) || returnType.equals(boolean.class)) return false;
         if (returnType.equals(Double.class) || returnType.equals(double.class)) return 0.0;
         if (returnType.equals(Float.class) || returnType.equals(float.class)) return 0.0f;
-        if (returnType.equals(Byte.class) || returnType.equals(byte.class)) return (byte)0;
-        if (returnType.equals(Short.class) || returnType.equals(short.class)) return (short)0;
+        if (returnType.equals(Byte.class) || returnType.equals(byte.class)) return (byte) 0;
+        if (returnType.equals(Short.class) || returnType.equals(short.class)) return (short) 0;
         if (returnType.equals(Character.class) || returnType.equals(char.class)) return '\0';
 
         // Handle common collections
@@ -272,7 +248,7 @@ public class Reflect {
     private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
         Variable v = new Variable(initialValue);
         ObjectCreationExpr expr = new ObjectCreationExpr()
-            .setType(new ClassOrInterfaceType().setName(typeName));
+                .setType(new ClassOrInterfaceType().setName(typeName));
 
         if (stringValue != null) {
             expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
@@ -291,44 +267,37 @@ public class Reflect {
 
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" ->
-                createVariable(new ArrayList<>(), "java.util.ArrayList", null);
+                    createVariable(new ArrayList<>(), "java.util.ArrayList", null);
 
             case "Map", "java.util.Map", "java.util.HashMap" ->
-                createVariable(new HashMap<>(), "java.util.HashMap", null);
+                    createVariable(new HashMap<>(), "java.util.HashMap", null);
 
-            case "java.util.TreeMap" ->
-                createVariable(new TreeMap<>(), "java.util.TreeMap", null);
+            case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
 
             case "Set", "java.util.Set", "java.util.HashSet" ->
-                createVariable(new HashSet<>(), "java.util.HashSet", null);
+                    createVariable(new HashSet<>(), "java.util.HashSet", null);
 
-            case "java.util.TreeSet" ->
-                createVariable(new TreeSet<>(), "java.util.TreeSet", null);
+            case "java.util.TreeSet" -> createVariable(new TreeSet<>(), "java.util.TreeSet", null);
 
-            case "java.util.Optional" ->
-                createVariable(Optional.empty(), "java.util.Optional", null);
+            case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
 
-            case "Boolean", "boolean" ->
-                createVariable(false, "Boolean", "false");
+            case "Boolean", "boolean" -> createVariable(false, "Boolean", "false");
 
-            case "float", "Float", "double", DOUBLE ->
-                createVariable(0.0, DOUBLE, "0.0");
+            case "float", "Float", "double", DOUBLE -> createVariable(0.0, DOUBLE, "0.0");
 
-            case INTEGER, "int" ->
-                createVariable(0, INTEGER, "0");
+            case INTEGER, "int" -> createVariable(0, INTEGER, "0");
 
-            case "Long", "long", "java.lang.Long" ->
-                createVariable(-100L, "Long", "-100");
+            case "Long", "long", "java.lang.Long" -> createVariable(-100L, "Long", "-100");
 
-            case "String", "java.lang.String" ->
-                createVariable("Ibuprofen", "String", "Ibuprofen");
+            case "String", "java.lang.String" -> createVariable("Ibuprofen", "String", "Ibuprofen");
 
             default -> new Variable(null);
         };
     }
+
     /**
      * Finds a matching method using parameters.
-     *
+     * <p>
      * This function has side effects. The paramTypes in reflectionArguments may end up being
      * converted from a boxed to primitive or vice versa.
      * This is because the Variable class that we use has an Object representing the value.
@@ -346,14 +315,14 @@ public class Reflect {
         for (Method m : methods) {
             if (m.getName().equals(methodName)) {
                 Class<?>[] types = m.getParameterTypes();
-                if(types.length == 1 && types[0].equals(Object[].class)) {
+                if (types.length == 1 && types[0].equals(Object[].class)) {
                     return m;
                 }
                 if (paramTypes == null || types.length != paramTypes.length) {
                     continue;
                 }
                 boolean found = true;
-                for (int i = 0 ; i < paramTypes.length ; i++) {
+                for (int i = 0; i < paramTypes.length; i++) {
                     if (findMatch(paramTypes, types, i) || types[i].getName().equals("java.lang.Object")) {
                         continue;
                     }
@@ -369,11 +338,11 @@ public class Reflect {
 
     /**
      * Find a constructor matching the given parameters.
-     *
+     * <p>
      * This method has side effects. The paramTypes may end up being converted from a boxed to primitive
      * or vice verce
      *
-     * @param clazz the Class for which we need to find a constructor
+     * @param clazz      the Class for which we need to find a constructor
      * @param paramTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
@@ -384,7 +353,7 @@ public class Reflect {
                 continue;
             }
             boolean found = true;
-            for(int i = 0 ; i < paramTypes.length ; i++) {
+            for (int i = 0; i < paramTypes.length; i++) {
                 if (findMatch(paramTypes, types, i)) continue;
                 found = false;
             }
@@ -402,7 +371,6 @@ public class Reflect {
     public static Class<?> primitiveToWrapper(Class<?> clazz) {
         return primitiveToWrapper.getOrDefault(clazz, null);
     }
-
 
     /**
      * Determine if parameters match.
@@ -426,15 +394,14 @@ public class Reflect {
             paramTypes[i] = wrapperToPrimitive.get(argumentType);
             return true;
         }
-        if(primitiveToWrapper.get(argumentType) != null && primitiveToWrapper.get(argumentType).equals(paramTypes[i])) {
+        if (primitiveToWrapper.get(argumentType) != null && primitiveToWrapper.get(argumentType).equals(paramTypes[i])) {
             paramTypes[i] = primitiveToWrapper.get(argumentType);
             return true;
         }
 
         for (Class<?> iface : argumentType.getInterfaces()) {
             for (Class<?> iface2 : paramTypes[i].getInterfaces()) {
-                if (iface.equals(iface2))
-                {
+                if (iface.equals(iface2)) {
                     return iface.isAnnotationPresent(FunctionalInterface.class) && iface2.isAnnotationPresent(FunctionalInterface.class);
                 }
             }
@@ -484,7 +451,8 @@ public class Reflect {
                 if (Modifier.isPublic(method.getModifiers())) {
                     return method;
                 }
-            } catch (NoSuchMethodException ignored) {}
+            } catch (NoSuchMethodException ignored) {
+            }
         }
 
         // Try superclass hierarchy
@@ -495,11 +463,47 @@ public class Reflect {
                 if (Modifier.isPublic(method.getModifiers())) {
                     return method;
                 }
-            } catch (NoSuchMethodException ignored) {}
+            } catch (NoSuchMethodException ignored) {
+            }
             superclass = superclass.getSuperclass();
         }
 
         return null;
+    }
+
+    private static class FunctionalInvocationHandler implements InvocationHandler {
+        private final FPEvaluator<?> evaluator;
+
+        FunctionalInvocationHandler(FPEvaluator<?> evaluator) {
+            this.evaluator = evaluator;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (method.getDeclaringClass() == Object.class) {
+                return method.invoke(this, args);
+            }
+
+            if (evaluator instanceof BiConsumer bc) {
+                bc.accept(args[0], args[1]);
+                return null;
+            }
+            if (evaluator instanceof Function f) {
+                return f.apply(args[0]);
+            }
+            if (evaluator instanceof Consumer c) {
+                c.accept(args[0]);
+                return null;
+            }
+            if (evaluator instanceof Runnable r) {
+                r.run();
+                return null;
+            }
+            if (evaluator instanceof Supplier s) {
+                return s.get();
+            }
+            return null;
+        }
     }
 
 }
