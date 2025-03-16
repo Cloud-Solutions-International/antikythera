@@ -107,7 +107,7 @@ public class Reflect {
             if (argValues[i] != null) {
                 args[i] = argValues[i].getValue();
                 if (args[i] instanceof FPEvaluator<?>) {
-                    System.out.println("FP");
+
                 }
                 if (argValues[i].getClazz() != null ) {
                     paramTypes[i] = argValues[i].getClazz();
