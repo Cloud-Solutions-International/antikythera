@@ -46,28 +46,6 @@ public abstract class FPEvaluator<T> extends Evaluator {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public static FPEvaluator<?> create(MethodReferenceExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
-        CompilationUnit cu = enclosure.getCompilationUnit();
-        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, lambdaExpr.getScope().toString());
-        MethodDeclaration md = cdecl.findFirst(
-                MethodDeclaration.class, mx -> mx.getNameAsString().equals(lambdaExpr.getIdentifier())
-        ).orElseThrow();
-
-        BlockStmt body;
-        if (md.getBody().isPresent()) {
-            body = md.getBody().get();
-        } else {
-            body = new BlockStmt();
-            md.setBody(body);
-        }
-        md.setType(new UnknownType());
-
-        FPEvaluator<?> fp = createEvaluator(enclosure, md);
-        fp.enclosure = enclosure;
-        fp.expr = lambdaExpr;
-        return fp;
-    }
-
     public static FPEvaluator<?> create(LambdaExpr lambdaExpr, Evaluator enclosure, Variable scope) throws ReflectiveOperationException {
         // Create a synthetic method from the lambda
         MethodDeclaration md = new MethodDeclaration();
