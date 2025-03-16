@@ -3,14 +3,14 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 public class ReflectionArguments {
     private final String methodName;
     private Object[] args;
-    private final Class<?>[] paramTypes;
+    private final Class<?>[] argumentTypes;
     private Evaluator enclosure;
     private Variable scope;
 
-    public ReflectionArguments(String methodName, Object[] args, Class<?>[] paramTypes) {
+    public ReflectionArguments(String methodName, Object[] args, Class<?>[] argumentTypes) {
         this.methodName = methodName;
         this.args = args;
-        this.paramTypes = paramTypes;
+        this.argumentTypes = argumentTypes;
     }
 
     public String getMethodName() {
@@ -25,8 +25,8 @@ public class ReflectionArguments {
         this.args = args;
     }
 
-    public Class<?>[] getParamTypes() {
-        return paramTypes;
+    public Class<?>[] getArgumentTypes() {
+        return argumentTypes;
     }
 
     public Variable getScope() {

@@ -39,7 +39,6 @@ import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
-import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -62,7 +61,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -71,15 +69,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.BiPredicate;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-import java.util.function.ToIntFunction;
 
 import static org.mockito.Mockito.withSettings;
 
@@ -688,7 +677,7 @@ public class Evaluator {
             } else {
                 ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
-                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getParamTypes());
+                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes());
                 if(cons !=  null) {
                     Object instance = cons.newInstance(reflectionArguments.getArgs());
                     return new Variable(type, instance);
@@ -977,7 +966,7 @@ public class Evaluator {
             }
         } catch (InaccessibleObjectException ioe) {
             // If module access fails, try to find a public interface or superclass method
-            Method publicMethod = Reflect.findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getParamTypes());
+            Method publicMethod = Reflect.findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getArgumentTypes());
             if (publicMethod != null) {
                 returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
                 if (returnValue.getValue() == null && returnValue.getClazz() == null) {

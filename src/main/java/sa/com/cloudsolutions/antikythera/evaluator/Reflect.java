@@ -103,7 +103,7 @@ public class Reflect {
                                                             Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
         Variable[] argValues = new Variable[arguments.size()];
-        Class<?>[] paramTypes = new Class<?>[arguments.size()];
+        Class<?>[] argumentTypes = new Class<?>[arguments.size()];
         Object[] args = new Object[arguments.size()];
 
         for (int i = 0; i < arguments.size(); i++) {
@@ -120,35 +120,35 @@ public class Reflect {
             if (argValues[i] != null) {
                 args[i] = argValues[i].getValue();
                 if (argValues[i].getClazz() != null) {
-                    paramTypes[i] = argValues[i].getClazz();
+                    argumentTypes[i] = argValues[i].getClazz();
                 } else if (args[i] != null) {
-                    paramTypes[i] = argValues[i].getValue().getClass();
+                    argumentTypes[i] = argValues[i].getValue().getClass();
                 }
             } else {
                 try {
                     String className = arguments.get(0).calculateResolvedType().describe();
                     className = primitiveToWrapper(className);
-                    paramTypes[i] = Class.forName(className);
+                    argumentTypes[i] = Class.forName(className);
                 } catch (UnsolvedSymbolException us) {
-                    paramTypes[i] = Object.class;
+                    argumentTypes[i] = Object.class;
                 }
             }
 
-            Class<?> functional = getFunctionalInterface(paramTypes[i]);
+            Class<?> functional = getFunctionalInterface(argumentTypes[i]);
 
             if (args[i] instanceof FPEvaluator<?> && functional != null) {
                 Object proxy = Proxy.newProxyInstance(
-                        paramTypes[i].getClassLoader(),
+                        argumentTypes[i].getClassLoader(),
                         new Class<?>[]{functional},
                         new FunctionalInvocationHandler((FPEvaluator<?>) args[i])
                 );
                 args[i] = proxy;
-                paramTypes[i] = functional;
+                argumentTypes[i] = functional;
             }
 
         }
 
-        ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, paramTypes);
+        ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, argumentTypes);
         reflectionArguments.setScope(scope);
         reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
@@ -298,7 +298,7 @@ public class Reflect {
      */
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
-        Class<?>[] paramTypes = reflectionArguments.getParamTypes();
+        Class<?>[] paramTypes = reflectionArguments.getArgumentTypes();
 
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
