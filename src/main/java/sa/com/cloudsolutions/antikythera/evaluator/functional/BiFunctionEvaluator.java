@@ -18,7 +18,7 @@ public class BiFunctionEvaluator<T, U, R> extends FPEvaluator<T> implements BiFu
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName(getClassName())
+                .setName("BiFunction")
                 .setTypeArguments(
                         new WildcardType(),new WildcardType(),new WildcardType()
                 );

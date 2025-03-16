@@ -17,7 +17,7 @@ public class BiConsumerEvaluator<T, U> extends FPEvaluator<T> implements BiConsu
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName(getClassName())
+                .setName("BiConsumer")
                 .setTypeArguments(
                         new WildcardType(),
                         new WildcardType()

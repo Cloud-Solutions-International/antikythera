@@ -18,7 +18,7 @@ public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> 
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName(getClassName())
+                .setName("Consumer")
                 .setTypeArguments(
                         new WildcardType()
                 );

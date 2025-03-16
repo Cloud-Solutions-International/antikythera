@@ -17,7 +17,7 @@ public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> 
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName(getClassName())
+                .setName("Supplier")
                 .setTypeArguments(
                         new WildcardType()
                 );

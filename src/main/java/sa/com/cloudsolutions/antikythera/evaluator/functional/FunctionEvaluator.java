@@ -18,7 +18,7 @@ public class FunctionEvaluator<T,R> extends FPEvaluator<T> implements Function<T
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName(getClassName())
+                .setName("Function")
                 .setTypeArguments(
                         new WildcardType(), new WildcardType()
                 );
