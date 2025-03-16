@@ -353,14 +353,6 @@ public class Reflect {
         return null;
     }
 
-    public static Class<?> wrapperToPrimitive(Class<?> clazz) {
-        return wrapperToPrimitive.getOrDefault(clazz, null);
-    }
-
-    public static Class<?> primitiveToWrapper(Class<?> clazz) {
-        return primitiveToWrapper.getOrDefault(clazz, null);
-    }
-
     /**
      * Determine if parameters match.
      * This method does part of it's job through side effects, hence the reason that arrays are
