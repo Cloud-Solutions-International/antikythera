@@ -94,7 +94,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         if (v == null) {
             v = enclosure.getValue(expr.getParentNode().get(), name);
             if (v != null) {
-                return null;
+                return v;
             }
             for(Map<String, Variable> local : enclosure.getLocals().values()) {
                 v = local.get(name);
