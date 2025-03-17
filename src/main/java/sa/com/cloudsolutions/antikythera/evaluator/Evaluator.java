@@ -308,6 +308,7 @@ public class Evaluator {
         return null;
     }
 
+    @SuppressWarnings("java:S3011")
     Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
 
@@ -343,17 +344,7 @@ public class Evaluator {
             }
             logger.warn("Could not resolve {} for field access", fae.getScope());
         }
-        else {
-            throw new AntikytheraException("THIS CODE IS A DELETION CANDIDATE");
-            /*
-            Variable v = getFields().get(fae.getScope().toString());
-            if (v != null) {
-                Object obj = v.getValue();
-                Field field = obj.getClass().getDeclaredField(fae.getNameAsString());
-                field.setAccessible(true);
-                return new Variable(field.get(obj));
-            }*/
-        }
+
         return null;
     }
 
@@ -379,6 +370,7 @@ public class Evaluator {
         };
     }
 
+    @SuppressWarnings("java:S3011")
     private Variable evaluateAssignment(Expression expr) throws ReflectiveOperationException {
         AssignExpr assignExpr = expr.asAssignExpr();
         Expression target = assignExpr.getTarget();
@@ -955,7 +947,7 @@ public class Evaluator {
         }
     }
 
-
+    @SuppressWarnings("java:S3011")
     private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments, Method method) throws ReflectiveOperationException {
         Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
         try {

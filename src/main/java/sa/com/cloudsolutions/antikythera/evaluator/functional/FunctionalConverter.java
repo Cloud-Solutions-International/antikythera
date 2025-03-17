@@ -17,6 +17,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -65,8 +66,8 @@ public class FunctionalConverter {
         }
         else {
             Class<?> clazz = outerScope.getClazz();
-            for (Method m : clazz.getMethods()) {
-                if (m.getName().equals(name) && m.getParameterCount() == mce.getArguments().size()) {
+            for (Method m : Reflect.getMethodsByName(clazz, name)) {
+                if (m.getParameterCount() == mce.getArguments().size()) {
                     Class<?> param = m.getParameterTypes()[pos];
                     if (param.isInterface() && param.isAnnotationPresent(FunctionalInterface.class)) {
                         Method functionalMethod = getFunctionalInterfaceMethod(param);

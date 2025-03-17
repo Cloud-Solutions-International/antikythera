@@ -314,30 +314,45 @@ public class Reflect {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
 
-        Method[] methods = clazz.getMethods();
-        for (Method m : methods) {
-            if (m.getName().equals(methodName)) {
-                Class<?>[] parameterTypes = m.getParameterTypes();
-                if (parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class)) {
-                    return m;
-                }
-                if (argumentTypes == null || parameterTypes.length != argumentTypes.length) {
+        for (Method m : getMethodsByName(clazz, methodName)) {
+            Class<?>[] parameterTypes = m.getParameterTypes();
+            if (parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class)) {
+                return m;
+            }
+            if (argumentTypes == null || parameterTypes.length != argumentTypes.length) {
+                continue;
+            }
+            boolean found = true;
+            for (int i = 0; i < argumentTypes.length; i++) {
+                if (matchArgumentVsParameter(argumentTypes, parameterTypes, reflectionArguments.getArguments(), i) ||
+                        parameterTypes[i].getName().equals("java.lang.Object")) {
                     continue;
                 }
-                boolean found = true;
-                for (int i = 0; i < argumentTypes.length; i++) {
-                    if (matchArgumentVsParameter(argumentTypes, parameterTypes, reflectionArguments.getArguments(), i) ||
-                            parameterTypes[i].getName().equals("java.lang.Object")) {
-                        continue;
-                    }
-                    found = false;
-                }
-                if (found) {
-                    return m;
-                }
+                found = false;
+            }
+            if (found) {
+                return m;
             }
         }
         return null;
+    }
+
+    /**
+     * Get methods matching a name from the given class
+     * by using this you are probably making one more iteration than you have to, but it's worth
+     * the reduction in method complexity.
+     * @param clazz the haystack to search
+     * @param name the needle to find.
+     * @return a list of methods that match the name
+     */
+    public static List<Method> getMethodsByName(Class<?> clazz, String name) {
+        List<Method> methods = new ArrayList<>();
+        for (Method m : clazz.getMethods()) {
+            if (m.getName().equals(name)) {
+                methods.add(m);
+            }
+        }
+        return methods;
     }
 
     /**

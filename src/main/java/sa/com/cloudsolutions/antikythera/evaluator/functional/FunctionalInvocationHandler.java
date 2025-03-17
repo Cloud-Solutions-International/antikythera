@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.util.Comparator;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
