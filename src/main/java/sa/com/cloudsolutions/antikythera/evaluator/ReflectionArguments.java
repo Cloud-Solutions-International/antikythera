@@ -53,10 +53,6 @@ public class ReflectionArguments {
         this.scope = scope;
     }
 
-    public Evaluator getEnclosure() {
-        return enclosure;
-    }
-
     public void setEnclosure(Evaluator enclosure) {
         this.enclosure = enclosure;
     }

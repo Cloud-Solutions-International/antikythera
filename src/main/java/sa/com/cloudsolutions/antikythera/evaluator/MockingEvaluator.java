@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 

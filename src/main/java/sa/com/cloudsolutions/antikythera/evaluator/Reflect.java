@@ -212,7 +212,7 @@ public class Reflect {
             case "short", "java.lang.Short" -> PrimitiveType.shortType();
             case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
             case "char", "java.lang.Character" -> PrimitiveType.charType();
-            case "java.lang.String" -> new ClassOrInterfaceType("String");
+            case "java.lang.String" -> new ClassOrInterfaceType().setName("String");
             default -> null;
         };
     }
@@ -310,6 +310,7 @@ public class Reflect {
      * @param clazz the class on which we need to match the method name
      * @return a Method instance or null.
      */
+    @SuppressWarnings("java:S1872")
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
@@ -356,8 +357,8 @@ public class Reflect {
     }
 
     /**
-     * Find a constructor matching the given parameters.
-     * <p>
+     * <p>Find a constructor matching the given parameters.</p>
+     *
      * This method has side effects. The argumentTypes may end up being converted from a boxed to primitive
      * or vice verce
      *

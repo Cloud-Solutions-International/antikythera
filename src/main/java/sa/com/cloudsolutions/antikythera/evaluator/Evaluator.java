@@ -598,6 +598,7 @@ public class Evaluator {
                 if (body.isMethodDeclaration() && match != null) {
                     MethodDeclaration md = body.asMethodDeclaration();
                     MethodDeclaration replace = null;
+
                     for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
                         if (method.getNameAsString().equals(md.getNameAsString())) {
                             replace = method;
@@ -697,15 +698,14 @@ public class Evaluator {
      * @return the Variable if it's found or null.
      */
     public Variable getLocal(Node node, String name) {
-        Variable v = null;
         Node n = node;
 
-        while (true) {
+        while (n != null) {
             BlockStmt block = findBlockStatement(n);
             int hash = (block != null) ? block.hashCode() : 0;
             if (hash == 0) {
-                for(Map.Entry<Integer, Map<String, Variable>> entry : locals.entrySet()) {
-                    v = entry.getValue().get(name);
+                for(Map<String, Variable> entry : locals.values()) {
+                    Variable v = entry.get(name);
                     if (v != null) {
                         return v;
                     }
@@ -716,25 +716,16 @@ public class Evaluator {
                 Map<String, Variable> localsVars = this.locals.get(hash);
 
                 if (localsVars != null) {
-                    v = localsVars.get(name);
+                    Variable v = localsVars.get(name);
                     if (v != null)
                         return v;
                 }
                 if (n instanceof MethodDeclaration) {
                     localsVars = this.locals.get(hash);
-                    if (localsVars != null) {
-                        v = localsVars.get(name);
-                        return v;
-                    }
-                    break;
+                    return localsVars == null ? null : localsVars.get(name);
                 }
-                if (block == null) {
-                    break;
-                }
+
                 n = block.getParentNode().orElse(null);
-                if (n == null) {
-                    break;
-                }
             }
         }
         return null;
@@ -782,13 +773,15 @@ public class Evaluator {
     }
 
     /**
-     * Evaluate a method call.
-     * There are two types of method calls, those that return values and those that do not.
-     * The ones that return values will typically reach here through a flow such as initialize
-     * variables.
-     * Void method calls will typically reach here through the evaluate expression flow.
+     * <p>Evaluate a method call.</p>
      *
-     * Does so by executing all the code contained in that method where possible.
+     * <p>There are two types of method calls, those that return values and those that do not.
+     * The ones that return values will typically reach here through a flow such as initialize
+     * variables. Void method calls will typically reach this method through the evaluate
+     * expression flow.</p>
+     *
+     * Evaluates a method call by finding the method declaration and executing all the code
+     * contained in that method where possible.
      *
      * @param methodCall the method call expression
      * @return the result of executing that code.
@@ -857,20 +850,22 @@ public class Evaluator {
         return variable;
     }
 
+    @SuppressWarnings("java:S106")
     private Object findScopeType(String s) {
         return switch (s) {
             case "System.out" -> System.out;
             case "System.err" -> System.err;
             case "System.in" -> System.in;
             default -> {
-                String fullQulifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQulifiedName);
+                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (cu != null) {
                     TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
-                    yield createEvaluator(typeDecl.getFullyQualifiedName().get());
-                } else {
-                    yield null;
+                    if (typeDecl != null) {
+                        yield createEvaluator(typeDecl.getFullyQualifiedName().orElse(null));
+                    }
                 }
+                yield null;
             }
         };
     }
@@ -1003,8 +998,8 @@ public class Evaluator {
         Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
         if (cdecl.isPresent()) {
             /*
-             * At this point we are searching for the method call in the current class. For example it
-             * maybe a getter or setter that has been defined through lombok annotations.
+             * At this point we are searching for the method call in the current class. For example,
+             * it maybe a getter or setter that has been defined through lombok annotations.
              */
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(wrapper, cdecl.get());
@@ -1499,6 +1494,7 @@ public class Evaluator {
         loops.pollLast();
     }
 
+    @SuppressWarnings("java:S112")
     private void executeThrow(Statement stmt) throws Exception {
         ThrowStmt t = stmt.asThrowStmt();
         if (t.getExpression().isObjectCreationExpr()) {
@@ -1619,9 +1615,9 @@ public class Evaluator {
     }
 
     /**
-     * Java parser visitor used to setup the fields in the class.
+     * <p>Java parser visitor used to set up the fields in the class.</p>
      *
-     * When we initialize a class the fields also need to be initialized, so hwere we are
+     * When we initialize a class the fields also need to be initialized, so here we are
      */
     private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
         /**
