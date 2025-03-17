@@ -46,7 +46,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public static Variable create(LambdaExpr lambdaExpr, Evaluator enclosure) throws ReflectiveOperationException {
+    public static Variable create(LambdaExpr lambdaExpr, Evaluator enclosure)  {
         // Create a synthetic method from the lambda
         MethodDeclaration md = new MethodDeclaration();
 
@@ -132,6 +132,9 @@ public abstract class FPEvaluator<T> extends Evaluator {
         // alternatively we can look at the return type of the method itself. If it is not void
         // that method is going to return something.
         if (lambdaExpr.getParentNode().isPresent()) {
+            if (!lambdaExpr.getBody().isBlockStmt()) {
+                return true;
+            }
             if (lambdaExpr.getParentNode().get() instanceof MethodCallExpr mce) {
                 String name = mce.getNameAsString();
                 return switch (name) {
