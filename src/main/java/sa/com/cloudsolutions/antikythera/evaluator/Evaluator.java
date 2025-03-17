@@ -60,6 +60,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
@@ -182,7 +183,7 @@ public class Evaluator {
             /*
              * Binary expressions can also be difficult
              */
-            return evaluateBinaryExpression(expr);
+            return evaluateBinaryExpression(expr.asBinaryExpr());
         } else if (expr.isUnaryExpr()) {
             return  evaluateUnaryExpression(expr);
         } else if (expr.isAssignExpr()) {
@@ -211,9 +212,7 @@ public class Evaluator {
         return null;
     }
 
-
-    private Variable evaluateBinaryExpression(Expression expr) throws ReflectiveOperationException {
-        BinaryExpr binaryExpr = expr.asBinaryExpr();
+    private Variable evaluateBinaryExpression(BinaryExpr binaryExpr) throws ReflectiveOperationException {
         Expression left = binaryExpr.getLeft();
         Expression right = binaryExpr.getRight();
 
@@ -221,7 +220,7 @@ public class Evaluator {
     }
 
     private Variable evaluateConditionalExpression(ConditionalExpr conditionalExpr) throws ReflectiveOperationException {
-        Variable v = evaluateBinaryExpression(conditionalExpr.getCondition());
+        Variable v = evaluateBinaryExpression(conditionalExpr.getCondition().asBinaryExpr());
         if (v != null && v.getValue().equals(Boolean.TRUE)) {
             return evaluateExpression(conditionalExpr.getThenExpr());
         }
@@ -558,7 +557,7 @@ public class Evaluator {
     protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
-        Stack<Type> args = new Stack<>();
+        Deque<Type> args = new ArrayDeque<>();
         mce.setArgumentTypes(argTypes);
 
         for (int i = oce.getArguments().size() - 1; i >= 0; i--) {

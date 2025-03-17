@@ -134,16 +134,6 @@ public abstract class FPEvaluator<T> extends Evaluator {
     }
 
     @Override
-    public Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
-        returnFrom = null;
-        if (methodCall.getNameAsString().equals("apply") || methodCall.getNameAsString().equals("accept")) {
-            wrapCallExpression(methodCall);
-            return executeMethod(methodDeclaration);
-        }
-        throw new UnsupportedOperationException("Not yet implemented");
-    }
-
-    @Override
     public Variable getValue(Node n, String name) {
         Variable v = super.getValue(n, name);
         if (v == null) {
