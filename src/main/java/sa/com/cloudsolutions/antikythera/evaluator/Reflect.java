@@ -129,7 +129,7 @@ public class Reflect {
                     String className = arguments.get(0).calculateResolvedType().describe();
                     className = primitiveToWrapper(className);
                     argumentTypes[i] = Class.forName(className);
-                } catch (UnsolvedSymbolException us) {
+                } catch (UnsolvedSymbolException|ReflectiveOperationException us) {
                     argumentTypes[i] = Object.class;
                 }
             }

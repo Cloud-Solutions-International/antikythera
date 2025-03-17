@@ -14,13 +14,12 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.type.VoidType;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Optional;
 
 public abstract class FPEvaluator<T> extends Evaluator {
@@ -46,8 +45,10 @@ public abstract class FPEvaluator<T> extends Evaluator {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public static Variable create(LambdaExpr lambdaExpr, Evaluator enclosure)  {
-        // Create a synthetic method from the lambda
+    public static Variable create(LambdaExpr lambda, Evaluator enclosure)  {
+        LambdaExpr lambdaExpr = lambda.clone();
+        lambdaExpr.setParentNode(lambda.getParentNode().orElseThrow());
+
         MethodDeclaration md = new MethodDeclaration();
 
         BlockStmt body;
@@ -81,8 +82,7 @@ public abstract class FPEvaluator<T> extends Evaluator {
 
         FPEvaluator<?> fp = createEvaluator(md);
         fp.enclosure = enclosure;
-        fp.expr = lambdaExpr;
-
+        fp.expr = lambda;
         Variable v = new Variable(fp);
         v.setType(fp.getType());
         return v;
@@ -92,7 +92,16 @@ public abstract class FPEvaluator<T> extends Evaluator {
     public Variable getValue(Node n, String name) {
         Variable v = super.getValue(n, name);
         if (v == null) {
-            return enclosure.getValue(expr, name);
+            v = enclosure.getValue(expr.getParentNode().get(), name);
+            if (v != null) {
+                return null;
+            }
+            for(Map<String, Variable> local : enclosure.getLocals().values()) {
+                v = local.get(name);
+                if (v != null) {
+                    return v;
+                }
+            }
         }
         return v;
     }

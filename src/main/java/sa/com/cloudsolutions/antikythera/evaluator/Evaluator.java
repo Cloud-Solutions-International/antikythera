@@ -700,7 +700,7 @@ public class Evaluator {
      * Find local variable
      * Does not look at fields. You probably want to call getValue() instead.
      *
-     * @param node the node representing the current expresion.
+     * @param node the node representing the current expression.
      *             It's primary purpose is to help identify the current block
      * @param name the name of the variable to look up
      * @return the Variable if it's found or null.
@@ -1129,6 +1129,10 @@ public class Evaluator {
         v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
         v.setClazz(cls);
         return v;
+    }
+
+    public Map<Integer, Map<String, Variable>> getLocals() {
+        return locals;
     }
 
     private static class MockReturnValueHandler implements Answer<Object> {
