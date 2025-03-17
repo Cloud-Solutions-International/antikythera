@@ -17,13 +17,14 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.util.Map;
+import java.util.Optional;
 
 public abstract class FPEvaluator<T> extends Evaluator {
     protected MethodDeclaration methodDeclaration;
     protected Evaluator enclosure;
     Expression expr;
 
-    public FPEvaluator(String className) {
+    FPEvaluator(String className) {
         super(className);
     }
 
@@ -45,10 +46,10 @@ public abstract class FPEvaluator<T> extends Evaluator {
         md.setType(new VoidType());
 
         if (lambdaExpr.getBody().findFirst(ReturnStmt.class).isPresent()) {
-            md.setType(new ClassOrInterfaceType("Object"));
+            md.setType(new ClassOrInterfaceType().setName("Object"));
         } else {
             if (isReturning(lambdaExpr)) {
-                md.setType(new ClassOrInterfaceType("Object"));
+                md.setType(new ClassOrInterfaceType().setName("Object"));
                 Statement last = body.getStatements().get(body.getStatements().size() - 1);
                 addReturnStatement(body, last);
             }
@@ -96,19 +97,20 @@ public abstract class FPEvaluator<T> extends Evaluator {
         /*
          * There are two kinds of lambdas; those that contain a block and those that don't
          *
-         * If you have a block statement and you are supposed to return something, you are need an
+         * If you have a block statement, and you are supposed to return something, you are need an
          * explicit return statement. So those are pretty easy to spot, just look at the last line
          * of the block.
          *
-         * Those without a block statement are trickier. The simpliest approach is to look at the
+         * Those without a block statement are trickier. The simplest approach is to look at the
          * outer method and see if it is one of the usual suspects that are supposed to return
          * a value.
          */
-        if (lambdaExpr.getParentNode().isPresent()) {
+        Optional<Node> parentNode = lambdaExpr.getParentNode();
+        if (parentNode.isPresent()) {
             if (!lambdaExpr.getBody().isBlockStmt()) {
                 return true;
             }
-            if (lambdaExpr.getParentNode().get() instanceof MethodCallExpr mce) {
+            if (parentNode.get() instanceof MethodCallExpr mce) {
                 String name = mce.getNameAsString();
                 return switch (name) {
                     case "map", "filter", "sorted", "reduce", "anyMatch", "allMatch", "noneMatch",
@@ -145,14 +147,17 @@ public abstract class FPEvaluator<T> extends Evaluator {
     public Variable getValue(Node n, String name) {
         Variable v = super.getValue(n, name);
         if (v == null) {
-            v = enclosure.getValue(expr.getParentNode().get(), name);
-            if (v != null) {
-                return v;
-            }
-            for (Map<String, Variable> local : enclosure.getLocals().values()) {
-                v = local.get(name);
+            Optional<Node> parentNode = expr.getParentNode();
+            if (parentNode.isPresent()) {
+                v = enclosure.getValue(parentNode.get(), name);
                 if (v != null) {
                     return v;
+                }
+                for (Map<String, Variable> local : enclosure.getLocals().values()) {
+                    v = local.get(name);
+                    if (v != null) {
+                        return v;
+                    }
                 }
             }
         }
