@@ -187,29 +187,36 @@ public class Toggles {
 
 
     public static void main(String[] args) throws IOException {
-        Toggles t = new Toggles();
-
         writer = new PrintWriter(new File("/tmp/configs.csv"));
-        String path = "/home/raditha/workspaces/python/CSI/selenium/repos";
-        List<Path> folders = findFolders(Paths.get(path));
-        for (Path folder : folders) {
-            System.out.println("Folder: " + folder);
-            List<Path> subFolders = findFolders(folder);
-            for (Path subFolder : subFolders) {
-                if (containsPomXml(subFolder)) {
-                    AntikytheraRunTime.resetAll();
-                    AbstractCompiler.preProcess();
-                    String[] parts = subFolder.toString().split("/");
-                    project = parts[parts.length - 2];
-                    repo = parts[parts.length - 1];
 
-                    if (Paths.get(Constants.BASE_PATH, subFolder.toString() , "/src/main/java").toFile().exists()) {
-                        Settings.setProperty(Constants.BASE_PATH, subFolder.toString() + "/src/main/java");
-                    }
-                    t.find();
-                }
-            }
-        }
+        Toggles t = new Toggles();
+        AbstractCompiler.preProcess();
+        t.find();
+
+//        String path = "/home/raditha/workspaces/python/CSI/selenium/repos";
+//        List<Path> folders = findFolders(Paths.get(path));
+//        for (Path folder : folders) {
+//            System.out.println("Folder: " + folder);
+//            List<Path> subFolders = findFolders(folder);
+//            for (Path subFolder : subFolders) {
+//                if (containsPomXml(subFolder)) {
+//                    String[] parts = subFolder.toString().split("/");
+//                    project = parts[parts.length - 2];
+//                    repo = parts[parts.length - 1];
+//
+//                    Path path1 = Paths.get( subFolder.toString(), "/src/main/java");
+//                    if (path1.toFile().exists()) {
+//                        Settings.setProperty(Constants.BASE_PATH, subFolder.toString() + "/src/main/java");
+//                        AntikytheraRunTime.resetAll();
+//                        AbstractCompiler.preProcess();
+//                        t.find();
+//                    }
+//                    else {
+//                        System.out.println("\t" + path1);
+//                    }
+//                }
+//            }
+//        }
         writer.close();
 
         writer = new PrintWriter("/tmp/uniques.txt");

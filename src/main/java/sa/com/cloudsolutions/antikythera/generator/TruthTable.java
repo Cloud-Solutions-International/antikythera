@@ -24,14 +24,14 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Generates and print truth tables for given conditionals
+ * <p>Generates and print truth tables for given conditionals</p>
  *
- * Comparisions involving Object.equals() are tricky. The range of values to assign to the variable
+ * <p>Comparisons involving Object.equals() are tricky. The range of values to assign to the variable
  * depends on the argument to the equals method. Obviously when the scope is null null.equals leads
- * to Null Pointer Exceptions, so work arounds will have to be used.
+ * to Null Pointer Exceptions, so workarounds will have to be used.</p>
  *
- * The values assigned may have its domain in Strings, Boolean or any other objects. This
- * implementation will only consider Numeric, Boolean and String expressions.
+ * <p>The values assigned may have its domain in Strings, Boolean or any other objects. This
+ * implementation will only consider Numeric, Boolean and String expressions.</p>
  */
 public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
