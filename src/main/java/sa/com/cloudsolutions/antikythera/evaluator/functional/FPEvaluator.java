@@ -131,14 +131,15 @@ public abstract class FPEvaluator<T> extends Evaluator {
         // foreach does not.
         // alternatively we can look at the return type of the method itself. If it is not void
         // that method is going to return something.
-        Node parent = lambdaExpr.getParentNode().orElseThrow();
-        if (parent instanceof MethodCallExpr mce) {
-            String name = mce.getNameAsString();
-            return switch(name) {
-                case "map","filter","sorted","reduce","anyMatch","allMatch","noneMatch",
-                     "findFirst","findAny" -> true;
-                default -> false;
-            };
+        if (lambdaExpr.getParentNode().isPresent()) {
+            if (lambdaExpr.getParentNode().get() instanceof MethodCallExpr mce) {
+                String name = mce.getNameAsString();
+                return switch (name) {
+                    case "map", "filter", "sorted", "reduce", "anyMatch", "allMatch", "noneMatch",
+                         "findFirst", "findAny" -> true;
+                    default -> false;
+                };
+            }
         }
         return false;
     }

@@ -108,7 +108,9 @@ public class FunctionalConverter {
             call.setScope(new NameExpr("arg"));
         }
 
-        return new LambdaExpr(parameters, body);
+        LambdaExpr lambda = new LambdaExpr(parameters, body);
+        lambda.setParentNode(methodRef.getParentNode().get());
+        return lambda;
     }
 
     private static Method getFunctionalInterfaceMethod(Class<?> functionalInterface) {
