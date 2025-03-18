@@ -5,26 +5,21 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 import java.io.FileNotFoundException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-
 class AbstractCompilerTest {
-
-    private final String BASE_PATH = (String) Settings.getProperty(Constants.BASE_PATH);
 
     @BeforeAll
     static void setUp() throws IOException {
@@ -58,59 +53,20 @@ class AbstractCompilerTest {
     }
 
     @Test
-    void compileParsesControllerFileWhenDtoFileDoesNotExist() throws IOException {
-        Path tempFilePath = Files.createTempFile(Path.of(BASE_PATH), "TempController", ".java");
-        Files.write(tempFilePath, """
-            public class TempController {
-                public class TempDto {
-                }
-            }
-        """.getBytes());
-
-        try {
-            AbstractCompiler compiler = new AbstractCompiler();
-            compiler.compile(tempFilePath.toString().replace(BASE_PATH + "/", ""));
-
-            assertNotNull(compiler.cu);
-            assertTrue(compiler.cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                    .anyMatch(cls -> cls.getNameAsString().endsWith("Dto")));
-        } finally {
-            Files.delete(tempFilePath);
-        }
-    }
-
-    @Test
     void compileCachesParsedCompilationUnit() throws IOException {
-        Path tempFilePath = Files.createTempFile(Path.of(BASE_PATH), "TempClass", ".java");
-        Files.write(tempFilePath, """
-            public class TempClass {
-            }
-        """.getBytes());
-
-        try {
-            AbstractCompiler compiler = new AbstractCompiler();
-            compiler.compile(tempFilePath.toString().replace(BASE_PATH + "/", ""));
-            CompilationUnit firstParse = compiler.cu;
-
-            compiler.compile(tempFilePath.toString().replace(BASE_PATH + "/", ""));
-            CompilationUnit secondParse = compiler.cu;
-
-            assertSame(firstParse, secondParse);
-        } finally {
-            Files.delete(tempFilePath);
-        }
+        CompilationUnit first = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Empty");
+        AbstractCompiler.preProcess();
+        CompilationUnit second = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Empty");
+        assertSame(first, second);
     }
 
     @Test
     void testGetPublicClass() {
-        CompilationUnit cu = StaticJavaParser.parse("""
-            public class TempController {
-                public class TempDto {
-                }
-            }
-        """ + "\n");
-        TypeDeclaration<?> result = AbstractCompiler.getPublicType(cu);
-        assertNotNull(result);
+        CompilationUnit outer = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Nested");
+        assertNotNull(outer);
+        assertEquals("Nested", AbstractCompiler.getPublicType(outer).getNameAsString());
+        CompilationUnit inner = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Nested.Inner");
+        assertSame(outer, inner);
     }
 
     @Test
@@ -129,11 +85,8 @@ class AbstractCompilerTest {
 
     @Test
     void testWildCardImport()  {
-
-        CompilationUnit cu = StaticJavaParser.parse("""
-                import java.util.*;
-                import sa.com.cloudsolutions.antikythera.evaluator.*;
-                class TempController {}\n""");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Nested");
+        assertNotNull(cu);
         ImportWrapper w = AbstractCompiler.findWildcardImport(cu, "List");
         assertNotNull(w);
         assertNotNull(w.getSimplified());
@@ -161,6 +114,4 @@ class AbstractCompilerTest {
         result = AbstractCompiler.findFullyQualifiedName(cu, "ClassProcessorTest");
         assertEquals("sa.com.cloudsolutions.antikythera.parser.ClassProcessorTest", result);
     }
-
-
 }

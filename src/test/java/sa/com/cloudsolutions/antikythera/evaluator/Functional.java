@@ -90,6 +90,7 @@ public class Functional {
         Person p = new Person(f.apply("Bombadil"));
         System.out.println(p.getName());
     }
+
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
