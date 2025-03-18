@@ -460,6 +460,8 @@ public class Evaluator {
             v = evaluateMethodCall(init.asMethodCallExpr());
         } else if (init.isObjectCreationExpr()) {
             v = createObject(init, decl, init.asObjectCreationExpr());
+        } else if (init.isLambdaExpr()) {
+            v = FPEvaluator.create(init.asLambdaExpr(), this);
         } else {
             v = evaluateExpression(init);
         }
