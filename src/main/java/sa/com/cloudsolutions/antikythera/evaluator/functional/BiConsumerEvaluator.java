@@ -5,10 +5,11 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.BiConsumer;
 
-public class BiConsumerEvaluator<T, U> extends FPEvaluator implements BiConsumer<T, U> {
+public class BiConsumerEvaluator<T, U> extends FPEvaluator<T> implements BiConsumer<T, U> {
     public BiConsumerEvaluator(String className) {
         super(className);
     }
@@ -31,7 +32,7 @@ public class BiConsumerEvaluator<T, U> extends FPEvaluator implements BiConsumer
         try {
             executeMethod(methodDeclaration);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            throw new AntikytheraException(e);
         }
     }
 }

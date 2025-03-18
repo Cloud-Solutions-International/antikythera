@@ -134,7 +134,10 @@ class AbstractCompilerTest {
                 import java.util.*;
                 import sa.com.cloudsolutions.antikythera.evaluator.*;
                 class TempController {}\n""");
-        assertNotNull(AbstractCompiler.findWildcardImport(cu, "List"));
+        ImportWrapper w = AbstractCompiler.findWildcardImport(cu, "List");
+        assertNotNull(w);
+        assertNotNull(w.getSimplified());
+        assertEquals("java.util.List", w.getSimplified().getNameAsString());
         assertNotNull(AbstractCompiler.findWildcardImport(cu, "Loops"));
     }
 

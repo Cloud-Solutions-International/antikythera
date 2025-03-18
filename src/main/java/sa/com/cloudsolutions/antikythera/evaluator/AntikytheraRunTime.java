@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
 
@@ -12,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A very basic Runtime for Antikythera.
+ * <p>A basic Runtime for Antikythera.</p>
  *
  * This class will be used to by the Evaluator to mimic a stack and keep track of
  * all the classes that we have compiled.
@@ -23,9 +24,9 @@ public class AntikytheraRunTime {
      */
     private static final Map<String, ClassInfo> resolved = new HashMap<>();
     /**
-     * We are not using a stack data structure here, but a Deque. This is because
-     * Deque is a double-ended queue, which can be used as a stack. It is more
-     * efficient than a Stack in java which is synchronized.
+     * <p>We are not using a stack data structure here, but a Deque. This is because Deque is a
+     * double-ended queue, which can be used as a stack. It is more efficient than a Stack ADT.
+     * Because in java the stack is synchronized.</p>
      *
      * While it's normal practice to also place the return value of a method call into the
      * stack, we are not doing so in here.
@@ -53,6 +54,8 @@ public class AntikytheraRunTime {
      * and stack overflows. To avoid that lets keep all Autowired instances cached.
      */
     protected static final Map<String, Variable> autowired = new HashMap<>();
+
+    private AntikytheraRunTime() {}
 
     public static CompilationUnit getCompilationUnit(String cls) {
         ClassInfo info = resolved.get(cls);
@@ -105,11 +108,6 @@ public class AntikytheraRunTime {
         return classInfo != null && classInfo.isInterface;
     }
 
-    public static boolean isAbstractClass(String name) {
-        ClassInfo classInfo = resolved.get(name);
-        return classInfo != null && classInfo.abstractClass;
-    }
-
     public static void markAsMocked(Type elementType) {
         mockedFields.add(elementType);
     }
@@ -125,7 +123,6 @@ public class AntikytheraRunTime {
         private boolean controllerClass;
         private boolean componentClass;
         private boolean isInterface;
-        private boolean abstractClass;
         protected ClassInfo() {}
 
         public static ClassInfo factory(String className, CompilationUnit cu) {
@@ -133,6 +130,7 @@ public class AntikytheraRunTime {
             classInfo.className = className;
             classInfo.cu = cu;
 
+            cu.getPrimaryType();
             for(TypeDeclaration<?> type : cu.getTypes()) {
                 if(type.isPublic()) {
                     if(type.isAnnotationPresent("Service")) {
@@ -145,12 +143,8 @@ public class AntikytheraRunTime {
                     }
 
                     if(type.isClassOrInterfaceDeclaration()) {
-                        if (type.asClassOrInterfaceDeclaration().isInterface()) {
-                            classInfo.isInterface = true;
-                        }
-                        if (type.asClassOrInterfaceDeclaration().isAbstract()) {
-                            classInfo.abstractClass = true;
-                        }
+                        ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
+                        classInfo.isInterface = cdecl.isInterface();
                     }
                 }
             }

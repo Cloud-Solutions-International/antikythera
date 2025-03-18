@@ -3,32 +3,31 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> {
+public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> {
 
-    public ConsumerEvaluator(String className) {
+    public SupplierEvaluator(String className) {
         super(className);
     }
 
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()
-                .setName("Consumer")
+                .setName("Supplier")
                 .setTypeArguments(
                         new WildcardType()
                 );
     }
 
     @Override
-    public void accept(T t) {
-        AntikytheraRunTime.push(new Variable(t));
+    public T get() {
         try {
-            executeMethod(methodDeclaration);
+            Variable v = executeMethod(methodDeclaration);
+            return (T) v.getValue();
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
         }

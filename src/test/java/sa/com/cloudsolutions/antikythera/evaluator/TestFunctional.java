@@ -4,9 +4,9 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -38,7 +38,10 @@ class TestFunctional extends TestHelper{
     }
 
     @ParameterizedTest
-    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield"})
+    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield",
+        "sorting1, 0123456789", "sorting2, 9876543210", "people4, [A]", "people5, A", "people6, A",
+            "people7, Tom Bombadil"
+    })
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
@@ -47,19 +50,12 @@ class TestFunctional extends TestHelper{
 
     }
 
-    @Test
-    void testAscending() throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("sorting1")).orElseThrow();
+    @ParameterizedTest
+    @ValueSource(strings = {"people1","people2","people3"})
+    void testPeople(String name) throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
-        assertEquals("0123456789\n", outContent.toString());
-    }
-
-    @Test
-    void testDescending() throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("sorting2")).orElseThrow();
-        Variable v = evaluator.executeMethod(method);
-        assertNull(v.getValue());
-        assertEquals("9876543210\n", outContent.toString());
+        assertEquals("[A, B]\n", outContent.toString());
     }
 }
