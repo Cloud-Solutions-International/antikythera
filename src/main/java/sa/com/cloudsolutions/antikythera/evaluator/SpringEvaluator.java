@@ -125,7 +125,6 @@ public class SpringEvaluator extends Evaluator {
                 executeMethod(md);
             }
         } catch (AUTException aex) {
-            aex.getCause().printStackTrace();
             logger.warn("This has probably been handled {}", aex.getMessage());
         }
     }
