@@ -1,20 +1,10 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.Expression;
-
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
@@ -26,7 +16,9 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
@@ -42,7 +34,6 @@ import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 public class RestControllerParser extends DepsolvingParser {
     private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
 
-    CompilationUnit cu;
     /**
      * Maintain stats of the controllers and methods parsed
      */

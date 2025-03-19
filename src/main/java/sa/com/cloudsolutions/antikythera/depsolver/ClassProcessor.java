@@ -574,6 +574,7 @@ public class ClassProcessor extends AbstractCompiler {
         }
     }
 
+    @SuppressWarnings("java:S125")
     protected void collectFieldAncestors(FieldDeclaration field, ClassOrInterfaceDeclaration ancestor) {
         /*
          * We need not have this ancestor check because java can't have global variables but that's the
