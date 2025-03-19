@@ -69,7 +69,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Stack;
 
 import static org.mockito.Mockito.withSettings;
 
@@ -118,7 +117,6 @@ public class Evaluator {
      * The preconditions that need to be met before the test can be executed.
      */
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
-
 
     public Evaluator (String className) {
         this.className = className;
@@ -533,7 +531,7 @@ public class Evaluator {
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
         if (match != null) {
-            Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
+            Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().get(), this);
             annonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
@@ -637,49 +635,16 @@ public class Evaluator {
             }
 
             Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
-            Class<?> outer = clazz.getEnclosingClass();
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
-            if (outer != null) {
-                for (Class<?> c : outer.getDeclaredClasses()) {
-                    if (c.getName().equals(resolvedClass)) {
-                        List<Expression> arguments = oce.getArguments();
-                        Class<?>[] argumentTypes = new Class<?>[arguments.size() + 1];
-                        Object[] args = new Object[arguments.size() + 1];
-
-                        // todo this is wrong, this should first check for an existing instance in the current scope
-                        // and then if an instance is not found build using the most suitable arguments.
-                        args[0] = outer.getDeclaredConstructors()[0].newInstance();
-                        argumentTypes[0] = outer;
-
-                        for (int i = 0; i < arguments.size(); i++) {
-                            Variable vv = evaluateExpression(arguments.get(i));
-                            Class<?> wrapperClass = vv.getValue().getClass();
-                            argumentTypes[i + 1] =wrapperClass;
-                            args[i + 1] = vv.getValue();
-                        }
-
-                        Constructor<?> cons = Reflect.findConstructor(c, argumentTypes, args);
-                        if(cons !=  null) {
-                            Object instance = cons.newInstance(args);
-                            return new Variable(type, instance);
-                        }
-                        else {
-                            throw new EvaluatorException("Could not find a constructor for class " + c.getName());
-                        }
-                    }
-                }
-            } else {
-                ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
-
-                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
-                        reflectionArguments.getArguments());
-                if(cons !=  null) {
-                    Object instance = cons.newInstance(reflectionArguments.getArguments());
-                    return new Variable(type, instance);
-                }
-                else {
-                    throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
-                }
+            Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
+                    reflectionArguments.getArguments());
+            if(cons !=  null) {
+                Object instance = cons.newInstance(reflectionArguments.getArguments());
+                return new Variable(type, instance);
+            }
+            else {
+                throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
             }
 
         } catch (Exception e) {
@@ -799,7 +764,8 @@ public class Evaluator {
         LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
-            return executeLocalMethod(methodCall);
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            return executeLocalMethod(wrapper);
         }
 
         Variable variable = evaluateScopeChain(chain);
@@ -864,7 +830,7 @@ public class Evaluator {
                 if (cu != null) {
                     TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
                     if (typeDecl != null) {
-                        yield createEvaluator(typeDecl.getFullyQualifiedName().orElse(null));
+                        yield EvaluatorFactory.create(typeDecl.getFullyQualifiedName().orElse(null), this);
                     }
                 }
                 yield null;
@@ -893,7 +859,7 @@ public class Evaluator {
                     v.setClazz(clazz);
                 }
                 else {
-                    Evaluator eval = createEvaluator(fullyQualifiedName);
+                    Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
                     eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
                     v = new Variable(eval);
                 }
@@ -975,7 +941,8 @@ public class Evaluator {
     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
 
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
             Variable v = executeMethod(n.get().asMethodDeclaration());
             if (v != null && v.getValue() == null) {
@@ -990,27 +957,29 @@ public class Evaluator {
     /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
-     * @param methodCall the method call expression to be executed
+     * @param methodCallWrapper the method call expression to be executed
      * @return a Variable containing the result of the method call
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors
      */
-    public Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
+    public Variable executeLocalMethod(MCEWrapper methodCallWrapper) throws ReflectiveOperationException {
         returnFrom = null;
-        Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
-        if (cdecl.isPresent()) {
-            /*
-             * At this point we are searching for the method call in the current class. For example,
-             * it maybe a getter or setter that has been defined through lombok annotations.
-             */
-            MCEWrapper wrapper = wrapCallExpression(methodCall);
-            Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(wrapper, cdecl.get());
+        NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
+        if (call instanceof MethodCallExpr methodCall) {
+            Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+            if (cdecl.isPresent()) {
+                /*
+                 * At this point we are searching for the method call in the current class. For example,
+                 * it maybe a getter or setter that has been defined through lombok annotations.
+                 */
 
-            if (mdecl.isPresent()) {
-                return executeMethod(mdecl.get().getCallableDeclaration());
-            }
-            else {
-                return executeViaDataAnnotation(cdecl.get(), methodCall);
+                Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(methodCallWrapper, cdecl.get());
+
+                if (mdecl.isPresent()) {
+                    return executeMethod(mdecl.get().getCallableDeclaration());
+                } else {
+                    return executeViaDataAnnotation(cdecl.get(), methodCall);
+                }
             }
         }
         return null;
@@ -1035,12 +1004,7 @@ public class Evaluator {
             fields.put(field, evaluateExpression(arg));
             return new Variable(getValue(methodCall, field).getValue());
         }
-        else if (methodCall.getScope().isPresent()){
-            /*
-             * At this point we switch to searching for the method call in other classes in the AUT
-             */
-            return executeSource(methodCall);
-        }
+
         return null;
     }
 
@@ -1188,7 +1152,7 @@ public class Evaluator {
                     String[] parts = importedName.toString().split("\\.");
 
                     if (importedName.toString().equals(name)) {
-                        Evaluator eval = createEvaluator(importedName.toString());
+                        Evaluator eval = EvaluatorFactory.create(importedName.toString(), this);
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1196,7 +1160,7 @@ public class Evaluator {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
-                        Evaluator eval = createEvaluator(cname);
+                        Evaluator eval = EvaluatorFactory.create(cname, this);
                         eval.setupFields(dep);
                         v = eval.getFields().get(name);
                         break;
@@ -1231,7 +1195,7 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else {
-                Evaluator eval = createEvaluator(resolvedClass);
+                Evaluator eval = EvaluatorFactory.create(resolvedClass, this);
                 Variable v = new Variable(eval);
                 v.setType(variable.getType());
                 fields.put(variable.getNameAsString(), v);
@@ -1653,10 +1617,6 @@ public class Evaluator {
 
     public void reset() {
         locals.clear();
-    }
-
-    public Evaluator createEvaluator(String className) {
-        return new Evaluator(className);
     }
 
 

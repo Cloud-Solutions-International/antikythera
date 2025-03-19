@@ -31,8 +31,6 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSol
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -76,8 +74,6 @@ public class AbstractCompiler {
      * amongst all instances of the class. Others like the CompilationUnit property
      * are specific to each instance.
      */
-
-    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
     public static final String SUFFIX = ".java";
 
     private static JavaParser javaParser;
@@ -193,7 +189,7 @@ public class AbstractCompiler {
     }
 
     /**
-     * Creates a compilation unit from the source code at the relative path.
+     * <p>Creates a compilation unit from the source code at the relative path.</p>
      *
      * If this file has previously been resolved, it will not be recompiled rather, it will be
      * fetched from the resolved map.
@@ -216,13 +212,27 @@ public class AbstractCompiler {
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
-        AntikytheraRunTime.addClass(className, cu);
-
-        // fresh meat
+        cache(cu);
         return false;
     }
 
-
+    private void cache(CompilationUnit cu) {
+        for (TypeDeclaration<?> type : cu.getTypes()) {
+            if (type.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
+                cdecl.getFullyQualifiedName().ifPresent(
+                        cname -> AntikytheraRunTime.addClass(cname, cu)
+                );
+                for (Node child : type.getChildNodes()) {
+                    if (child instanceof ClassOrInterfaceDeclaration cid) {
+                        cid.getFullyQualifiedName().ifPresent(fqn ->
+                                AntikytheraRunTime.addClass(fqn, cu)
+                        );
+                    }
+                }
+            }
+        }
+    }
     /**
      * Get the name of the parameter for a rest controller
      * @param param the parameter
@@ -258,11 +268,12 @@ public class AbstractCompiler {
                 if (t.getNameAsString().equals(type.getNameAsString())) {
                     return t;
                 }
-                for (Node child : t.getChildNodes()) {
-                    if (child instanceof ClassOrInterfaceDeclaration cid &&
-                            cid.getNameAsString().equals(type.getNameAsString())) {
-                        return cid;
-                    }
+                Optional<ClassOrInterfaceDeclaration> cid = t.findFirst(
+                        ClassOrInterfaceDeclaration.class,
+                        c -> c.getNameAsString().equals(type.getNameAsString())
+                );
+                if (cid.isPresent()) {
+                    return cid.get();
                 }
             }
 
@@ -277,13 +288,6 @@ public class AbstractCompiler {
         return null;
     }
 
-    public static String absolutePathToClassName(String abs) {
-        abs = abs.replace(Settings.getBasePath(), "");
-        if(abs.startsWith("/")) {
-            abs = abs.substring(1);
-        }
-        return abs.replace(SUFFIX, "").replace("/",".");
-    }
     /**
      * Get the compilation unit for the current class
      * @return a CompilationUnit instance.
@@ -338,6 +342,13 @@ public class AbstractCompiler {
             Optional<String> fullyQualifiedName = type.getFullyQualifiedName();
             if (fullyQualifiedName.isPresent() && fullyQualifiedName.get().equals(className)) {
                 return type;
+            }
+            for (Node child : type.getChildNodes()) {
+                if (child instanceof ClassOrInterfaceDeclaration cid) {
+                    if (cid.getFullyQualifiedName().isPresent() && cid.getFullyQualifiedName().get().equals(className)) {
+                        return cid;
+                    }
+                }
             }
         }
         return null;

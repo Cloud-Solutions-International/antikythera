@@ -424,12 +424,11 @@ public class DepSolver {
                     }
                 }
 
-                Optional<Expression> init = vd.getInitializer();
-                if (init.isPresent()) {
-                    if (init.get().isNameExpr()) {
-                        ImportUtils.addImport(node, init.get().asNameExpr().getNameAsString());
+                vd.getInitializer().ifPresent(init -> {
+                    if (init.isNameExpr()) {
+                        ImportUtils.addImport(node, init.asNameExpr().getNameAsString());
                     }
-                }
+                });
             }
             super.visit(n, node);
         }
