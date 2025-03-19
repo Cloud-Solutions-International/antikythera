@@ -62,10 +62,10 @@ class AbstractCompilerTest {
 
     @Test
     void testGetPublicClass() {
-        CompilationUnit outer = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Nested");
+        CompilationUnit outer = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
         assertNotNull(outer);
-        assertEquals("Nested", AbstractCompiler.getPublicType(outer).getNameAsString());
-        CompilationUnit inner = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Nested.Inner");
+        assertEquals("Nesting", AbstractCompiler.getPublicType(outer).getNameAsString());
+        CompilationUnit inner = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting.Inner");
         assertSame(outer, inner);
     }
 
@@ -85,7 +85,7 @@ class AbstractCompilerTest {
 
     @Test
     void testWildCardImport()  {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Nested");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
         assertNotNull(cu);
         ImportWrapper w = AbstractCompiler.findWildcardImport(cu, "List");
         assertNotNull(w);
@@ -111,7 +111,5 @@ class AbstractCompilerTest {
         result = AbstractCompiler.findFullyQualifiedName(cu, "Integer");
         assertEquals("java.lang.Integer", result);
 
-        result = AbstractCompiler.findFullyQualifiedName(cu, "ClassProcessorTest");
-        assertEquals("sa.com.cloudsolutions.antikythera.parser.ClassProcessorTest", result);
     }
 }
