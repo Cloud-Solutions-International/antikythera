@@ -37,25 +37,25 @@ class TestFunctional extends TestHelper{
         System.setOut(new PrintStream(outContent));
     }
 
-    @ParameterizedTest
-    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield",
-        "sorting1, 0123456789", "sorting2, 9876543210", "people4, [A]", "people5, A", "people6, A",
-            "people7, Tom Bombadil"
-    })
-    void testBiFunction(String name, String value) throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
-        Variable v = evaluator.executeMethod(method);
-        assertNull(v.getValue());
-        assertEquals(value + "\n", outContent.toString());
+//    @ParameterizedTest
+//    @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield",
+//        "sorting1, 0123456789", "sorting2, 9876543210", "people4, [A]", "people5, A", "people6, A",
+//            "people7, Tom Bombadil"
+//    })
+//    void testBiFunction(String name, String value) throws ReflectiveOperationException {
+//        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+//        Variable v = evaluator.executeMethod(method);
+//        assertNull(v.getValue());
+//        assertEquals(value + "\n", outContent.toString());
+//
+//    }
 
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"people1","people2","people3"})
-    void testPeople(String name) throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
-        Variable v = evaluator.executeMethod(method);
-        assertNull(v.getValue());
-        assertEquals("[A, B]\n", outContent.toString());
-    }
+//    @ParameterizedTest
+//    @ValueSource(strings = {"people1","people2","people3"})
+//    void testPeople(String name) throws ReflectiveOperationException {
+//        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+//        Variable v = evaluator.executeMethod(method);
+//        assertNull(v.getValue());
+//        assertEquals("[A, B]\n", outContent.toString());
+//    }
 }

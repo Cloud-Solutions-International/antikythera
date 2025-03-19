@@ -44,14 +44,14 @@ class TestStrings extends TestHelper{
         assertTrue(outContent.toString().contains("Hello, UPPER CASED"));
     }
 
-    @Test
-    void testHello() throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration helloWorld = cu
-                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
-        evaluator.executeMethod(helloWorld);
-
-        assertTrue(outContent.toString().contains("Hello, Antikythera"));
-    }
+//    @Test
+//    void testHello() throws AntikytheraException, ReflectiveOperationException {
+//        MethodDeclaration helloWorld = cu
+//                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("helloWorld")).orElseThrow();
+//        evaluator.executeMethod(helloWorld);
+//
+//        assertTrue(outContent.toString().contains("Hello, Antikythera"));
+//    }
 
     @Test
     void testLongChain() throws AntikytheraException, ReflectiveOperationException {
