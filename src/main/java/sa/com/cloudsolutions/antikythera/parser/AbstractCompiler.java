@@ -343,6 +343,13 @@ public class AbstractCompiler {
             if (fullyQualifiedName.isPresent() && fullyQualifiedName.get().equals(className)) {
                 return type;
             }
+            for (Node child : type.getChildNodes()) {
+                if (child instanceof ClassOrInterfaceDeclaration cid) {
+                    if (cid.getFullyQualifiedName().isPresent() && cid.getFullyQualifiedName().get().equals(className)) {
+                        return cid;
+                    }
+                }
+            }
         }
         return null;
     }

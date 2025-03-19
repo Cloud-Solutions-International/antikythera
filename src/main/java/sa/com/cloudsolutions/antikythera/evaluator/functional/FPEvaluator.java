@@ -14,14 +14,14 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.util.Map;
 import java.util.Optional;
 
-public abstract class FPEvaluator<T> extends Evaluator {
+public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     protected MethodDeclaration methodDeclaration;
-    protected Evaluator enclosure;
     Expression expr;
 
     FPEvaluator(String className) {

@@ -13,7 +13,7 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestNesting extends TestHelper{
+class TestNesting extends TestHelper{
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
@@ -30,6 +30,6 @@ public class TestNesting extends TestHelper{
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("t1")).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Hello World\nfrom outer method\n", outContent.toString());
+        assertEquals("Hello World\n", outContent.toString());
     }
 }

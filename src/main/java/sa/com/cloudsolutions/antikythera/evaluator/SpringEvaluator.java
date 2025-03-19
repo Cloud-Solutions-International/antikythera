@@ -490,11 +490,6 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public Evaluator createEvaluator(String name) {
-        return new SpringEvaluator(name);
-    }
-
-    @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
         LineOfCode l = branching.get(ifst.hashCode());
         if (l == null) {

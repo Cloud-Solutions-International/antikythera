@@ -69,7 +69,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Stack;
 
 import static org.mockito.Mockito.withSettings;
 
@@ -118,7 +117,6 @@ public class Evaluator {
      * The preconditions that need to be met before the test can be executed.
      */
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
-
 
     public Evaluator (String className) {
         this.className = className;
@@ -533,7 +531,7 @@ public class Evaluator {
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
         if (match != null) {
-            Evaluator eval = createEvaluator(match.getFullyQualifiedName().get());
+            Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().get(), this);
             annonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
@@ -864,7 +862,7 @@ public class Evaluator {
                 if (cu != null) {
                     TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
                     if (typeDecl != null) {
-                        yield createEvaluator(typeDecl.getFullyQualifiedName().orElse(null));
+                        yield EvaluatorFactory.create(typeDecl.getFullyQualifiedName().orElse(null), this);
                     }
                 }
                 yield null;
@@ -893,7 +891,7 @@ public class Evaluator {
                     v.setClazz(clazz);
                 }
                 else {
-                    Evaluator eval = createEvaluator(fullyQualifiedName);
+                    Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
                     eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
                     v = new Variable(eval);
                 }
@@ -975,7 +973,8 @@ public class Evaluator {
     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
 
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cu.getType(0).asClassOrInterfaceDeclaration());
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
             Variable v = executeMethod(n.get().asMethodDeclaration());
             if (v != null && v.getValue() == null) {
@@ -1188,7 +1187,7 @@ public class Evaluator {
                     String[] parts = importedName.toString().split("\\.");
 
                     if (importedName.toString().equals(name)) {
-                        Evaluator eval = createEvaluator(importedName.toString());
+                        Evaluator eval = EvaluatorFactory.create(importedName.toString(), this);
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1196,7 +1195,7 @@ public class Evaluator {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
-                        Evaluator eval = createEvaluator(cname);
+                        Evaluator eval = EvaluatorFactory.create(cname, this);
                         eval.setupFields(dep);
                         v = eval.getFields().get(name);
                         break;
@@ -1231,7 +1230,7 @@ public class Evaluator {
                 fields.put(variable.getNameAsString(), v);
             }
             else {
-                Evaluator eval = createEvaluator(resolvedClass);
+                Evaluator eval = EvaluatorFactory.create(resolvedClass, this);
                 Variable v = new Variable(eval);
                 v.setType(variable.getType());
                 fields.put(variable.getNameAsString(), v);
@@ -1653,10 +1652,6 @@ public class Evaluator {
 
     public void reset() {
         locals.clear();
-    }
-
-    public Evaluator createEvaluator(String className) {
-        return new Evaluator(className);
     }
 
 
