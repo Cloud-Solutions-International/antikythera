@@ -26,8 +26,14 @@ public class Nesting {
         System.out.println(inner.innerMethod());
     }
 
+    private void t2() {
+        Inner inner = new Inner();
+        System.out.println(inner.outerMethodCall());
+    }
+
     public static void main(String[] args) {
         Nesting n = new Nesting();
         n.t1();
+        n.t2();
     }
 }

@@ -3,7 +3,8 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -21,15 +22,17 @@ class TestNesting extends TestHelper{
         AbstractCompiler.preProcess();
     }
 
-    @Test
-    void testNesting() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"t1, Hello World", "t2, from outer method"})
+    void testNesting(String name, String output) throws ReflectiveOperationException {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
         evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
         evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
 
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("t1")).orElseThrow();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Hello World\n", outContent.toString());
+        assertEquals(output + "\n", outContent.toString());
     }
 }

@@ -797,7 +797,8 @@ public class Evaluator {
         LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
-            return executeLocalMethod(methodCall);
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
+            return executeLocalMethod(wrapper);
         }
 
         Variable variable = evaluateScopeChain(chain);
@@ -989,27 +990,29 @@ public class Evaluator {
     /**
      * Execute a method that has not been prefixed by a scope.
      * That means the method being called is a member of the current class or a parent of the current class.
-     * @param methodCall the method call expression to be executed
+     * @param methodCallWrapper the method call expression to be executed
      * @return a Variable containing the result of the method call
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors
      */
-    public Variable executeLocalMethod(MethodCallExpr methodCall) throws ReflectiveOperationException {
+    public Variable executeLocalMethod(MCEWrapper methodCallWrapper) throws ReflectiveOperationException {
         returnFrom = null;
-        Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
-        if (cdecl.isPresent()) {
-            /*
-             * At this point we are searching for the method call in the current class. For example,
-             * it maybe a getter or setter that has been defined through lombok annotations.
-             */
-            MCEWrapper wrapper = wrapCallExpression(methodCall);
-            Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(wrapper, cdecl.get());
+        NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
+        if (call instanceof MethodCallExpr methodCall) {
+            Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+            if (cdecl.isPresent()) {
+                /*
+                 * At this point we are searching for the method call in the current class. For example,
+                 * it maybe a getter or setter that has been defined through lombok annotations.
+                 */
 
-            if (mdecl.isPresent()) {
-                return executeMethod(mdecl.get().getCallableDeclaration());
-            }
-            else {
-                return executeViaDataAnnotation(cdecl.get(), methodCall);
+                Optional<Callable> mdecl = AbstractCompiler.findMethodDeclaration(methodCallWrapper, cdecl.get());
+
+                if (mdecl.isPresent()) {
+                    return executeMethod(mdecl.get().getCallableDeclaration());
+                } else {
+                    return executeViaDataAnnotation(cdecl.get(), methodCall);
+                }
             }
         }
         return null;
@@ -1034,12 +1037,7 @@ public class Evaluator {
             fields.put(field, evaluateExpression(arg));
             return new Variable(getValue(methodCall, field).getValue());
         }
-        else if (methodCall.getScope().isPresent()){
-            /*
-             * At this point we switch to searching for the method call in other classes in the AUT
-             */
-            return executeSource(methodCall);
-        }
+
         return null;
     }
 
