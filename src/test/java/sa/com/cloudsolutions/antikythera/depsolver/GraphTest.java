@@ -23,22 +23,22 @@ class GraphTest {
 
     }
 
-//    @Test
-//    void testCreatGraphNode() throws AntikytheraException, IOException {
-//        ReturnValueCompiler comp = new ReturnValueCompiler();
-//        CompilationUnit cu = comp.getCompilationUnit();
-//        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
-//                m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
-//
-//        GraphNode gn = Graph.createGraphNode(md);
-//        assertEquals(md, gn.getNode());
-//        assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
-//        assertNotNull(gn.getDestination());
-//
-//        assertEquals(1, Graph.getNodes().size());
-//        gn.buildNode();
-//        assertEquals(1, Graph.getNodes().size());
-//    }
+    @Test
+    void testCreatGraphNode() throws AntikytheraException, IOException {
+        ReturnValueCompiler comp = new ReturnValueCompiler();
+        CompilationUnit cu = comp.getCompilationUnit();
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
+
+        GraphNode gn = Graph.createGraphNode(md);
+        assertEquals(md, gn.getNode());
+        assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
+        assertNotNull(gn.getDestination());
+
+        assertEquals(1, Graph.getNodes().size());
+        gn.buildNode();
+        assertEquals(1, Graph.getNodes().size());
+    }
 
     @Test
     void testPersonInterface() throws AntikytheraException, IOException {
