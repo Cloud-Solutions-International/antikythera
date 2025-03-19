@@ -48,6 +48,10 @@ public class Person implements IPerson {
         this.id = id;
     }
 
+    public int getId()
+    {
+        return id;
+    }
     @Override
     public void setId(String id) {
         this.setId(Integer.parseInt(id));
