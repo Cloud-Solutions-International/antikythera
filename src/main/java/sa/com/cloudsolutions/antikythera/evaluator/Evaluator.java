@@ -635,49 +635,16 @@ public class Evaluator {
             }
 
             Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
-            Class<?> outer = clazz.getEnclosingClass();
+            ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
-            if (outer != null) {
-                for (Class<?> c : outer.getDeclaredClasses()) {
-                    if (c.getName().equals(resolvedClass)) {
-                        List<Expression> arguments = oce.getArguments();
-                        Class<?>[] argumentTypes = new Class<?>[arguments.size() + 1];
-                        Object[] args = new Object[arguments.size() + 1];
-
-                        // todo this is wrong, this should first check for an existing instance in the current scope
-                        // and then if an instance is not found build using the most suitable arguments.
-                        args[0] = outer.getDeclaredConstructors()[0].newInstance();
-                        argumentTypes[0] = outer;
-
-                        for (int i = 0; i < arguments.size(); i++) {
-                            Variable vv = evaluateExpression(arguments.get(i));
-                            Class<?> wrapperClass = vv.getValue().getClass();
-                            argumentTypes[i + 1] =wrapperClass;
-                            args[i + 1] = vv.getValue();
-                        }
-
-                        Constructor<?> cons = Reflect.findConstructor(c, argumentTypes, args);
-                        if(cons !=  null) {
-                            Object instance = cons.newInstance(args);
-                            return new Variable(type, instance);
-                        }
-                        else {
-                            throw new EvaluatorException("Could not find a constructor for class " + c.getName());
-                        }
-                    }
-                }
-            } else {
-                ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
-
-                Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
-                        reflectionArguments.getArguments());
-                if(cons !=  null) {
-                    Object instance = cons.newInstance(reflectionArguments.getArguments());
-                    return new Variable(type, instance);
-                }
-                else {
-                    throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
-                }
+            Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
+                    reflectionArguments.getArguments());
+            if(cons !=  null) {
+                Object instance = cons.newInstance(reflectionArguments.getArguments());
+                return new Variable(type, instance);
+            }
+            else {
+                throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
             }
 
         } catch (Exception e) {
