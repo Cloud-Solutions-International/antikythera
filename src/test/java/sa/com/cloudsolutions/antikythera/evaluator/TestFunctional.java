@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -47,7 +48,6 @@ class TestFunctional extends TestHelper{
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
         assertEquals(value + "\n", outContent.toString());
-
     }
 
     @ParameterizedTest
@@ -57,5 +57,13 @@ class TestFunctional extends TestHelper{
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
         assertEquals("[A, B]\n", outContent.toString());
+    }
+
+    @Test
+    void testMaps() throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("maps1")).orElseThrow();
+        Variable v = evaluator.executeMethod(method);
+        assertNull(v.getValue());
+        assertEquals("{25=A, 30=B}\n", outContent.toString());
     }
 }

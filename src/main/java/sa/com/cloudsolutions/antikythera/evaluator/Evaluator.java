@@ -1053,6 +1053,7 @@ public class Evaluator {
         return BinaryOps.binaryOps(operator, leftExpression, rightExpression, left, right);
     }
 
+    @SuppressWarnings("java:S3776")
     void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (AntikytheraRunTime.isMocked(variable.getType())) {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
@@ -1135,7 +1136,7 @@ public class Evaluator {
     }
 
     private void setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
-        Variable v = null;
+        Variable v;
         Optional<Expression> init = variable.getInitializer();
         if(init.isPresent()) {
             v = evaluateExpression(init.get());
@@ -1256,25 +1257,12 @@ public class Evaluator {
         ArrayList<Boolean> missing = new ArrayList<>();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             Parameter p = parameters.get(i);
-            /*
-             * Our implementation differs from a standard Expression Evaluation engine in that we do not
-             * throw an exception if the stack is empty.
-             *
-             * The primary purpose of this is to generate tests. Those tests are sometimes generated for
-             * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
-             * allow the developer to make a few manual edits that's more than enough.
-             */
-            if (AntikytheraRunTime.isEmptyStack()) {
-                logger.warn("Stack is empty");
-                missing.add(true);
-            }
-            else {
-                Variable va = AntikytheraRunTime.pop();
-                if (md.getBody().isPresent()) {
-                    // repository methods for example don't have bodies
-                    setLocal(md.getBody().get(), p.getNameAsString(), va);
-                    p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
-                }
+
+            Variable va = AntikytheraRunTime.pop();
+            if (md.getBody().isPresent()) {
+                // repository methods for example don't have bodies
+                setLocal(md.getBody().get(), p.getNameAsString(), va);
+                p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
             }
         }
         return missing.isEmpty();
@@ -1308,20 +1296,7 @@ public class Evaluator {
             returnValue = null;
             for (int i = parameters.size() - 1; i >= 0; i--) {
                 Parameter p = parameters.get(i);
-
-                /*
-                 * Our implementation differs from a standard Expression Evaluation engine in that we do not
-                 * throw an exception if the stack is empty.
-                 *
-                 * The primary purpose of this is to generate tests. Those tests are sometimes generated for
-                 * very complex classes. We are not trying to achieve 100% efficiency. If we can get close and
-                 * allow the developer to make a few manual edits that's more than enougn.
-                 */
-                if (AntikytheraRunTime.isEmptyStack()) {
-                    logger.warn("Stack is empty");
-                } else {
-                    setLocal(cd.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
-                }
+                setLocal(cd.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
             }
 
             executeBlock(statements);

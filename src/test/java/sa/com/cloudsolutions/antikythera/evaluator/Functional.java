@@ -4,6 +4,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -91,6 +92,18 @@ public class Functional {
         System.out.println(p.getName());
     }
 
+    private void maps1() {
+        a.setId(25);
+        b.setId(30);
+
+        Map<Integer, String> ageToName = people.stream()
+            .collect(Collectors.toMap(
+                Person::getId,
+                Person::getName
+            ));
+        System.out.println(ageToName);
+    }
+
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
@@ -105,6 +118,7 @@ public class Functional {
         f.people5();
         f.people6();
         f.people7();
+        f.maps1();
     }
 
 }
