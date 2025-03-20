@@ -160,7 +160,7 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        assertTrue(evaluator.autoWire(variable, PERSON_REPO));
+        assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);
     }
@@ -174,7 +174,7 @@ class TestSpringEvaluator {
         VariableDeclarator variable = fieldDecl.getVariable(0);
         AntikytheraRunTime.markAsMocked(fieldDecl.getElementType());
 
-        assertTrue(evaluator.autoWire(variable, PERSON_REPO));
+        assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);
         assertInstanceOf(MockingEvaluator.class, f.getValue());
@@ -197,7 +197,7 @@ class TestSpringEvaluator {
         // Get the field from the parsed class
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        assertFalse(evaluator.autoWire(variable, "TestClass"));
+        assertNull(evaluator.autoWire(variable, "TestClass"));
     }
 }
 

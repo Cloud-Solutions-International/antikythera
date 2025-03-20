@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * <p>A basic Runtime for Antikythera.</p>
@@ -54,6 +55,8 @@ public class AntikytheraRunTime {
      * and stack overflows. To avoid that lets keep all Autowired instances cached.
      */
     protected static final Map<String, Variable> autowired = new HashMap<>();
+
+    protected static final Map<Type, Map<String,Variable>> statics = new HashMap<>();
 
     private AntikytheraRunTime() {}
 
@@ -200,5 +203,15 @@ public class AntikytheraRunTime {
             resolvedClasses.put(entry.getKey(), entry.getValue().cu);
         }
         return resolvedClasses;
+    }
+
+    public static Variable getStaticVariable(Type type, String field) {
+        return statics.getOrDefault(type, new TreeMap<>()).get(field);
+    }
+
+    public static void setStaticVariable(Type type, String field, Variable variable)
+    {
+        Map<String, Variable> map = statics.computeIfAbsent(type, k -> new TreeMap<>());
+        map.put(field, variable);
     }
 }

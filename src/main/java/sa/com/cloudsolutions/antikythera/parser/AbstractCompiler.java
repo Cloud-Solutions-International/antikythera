@@ -424,7 +424,6 @@ public class AbstractCompiler {
         /*
          * First check if the compilation unit directly contains it.
          * Then check if there exists an import that ends with the short class name as it's last component.
-         *    Our preprocessing would have already replaced all the wild card imports with individual imports.
          * Check if the package folder contains a java source file with the same name
          * Lastly, we will try to invoke Class.forName to see if the class can be located in any jar file
          *    that we have loaded.
@@ -432,7 +431,8 @@ public class AbstractCompiler {
 
         TypeDeclaration<?> p = getMatchingType(cu, className);
         if (p != null) {
-            return null;
+            return p.getFullyQualifiedName().orElse(
+                    cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("") + "." + p.getName());
         }
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
