@@ -14,6 +14,7 @@ public class Functional {
     Person a = new Person("A");
     Person b = new Person("B");
     List<Person> people = List.of(a, b);
+    private List<Integer> numbers = new ArrayList<>(List.of(8,9,0,3,1,4,5,6,7,2));
 
     private void printHello(Function<String, String> f)
     {
@@ -38,14 +39,12 @@ public class Functional {
     }
 
     private void sorting1() {
-        List<Integer> numbers = new ArrayList<>(List.of(8,9,0,3,1,4,5,6,7,2));
         Collections.sort(numbers);
         numbers.forEach(System.out::print);
         System.out.println();
     }
 
     private void sorting2() {
-        List<Integer> numbers = new ArrayList<>(List.of(8,9,0,3,1,4,5,6,7,2));
         Collections.sort(numbers, (a,b) -> b - a);
         numbers.forEach(System.out::print);
         System.out.println();
@@ -62,7 +61,6 @@ public class Functional {
     }
 
     private void people3() {
-
         List<String> names = new ArrayList();
 
         people.forEach(p -> names.add(p.getName()));
@@ -104,6 +102,17 @@ public class Functional {
         System.out.println(ageToName);
     }
 
+    private void nestedStream() {
+        numbers.forEach(n -> {
+            int x = n;
+            if (n == 1 || n == 2) {
+                System.out.print(x);
+                people.stream().forEach(p -> System.out.print(p.getName()));
+            }
+        });
+        System.out.println();
+    }
+
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
@@ -119,6 +128,7 @@ public class Functional {
         f.people6();
         f.people7();
         f.maps1();
+        f.nestedStream();
     }
 
 }
