@@ -217,22 +217,31 @@ public class AbstractCompiler {
     }
 
     private void cache(CompilationUnit cu) {
+        for (TypeDeclaration<?> type : findContainedTypes(cu)) {
+            type.getFullyQualifiedName().ifPresent(
+                    cname -> AntikytheraRunTime.addClass(cname, cu)
+            );
+        }
+    }
+
+    private static List<TypeDeclaration> findContainedTypes(CompilationUnit cu) {
+        List<TypeDeclaration> types = new ArrayList<>();
         for (TypeDeclaration<?> type : cu.getTypes()) {
-            if (type.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
-                cdecl.getFullyQualifiedName().ifPresent(
-                        cname -> AntikytheraRunTime.addClass(cname, cu)
-                );
-                for (Node child : type.getChildNodes()) {
-                    if (child instanceof ClassOrInterfaceDeclaration cid) {
-                        cid.getFullyQualifiedName().ifPresent(fqn ->
-                                AntikytheraRunTime.addClass(fqn, cu)
-                        );
-                    }
-                }
+            types.add(type);
+            findInners(type, types);
+        }
+        return types;
+    }
+
+    private static void findInners(TypeDeclaration cdecl, List<TypeDeclaration> inners) {
+        for (Node child : cdecl.getChildNodes()) {
+            if (child instanceof ClassOrInterfaceDeclaration cid) {
+                inners.add(cid);
+                findInners(cid, inners);
             }
         }
     }
+
     /**
      * Get the name of the parameter for a rest controller
      * @param param the parameter
@@ -335,20 +344,12 @@ public class AbstractCompiler {
      * @return the type declaration or null if no match is found
      */
     public static TypeDeclaration<?> getMatchingType(CompilationUnit cu, String className) {
-        for (var type : cu.getTypes()) {
+        for (TypeDeclaration<?> type : findContainedTypes(cu)) {
             if (type.getNameAsString().equals(className)) {
                 return type;
             }
-            Optional<String> fullyQualifiedName = type.getFullyQualifiedName();
-            if (fullyQualifiedName.isPresent() && fullyQualifiedName.get().equals(className)) {
+            if (className.equals(type.getFullyQualifiedName().orElse(null))) {
                 return type;
-            }
-            for (Node child : type.getChildNodes()) {
-                if (child instanceof ClassOrInterfaceDeclaration cid) {
-                    if (cid.getFullyQualifiedName().isPresent() && cid.getFullyQualifiedName().get().equals(className)) {
-                        return cid;
-                    }
-                }
             }
         }
         return null;
@@ -421,14 +422,18 @@ public class AbstractCompiler {
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
         /*
-         * The strategy is threefold. First check if there exists an import that ends with the
-         * short class name as it's last component. Our preprocessing would have already replaced
-         * all the wild card imports with individual imports.
-         * If we are unable to find a match, we will check for the existence of a file in the same
-         * package locally.
-         * Lastly, if we will try to invoke Class.forName to see if the class can be located in
-         * any jar file that we have loaded.
+         * First check if the compilation unit directly contains it.
+         * Then check if there exists an import that ends with the short class name as it's last component.
+         *    Our preprocessing would have already replaced all the wild card imports with individual imports.
+         * Check if the package folder contains a java source file with the same name
+         * Lastly, we will try to invoke Class.forName to see if the class can be located in any jar file
+         *    that we have loaded.
          */
+
+        TypeDeclaration<?> p = getMatchingType(cu, className);
+        if (p != null) {
+            return null;
+        }
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
             if (imp.getImport().isAsterisk()) {
