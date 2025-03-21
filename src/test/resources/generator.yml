@@ -3,8 +3,8 @@
 # environment variable.
 
 variables:
-  projects_folder: /home/raditha/csi
-  m2_folder: /home/raditha/.m2/repository
+  projects_folder: ..
+  m2_folder: ${HOME}/.m2/repository
 
 # Points to top level folder of the application under test. This is a file system path.
 base_path: ${projects_folder}/antikythera/src/test/resources/sources/src/main/java
