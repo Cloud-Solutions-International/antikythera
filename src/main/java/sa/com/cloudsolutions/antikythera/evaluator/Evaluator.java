@@ -331,9 +331,16 @@ public class Evaluator {
 
                         if (fieldDeclaration.isPresent()) {
                             FieldDeclaration field = fieldDeclaration.get();
-                            Variable v = new Variable(field.getVariable(0).getType().asString());
-                            field.getVariable(0).getInitializer().ifPresent(f -> v.setValue(f.toString()));
-                            return v;
+                            for (var variable : field.getVariables()) {
+                                if (variable.getNameAsString().equals(fae.getNameAsString())) {
+                                    if (field.isStatic()) {
+                                        return AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
+                                    }
+                                    Variable v = new Variable(field.getVariable(0).getType().asString());
+                                    field.getVariable(0).getInitializer().ifPresent(f -> v.setValue(f.toString()));
+                                    return v;
+                                }
+                            }
                         }
                     }
                 }
