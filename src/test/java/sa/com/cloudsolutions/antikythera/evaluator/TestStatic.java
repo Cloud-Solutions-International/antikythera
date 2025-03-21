@@ -44,4 +44,13 @@ public class TestStatic extends TestHelper{
         assertNull(v.getValue());
         assertEquals("2 b\n2 a\n2 b\n", outContent.toString());
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"number1", "number2"})
+    void testInitializer(String name) throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+        Variable v = evaluator.executeMethod(method);
+        assertNull(v.getValue());
+        assertEquals("26\n", outContent.toString());
+    }
 }

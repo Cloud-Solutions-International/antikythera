@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.stmt.CatchClause;
@@ -1597,6 +1598,22 @@ public class Evaluator {
                     }
                 });
             }
+        }
+
+        @Override
+        public void visit(InitializerDeclaration init, Void arg) {
+            super.visit(init, arg);
+            init.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
+                cdecl.getFullyQualifiedName().ifPresent(className -> {
+                    if (className.equals(getClassName())) {
+                        try {
+                            executeBlock(init.getBody().getStatements());
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    }
+                });
+            });
         }
 
         private void setupField(FieldDeclaration field, VariableDeclarator variable) {
