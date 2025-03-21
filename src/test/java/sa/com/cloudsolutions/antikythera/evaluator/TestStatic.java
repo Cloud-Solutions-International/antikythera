@@ -28,7 +28,6 @@ public class TestStatic extends TestHelper{
     void testStatic() throws ReflectiveOperationException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = new Evaluator(SAMPLE_CLASS);
-        evaluator.setupFields(cu);
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("counter")).orElseThrow();
         Variable v = evaluator.executeMethod(method);

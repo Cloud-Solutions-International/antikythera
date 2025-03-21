@@ -133,8 +133,9 @@ public class Reflect {
                     argumentTypes[i] = Object.class;
                 }
             }
-
-            dynamicProxy(argumentTypes, i, args);
+            if (argumentTypes[i] != null) {
+                dynamicProxy(argumentTypes, i, args);
+            }
         }
 
         ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, argumentTypes);
@@ -144,6 +145,7 @@ public class Reflect {
     }
 
     private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
+
         Class<?> functional = getFunctionalInterface(argumentTypes[i]);
         if (functional != null) {
             FPEvaluator<?> evaluator = null;
@@ -398,8 +400,11 @@ public class Reflect {
      */
     private static boolean matchArgumentVsParameter(Class<?>[] argumentTypes, Class<?>[] parameterTypes,
                                                     Object[] arguments, int i) {
+        if (arguments.length < parameterTypes.length) {
+            return false;
+        }
         Class<?> parameterType = parameterTypes[i];
-        if (parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
+        if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
             return true;
         }
 

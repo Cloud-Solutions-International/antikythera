@@ -43,8 +43,6 @@ public class ServicesParser {
         evaluator.setOnTest(true);
         generator.setupImports();
         generator.addBeforeClass();
-
-        evaluator.setupFields(cu);
     }
 
     public void start() {

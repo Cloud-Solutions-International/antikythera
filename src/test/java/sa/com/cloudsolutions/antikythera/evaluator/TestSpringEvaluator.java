@@ -167,13 +167,14 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithMock() {
-        SpringEvaluator evaluator = new SpringEvaluator("sa.com.cloudsolutions.service.Service");
-        CompilationUnit cu = evaluator.getCompilationUnit();
+        final String sample = "sa.com.cloudsolutions.service.Service";
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(sample);
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         AntikytheraRunTime.markAsMocked(fieldDecl.getElementType());
 
+        SpringEvaluator evaluator = new SpringEvaluator(sample);
         assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);

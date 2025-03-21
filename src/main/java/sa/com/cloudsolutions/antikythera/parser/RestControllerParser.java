@@ -103,7 +103,6 @@ public class RestControllerParser extends DepsolvingParser {
          * Pass 2 : Generate the tests
          */
         AntikytheraRunTime.reset();
-        evaluator.setupFields(cu);
         cu.accept(new ControllerMethodVisitor(), null);
 
         Antikythera.getInstance().writeFilesToTest(

@@ -124,6 +124,9 @@ public class Evaluator {
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
+        if (cu != null) {
+            this.setupFields(cu);
+        }
     }
 
     /**
@@ -1548,7 +1551,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    public void setupFields(CompilationUnit cu)  {
+    private void setupFields(CompilationUnit cu)  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
