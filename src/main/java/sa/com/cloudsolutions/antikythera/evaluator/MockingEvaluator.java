@@ -19,10 +19,6 @@ public class MockingEvaluator extends Evaluator {
     }
 
     @Override
-    public void setupFields(CompilationUnit cu) {
-    }
-
-    @Override
     public Map<String, Variable> getFields() {
         return null;
     }
