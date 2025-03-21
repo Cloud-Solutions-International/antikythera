@@ -3,12 +3,15 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -24,11 +27,16 @@ public class TestStatic extends TestHelper{
         AbstractCompiler.preProcess();
     }
 
-    @Test
-    void testStatic() throws ReflectiveOperationException {
+    @BeforeEach
+    void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = new Evaluator(SAMPLE_CLASS);
+        System.setOut(new PrintStream(outContent));
+    }
 
+
+    @Test
+    void testStatic() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("counter")).orElseThrow();
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());

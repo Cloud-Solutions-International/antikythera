@@ -1575,36 +1575,43 @@ public class Evaluator {
         public void visit(FieldDeclaration field, Void arg) {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
-                try {
-                    if (field.isStatic()) {
-                        Variable s = AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
-                        if (s != null ) {
-                            fields.put(variable.getNameAsString(), s);
-                            return;
-                        }
+                field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
+                    if (cdecl.getFullyQualifiedName().isPresent() && cdecl.getFullyQualifiedName().get().equals(className)) {
+                        setupField(field, variable);
                     }
-                    Variable v = identifyFieldDeclarations(variable);
-                    if (v != null) {
-                        fields.put(variable.getNameAsString(), v);
-                        if (field.isStatic()) {
-                            v.setStatic(true);
-                            AntikytheraRunTime.setStaticVariable(variable.getType(), variable.getNameAsString(), v);
-                        }
+                });
+            }
+        }
+
+        private void setupField(FieldDeclaration field, VariableDeclarator variable) {
+            try {
+                if (field.isStatic()) {
+                    Variable s = AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
+                    if (s != null) {
+                        fields.put(variable.getNameAsString(), s);
+                        return;
                     }
-
-                } catch (UnsolvedSymbolException e) {
-                    logger.debug("ignore {}", variable);
-                } catch (IOException e) {
-                    String action = Settings.getProperty("dependencies.on_error").toString();
-                    if(action == null || action.equals("exit")) {
-                        throw new GeneratorException("Exception while processing fields", e);
-                    }
-
-                    logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
-
-                } catch (AntikytheraException|ReflectiveOperationException e) {
-                    throw new GeneratorException(e);
                 }
+                Variable v = identifyFieldDeclarations(variable);
+                if (v != null) {
+                    fields.put(variable.getNameAsString(), v);
+                    if (field.isStatic()) {
+                        v.setStatic(true);
+                        AntikytheraRunTime.setStaticVariable(variable.getType(), variable.getNameAsString(), v);
+                    }
+                }
+            } catch (UnsolvedSymbolException e) {
+                logger.debug("ignore {}", variable);
+            } catch (IOException e) {
+                String action = Settings.getProperty("dependencies.on_error").toString();
+                if(action == null || action.equals("exit")) {
+                    throw new GeneratorException("Exception while processing fields", e);
+                }
+
+                logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
+
+            } catch (AntikytheraException|ReflectiveOperationException e) {
+                throw new GeneratorException(e);
             }
         }
     }

@@ -31,7 +31,6 @@ class TestLocals extends TestHelper {
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = new Evaluator(SAMPLE_CLASS);
-
         System.setOut(new PrintStream(outContent));
     }
 
