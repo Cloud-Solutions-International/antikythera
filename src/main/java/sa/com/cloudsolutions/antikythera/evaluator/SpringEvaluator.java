@@ -89,6 +89,10 @@ public class SpringEvaluator extends Evaluator {
         super(className);
     }
 
+    protected SpringEvaluator(String className, boolean lazy) {
+        super(className, lazy);
+    }
+
     /**
      * Called by the java parser method visitor.
      *
@@ -392,10 +396,11 @@ public class SpringEvaluator extends Evaluator {
                     AntikytheraRunTime.autoWire(resolvedClass, v);
                 }
                 else {
-                    Evaluator eval = new SpringEvaluator(resolvedClass);
+                    Evaluator eval = new SpringEvaluator(resolvedClass, true);
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
+                    eval.setupFields(eval.getCompilationUnit());
                 }
             }
             return v;
@@ -420,10 +425,14 @@ public class SpringEvaluator extends Evaluator {
                     for (String impl : implementations) {
                         v = autoWire(variable, impl);
                         if (v != null) {
+                            fields.put(variable.getNameAsString(), v);
                             return;
                         }
                     }
                 }
+            }
+            else {
+                fields.put(variable.getNameAsString(), v);
             }
         }
         super.setupField(field, variable);

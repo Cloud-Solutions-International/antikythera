@@ -120,12 +120,16 @@ public class Evaluator {
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
     public Evaluator (String className) {
+        this(className, false);
+    }
+
+    protected Evaluator(String className, boolean lazy) {
         this.className = className;
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
-        if (cu != null) {
+        if (cu != null && !lazy) {
             this.setupFields(cu);
         }
     }
@@ -1578,7 +1582,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    private void setupFields(CompilationUnit cu)  {
+    void setupFields(CompilationUnit cu)  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
