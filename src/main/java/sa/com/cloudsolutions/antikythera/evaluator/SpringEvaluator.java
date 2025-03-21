@@ -401,41 +401,42 @@ public class SpringEvaluator extends Evaluator {
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
                     eval.setupFields(eval.getCompilationUnit());
+                    eval.invokeDefaultConstructor();
                 }
             }
+            fields.put(variable.getNameAsString(), v);
             return v;
         }
         return null;
     }
 
     @Override
-    void setupField(FieldDeclaration field, VariableDeclarator variable) {
-        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, variable.getTypeAsString());
+    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
+        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, variableDeclarator.getTypeAsString());
         if (resolvedClass != null) {
-            Variable v = autoWire(variable, resolvedClass);
+            Variable v = autoWire(variableDeclarator, resolvedClass);
             if (v == null) {
                 /*
                  * Try to substitute an implementation for the interface.
                  */
                 CompilationUnit targetCu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                 if (targetCu != null) {
-                    String name = AbstractCompiler.findFullyQualifiedName(targetCu,variable.getType().asString());
+                    String name = AbstractCompiler.findFullyQualifiedName(targetCu,variableDeclarator.getType().asString());
 
                     Set<String> implementations = AntikytheraRunTime.findImplementations(name);
                     for (String impl : implementations) {
-                        v = autoWire(variable, impl);
+                        v = autoWire(variableDeclarator, impl);
                         if (v != null) {
-                            fields.put(variable.getNameAsString(), v);
                             return;
                         }
                     }
                 }
             }
             else {
-                fields.put(variable.getNameAsString(), v);
+                return;
             }
         }
-        super.setupField(field, variable);
+        super.setupField(field, variableDeclarator);
     }
 
     @Override

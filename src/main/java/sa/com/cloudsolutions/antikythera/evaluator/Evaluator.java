@@ -421,7 +421,7 @@ public class Evaluator {
                 /*
                  * This is not something that was created with class.forName or byte buddy.
                  */
-                this.fields.put(fieldName,variable);
+                this.fields.put(fieldName,v);
             }
 
         }
@@ -731,7 +731,7 @@ public class Evaluator {
      * @param v The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getLocal(node, nameAsString);
+        Variable old = getValue(node, nameAsString);
         if (old != null) {
             old.setValue(v.getValue());
         }
@@ -1110,6 +1110,26 @@ public class Evaluator {
 
     public Map<Integer, Map<String, Variable>> getLocals() {
         return locals;
+    }
+
+    protected void invokeDefaultConstructor() {
+        String[] parts = className.split("\\.");
+        String shortName = parts[parts.length - 1];
+
+        for(ConstructorDeclaration decl : cu.findAll(ConstructorDeclaration.class)) {
+
+            if (decl.getParameters().isEmpty()) {
+                decl.findAncestor(TypeDeclaration.class).ifPresent(t -> {
+                    if(shortName.equals(t.getNameAsString())) {
+                        try {
+                            executeConstructor(decl);
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    }
+                });
+            }
+        }
     }
 
     private static class MockReturnValueHandler implements Answer<Object> {
@@ -1631,25 +1651,25 @@ public class Evaluator {
         }
     }
 
-    void setupField(FieldDeclaration field, VariableDeclarator variable) {
+    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
         try {
             if (field.isStatic()) {
-                Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variable.getNameAsString());
+                Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variableDeclarator.getNameAsString());
                 if (s != null) {
-                    fields.put(variable.getNameAsString(), s);
+                    fields.put(variableDeclarator.getNameAsString(), s);
                     return;
                 }
             }
-            Variable v = identifyFieldDeclarations(variable);
+            Variable v = identifyFieldDeclarations(variableDeclarator);
             if (v != null) {
-                fields.put(variable.getNameAsString(), v);
+                fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
                     v.setStatic(true);
-                    AntikytheraRunTime.setStaticVariable(getClassName(), variable.getNameAsString(), v);
+                    AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
                 }
             }
         } catch (UnsolvedSymbolException e) {
-            logger.debug("ignore {}", variable);
+            logger.debug("ignore {}", variableDeclarator);
         } catch (IOException e) {
             String action = Settings.getProperty("dependencies.on_error").toString();
             if(action == null || action.equals("exit")) {

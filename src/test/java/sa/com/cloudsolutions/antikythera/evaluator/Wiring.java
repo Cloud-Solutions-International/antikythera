@@ -71,7 +71,7 @@ class Second {
     private String name;
 
     public Second() {
-        this.name = "Bolgar";
+        this.name = "Bolger";
     }
     public String getName() {
         return name;
