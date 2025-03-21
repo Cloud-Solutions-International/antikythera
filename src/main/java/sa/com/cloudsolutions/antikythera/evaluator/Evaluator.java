@@ -325,23 +325,9 @@ public class Evaluator {
                     field.setAccessible(true);
                     return new Variable(field.get(null));
                 } else {
-                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-                    if (typeDeclaration != null) {
-                        Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
-
-                        if (fieldDeclaration.isPresent()) {
-                            FieldDeclaration field = fieldDeclaration.get();
-                            for (var variable : field.getVariables()) {
-                                if (variable.getNameAsString().equals(fae.getNameAsString())) {
-                                    if (field.isStatic()) {
-                                        return AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
-                                    }
-                                    Variable v = new Variable(field.getVariable(0).getType().asString());
-                                    field.getVariable(0).getInitializer().ifPresent(f -> v.setValue(f.toString()));
-                                    return v;
-                                }
-                            }
-                        }
+                    Variable v = evaluateFieldAccessExpression(fae, dep);
+                    if (v != null) {
+                        return v;
                     }
                 }
             }
@@ -352,6 +338,28 @@ public class Evaluator {
             logger.warn("Could not resolve {} for field access", fae.getScope());
         }
 
+        return null;
+    }
+
+    private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep)  {
+        TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
+        if (typeDeclaration != null) {
+            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
+
+            if (fieldDeclaration.isPresent()) {
+                FieldDeclaration field = fieldDeclaration.get();
+                for (var variable : field.getVariables()) {
+                    if (variable.getNameAsString().equals(fae.getNameAsString())) {
+                        if (field.isStatic()) {
+                            return AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
+                        }
+                        Variable v = new Variable(field.getVariable(0).getType().asString());
+                        variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
+                        return v;
+                    }
+                }
+            }
+        }
         return null;
     }
 
