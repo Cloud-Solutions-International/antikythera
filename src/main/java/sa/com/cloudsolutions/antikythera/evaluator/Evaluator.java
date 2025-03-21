@@ -120,6 +120,7 @@ public class Evaluator {
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
     public Evaluator (String className) {
+        System.out.println(className);
         this.className = className;
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
@@ -1147,8 +1148,6 @@ public class Evaluator {
                     CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                     if (compilationUnit != null) {
                         return resolveFieldRepresentedByCode(variable, resolvedClass);
-                    } else {
-                        logger.debug("Unsolved {}", resolvedClass);
                     }
                 }
             }
