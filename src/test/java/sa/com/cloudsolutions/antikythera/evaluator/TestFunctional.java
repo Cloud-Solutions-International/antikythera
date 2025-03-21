@@ -34,14 +34,13 @@ class TestFunctional extends TestHelper{
     void each() {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = new Evaluator(SAMPLE_CLASS);
-        evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
     }
 
     @ParameterizedTest
     @CsvSource({"greet1, Hello Ashfaloth", "greet2, Hello Ashfaloth", "greet3, Hello Thorin Oakenshield",
         "sorting1, 0123456789", "sorting2, 9876543210", "people4, [A]", "people5, A", "people6, A",
-            "people7, Tom Bombadil"
+            "people7, Tom Bombadil", "nestedStream, 1AB2AB"
     })
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();

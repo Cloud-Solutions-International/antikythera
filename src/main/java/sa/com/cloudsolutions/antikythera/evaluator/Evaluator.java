@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.stmt.CatchClause;
@@ -124,6 +125,9 @@ public class Evaluator {
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
+        if (cu != null) {
+            this.setupFields(cu);
+        }
     }
 
     /**
@@ -275,7 +279,7 @@ public class Evaluator {
             } else if (v.getValue() instanceof Long l) {
                 v.setValue(l + 1);
             }
-            return evaluateExpression(unaryExpr);
+            return v;
         }
         else if(operator.equals(UnaryExpr.Operator.POSTFIX_DECREMENT)
                 || operator.equals(UnaryExpr.Operator.PREFIX_DECREMENT)) {
@@ -287,7 +291,7 @@ public class Evaluator {
             } else if (v.getValue() instanceof Long l) {
                 v.setValue(l - 1);
             }
-            return evaluateExpression(unaryExpr);
+            return v;
         }
         else if(operator.equals(UnaryExpr.Operator.MINUS)) {
             Variable v = evaluateExpression(unaryExpr);
@@ -322,16 +326,9 @@ public class Evaluator {
                     field.setAccessible(true);
                     return new Variable(field.get(null));
                 } else {
-                    TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-                    if (typeDeclaration != null) {
-                        Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
-
-                        if (fieldDeclaration.isPresent()) {
-                            FieldDeclaration field = fieldDeclaration.get();
-                            Variable v = new Variable(field.getVariable(0).getType().asString());
-                            field.getVariable(0).getInitializer().ifPresent(f -> v.setValue(f.toString()));
-                            return v;
-                        }
+                    Variable v = evaluateFieldAccessExpression(fae, dep);
+                    if (v != null) {
+                        return v;
                     }
                 }
             }
@@ -342,6 +339,29 @@ public class Evaluator {
             logger.warn("Could not resolve {} for field access", fae.getScope());
         }
 
+        return null;
+    }
+
+    private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep)  {
+        TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
+        if (typeDeclaration != null) {
+            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
+
+            if (fieldDeclaration.isPresent()) {
+                FieldDeclaration field = fieldDeclaration.get();
+                for (var variable : field.getVariables()) {
+                    if (variable.getNameAsString().equals(fae.getNameAsString())) {
+                        if (field.isStatic()) {
+                            return AntikytheraRunTime.getStaticVariable(
+                                    getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
+                        }
+                        Variable v = new Variable(field.getVariable(0).getType().asString());
+                        variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
+                        return v;
+                    }
+                }
+            }
+        }
         return null;
     }
 
@@ -1054,7 +1074,7 @@ public class Evaluator {
     }
 
     @SuppressWarnings("java:S3776")
-    void identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+    Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (AntikytheraRunTime.isMocked(variable.getType())) {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
@@ -1065,13 +1085,13 @@ public class Evaluator {
                 v = useMockito(fqdn);
             }
             v.setType(variable.getType());
-            fields.put(variable.getNameAsString(), v);
+            return v;
         }
         else {
             if (variable.getType().isClassOrInterfaceType()) {
-                resolveNonPrimitiveFields(variable);
+                return resolveNonPrimitiveFields(variable);
             } else {
-                resolvePrimitiveFields(variable);
+                return resolvePrimitiveFields(variable);
             }
         }
     }
@@ -1107,11 +1127,11 @@ public class Evaluator {
         }
     }
 
-    void resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    Variable resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
         if (imports.isEmpty()) {
-            setupPrimitiveOrBoxedField(variable, t);
+            return setupPrimitiveOrBoxedField(variable, t);
         }
         else {
             for (ImportWrapper imp : imports) {
@@ -1120,22 +1140,23 @@ public class Evaluator {
                 if (f != null) {
                     Variable v = new Variable(t);
                     v.setValue(f);
-                    fields.put(variable.getNameAsString(), v);
+                    return v;
                 } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-                    setupPrimitiveOrBoxedField(variable, t);
+                    return setupPrimitiveOrBoxedField(variable, t);
                 } else {
                     CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                     if (compilationUnit != null) {
-                        resolveFieldRepresentedByCode(variable, resolvedClass);
+                        return resolveFieldRepresentedByCode(variable, resolvedClass);
                     } else {
                         logger.debug("Unsolved {}", resolvedClass);
                     }
                 }
             }
         }
+        return null;
     }
 
-    private void setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
+    private Variable setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if(init.isPresent()) {
@@ -1175,38 +1196,38 @@ public class Evaluator {
             v = new Variable(t, null);
             v.setType(t);
         }
-        fields.put(variable.getNameAsString(), v);
+        return v;
     }
 
     /**
      * Try to identify the compilation unit that represents the given field
      * @param variable a variable declaration statement
      * @param resolvedClass the name of the class that the field is of
-     * @return true if successfully resolved
+     * @return The variable or null
      *
      * @throws AntikytheraException if something goes wrong
      * @throws ReflectiveOperationException if a reflective operation fails
      */
-    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
+    Variable resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
                 Variable v = createObject(variable, variable, init.get().asObjectCreationExpr());
                 v.setType(variable.getType());
-                fields.put(variable.getNameAsString(), v);
+                return v;
             }
             else {
                 Evaluator eval = EvaluatorFactory.create(resolvedClass, this);
                 Variable v = new Variable(eval);
                 v.setType(variable.getType());
-                fields.put(variable.getNameAsString(), v);
+                return v;
+
             }
-            return true;
         }
-        return false;
+        return null;
     }
 
-    private void resolvePrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    private Variable resolvePrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if(init.isPresent()) {
@@ -1217,7 +1238,7 @@ public class Evaluator {
             v = new Variable(variable.getType(), Reflect.getDefault(variable.getType().toString()));
         }
         v.setPrimitive(true);
-        fields.put(variable.getNameAsString(), v);
+        return v;
     }
 
     public Map<String, Variable> getFields() {
@@ -1547,7 +1568,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    public void setupFields(CompilationUnit cu)  {
+    private void setupFields(CompilationUnit cu)  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
@@ -1571,21 +1592,59 @@ public class Evaluator {
         public void visit(FieldDeclaration field, Void arg) {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
-                try {
-                    identifyFieldDeclarations(variable);
-                } catch (UnsolvedSymbolException e) {
-                    logger.debug("ignore {}", variable);
-                } catch (IOException e) {
-                    String action = Settings.getProperty("dependencies.on_error").toString();
-                    if(action == null || action.equals("exit")) {
-                        throw new GeneratorException("Exception while processing fields", e);
+                field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
+                    if (cdecl.getFullyQualifiedName().isPresent() && cdecl.getFullyQualifiedName().get().equals(className)) {
+                        setupField(field, variable);
                     }
+                });
+            }
+        }
 
-                    logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
+        @Override
+        public void visit(InitializerDeclaration init, Void arg) {
+            super.visit(init, arg);
+            init.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
+                cdecl.getFullyQualifiedName().ifPresent(className -> {
+                    if (className.equals(getClassName())) {
+                        try {
+                            executeBlock(init.getBody().getStatements());
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    }
+                });
+            });
+        }
 
-                } catch (AntikytheraException|ReflectiveOperationException e) {
-                    throw new GeneratorException(e);
+        private void setupField(FieldDeclaration field, VariableDeclarator variable) {
+            try {
+                if (field.isStatic()) {
+                    Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variable.getNameAsString());
+                    if (s != null) {
+                        fields.put(variable.getNameAsString(), s);
+                        return;
+                    }
                 }
+                Variable v = identifyFieldDeclarations(variable);
+                if (v != null) {
+                    fields.put(variable.getNameAsString(), v);
+                    if (field.isStatic()) {
+                        v.setStatic(true);
+                        AntikytheraRunTime.setStaticVariable(getClassName(), variable.getNameAsString(), v);
+                    }
+                }
+            } catch (UnsolvedSymbolException e) {
+                logger.debug("ignore {}", variable);
+            } catch (IOException e) {
+                String action = Settings.getProperty("dependencies.on_error").toString();
+                if(action == null || action.equals("exit")) {
+                    throw new GeneratorException("Exception while processing fields", e);
+                }
+
+                logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
+
+            } catch (AntikytheraException|ReflectiveOperationException e) {
+                throw new GeneratorException(e);
             }
         }
     }

@@ -27,7 +27,6 @@ class TestNesting extends TestHelper{
     void testNesting(String name, String output) throws ReflectiveOperationException {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
         evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
-        evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,

@@ -35,7 +35,6 @@ class TestTryCatch extends TestHelper {
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = new Evaluator(SAMPLE_CLASS);
-        evaluator.setupFields(cu);
         System.setOut(new PrintStream(outContent));
     }
 

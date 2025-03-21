@@ -279,9 +279,10 @@ public class SpringEvaluator extends Evaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
-    public void identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
-        super.identifyFieldDeclarations(field);
+    public Variable identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
+        Variable v = super.identifyFieldDeclarations(field);
         detectRepository(field);
+        return v;
     }
 
     /**
@@ -389,7 +390,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws ReflectiveOperationException if a reflective operation goes wrong
      */
     @Override
-    boolean resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
+    Variable resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
         /*
          * Try to substitute an implementation for the interface.
          */
@@ -400,22 +401,18 @@ public class SpringEvaluator extends Evaluator {
         Set<String> implementations = AntikytheraRunTime.findImplementations(name);
         if (implementations != null) {
             for (String impl : implementations) {
-                if (super.resolveFieldRepresentedByCode(variable, impl)) {
-                    return true;
-                }
-                else {
-                    if (autoWire(variable, impl)) return true;
+                Variable v = super.resolveFieldRepresentedByCode(variable, impl);
+                if (v == null) {
+                    return autoWire(variable, impl);
                 }
             }
         }
 
-        if(super.resolveFieldRepresentedByCode(variable, resolvedClass)) {
-            return true;
-        }
-        return autoWire(variable, resolvedClass);
+        Variable v = super.resolveFieldRepresentedByCode(variable, resolvedClass);
+        return (v == null) ? autoWire(variable, resolvedClass) :  v;
     }
 
-     boolean    autoWire(VariableDeclarator variable, String resolvedClass) {
+     Variable autoWire(VariableDeclarator variable, String resolvedClass) {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
@@ -429,18 +426,14 @@ public class SpringEvaluator extends Evaluator {
                 }
                 else {
                     Evaluator eval = new SpringEvaluator(resolvedClass);
-                    CompilationUnit dependant = AntikytheraRunTime.getCompilationUnit(resolvedClass);
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
-                    eval.setupFields(dependant);
                 }
-                fields.put(variable.getNameAsString(), v);
             }
-
-            return true;
+            return v;
         }
-        return false;
+        return null;
     }
 
 
