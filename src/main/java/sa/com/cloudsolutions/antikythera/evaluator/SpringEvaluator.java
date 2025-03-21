@@ -63,7 +63,7 @@ public class SpringEvaluator extends Evaluator {
     private static final Map<String, RepositoryParser> repositories = new HashMap<>();
 
     /**
-     * List of generators that we have.
+     * <p>List of test generators that we have.</p>
      *
      * Generators ought to be seperated from the parsers/evaluators because different kinds of
      * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
@@ -94,11 +94,12 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Called by the java parser method visitor.
+     * <p>This is where the code evaluation really starts</p>
      *
-     * This is where the code evaluation begins. Note that we may run the same code repeatedly
-     * so that we can exercise all the paths in the code. This is done by setting the values
-     * of variables so that different branches in conditional statements are taken.
+     * The method will be called by the java parser method visitor. Note that we may run the same
+     * code repeatedly so that we can exercise all the paths in the code.
+     * This is done by setting the values of variables to ensure conditionals evaluate to both true
+     * state and the false state
      *
      * @param md The MethodDeclaration being worked on
      * @throws AntikytheraException if evaluation fails
@@ -166,10 +167,10 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Execute a block of statements.
+     * <p>Execute a block of statements.</p>
      *
-     * We may end up executing the same block of statements repeatedly until all the branches
-     * have been covered.
+     * When generating tests; we may end up executing the same block of statements repeatedly until
+     * all the branches have been covered.
      *
      * @param statements the collection of statements that make up the block
      * @throws AntikytheraException if there are situations where we cannot process the block
@@ -423,17 +424,13 @@ public class SpringEvaluator extends Evaluator {
                 if (targetCu != null) {
                     String name = AbstractCompiler.findFullyQualifiedName(targetCu,variableDeclarator.getType().asString());
 
-                    Set<String> implementations = AntikytheraRunTime.findImplementations(name);
-                    for (String impl : implementations) {
+                    for (String impl : AntikytheraRunTime.findImplementations(name)) {
                         v = autoWire(variableDeclarator, impl);
                         if (v != null) {
                             return;
                         }
                     }
                 }
-            }
-            else {
-                return;
             }
         }
         super.setupField(field, variableDeclarator);
