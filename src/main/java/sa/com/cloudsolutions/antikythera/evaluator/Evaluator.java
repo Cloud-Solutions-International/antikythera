@@ -278,7 +278,7 @@ public class Evaluator {
             } else if (v.getValue() instanceof Long l) {
                 v.setValue(l + 1);
             }
-            return evaluateExpression(unaryExpr);
+            return v;
         }
         else if(operator.equals(UnaryExpr.Operator.POSTFIX_DECREMENT)
                 || operator.equals(UnaryExpr.Operator.PREFIX_DECREMENT)) {
@@ -290,7 +290,7 @@ public class Evaluator {
             } else if (v.getValue() instanceof Long l) {
                 v.setValue(l - 1);
             }
-            return evaluateExpression(unaryExpr);
+            return v;
         }
         else if(operator.equals(UnaryExpr.Operator.MINUS)) {
             Variable v = evaluateExpression(unaryExpr);
@@ -351,7 +351,8 @@ public class Evaluator {
                 for (var variable : field.getVariables()) {
                     if (variable.getNameAsString().equals(fae.getNameAsString())) {
                         if (field.isStatic()) {
-                            return AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
+                            return AntikytheraRunTime.getStaticVariable(
+                                    getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
                         }
                         Variable v = new Variable(field.getVariable(0).getType().asString());
                         variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
@@ -1601,7 +1602,7 @@ public class Evaluator {
         private void setupField(FieldDeclaration field, VariableDeclarator variable) {
             try {
                 if (field.isStatic()) {
-                    Variable s = AntikytheraRunTime.getStaticVariable(variable.getType(), variable.getNameAsString());
+                    Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variable.getNameAsString());
                     if (s != null) {
                         fields.put(variable.getNameAsString(), s);
                         return;
@@ -1612,7 +1613,7 @@ public class Evaluator {
                     fields.put(variable.getNameAsString(), v);
                     if (field.isStatic()) {
                         v.setStatic(true);
-                        AntikytheraRunTime.setStaticVariable(variable.getType(), variable.getNameAsString(), v);
+                        AntikytheraRunTime.setStaticVariable(getClassName(), variable.getNameAsString(), v);
                     }
                 }
             } catch (UnsolvedSymbolException e) {

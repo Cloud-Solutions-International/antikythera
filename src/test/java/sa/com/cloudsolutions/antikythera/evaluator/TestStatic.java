@@ -4,7 +4,8 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -35,11 +36,12 @@ public class TestStatic extends TestHelper{
     }
 
 
-    @Test
-    void testStatic() throws ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("counter")).orElseThrow();
+    @ParameterizedTest
+    @ValueSource(strings = {"counter1", "counter2"})
+    void testStatic(String name) throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
-        assertEquals("2 b\n", outContent.toString());
+        assertEquals("2 b\n2 a\n2 b\n", outContent.toString());
     }
 }

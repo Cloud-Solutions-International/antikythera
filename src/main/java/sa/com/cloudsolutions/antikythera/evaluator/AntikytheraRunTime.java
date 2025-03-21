@@ -56,7 +56,7 @@ public class AntikytheraRunTime {
      */
     protected static final Map<String, Variable> autowired = new HashMap<>();
 
-    protected static final Map<Type, Map<String,Variable>> statics = new HashMap<>();
+    protected static final Map<String, Map<String,Variable>> statics = new HashMap<>();
 
     private AntikytheraRunTime() {}
 
@@ -205,13 +205,13 @@ public class AntikytheraRunTime {
         return resolvedClasses;
     }
 
-    public static Variable getStaticVariable(Type type, String field) {
-        return statics.getOrDefault(type, new TreeMap<>()).get(field);
+    public static Variable getStaticVariable(String fqn, String field) {
+        return statics.getOrDefault(fqn, new TreeMap<>()).get(field);
     }
 
-    public static void setStaticVariable(Type type, String field, Variable variable)
+    public static void setStaticVariable(String fqn, String field, Variable variable)
     {
-        Map<String, Variable> map = statics.computeIfAbsent(type, k -> new TreeMap<>());
+        Map<String, Variable> map = statics.computeIfAbsent(fqn, k -> new TreeMap<>());
         map.put(field, variable);
     }
 }
