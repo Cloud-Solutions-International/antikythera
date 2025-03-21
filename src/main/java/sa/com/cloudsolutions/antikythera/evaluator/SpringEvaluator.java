@@ -405,7 +405,6 @@ public class SpringEvaluator extends Evaluator {
                 if (v == null) {
                     return autoWire(variable, impl);
                 }
-                return v;
             }
         }
 
