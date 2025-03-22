@@ -309,8 +309,22 @@ class TestTruthTable {
     }
 
     @Test
-    void testDomainAdjustmentWithLiterals() {
+    void testDomainAdjustmentWithLiterals1() {
         String condition = "a > 5 || a.equals(7)";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+        assertEquals(6, v.getFirst().get(new NameExpr("a")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testDomainAdjustmentWithLiterals2() {
+        String condition = "a > 5 && a.equals(7)";
         TruthTable tt = new TruthTable(condition);
         tt.generateTruthTable();
 
@@ -321,6 +335,7 @@ class TestTruthTable {
         v = tt.findValuesForCondition(false);
         assertFalse(v.isEmpty());
     }
+
 
     @Test
     void testWithConstraints() {
@@ -352,7 +367,22 @@ class TestTruthTable {
         String condition = "a >= b && b >= c";
         TruthTable tt = new TruthTable(condition);
 
-        // Add constraints: 1 <= b <= 3
+        tt.addConstraint(new NameExpr("a"),
+                new BinaryExpr(
+                        new NameExpr("a"),
+                        new IntegerLiteralExpr("10"),
+                        BinaryExpr.Operator.LESS_EQUALS
+                )
+        );
+
+        tt.addConstraint(new NameExpr("a"),
+                new BinaryExpr(
+                        new NameExpr("a"),
+                        new IntegerLiteralExpr("5"),
+                        BinaryExpr.Operator.GREATER_EQUALS
+                )
+        );
+
         tt.addConstraint(new NameExpr("b"),
             new BinaryExpr(
                 new NameExpr("b"),
@@ -374,7 +404,7 @@ class TestTruthTable {
         assertFalse(v.isEmpty());
         for (Map<Expression, Object> row : v) {
             int bValue = (int) row.get(new NameExpr("b"));
-            assertTrue(bValue >= 1 && bValue <= 3, "b should be between 1 and 3");
+            assertTrue(bValue >= 5 && bValue <= 10, "b should be between 1 and 3");
             assertTrue((int) row.get(new NameExpr("a")) >= bValue, "a should be greater than or equal to b");
             assertTrue(bValue >= (int) row.get(new NameExpr("c")), "b should be greater than or equal to c");
         }

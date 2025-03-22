@@ -56,7 +56,7 @@ public class TruthTable {
     /**
      * If any c
      */
-    private final HashMap<Expression, Expression> constraints;
+    private final HashMap<Expression, List<Expression>> constraints;
     /**
      * The matrix of values for the variables and the result of the condition
      */
@@ -156,31 +156,32 @@ public class TruthTable {
     }
 
     private boolean satisfiesConstraints(Map<Expression, Object> truthValues) {
-        for (Map.Entry<Expression, Expression> constraint : constraints.entrySet()) {
+        for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
-            Expression constraintExpr = constraint.getValue();
+            for (Expression constraintExpr : constraint.getValue()) {
 
-            if (constraintExpr instanceof BinaryExpr binaryExpr) {
-                Object value = truthValues.get(variable);
-                if (value instanceof Integer intValue) {
-                    int literalValue = Integer.parseInt(
-                        binaryExpr.getRight().isIntegerLiteralExpr() ?
-                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
-                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
-                    );
+                if (constraintExpr instanceof BinaryExpr binaryExpr) {
+                    Object value = truthValues.get(variable);
+                    if (value instanceof Integer intValue) {
+                        int literalValue = Integer.parseInt(
+                                binaryExpr.getRight().isIntegerLiteralExpr() ?
+                                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
+                                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
+                        );
 
-                    boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
-                    boolean satisfied = switch (binaryExpr.getOperator()) {
-                        case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
-                        case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
-                        case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
-                        case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
-                        case EQUALS -> intValue == literalValue;
-                        default -> true;
-                    };
+                        boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
+                        boolean satisfied = switch (binaryExpr.getOperator()) {
+                            case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
+                            case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
+                            case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
+                            case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
+                            case EQUALS -> intValue == literalValue;
+                            default -> true;
+                        };
 
-                    if (!satisfied) {
-                        return false;
+                        if (!satisfied) {
+                            return false;
+                        }
                     }
                 }
             }
@@ -294,12 +295,12 @@ public class TruthTable {
         }
 
         // Then handle constraints
-        for (Map.Entry<Expression, Expression> constraint : constraints.entrySet()) {
+        for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
-            Expression constraintExpr = constraint.getValue();
-
-            if (constraintExpr instanceof BinaryExpr binaryExpr) {
-                adjustDomainForConstraint(variable, binaryExpr);
+            for (Expression constraintExpr : constraint.getValue()) {
+                if (constraintExpr instanceof BinaryExpr binaryExpr) {
+                    adjustDomainForConstraint(variable, binaryExpr);
+                }
             }
         }
     }
@@ -635,7 +636,10 @@ public class TruthTable {
     }
 
     public void addConstraint(NameExpr name, BinaryExpr constraint) {
-        constraints.put(name, constraint);
+        if (!constraints.containsKey(name)) {
+            constraints.put(name, new ArrayList<>());
+        }
+        constraints.get(name).add(constraint);
     }
 
 
@@ -694,7 +698,7 @@ public class TruthTable {
                         switch (binaryExpr.getOperator()) {
                             case LESS -> collector.put(n, new Pair<>(0, literalValue));
                             case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
-                            case GREATER -> collector.put(n, new Pair<>(literalValue + 1, literalValue + 3));
+                            case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
                             case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
                             default -> collector.put(n, new Pair<>(0, 1)); // fallback
                         }
@@ -703,7 +707,19 @@ public class TruthTable {
                     }
                 } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS)) {
                     // Handle a.equals(1) type expressions
-                    collector.put(n, new Pair<>(literalValue, literalValue));
+                    if (collector.containsKey(n)) {
+                        Pair<Object, Object> existingBounds = collector.get(n);
+                        if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
+                            if (literalValue < min) {
+                                collector.put(n, new Pair<>(literalValue, max));
+                            } else if (literalValue > max) {
+                                collector.put(n, new Pair<>(min, literalValue));
+                            }
+                            // If literalValue is within bounds, no action needed
+                        }
+                    } else {
+                        collector.put(n, new Pair<>(literalValue, literalValue));
+                    }
                 }
             }
             else if (compareWith.isStringLiteralExpr()) {
