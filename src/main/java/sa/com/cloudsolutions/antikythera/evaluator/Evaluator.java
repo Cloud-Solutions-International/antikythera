@@ -1311,21 +1311,20 @@ public class Evaluator {
         return null;
     }
 
-    protected void setupParameters(MethodDeclaration md) {
+    protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
 
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Variable v = setupParameter(md, parameters, i);
+            setupParameter(md, parameters, i);
         }
     }
 
-    Variable setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) {
+    void setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) throws ReflectiveOperationException {
         Parameter p = parameters.get(i);
         Variable va = AntikytheraRunTime.pop();
         md.getBody().ifPresent(body -> {
             setLocal(body, p.getNameAsString(), va);
         });
-        return va;
     }
 
     /**

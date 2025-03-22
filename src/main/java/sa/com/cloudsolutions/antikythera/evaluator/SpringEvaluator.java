@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
@@ -140,36 +141,28 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable executeMethod(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
-        if (cd instanceof MethodDeclaration md) {
-            returnFrom = null;
-            returnValue = null;
-
-            List<Statement> statements = md.getBody().orElseThrow().getStatements();
-            setupParameters(md);
-            applyPreconditions(md);
-            executeBlock(statements);
-
-            return returnValue;
-        }
-        return null;
-    }
-
-    private void applyPreconditions(MethodDeclaration md) throws ReflectiveOperationException {
-        for (Expression cond : preConditions.getOrDefault(md, Collections.emptySet())) {
-            evaluateExpression(cond);
-        }
-    }
-
-    @Override
-    Variable setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) {
+    void setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) throws ReflectiveOperationException {
         Parameter p = parameters.get(i);
         Variable va = AntikytheraRunTime.pop();
+
+        for (Expression cond : preConditions.getOrDefault(md, Collections.emptySet())) {
+            if (cond instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                if (mce.getScope().get() instanceof NameExpr ne) {
+                    if (ne.getNameAsString().equals(p.getNameAsString())) {
+                        if (va.getValue() instanceof  Evaluator eval) {
+                            MCEWrapper wrapper = wrapCallExpression(mce);
+                            eval.executeLocalMethod(wrapper);
+                        }
+                    }
+                }
+            }
+        }
+
         md.getBody().ifPresent(body -> {
             setLocal(body, p.getNameAsString(), va);
             p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
         });
-        return va;
+
     }
 
     private static void setupRequestParam(AnnotationExpr a) {
