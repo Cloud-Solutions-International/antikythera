@@ -36,6 +36,7 @@ import java.util.Set;
  */
 public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
+    public static final String EQUALS = "equals";
     /**
      * The condition that this truth table is for
      */
@@ -158,9 +159,9 @@ public class TruthTable {
      */
     private int calculateTotalCombinations(Expression[] variableList, Map<Expression, Integer> domain) {
         int totalCombinations = 1;
-        for (Expression var : variableList) {
-            if (domain.containsKey(var)) {
-                totalCombinations *= (domain.get(var) + 1);
+        for (Expression v : variableList) {
+            if (domain.containsKey(v)) {
+                totalCombinations *= (domain.get(v) + 1);
             } else {
                 totalCombinations *= 2;
             }
@@ -275,7 +276,7 @@ public class TruthTable {
                         maxValue = Math.max(maxValue, value + 1);
                     }
                 }
-            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains("equals")) {
+            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS)) {
                 // Check equals method arguments for integer literals
                 if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
                     int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
@@ -470,7 +471,7 @@ public class TruthTable {
     }
 
     private Object evaluateMethodCall(MethodCallExpr condition, Map<Expression, Object> truthValues) {
-        if (condition.toString().contains("equals")) {
+        if (condition.toString().contains(EQUALS)) {
             Expression scope = condition.getScope().orElse(null);
             Object scopeValue = truthValues.get(scope);
             Expression argument = condition.getArgument(0);
@@ -550,12 +551,12 @@ public class TruthTable {
         }
 
         private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
+            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS)) {
                 findDomain(n, collector, mce.getArgument(0));
             } else if (parent instanceof BinaryExpr b) {
                 findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
             } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
-                collector.put(n, new Pair<>(isInequalityPresent() ? 0 : true, isInequalityPresent() ? 1 : false));
+                collector.put(n, new Pair<>(false, true));
             }
         }
 
@@ -586,7 +587,7 @@ public class TruthTable {
                     } else {
                         collector.put(n, new Pair<>(literalValue, literalValue));
                     }
-                } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals("equals")) {
+                } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS)) {
                     // Handle a.equals(1) type expressions
                     collector.put(n, new Pair<>(literalValue, literalValue));
                 }
@@ -606,7 +607,7 @@ public class TruthTable {
 
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (!m.getNameAsString().equals("equals")) {
+            if (!m.getNameAsString().equals(EQUALS)) {
                 Optional<Node> parent = m.getParentNode();
 
                  if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
@@ -670,7 +671,7 @@ public class TruthTable {
          */
         @Override
         public void visit(MethodCallExpr m, Set<Expression> collector) {
-            if(m.toString().contains("equals")) {
+            if(m.toString().contains(EQUALS)) {
                 collector.add(m);
             }
             super.visit(m, collector);
