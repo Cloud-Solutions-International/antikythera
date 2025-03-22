@@ -15,8 +15,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,6 +45,10 @@ class TestTruthTable {
         assertFalse(truthTable.isEmpty());
         assertEquals(2, truthTable.size()); // 2^3 = 8 rows for 3 variables
         assertNull(truthTable.getFirst().get("a"));
+
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertFalse(values.isEmpty());
+        assertNull(values.getFirst().get(new NameExpr("a")));
     }
 
     @SuppressWarnings("java:S125")
@@ -75,6 +77,7 @@ class TestTruthTable {
 
         generator.printTruthTable();
         assertTrue(outContent.toString().startsWith("Truth Table for condition: a && b || !c\n"));
+        assertTrue(outContent.toString().contains("true       true       false      true "));
     }
 
     @ParameterizedTest
@@ -121,6 +124,9 @@ class TestTruthTable {
         assertEquals(0, first.get(new NameExpr("a")));
         assertEquals(0, first.get(new NameExpr("b")));
         assertEquals(0, first.get(new NameExpr("c")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -136,6 +142,9 @@ class TestTruthTable {
         assertEquals(2, first.get(new NameExpr("a")));
         assertEquals(1, first.get(new NameExpr("b")));
         assertEquals(0, first.get(new NameExpr("c")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -153,6 +162,9 @@ class TestTruthTable {
         assertEquals(1, v.size());
         first = v.getFirst();
         assertNotNull(first.get(new NameExpr("a")));
+
+        v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -180,6 +192,9 @@ class TestTruthTable {
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
         assertEquals(1, v.size());
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -193,6 +208,9 @@ class TestTruthTable {
         Map<Expression, Object> first = v.getFirst();
         assertTrue(Boolean.parseBoolean(first.get(new NameExpr("a")).toString()));
         assertTrue(Boolean.parseBoolean(first.get(new NameExpr("b")).toString()));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -218,6 +236,9 @@ class TestTruthTable {
         Expression first = v.getFirst().keySet().stream().findFirst().orElse(null);
         assertNotNull(first);
         assertTrue(TruthTable.isTrue(v.getFirst().get(first)));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -245,6 +266,9 @@ class TestTruthTable {
         assertTrue(TruthTable.isTrue(first.get(new NameExpr("a")))
                 && TruthTable.isTrue(first.get(new NameExpr("b")))
                 || TruthTable.isTrue(first.get(new NameExpr("c"))));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -259,6 +283,9 @@ class TestTruthTable {
         Map<Expression, Object> first = v.getFirst();
         int value = (int) first.get(new NameExpr("a"));
         assertTrue(value <= 5);
+
+        v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -276,6 +303,9 @@ class TestTruthTable {
                 .orElse(null);
         assertNotNull(fieldAccess);
         assertTrue((int)v.getFirst().get(fieldAccess) > 18);
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
@@ -286,14 +316,10 @@ class TestTruthTable {
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
         assertFalse(v.isEmpty());
+        assertEquals(7, v.getFirst().get(new NameExpr("a")));
 
-        // Test values larger than the default [0,1] domain
-        Set<Object> values = v.stream()
-                .map(m -> m.get(new NameExpr("a")))
-                .collect(Collectors.toSet());
-
-        assertTrue(values.contains(6));
-        assertTrue(values.contains(7));
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
     }
 
     @Test
