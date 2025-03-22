@@ -52,6 +52,10 @@ public class TruthTable {
     private final Set<Expression> conditions;
 
     /**
+     * If any c
+     */
+    private final HashMap<Expression, Expression> constraints;
+    /**
      * The matrix of values for the variables and the result of the condition
      */
     private List<Map<Expression, Object>> table;
@@ -62,7 +66,6 @@ public class TruthTable {
      */
     public TruthTable(String conditionCode) {
         this(StaticJavaParser.parseExpression(conditionCode));
-
     }
 
     /**
@@ -73,6 +76,7 @@ public class TruthTable {
         this.condition = condition;
         this.variables = new HashMap<>();
         this.conditions = new HashSet<>();
+        this.constraints = new HashMap<>();
     }
 
     private static boolean isInequality(BinaryExpr binaryExpr) {
@@ -121,45 +125,72 @@ public class TruthTable {
      * Generates a truth table for the given condition.
      */
     public void generateTruthTable() {
-        /*
-         * A single IF statement may have multiple binary expressions attached to it, first step
-         * is to identify all of them.
-         */
         this.condition.accept(new ConditionCollector(), conditions);
         this.condition.accept(new VariableCollector(), variables);
+        adjustDomain();
 
         Expression[] variableList = variables.keySet().toArray(new Expression[0]);
-        int numRows = (int) Math.pow(2, variableList.length);
-
         table = new ArrayList<>();
 
-        for (int i = 0; i < numRows; i++) {
-            Map<Expression, Object> truthValues = new HashMap<>();
-            for (int j = 0; j < variableList.length; j++) {
-                Expression variable = variableList[j];
-                Pair<Object, Object> bounds = variables.get(variable);
-
-                boolean value = (i & (1 << j)) != 0;
-                if (value) {
-                    if (bounds.a != null) {
-                        truthValues.put(variable, bounds.a);
-                    } else {
-                        truthValues.put(variable, bounds.b);
-                    }
-                }
-                else {
-                    if (bounds.a != null) {
-                        truthValues.put(variable, bounds.b);
-                    } else {
-                        truthValues.put(variable, null);
-                    }
-                }
-
+        // For integer variables, we'll use their full domain range
+        Map<Expression, Integer> ranges = new HashMap<>();
+        for (Expression var : variableList) {
+            Pair<Object, Object> bounds = variables.get(var);
+            if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
+                ranges.put(var, (Integer) bounds.b - (Integer) bounds.a);
             }
-            Object result = evaluateCondition(condition, truthValues);
+        }
 
+        // Calculate total combinations based on variable domains
+        int totalCombinations = 1;
+        for (Expression var : variableList) {
+            if (ranges.containsKey(var)) {
+                totalCombinations *= ((Integer) variables.get(var).b + 1);
+            } else {
+                totalCombinations *= 2; // Boolean/String variables still use 2 values
+            }
+        }
+
+        for (int i = 0; i < totalCombinations; i++) {
+            Map<Expression, Object> truthValues = new HashMap<>();
+            int product = 1;
+
+            for (Expression var : variableList) {
+                Pair<Object, Object> bounds = variables.get(var);
+
+                if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
+                    int range = (Integer) bounds.b;
+                    int value = (i / product) % (range + 1);
+                    truthValues.put(var, value);
+                    product *= (range + 1);
+                } else {
+                    // Handle boolean/string values as before
+                    boolean value = (i & (1 << ranges.size())) != 0;
+                    if (value) {
+                        truthValues.put(var, bounds.a != null ? bounds.a : bounds.b);
+                    } else {
+                        truthValues.put(var, bounds.a != null ? bounds.b : null);
+                    }
+                }
+            }
+
+            Object result = evaluateCondition(condition, truthValues);
             truthValues.put(RESULT, isTrue(result));
             table.add(truthValues);
+        }
+    }
+    private void adjustDomain() {
+        boolean all = true;
+        for(Pair<Object, Object> p : variables.values()) {
+            if (! (p.a instanceof Integer a && p.b instanceof Integer b  && a == 0 && b == 1)) {
+                all = false;
+                break;
+            }
+        }
+        if (all) {
+            for(Expression e : variables.keySet()) {
+                variables.put(e, new Pair<>(0, variables.size() -1));
+            }
         }
     }
 
@@ -393,12 +424,16 @@ public class TruthTable {
      */
     private class VariableCollector extends VoidVisitorAdapter<HashMap<Expression, Pair<Object, Object>>> {
         /**
-         * Identify name expressions.
-         * We will get a lot of false positives here where the name expression is part of a component
-         * that is being captured else where. So we have to carefully filter them out.
+         * Processes variable names found in conditional expressions and determines their value domains.
+         * For each name expression encountered:
+         * - If part of an equals() comparison with null, sets domain to [null, "T"]
+         * - If part of a numeric comparison, sets domain to [0, numberOfVariables ]
+         * - If part of a string comparison, sets domain to [null, "literal"]
+         * - For boolean conditions, sets domain to [true, false]
+         * Filters out name expressions that are part of method calls or field access.
          *
-         * @param n NameExpr
-         * @param collector HashMap<Expression, Pair<Object, Object>>
+         * @param n The name expression to analyze
+         * @param collector Map storing variable domains as Pairs of lower/upper bounds
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {

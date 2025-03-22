@@ -105,6 +105,36 @@ class TestTruthTable {
     }
 
     @Test
+    void testChainedInequality() {
+        String condition = "a >= b && b >= c";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(10, v.size());
+
+        Map<Expression, Object> first = v.getFirst();
+        assertEquals(0, first.get(new NameExpr("a")));
+        assertEquals(0, first.get(new NameExpr("b")));
+        assertEquals(0, first.get(new NameExpr("c")));
+    }
+
+    @Test
+    void testChainedInequality2() {
+        String condition = "a > b && b > c";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(4, v.size());
+
+        Map<Expression, Object> first = v.getFirst();
+        assertEquals(2, first.get(new NameExpr("a")));
+        assertEquals(1, first.get(new NameExpr("b")));
+        assertEquals(0, first.get(new NameExpr("c")));
+    }
+
+    @Test
     void testSimpleNull() {
         String condition = "a == null";
         TruthTable tt = new TruthTable(condition);
