@@ -706,7 +706,7 @@ public class TruthTable {
         private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
                 int literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>(0, literalValue));
+                case LESS -> collector.put(n, new Pair<>(literalValue -1, literalValue));
                 case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
                 case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
                 case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
