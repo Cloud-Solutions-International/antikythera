@@ -55,20 +55,14 @@ public class ImportUtils {
                 } else if (imp.getImport().isAsterisk() && !imp.isExternal()) {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                     if (cu != null) {
-                        TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, name);
-                        if (td != null) {
-                            Graph.createGraphNode(td);
-                        }
+                        AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
                     }
                 }
             } else {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, name);
-                    if (t != null) {
-                        returnValue = Graph.createGraphNode(t);
-                    }
+                    AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
                 }
             }
         } catch (AntikytheraException e) {

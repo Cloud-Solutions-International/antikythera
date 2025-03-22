@@ -423,7 +423,7 @@ public class RepositoryParser extends ClassProcessor {
                     }
                 }
             }
-            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd));
+            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd).orElse(null));
         }
         return null;
     }

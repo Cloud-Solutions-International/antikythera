@@ -105,8 +105,8 @@ public class Resolver {
                     else {
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
                         if (cu != null) {
-                            TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString());
-                            createFieldNode(value, t);
+                            AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
+                                    .ifPresent(t -> createFieldNode(value, t));
                         }
                     }
                 } catch (AntikytheraException e) {
@@ -297,9 +297,9 @@ public class Resolver {
                 String fqn = AbstractCompiler.findFullyQualifiedName(scopeNode.getCompilationUnit(), resolvedType.getName().asString());
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
                 if (cu != null) {
-                    TypeDeclaration<?> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
-                    if (resolvedClass != null) {
-                        Optional<FieldDeclaration> field = resolvedClass.getFieldByName(fae.getNameAsString());
+                    Optional<TypeDeclaration<?>> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
+                    if (resolvedClass.isPresent()) {
+                        Optional<FieldDeclaration> field = resolvedClass.get().getFieldByName(fae.getNameAsString());
                         if (field.isPresent()) {
                             return Graph.createGraphNode(field.get());
                         }

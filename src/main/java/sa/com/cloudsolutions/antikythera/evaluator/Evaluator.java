@@ -347,9 +347,9 @@ public class Evaluator {
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep)  {
-        TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (typeDeclaration != null) {
-            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
+        Optional<TypeDeclaration<?>> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
+        if (typeDeclaration.isPresent()) {
+            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.get().getFieldByName(fae.getNameAsString());
 
             if (fieldDeclaration.isPresent()) {
                 FieldDeclaration field = fieldDeclaration.get();
@@ -553,7 +553,7 @@ public class Evaluator {
      * @param oce the object creation expression.
      */
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
-        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
+        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().get(), this);
             annonymousOverrides(type, oce, eval);
@@ -609,7 +609,7 @@ public class Evaluator {
     }
 
     private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
-        TypeDeclaration<?> match;
+
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
         if (anonymousClassBody.isPresent()) {
             /*
@@ -617,24 +617,29 @@ public class Evaluator {
              */
             CompilationUnit cu = eval.getCompilationUnit().clone();
             eval.setCompilationUnit(cu);
-            match = AbstractCompiler.getMatchingType(cu, type.getNameAsString());
-            for(BodyDeclaration<?> body : anonymousClassBody.get()) {
-                if (body.isMethodDeclaration() && match != null) {
-                    MethodDeclaration md = body.asMethodDeclaration();
-                    MethodDeclaration replace = null;
+            AbstractCompiler.getMatchingType(cu, type.getNameAsString()).ifPresent(match ->
+                injectMethods(match, anonymousClassBody.get())
+            );
+        }
+    }
 
-                    for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
-                        if (method.getNameAsString().equals(md.getNameAsString())) {
-                            replace = method;
-                            break;
-                        }
+    private static void injectMethods(TypeDeclaration<?> match, NodeList<BodyDeclaration<?>> anonymousClassBody) {
+        for(BodyDeclaration<?> body : anonymousClassBody) {
+            if (body.isMethodDeclaration()) {
+                MethodDeclaration md = body.asMethodDeclaration();
+                MethodDeclaration replace = null;
+
+                for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
+                    if (method.getNameAsString().equals(md.getNameAsString())) {
+                        replace = method;
+                        break;
                     }
-                    if (replace != null) {
-                        replace.replace(md);
-                    }
-                    else {
-                        match.addMember(md);
-                    }
+                }
+                if (replace != null) {
+                    replace.replace(md);
+                }
+                else {
+                    match.addMember(md);
                 }
             }
         }
@@ -850,11 +855,11 @@ public class Evaluator {
             case "System.in" -> System.in;
             default -> {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                if (cu != null) {
-                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
-                    if (typeDecl != null) {
-                        yield EvaluatorFactory.create(typeDecl.getFullyQualifiedName().orElse(null), this);
+                CompilationUnit targetCu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                if (targetCu != null) {
+                    Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.getMatchingType(targetCu, s);
+                    if (typeDecl.isPresent()) {
+                        yield EvaluatorFactory.create(typeDecl.get().getFullyQualifiedName().orElse(null), this);
                     }
                 }
                 yield null;
@@ -965,8 +970,8 @@ public class Evaluator {
     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
 
-        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.asClassOrInterfaceDeclaration());
+        Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
             Variable v = executeMethod(n.get().asMethodDeclaration());
             if (v != null && v.getValue() == null) {
@@ -1042,7 +1047,7 @@ public class Evaluator {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
+                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
