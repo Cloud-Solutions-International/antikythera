@@ -140,35 +140,71 @@ public class TruthTable {
      * @param variableList all the variables in the conditional.
      */
     private void generateCombinations(Expression[] variableList) {
-        Map<Expression, Integer> numericRanges = collectNumericRanges(variableList);
+        Map<Expression, NumericRange> numericRanges = collectNumericRanges(variableList);
         int totalCombinations = calculateTotalCombinations(variableList, numericRanges);
+        table = new ArrayList<>();
 
         for (int i = 0; i < totalCombinations; i++) {
             Map<Expression, Object> truthValues = generateRowValues(variableList, numericRanges, i);
-            Object result = evaluateCondition(condition, truthValues);
-            truthValues.put(RESULT, isTrue(result));
-            table.add(truthValues);
+            // Only add combinations that satisfy all constraints
+            if (satisfiesConstraints(truthValues)) {
+                Object result = evaluateCondition(condition, truthValues);
+                truthValues.put(RESULT, isTrue(result));
+                table.add(truthValues);
+            }
         }
     }
 
+    private boolean satisfiesConstraints(Map<Expression, Object> truthValues) {
+        for (Map.Entry<Expression, Expression> constraint : constraints.entrySet()) {
+            Expression variable = constraint.getKey();
+            Expression constraintExpr = constraint.getValue();
+
+            if (constraintExpr instanceof BinaryExpr binaryExpr) {
+                Object value = truthValues.get(variable);
+                if (value instanceof Integer intValue) {
+                    int literalValue = Integer.parseInt(
+                        binaryExpr.getRight().isIntegerLiteralExpr() ?
+                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
+                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
+                    );
+
+                    boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
+                    boolean satisfied = switch (binaryExpr.getOperator()) {
+                        case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
+                        case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
+                        case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
+                        case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
+                        case EQUALS -> intValue == literalValue;
+                        default -> true;
+                    };
+
+                    if (!satisfied) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
     /**
      * Depending on the number of variables and their domain the number of possibilities can change.
      * @param variableList all the variables in the truth table.
      * @param domain the domain of values for integer literals
      * @return the total number of combinations that are available to us.
      */
-    private int calculateTotalCombinations(Expression[] variableList, Map<Expression, Integer> domain) {
+    private int calculateTotalCombinations(Expression[] variableList,
+            Map<Expression, NumericRange> domain) {
         int totalCombinations = 1;
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
-                totalCombinations *= (domain.get(v) + 1);
+                totalCombinations *= domain.get(v).range;
             } else {
                 totalCombinations *= 2;
             }
         }
         return totalCombinations;
     }
-
     /**
      * <p>Identifies numeric variables from the list and maps them to their upper bounds.</p>
      *
@@ -184,12 +220,13 @@ public class TruthTable {
      * @param variableList Array of Expression objects representing variables
      * @return Map of numeric variables to their upper bounds
      */
-    private Map<Expression, Integer> collectNumericRanges(Expression[] variableList) {
-        Map<Expression, Integer> numericRanges = new HashMap<>();
+
+    private Map<Expression, NumericRange> collectNumericRanges(Expression[] variableList) {
+        Map<Expression, NumericRange> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
             Pair<Object, Object> bounds = variables.get(v);
-            if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
-                numericRanges.put(v, (Integer) bounds.b);
+            if (bounds.a instanceof Integer min && bounds.b instanceof Integer max) {
+                numericRanges.put(v, new NumericRange(min, max));
             }
         }
         return numericRanges;
@@ -204,9 +241,9 @@ public class TruthTable {
      *    - Example: For range [0,5], combination 7 with product 2 gives (7/2)%6 = 3
      * 2. For non-numeric variables (typically boolean or string):
      *    - Uses binary choice (0 or 1) to select between lower and upper bounds
-     *    - Example: For boolean, combination 3 with product 2 gives (3/2)%2 = 1 -> true
+     *    - Example: For boolean, combination 3 with product 2 gives (3/2)%2 = 1 -> true</p>
      *
-     * The 'product' variable maintains the stride length for each variable position, ensuring
+     * <p>The 'product' variable maintains the stride length for each variable position, ensuring
      * all possible combinations are covered systematically.</p>
      *
      * @param variableList Array of variables to assign values to
@@ -215,16 +252,16 @@ public class TruthTable {
      * @return Map of variable expressions to their assigned values
      */
     private Map<Expression, Object> generateRowValues(Expression[] variableList,
-            Map<Expression, Integer> domain, int combination) {
+            Map<Expression, NumericRange> domain, int combination) {
         Map<Expression, Object> truthValues = new HashMap<>();
         int product = 1;
 
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
-                int range = domain.get(v);
-                int value = (combination / product) % (range + 1);
+                NumericRange range = domain.get(v);
+                int value = range.min + (combination / product) % range.range;
                 truthValues.put(v, value);
-                product *= (range + 1);
+                product *= range.range;
             } else {
                 Pair<Object, Object> bounds = variables.get(v);
                 boolean value = ((combination / product) % 2) == 1;
@@ -236,7 +273,7 @@ public class TruthTable {
     }
 
     private void adjustDomain() {
-        // Check if all variables have default domain of [0,1]
+        // First handle the regular domain adjustment
         boolean allDefaultDomain = true;
         for(Pair<Object, Object> p : variables.values()) {
             if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
@@ -245,22 +282,95 @@ public class TruthTable {
             }
         }
 
-        // If all variables have default domain, check conditions for integer literals
         if (allDefaultDomain) {
             int maxLiteral = findMaxIntegerLiteral();
             if (maxLiteral > 1) {
-                for(Expression e : variables.keySet()) {
-                    variables.put(e, new Pair<>(0, maxLiteral));
-                }
+                variables.replaceAll((e, v) -> new Pair<>(0, maxLiteral));
             } else {
-                // Original behavior for boolean/simple conditions
                 for(Expression e : variables.keySet()) {
                     variables.put(e, new Pair<>(0, variables.size() - 1));
                 }
             }
         }
+
+        // Then handle constraints
+        for (Map.Entry<Expression, Expression> constraint : constraints.entrySet()) {
+            Expression variable = constraint.getKey();
+            Expression constraintExpr = constraint.getValue();
+
+            if (constraintExpr instanceof BinaryExpr binaryExpr) {
+                adjustDomainForConstraint(variable, binaryExpr);
+            }
+        }
     }
 
+    private void adjustDomainForConstraint(Expression variable, BinaryExpr constraint) {
+        if (!variables.containsKey(variable)) {
+            return;
+        }
+
+        Expression value = constraint.getRight().isIntegerLiteralExpr() ?
+            constraint.getRight() : constraint.getLeft();
+        if (!value.isIntegerLiteralExpr()) {
+            return;
+        }
+
+        int literalValue = Integer.parseInt(value.asIntegerLiteralExpr().getValue());
+        Pair<Object, Object> currentDomain = variables.get(variable);
+
+        if (!(currentDomain.a instanceof Integer && currentDomain.b instanceof Integer)) {
+            return;
+        }
+
+        int min = (Integer) currentDomain.a;
+        int max = (Integer) currentDomain.b;
+        boolean varOnLeft = constraint.getLeft().toString().equals(variable.toString());
+
+        switch (constraint.getOperator()) {
+            case GREATER -> {
+                if (varOnLeft) {
+                    min = literalValue + 1;
+                    max = Math.max(max, min + 1);  // Ensure max is at least min + 1
+                } else {
+                    max = literalValue - 1;
+                    min = Math.min(min, max - 1);  // Ensure min is at most max - 1
+                }
+            }
+            case GREATER_EQUALS -> {
+                if (varOnLeft) {
+                    min = literalValue;
+                    max = Math.max(max, min + 1);  // Ensure max is at least min + 1
+                } else {
+                    max = literalValue;
+                    min = Math.min(min, max);  // Ensure min is at most max
+                }
+            }
+            case LESS -> {
+                if (varOnLeft) {
+                    max = literalValue - 1;
+                    min = Math.min(min, max);  // Ensure min is at most max
+                } else {
+                    min = literalValue + 1;
+                    max = Math.max(max, min);  // Ensure max is at least min
+                }
+            }
+            case LESS_EQUALS -> {
+                if (varOnLeft) {
+                    max = literalValue;
+                    min = Math.min(min, max);  // Ensure min is at most max
+                } else {
+                    min = literalValue;
+                    max = Math.max(max, min);  // Ensure max is at least min
+                }
+            }
+            case EQUALS -> {
+                min = literalValue;
+                max = literalValue;
+            }
+        }
+
+        variables.put(variable, new Pair<>(min, max));
+    }
     private int findMaxIntegerLiteral() {
         int maxValue = 1;
         for (Expression condition : conditions) {
@@ -524,6 +634,10 @@ public class TruthTable {
         return table;
     }
 
+    public void addConstraint(NameExpr name, BinaryExpr constraint) {
+        constraints.put(name, constraint);
+    }
+
 
     /**
      * Collects variable names from the condition expression.
@@ -675,6 +789,18 @@ public class TruthTable {
                 collector.add(m);
             }
             super.visit(m, collector);
+        }
+    }
+
+    private static class NumericRange {
+        final int min;
+        final int max;
+        final int range;
+
+        NumericRange(int min, int max) {
+            this.min = min;
+            this.max = max;
+            this.range = max - min + 1;
         }
     }
 }

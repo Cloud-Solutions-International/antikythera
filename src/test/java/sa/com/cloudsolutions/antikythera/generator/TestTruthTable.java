@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -292,5 +294,63 @@ class TestTruthTable {
 
         assertTrue(values.contains(6));
         assertTrue(values.contains(7));
+    }
+
+    @Test
+    void testWithConstraints() {
+        String condition = "a > b && b > c";
+        TruthTable tt = new TruthTable(condition);
+
+        // Add constraint: a must be less than 5
+        tt.addConstraint(new NameExpr("a"),
+            new BinaryExpr(
+                new NameExpr("a"),
+                new IntegerLiteralExpr("5"),
+                BinaryExpr.Operator.GREATER
+            )
+        );
+
+        tt.generateTruthTable();
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        assertFalse(v.isEmpty());
+        for (Map<Expression, Object> row : v) {
+            int aValue = (int) row.get(new NameExpr("a"));
+            assertTrue(aValue > 5, "a should be greater than 5");
+            assertTrue(aValue > (int) row.get(new NameExpr("b")), "a should be greater than b");
+        }
+    }
+
+    @Test
+    void testMultipleConstraints() {
+        String condition = "a >= b && b >= c";
+        TruthTable tt = new TruthTable(condition);
+
+        // Add constraints: 1 <= b <= 3
+        tt.addConstraint(new NameExpr("b"),
+            new BinaryExpr(
+                new NameExpr("b"),
+                new IntegerLiteralExpr("5"),
+                BinaryExpr.Operator.GREATER_EQUALS
+            )
+        );
+        tt.addConstraint(new NameExpr("b"),
+            new BinaryExpr(
+                new NameExpr("b"),
+                new IntegerLiteralExpr("10"),
+                BinaryExpr.Operator.LESS_EQUALS
+            )
+        );
+
+        tt.generateTruthTable();
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        assertFalse(v.isEmpty());
+        for (Map<Expression, Object> row : v) {
+            int bValue = (int) row.get(new NameExpr("b"));
+            assertTrue(bValue >= 1 && bValue <= 3, "b should be between 1 and 3");
+            assertTrue((int) row.get(new NameExpr("a")) >= bValue, "a should be greater than or equal to b");
+            assertTrue(bValue >= (int) row.get(new NameExpr("c")), "b should be greater than or equal to c");
+        }
     }
 }
