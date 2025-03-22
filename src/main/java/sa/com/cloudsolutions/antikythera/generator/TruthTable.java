@@ -36,7 +36,7 @@ import java.util.Set;
  */
 public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
-    public static final String EQUALS = "equals";
+    public static final String EQUALS_CALL = "equals";
     /**
      * The condition that this truth table is for
      */
@@ -140,7 +140,7 @@ public class TruthTable {
      * @param variableList all the variables in the conditional.
      */
     private void generateCombinations(Expression[] variableList) {
-        Map<Expression, NumericRange> numericRanges = collectNumericRanges(variableList);
+        Map<Expression, Interval> numericRanges = collectNumericRanges(variableList);
         int totalCombinations = calculateTotalCombinations(variableList, numericRanges);
         table = new ArrayList<>();
 
@@ -159,35 +159,40 @@ public class TruthTable {
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
             for (Expression constraintExpr : constraint.getValue()) {
-
                 if (constraintExpr instanceof BinaryExpr binaryExpr) {
-                    Object value = truthValues.get(variable);
-                    if (value instanceof Integer intValue) {
-                        int literalValue = Integer.parseInt(
-                                binaryExpr.getRight().isIntegerLiteralExpr() ?
-                                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
-                                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
-                        );
-
-                        boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
-                        boolean satisfied = switch (binaryExpr.getOperator()) {
-                            case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
-                            case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
-                            case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
-                            case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
-                            case EQUALS -> intValue == literalValue;
-                            default -> true;
-                        };
-
-                        if (!satisfied) {
-                            return false;
-                        }
+                    if (!satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
+                        return false;
                     }
                 }
             }
         }
         return true;
     }
+
+    private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
+            Map<Expression, Object> truthValues) {
+        Object value = truthValues.get(variable);
+        if (!(value instanceof Integer intValue)) {
+            return true;
+        }
+
+        int literalValue = Integer.parseInt(
+                binaryExpr.getRight().isIntegerLiteralExpr() ?
+                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
+                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
+        );
+
+        boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
+        return switch (binaryExpr.getOperator()) {
+            case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
+            case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
+            case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
+            case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
+            case EQUALS -> intValue == literalValue;
+            default -> true;
+        };
+    }
+
     /**
      * Depending on the number of variables and their domain the number of possibilities can change.
      * @param variableList all the variables in the truth table.
@@ -195,11 +200,11 @@ public class TruthTable {
      * @return the total number of combinations that are available to us.
      */
     private int calculateTotalCombinations(Expression[] variableList,
-            Map<Expression, NumericRange> domain) {
+            Map<Expression, Interval> domain) {
         int totalCombinations = 1;
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
-                totalCombinations *= domain.get(v).range;
+                totalCombinations *= domain.get(v).width;
             } else {
                 totalCombinations *= 2;
             }
@@ -222,12 +227,12 @@ public class TruthTable {
      * @return Map of numeric variables to their upper bounds
      */
 
-    private Map<Expression, NumericRange> collectNumericRanges(Expression[] variableList) {
-        Map<Expression, NumericRange> numericRanges = new HashMap<>();
+    private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
+        Map<Expression, Interval> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
             Pair<Object, Object> bounds = variables.get(v);
             if (bounds.a instanceof Integer min && bounds.b instanceof Integer max) {
-                numericRanges.put(v, new NumericRange(min, max));
+                numericRanges.put(v, new Interval(min, max));
             }
         }
         return numericRanges;
@@ -253,16 +258,16 @@ public class TruthTable {
      * @return Map of variable expressions to their assigned values
      */
     private Map<Expression, Object> generateRowValues(Expression[] variableList,
-            Map<Expression, NumericRange> domain, int combination) {
+                                                      Map<Expression, Interval> domain, int combination) {
         Map<Expression, Object> truthValues = new HashMap<>();
         int product = 1;
 
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
-                NumericRange range = domain.get(v);
-                int value = range.min + (combination / product) % range.range;
+                Interval range = domain.get(v);
+                int value = range.min + (combination / product) % range.width;
                 truthValues.put(v, value);
-                product *= range.range;
+                product *= range.width;
             } else {
                 Pair<Object, Object> bounds = variables.get(v);
                 boolean value = ((combination / product) % 2) == 1;
@@ -323,55 +328,36 @@ public class TruthTable {
             return;
         }
 
-        int min = (Integer) currentDomain.a;
-        int max = (Integer) currentDomain.b;
-        boolean varOnLeft = constraint.getLeft().toString().equals(variable.toString());
+        Interval newInterval = calculateNewInterval(
+            new Interval((Integer) currentDomain.a, (Integer) currentDomain.b),
+            literalValue,
+            constraint.getOperator(),
+            constraint.getLeft().toString().equals(variable.toString())
+        );
 
-        switch (constraint.getOperator()) {
-            case GREATER -> {
-                if (varOnLeft) {
-                    min = literalValue + 1;
-                    max = Math.max(max, min + 1);  // Ensure max is at least min + 1
-                } else {
-                    max = literalValue - 1;
-                    min = Math.min(min, max - 1);  // Ensure min is at most max - 1
-                }
-            }
-            case GREATER_EQUALS -> {
-                if (varOnLeft) {
-                    min = literalValue;
-                    max = Math.max(max, min + 1);  // Ensure max is at least min + 1
-                } else {
-                    max = literalValue;
-                    min = Math.min(min, max);  // Ensure min is at most max
-                }
-            }
-            case LESS -> {
-                if (varOnLeft) {
-                    max = literalValue - 1;
-                    min = Math.min(min, max);  // Ensure min is at most max
-                } else {
-                    min = literalValue + 1;
-                    max = Math.max(max, min);  // Ensure max is at least min
-                }
-            }
-            case LESS_EQUALS -> {
-                if (varOnLeft) {
-                    max = literalValue;
-                    min = Math.min(min, max);  // Ensure min is at most max
-                } else {
-                    min = literalValue;
-                    max = Math.max(max, min);  // Ensure max is at least min
-                }
-            }
-            case EQUALS -> {
-                min = literalValue;
-                max = literalValue;
-            }
-        }
-
-        variables.put(variable, new Pair<>(min, max));
+        variables.put(variable, new Pair<>(newInterval.min, newInterval.max));
     }
+
+    private Interval calculateNewInterval(Interval current, int literalValue,
+            BinaryExpr.Operator operator, boolean varOnLeft) {
+        return switch (operator) {
+            case GREATER -> varOnLeft ?
+                new Interval(literalValue + 1, Math.max(current.max, literalValue + 2)) :
+                new Interval(Math.min(current.min, literalValue - 2), literalValue - 1);
+            case GREATER_EQUALS -> varOnLeft ?
+                new Interval(literalValue, Math.max(current.max, literalValue + 1)) :
+                new Interval(Math.min(current.min, literalValue - 1), literalValue);
+            case LESS -> varOnLeft ?
+                new Interval(Math.min(current.min, literalValue - 1), literalValue - 1) :
+                new Interval(literalValue + 1, Math.max(current.max, literalValue + 1));
+            case LESS_EQUALS -> varOnLeft ?
+                new Interval(Math.min(current.min, literalValue), literalValue) :
+                new Interval(literalValue, Math.max(current.max, literalValue));
+            case EQUALS -> new Interval(literalValue, literalValue);
+            default -> current;
+        };
+    }
+
     private int findMaxIntegerLiteral() {
         int maxValue = 1;
         for (Expression condition : conditions) {
@@ -387,7 +373,7 @@ public class TruthTable {
                         maxValue = Math.max(maxValue, value + 1);
                     }
                 }
-            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS)) {
+            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
                 // Check equals method arguments for integer literals
                 if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
                     int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
@@ -582,7 +568,7 @@ public class TruthTable {
     }
 
     private Object evaluateMethodCall(MethodCallExpr condition, Map<Expression, Object> truthValues) {
-        if (condition.toString().contains(EQUALS)) {
+        if (condition.toString().contains(EQUALS_CALL)) {
             Expression scope = condition.getScope().orElse(null);
             Object scopeValue = truthValues.get(scope);
             Expression argument = condition.getArgument(0);
@@ -636,10 +622,7 @@ public class TruthTable {
     }
 
     public void addConstraint(NameExpr name, BinaryExpr constraint) {
-        if (!constraints.containsKey(name)) {
-            constraints.put(name, new ArrayList<>());
-        }
-        constraints.get(name).add(constraint);
+        constraints.computeIfAbsent(name, k -> new ArrayList<>()).add(constraint);
     }
 
 
@@ -669,7 +652,7 @@ public class TruthTable {
         }
 
         private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS)) {
+            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS_CALL)) {
                 findDomain(n, collector, mce.getArgument(0));
             } else if (parent instanceof BinaryExpr b) {
                 findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
@@ -689,38 +672,7 @@ public class TruthTable {
                 collector.put(n, new Pair<>(null, "T"));
             }
             else if (compareWith.isIntegerLiteralExpr()) {
-                int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
-                Node parent = n.getParentNode().orElse(null);
-
-                if (parent instanceof BinaryExpr binaryExpr) {
-                    if (isInequality(binaryExpr)) {
-                        // Adjust domain based on the inequality operator
-                        switch (binaryExpr.getOperator()) {
-                            case LESS -> collector.put(n, new Pair<>(0, literalValue));
-                            case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
-                            case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
-                            case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
-                            default -> collector.put(n, new Pair<>(0, 1)); // fallback
-                        }
-                    } else {
-                        collector.put(n, new Pair<>(literalValue, literalValue));
-                    }
-                } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS)) {
-                    // Handle a.equals(1) type expressions
-                    if (collector.containsKey(n)) {
-                        Pair<Object, Object> existingBounds = collector.get(n);
-                        if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
-                            if (literalValue < min) {
-                                collector.put(n, new Pair<>(literalValue, max));
-                            } else if (literalValue > max) {
-                                collector.put(n, new Pair<>(min, literalValue));
-                            }
-                            // If literalValue is within bounds, no action needed
-                        }
-                    } else {
-                        collector.put(n, new Pair<>(literalValue, literalValue));
-                    }
-                }
+                handleIntegerLiteral(n, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
                 collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
@@ -735,9 +687,53 @@ public class TruthTable {
             }
         }
 
+        private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                Expression compareWith) {
+            int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>(literalValue, literalValue));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, literalValue);
+            }
+        }
+
+        private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                int literalValue, BinaryExpr binaryExpr) {
+            switch (binaryExpr.getOperator()) {
+                case LESS -> collector.put(n, new Pair<>(0, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
+                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
+                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+            }
+        }
+
+        private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                int literalValue) {
+            if (collector.containsKey(n)) {
+                Pair<Object, Object> existingBounds = collector.get(n);
+                if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
+                    if (literalValue < min) {
+                        collector.put(n, new Pair<>(literalValue, max));
+                    } else if (literalValue > max) {
+                        collector.put(n, new Pair<>(min, literalValue));
+                    }
+                    // If literalValue is within bounds, no action needed
+                }
+            } else {
+                collector.put(n, new Pair<>(literalValue, literalValue));
+            }
+        }
+
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (!m.getNameAsString().equals(EQUALS)) {
+            if (!m.getNameAsString().equals(EQUALS_CALL)) {
                 Optional<Node> parent = m.getParentNode();
 
                  if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
@@ -801,22 +797,22 @@ public class TruthTable {
          */
         @Override
         public void visit(MethodCallExpr m, Set<Expression> collector) {
-            if(m.toString().contains(EQUALS)) {
+            if(m.toString().contains(EQUALS_CALL)) {
                 collector.add(m);
             }
             super.visit(m, collector);
         }
     }
 
-    private static class NumericRange {
+    private static class Interval {
         final int min;
         final int max;
-        final int range;
+        final int width;
 
-        NumericRange(int min, int max) {
+        Interval(int min, int max) {
             this.min = min;
             this.max = max;
-            this.range = max - min + 1;
+            this.width = max - min + 1;
         }
     }
 }
