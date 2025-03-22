@@ -1,20 +1,50 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 public class Conditional {
-    public void testMethod(Person person) {
+    public void conditional1(Person person) {
         if (person.getName() != null) {
-            System.out.println(person.getName());
+            System.out.print(person.getName());
         }
         else {
-            System.out.println("The name is null");
+            System.out.print("The name is null");
+        }
+    }
+
+    public void conditional2(Person person) {
+        if (person.getName() == null) {
+            System.out.print("The name is null");
+        }
+        else {
+            System.out.print(person.getName());
+        }
+    }
+
+    public void conditional3(Person person) {
+        if (person.getId() == 0) {
+            System.out.print("ZERO!");
+        }
+        else {
+            System.out.print(person.getId());
+        }
+    }
+
+    public void conditional4(Person person) {
+        if (person.getId() < 0) {
+            System.out.print("Negative");
+        }
+        else if (person.getId() > 1) {
+            System.out.print("Positive!");
+        }
+        else {
+            System.out.print("ZERO!");
         }
     }
 
     public static void main(String[] args) {
         Person p = new Person("Hello");
         Conditional c = new Conditional();
-        c.testMethod(p);
+        c.conditional1(p);
         p.setName(null);
-        c.testMethod(p);
+        c.conditional1(p);
     }
 }

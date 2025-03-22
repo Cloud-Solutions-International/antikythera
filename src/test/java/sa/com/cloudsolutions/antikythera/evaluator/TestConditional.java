@@ -5,6 +5,8 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -39,19 +41,22 @@ public class TestConditional extends TestHelper {
         AntikytheraRunTime.push(new Variable(p));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("testMethod")).orElseThrow();
+                md -> md.getNameAsString().equals("conditional1")).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Hello\n", outContent.toString());
+        assertEquals("Hello", outContent.toString());
     }
 
-    @Test
-    void testVisit() throws ReflectiveOperationException {
+
+    @ParameterizedTest
+    @CsvSource({"conditional1, The name is nullT", "conditional2, The name is nullT",
+            "conditional3, ZERO!1", "conditional4, negative!"})
+    void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("testMethod")).orElseThrow();
+                md -> md.getNameAsString().equals(name)).orElseThrow();
         evaluator.visit(method);
-        assertEquals("The name is null\nT\n", outContent.toString());
+        assertEquals(value, outContent.toString());
     }
 
 }

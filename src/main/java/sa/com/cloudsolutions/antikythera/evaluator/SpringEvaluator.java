@@ -127,6 +127,9 @@ public class SpringEvaluator extends Evaluator {
             public void visit(IfStmt stmt, Void arg) {
                 LineOfCode l = new LineOfCode(stmt);
                 branching.putIfAbsent(stmt.hashCode(), l);
+                if(stmt.getElseStmt().isPresent()) {
+                    stmt.getElseStmt().get().accept(this, arg);
+                }
             }
         }, null);
 
