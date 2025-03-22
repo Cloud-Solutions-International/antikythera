@@ -12,6 +12,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 
 public class ImportUtils {
+    private ImportUtils() {}
+
     public static GraphNode addImport(GraphNode node, Expression expr) {
         if (expr.isNameExpr()) {
             return ImportUtils.addImport(node, expr.asNameExpr().getNameAsString());
@@ -26,13 +28,9 @@ public class ImportUtils {
             if (n == null) {
                 // possibly an inner class
                 node.getEnclosingType().findFirst(TypeDeclaration.class,
-                        td -> td.getNameAsString().equals(ct.getNameAsString())).ifPresent(td -> {
-                    try {
-                        Graph.createGraphNode(td);
-                    } catch (AntikytheraException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                        td -> td.getNameAsString().equals(ct.getNameAsString()))
+                        .ifPresent(Graph::createGraphNode
+                );
             }
         }
         else {

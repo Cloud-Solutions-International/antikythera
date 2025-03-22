@@ -164,7 +164,6 @@ public class Resolver {
                 Resolver.resolveArrayExpr(node, value);
             }
             else if (value.isClassExpr()) {
-
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
                 ImportUtils.addImport(node, ct.getName().toString());
             }
@@ -545,9 +544,6 @@ public class Resolver {
                     }
                 }
             }
-            else {
-                
-            }
         }
     }
 
@@ -585,10 +581,8 @@ public class Resolver {
                     Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
 
                     if (!parent.get().isInterface()) {
-                        Optional<Callable> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
-                        if (overRides.isPresent()) {
-                            Graph.createGraphNode(overRides.get().getCallableDeclaration());
-                        }
+                        AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
+                                .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
                     }
                 }
                 return Graph.createGraphNode(method);

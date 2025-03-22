@@ -55,8 +55,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.ReflectionArguments;
 import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 
-import javax.swing.text.html.Option;
-
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
  */
@@ -226,8 +224,8 @@ public class AbstractCompiler {
         }
     }
 
-    private static List<TypeDeclaration> findContainedTypes(CompilationUnit cu) {
-        List<TypeDeclaration> types = new ArrayList<>();
+    private static List<TypeDeclaration<?>> findContainedTypes(CompilationUnit cu) {
+        List<TypeDeclaration<?>> types = new ArrayList<>();
         for (TypeDeclaration<?> type : cu.getTypes()) {
             types.add(type);
             findInners(type, types);
@@ -235,7 +233,7 @@ public class AbstractCompiler {
         return types;
     }
 
-    private static void findInners(TypeDeclaration cdecl, List<TypeDeclaration> inners) {
+    private static void findInners(TypeDeclaration<?> cdecl, List<TypeDeclaration<?>> inners) {
         for (Node child : cdecl.getChildNodes()) {
             if (child instanceof ClassOrInterfaceDeclaration cid) {
                 inners.add(cid);
