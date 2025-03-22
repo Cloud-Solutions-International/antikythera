@@ -89,7 +89,7 @@ public class SpringEvaluator extends Evaluator {
         super(className);
     }
 
-    protected SpringEvaluator(String className, boolean lazy) {
+    public SpringEvaluator(String className, boolean lazy) {
         super(className, lazy);
     }
 
@@ -401,7 +401,7 @@ public class SpringEvaluator extends Evaluator {
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
-                    eval.setupFields(eval.getCompilationUnit());
+                    eval.setupFields();
                     eval.invokeDefaultConstructor();
                 }
             }

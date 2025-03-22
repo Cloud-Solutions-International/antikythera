@@ -130,7 +130,7 @@ public class Evaluator {
         fields = new HashMap<>();
         Finch.loadFinches();
         if (cu != null && !lazy) {
-            this.setupFields(cu);
+            this.setupFields();
         }
     }
 
@@ -884,7 +884,7 @@ public class Evaluator {
                 }
                 else {
                     Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
-                    eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
+                    eval.setupFields();
                     v = new Variable(eval);
                 }
             }
@@ -1215,9 +1215,8 @@ public class Evaluator {
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
-                        CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
                         Evaluator eval = EvaluatorFactory.create(cname, this);
-                        eval.setupFields(dep);
+
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1602,7 +1601,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    void setupFields(CompilationUnit cu)  {
+    public void setupFields()  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
