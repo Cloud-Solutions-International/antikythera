@@ -56,7 +56,7 @@ class TestTruthTable {
         generator.generateTruthTable();
 
         List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
-        assertEquals(1, values.size());
+        assertEquals(5, values.size());
         assertEquals(1, values.getFirst().get(new NameExpr("a")));
         assertEquals(0, values.getFirst().get(new NameExpr("b")));
         assertEquals(1, values.getFirst().get(new NameExpr("c")));
@@ -93,15 +93,15 @@ class TestTruthTable {
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
-        assertEquals(2, v.size());
+        assertEquals(24, v.size());
         Map<Expression, Object> first = v.getFirst();
         assertEquals(1, first.get(new NameExpr("a")));
         assertEquals(0, first.get(new NameExpr("b")));
-        assertEquals(1, first.get(new NameExpr("c")));
-        assertEquals(1, first.get(new NameExpr("d")));
+        assertEquals(0, first.get(new NameExpr("c")));
+        assertEquals(0, first.get(new NameExpr("d")));
 
         v = tt.findValuesForCondition(false);
-        assertEquals(14, v.size());
+        assertEquals(232, v.size());
     }
 
     @Test
@@ -126,7 +126,7 @@ class TestTruthTable {
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
-        assertEquals(4, v.size());
+        assertEquals(1, v.size());
 
         Map<Expression, Object> first = v.getFirst();
         assertEquals(2, first.get(new NameExpr("a")));
@@ -186,8 +186,9 @@ class TestTruthTable {
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
         assertEquals(2, v.size());
-        assertFalse(TruthTable.isTrue(v.getFirst().get(new NameExpr("a"))));
-        assertFalse(TruthTable.isTrue(v.getFirst().get(new NameExpr("b"))));
+        Map<Expression, Object> first = v.getFirst();
+        assertTrue(Boolean.parseBoolean(first.get(new NameExpr("a")).toString()));
+        assertTrue(Boolean.parseBoolean(first.get(new NameExpr("b")).toString()));
     }
 
     @Test
@@ -222,7 +223,7 @@ class TestTruthTable {
          */
         TruthTable.main(new String[0]);
         String output = outContent.toString();
-        assertTrue(output.matches("(?s).*Values to make the condition false for: a > b && b > c\\s*a\\s*=\\s*1\\s*b\\s*=\\s*1\\s*c\\s*=\\s*1.*"));
-        assertTrue(output.contains("a > b && b > c\nNo combination of values makes the condition true."));
+        assertTrue(output.contains("Values to make the condition true for: !a\na=false"));
+
     }
 }

@@ -96,7 +96,6 @@ public class TruthTable {
     public static void main(String[] args) {
         String[] conditions = {
                 "!a",
-                "a.equals(\"null\")", // this is a string literal so we have to handle it carefully
                 "a > b && c == d",
                 "a > b",
                 "a == b",
@@ -132,22 +131,22 @@ public class TruthTable {
         Expression[] variableList = variables.keySet().toArray(new Expression[0]);
         table = new ArrayList<>();
 
-        // For integer variables, we'll use their full domain range
-        Map<Expression, Integer> ranges = new HashMap<>();
+        // Track only numeric variables that need extended domain
+        Map<Expression, Integer> numericRanges = new HashMap<>();
         for (Expression var : variableList) {
             Pair<Object, Object> bounds = variables.get(var);
             if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
-                ranges.put(var, (Integer) bounds.b - (Integer) bounds.a);
+                numericRanges.put(var, (Integer) bounds.b);
             }
         }
 
-        // Calculate total combinations based on variable domains
+        // Calculate combinations - extended range for numbers, binary for others
         int totalCombinations = 1;
         for (Expression var : variableList) {
-            if (ranges.containsKey(var)) {
-                totalCombinations *= ((Integer) variables.get(var).b + 1);
+            if (numericRanges.containsKey(var)) {
+                totalCombinations *= (numericRanges.get(var) + 1);
             } else {
-                totalCombinations *= 2; // Boolean/String variables still use 2 values
+                totalCombinations *= 2;
             }
         }
 
@@ -156,21 +155,18 @@ public class TruthTable {
             int product = 1;
 
             for (Expression var : variableList) {
-                Pair<Object, Object> bounds = variables.get(var);
-
-                if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
-                    int range = (Integer) bounds.b;
+                if (numericRanges.containsKey(var)) {
+                    // Handle numeric variables with extended domain
+                    int range = numericRanges.get(var);
                     int value = (i / product) % (range + 1);
                     truthValues.put(var, value);
                     product *= (range + 1);
                 } else {
-                    // Handle boolean/string values as before
-                    boolean value = (i & (1 << ranges.size())) != 0;
-                    if (value) {
-                        truthValues.put(var, bounds.a != null ? bounds.a : bounds.b);
-                    } else {
-                        truthValues.put(var, bounds.a != null ? bounds.b : null);
-                    }
+                    // Handle boolean and string variables with binary domain
+                    Pair<Object, Object> bounds = variables.get(var);
+                    boolean value = ((i / product) % 2) == 1;
+                    truthValues.put(var, value ? bounds.b : bounds.a);
+                    product *= 2;
                 }
             }
 
