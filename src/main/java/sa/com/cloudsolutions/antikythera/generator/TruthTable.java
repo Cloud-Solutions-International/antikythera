@@ -73,15 +73,6 @@ public class TruthTable {
         this.condition = condition;
         this.variables = new HashMap<>();
         this.conditions = new HashSet<>();
-
-        /*
-         * A single IF statement may have multiple binary expressions attached to it, first step
-         * is to identify all of them.
-         */
-        this.condition.accept(new ConditionCollector(), conditions);
-        this.condition.accept(new VariableCollector(), variables);
-
-        generateTruthTable();
     }
 
     private static boolean isInequality(BinaryExpr binaryExpr) {
@@ -118,6 +109,7 @@ public class TruthTable {
 
         for (String condition : conditions) {
             TruthTable generator = new TruthTable(condition);
+            generator.generateTruthTable();
             generator.printTruthTable();
             generator.printValues(true);
             generator.printValues(false);
@@ -128,7 +120,14 @@ public class TruthTable {
     /**
      * Generates a truth table for the given condition.
      */
-    private void generateTruthTable() {
+    public void generateTruthTable() {
+        /*
+         * A single IF statement may have multiple binary expressions attached to it, first step
+         * is to identify all of them.
+         */
+        this.condition.accept(new ConditionCollector(), conditions);
+        this.condition.accept(new VariableCollector(), variables);
+
         Expression[] variableList = variables.keySet().toArray(new Expression[0]);
         int numRows = (int) Math.pow(2, variableList.length);
 

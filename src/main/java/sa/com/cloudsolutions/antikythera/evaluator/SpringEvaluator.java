@@ -533,6 +533,8 @@ public class SpringEvaluator extends Evaluator {
      */
     void setupIfCondition(IfStmt ifst, boolean state)  {
         TruthTable tt = new TruthTable(ifst.getCondition());
+        tt.generateTruthTable();
+
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
         if (!values.isEmpty()) {
