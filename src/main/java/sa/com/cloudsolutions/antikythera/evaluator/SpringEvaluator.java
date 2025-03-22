@@ -555,7 +555,7 @@ public class SpringEvaluator extends Evaluator {
 
                                 } catch (ReflectiveOperationException e) {
                                     /*
-                                     * Can probably be ignroed
+                                     * Can probably be ignored
                                      */
                                     logger.info("Could not create class for {}", fullname);
                                 }
