@@ -1311,34 +1311,21 @@ public class Evaluator {
         return null;
     }
 
-    protected boolean setupParameters(MethodDeclaration md) {
+    protected void setupParameters(MethodDeclaration md) {
         NodeList<Parameter> parameters = md.getParameters();
-        ArrayList<Boolean> missing = new ArrayList<>();
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Parameter p = parameters.get(i);
 
-            Variable va = AntikytheraRunTime.pop();
-            if (md.getBody().isPresent()) {
-                // repository methods for example don't have bodies
-                setLocal(md.getBody().get(), p.getNameAsString(), va);
-                p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
-            }
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            Variable v = setupParameter(md, parameters, i);
         }
-        return missing.isEmpty();
     }
 
-    private static void setupRequestParam(AnnotationExpr a , Variable va, ArrayList<Boolean> missing) {
-        if (a.isNormalAnnotationExpr()) {
-            NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
-            for (MemberValuePair pair : ne.getPairs()) {
-                if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
-                    return;
-                }
-            }
-        }
-        if (va == null) {
-            missing.add(true);
-        }
+    Variable setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) {
+        Parameter p = parameters.get(i);
+        Variable va = AntikytheraRunTime.pop();
+        md.getBody().ifPresent(body -> {
+            setLocal(body, p.getNameAsString(), va);
+        });
+        return va;
     }
 
     /**

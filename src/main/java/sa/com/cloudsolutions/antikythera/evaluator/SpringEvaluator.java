@@ -2,6 +2,10 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.MemberValuePair;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -37,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
+import javax.swing.text.html.Option;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -141,12 +146,10 @@ public class SpringEvaluator extends Evaluator {
             returnValue = null;
 
             List<Statement> statements = md.getBody().orElseThrow().getStatements();
-            if (setupParameters(md)) {
-                applyPreconditions(md);
-                executeBlock(statements);
-            } else {
-                return testForBadRequest();
-            }
+            setupParameters(md);
+            applyPreconditions(md);
+            executeBlock(statements);
+
             return returnValue;
         }
         return null;
@@ -158,12 +161,26 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    private Variable testForBadRequest() {
-        MethodResponse cr = new MethodResponse();
-        ResponseEntity<String> response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        cr.setResponse(new Variable(response));
+    @Override
+    Variable setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) {
+        Parameter p = parameters.get(i);
+        Variable va = AntikytheraRunTime.pop();
+        md.getBody().ifPresent(body -> {
+            setLocal(body, p.getNameAsString(), va);
+            p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
+        });
+        return va;
+    }
 
-        return createTests(cr);
+    private static void setupRequestParam(AnnotationExpr a) {
+        if (a.isNormalAnnotationExpr()) {
+            NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
+            for (MemberValuePair pair : ne.getPairs()) {
+                if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
+                    return;
+                }
+            }
+        }
     }
 
     /**
@@ -518,7 +535,7 @@ public class SpringEvaluator extends Evaluator {
      * @param ifst the if statement to mess with
      * @param state the desired state.
      */
-    private void setupIfCondition(IfStmt ifst, boolean state)  {
+    void setupIfCondition(IfStmt ifst, boolean state)  {
         TruthTable tt = new TruthTable(ifst.getCondition());
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
