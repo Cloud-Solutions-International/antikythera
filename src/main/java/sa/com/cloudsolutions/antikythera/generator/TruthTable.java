@@ -11,6 +11,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
 
@@ -135,7 +136,7 @@ public class TruthTable {
 
     /**
      * Creates and fills the truth table.
-     * @param variableList
+     * @param variableList all the variables in the conditional.
      */
     private void generateCombinations(Expression[] variableList) {
         Map<Expression, Integer> numericRanges = collectNumericRanges(variableList);
@@ -151,15 +152,15 @@ public class TruthTable {
 
     /**
      * Depending on the number of variables and their domain the number of possibilities can change.
-     * @param variableList
-     * @param numericRanges
-     * @return
+     * @param variableList all the variables in the truth table.
+     * @param domain the domain of values for integer literals
+     * @return the total number of combinations that are available to us.
      */
-    private int calculateTotalCombinations(Expression[] variableList, Map<Expression, Integer> numericRanges) {
+    private int calculateTotalCombinations(Expression[] variableList, Map<Expression, Integer> domain) {
         int totalCombinations = 1;
         for (Expression var : variableList) {
-            if (numericRanges.containsKey(var)) {
-                totalCombinations *= (numericRanges.get(var) + 1);
+            if (domain.containsKey(var)) {
+                totalCombinations *= (domain.get(var) + 1);
             } else {
                 totalCombinations *= 2;
             }
@@ -193,14 +194,33 @@ public class TruthTable {
         return numericRanges;
     }
 
+    /**
+     * <p>Generates values for each variable in a single row of the truth table.</p>
+     *
+     * <p>This method converts a numerical combination into specific values for each variable by:
+     * 1. For numeric variables (with extended domains):
+     *    - Uses modulo arithmetic to select a value within the variable's range
+     *    - Example: For range [0,5], combination 7 with product 2 gives (7/2)%6 = 3
+     * 2. For non-numeric variables (typically boolean or string):
+     *    - Uses binary choice (0 or 1) to select between lower and upper bounds
+     *    - Example: For boolean, combination 3 with product 2 gives (3/2)%2 = 1 -> true
+     *
+     * The 'product' variable maintains the stride length for each variable position, ensuring
+     * all possible combinations are covered systematically.</p>
+     *
+     * @param variableList Array of variables to assign values to
+     * @param domain Map of variables to their maximum values (for numeric variables)
+     * @param combination Current combination number being processed
+     * @return Map of variable expressions to their assigned values
+     */
     private Map<Expression, Object> generateRowValues(Expression[] variableList,
-            Map<Expression, Integer> numericRanges, int combination) {
+            Map<Expression, Integer> domain, int combination) {
         Map<Expression, Object> truthValues = new HashMap<>();
         int product = 1;
 
         for (Expression v : variableList) {
-            if (numericRanges.containsKey(v)) {
-                int range = numericRanges.get(v);
+            if (domain.containsKey(v)) {
+                int range = domain.get(v);
                 int value = (combination / product) % (range + 1);
                 truthValues.put(v, value);
                 product *= (range + 1);
@@ -257,7 +277,7 @@ public class TruthTable {
                 }
             } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains("equals")) {
                 // Check equals method arguments for integer literals
-                if (methodCall.getArguments().size() > 0 && methodCall.getArgument(0).isIntegerLiteralExpr()) {
+                if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
                     int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
                     maxValue = Math.max(maxValue, value + 1);
                 }
@@ -265,6 +285,7 @@ public class TruthTable {
         }
         return maxValue;
     }
+
     public static boolean isTrue(Object o) {
         if (o instanceof Boolean b) {
             return b;
@@ -389,10 +410,11 @@ public class TruthTable {
         } else if (condition.isUnaryExpr()) {
             var unaryExpr = condition.asUnaryExpr();
             Object value = evaluateCondition(unaryExpr.getExpression(), truthValues);
-            return switch (unaryExpr.getOperator()) {
-                case LOGICAL_COMPLEMENT -> !(Boolean) value;
-                default -> throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
-            };
+            if (unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                    return !(Boolean) value;
+            } else {
+                throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
+            }
         } else if (condition.isMethodCallExpr()) {
             return evaluateMethodCall(condition.asMethodCallExpr(), truthValues);
         }
@@ -520,30 +542,21 @@ public class TruthTable {
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (n.getParentNode().isEmpty()) {
-                collector.put(n, new Pair<>(true, false));
-            } else {
-                Node parent = n.getParentNode().get();
-                if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
-                    Expression arg = mce.getArgument(0);
-                    findDomain(n, collector, arg);
-                } else if (parent instanceof BinaryExpr b) {
-                    if (b.getLeft().equals(n)) {
-                        findDomain(n, collector, b.getRight());
-                    }
-                    else {
-                        findDomain(n, collector, b.getLeft());
-                    }
-                } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
-                    if(isInequalityPresent()) {
-                        collector.put(n, new Pair<>(0, 1));
-                    }
-                    else {
-                        collector.put(n, new Pair<>(true, false));
-                    }
-                }
-            }
+            n.getParentNode().ifPresentOrElse(
+                    parent -> handleParentNode(n, parent, collector),
+                    () -> collector.put(n, new Pair<>(true, false))
+            );
             super.visit(n, collector);
+        }
+
+        private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
+            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
+                findDomain(n, collector, mce.getArgument(0));
+            } else if (parent instanceof BinaryExpr b) {
+                findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
+            } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
+                collector.put(n, new Pair<>(isInequalityPresent() ? 0 : true, isInequalityPresent() ? 1 : false));
+            }
         }
 
         /**
@@ -649,7 +662,8 @@ public class TruthTable {
         }
 
         /**
-         * In this scenario a method call expression will always be Object.equals call or a method returning boolean
+         * In this scenario a method call expression will always be `Object.equals` call or a method
+         * returning boolean
          * @param m the method call expression
          * @param collector for all the conditional expressions encountered.
          *
