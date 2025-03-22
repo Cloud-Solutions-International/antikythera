@@ -51,7 +51,7 @@ public class TestConditional extends TestHelper {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("testMethod")).orElseThrow();
         evaluator.visit(method);
-        assertEquals("Hello\n", outContent.toString());
+        assertEquals("The name is null\nT\n", outContent.toString());
     }
 
 }

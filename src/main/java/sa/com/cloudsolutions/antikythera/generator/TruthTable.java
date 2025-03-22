@@ -24,11 +24,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Generates and print truth tables for given conditionals
+ * <p>Generate (and print) truth tables for given conditionals</p>
  *
- * Comparisions involving Object.equals() are tricky. The range of values to assign to the variable
- * depends on the argument to the equals method. Obviously when the scope is null null.equals leads
- * to Null Pointer Exceptions, so work arounds will have to be used.
+ * Comparisons involving Object.equals() are tricky. The range of values to assign to the variable
+ * depends on the argument to the `equals` method. Obviously when the scope is null `null.equals`
+ * leads to Null Pointer Exceptions, so workarounds will have to be used.
  *
  * The values assigned may have its domain in Strings, Boolean or any other objects. This
  * implementation will only consider Numeric, Boolean and String expressions.
@@ -42,7 +42,7 @@ public class TruthTable {
     /**
      * Collection of variables involved in the condition.
      * the key will be the expression representing the variable and the value will be a Pair
-     * representing the lower and upper bounds for the expresion
+     * representing the lower and upper bounds for the expression
      */
     private final HashMap<Expression, Pair<Object, Object>> variables;
 
@@ -91,11 +91,13 @@ public class TruthTable {
                 || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
     }
 
+
     /**
      * Main method to test the truth table generation and printing with different conditions.
      *
      * @param args Command line arguments.
      */
+    @SuppressWarnings("java:S106")
     public static void main(String[] args) {
         String[] conditions = {
                 "!a",
@@ -436,7 +438,7 @@ public class TruthTable {
                 collector.put(n, new Pair<>(null, "T"));
             }
             else if (compareWith.isIntegerLiteralExpr()) {
-                int lower = Integer.valueOf(compareWith.asIntegerLiteralExpr().getValue());
+                int lower = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
                 collector.put(n, new Pair<>(lower, lower + 1));
             }
             else if (compareWith.isStringLiteralExpr()) {

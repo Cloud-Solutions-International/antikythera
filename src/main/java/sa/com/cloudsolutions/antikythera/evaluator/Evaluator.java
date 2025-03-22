@@ -996,6 +996,12 @@ public class Evaluator {
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
         if (call instanceof MethodCallExpr methodCall) {
             Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+            if (cdecl.isEmpty()) {
+                Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(cu, getClassName());
+                if (t.isPresent() && t.get().isClassOrInterfaceDeclaration()) {
+                    cdecl = Optional.of(t.get().asClassOrInterfaceDeclaration());
+                }
+            }
             if (cdecl.isPresent()) {
                 /*
                  * At this point we are searching for the method call in the current class. For example,
@@ -1060,7 +1066,7 @@ public class Evaluator {
 
     static Class<?> getClass(String className) {
         try {
-            return Class.forName(className);
+            return AbstractCompiler.loadClass(className);
         } catch (ClassNotFoundException e) {
             logger.info("Could not find class {}", className);
         }

@@ -581,16 +581,17 @@ public class SpringEvaluator extends Evaluator {
             setter.addArgument("null");
         }
         else {
-            setter.addArgument(entry.getValue().toString());
+            if (entry.getValue().equals("T")) {
+                setter.addArgument("\"T\"");
+            }
+            else {
+                setter.addArgument(entry.getValue().toString());
+            }
         }
         LineOfCode l = branching.get(ifst.hashCode());
         l.addPrecondition(setter, state);
         ifst.findAncestor(MethodDeclaration.class).ifPresent(md -> {
-            Set<Expression> expressions = preConditions.get(md);
-            if (expressions == null) {
-                expressions = new HashSet<>();
-                preConditions.put(md, expressions);
-            }
+            Set<Expression> expressions = preConditions.computeIfAbsent(md, k -> new HashSet<>());
             expressions.add(setter);
         });
     }

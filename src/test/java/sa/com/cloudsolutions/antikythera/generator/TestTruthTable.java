@@ -21,13 +21,13 @@ class TestTruthTable {
     final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         System.setOut(new PrintStream(outContent));
         AntikytheraRunTime.reset();
     }
 
     @AfterEach
-    public void tearDown() {
+    void tearDown() {
         System.setOut(standardOut);
     }
 
@@ -44,7 +44,7 @@ class TestTruthTable {
         assertNull(truthTable.getFirst().get("a"));
     }
 
-
+    @SuppressWarnings("java:S125")
     @Test
     void testGenerateTruthTableNumbers() {
         String condition = "a > b && b < c";
@@ -59,7 +59,6 @@ class TestTruthTable {
         assertEquals(1, values.getFirst().get(new NameExpr("c")));
 
     }
-
 
     @Test
     void testPrintTruthTable() {
@@ -172,5 +171,16 @@ class TestTruthTable {
         Expression first = v.getFirst().keySet().stream().findFirst().orElse(null);
         assertNotNull(first);
         assertTrue(TruthTable.isTrue(v.getFirst().get(first)));
+    }
+
+    @Test
+    void integrationTest() {
+        /*
+         * The main method already has a lot of useful stuff
+         */
+        TruthTable.main(new String[0]);
+        String output = outContent.toString();
+        assertTrue(output.matches("(?s).*Values to make the condition false for: a > b && b > c\\s*a\\s*=\\s*1\\s*b\\s*=\\s*1\\s*c\\s*=\\s*1.*"));
+        assertTrue(output.contains("a > b && b > c\nNo combination of values makes the condition true."));
     }
 }
