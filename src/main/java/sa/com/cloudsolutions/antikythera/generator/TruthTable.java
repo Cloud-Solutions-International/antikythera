@@ -130,17 +130,32 @@ public class TruthTable {
 
         Expression[] variableList = variables.keySet().toArray(new Expression[0]);
         table = new ArrayList<>();
+        generateCombinations(variableList);
+    }
 
-        // Track only numeric variables that need extended domain
-        Map<Expression, Integer> numericRanges = new HashMap<>();
-        for (Expression var : variableList) {
-            Pair<Object, Object> bounds = variables.get(var);
-            if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
-                numericRanges.put(var, (Integer) bounds.b);
-            }
+    /**
+     * Creates and fills the truth table.
+     * @param variableList
+     */
+    private void generateCombinations(Expression[] variableList) {
+        Map<Expression, Integer> numericRanges = collectNumericRanges(variableList);
+        int totalCombinations = calculateTotalCombinations(variableList, numericRanges);
+
+        for (int i = 0; i < totalCombinations; i++) {
+            Map<Expression, Object> truthValues = generateRowValues(variableList, numericRanges, i);
+            Object result = evaluateCondition(condition, truthValues);
+            truthValues.put(RESULT, isTrue(result));
+            table.add(truthValues);
         }
+    }
 
-        // Calculate combinations - extended range for numbers, binary for others
+    /**
+     * Depending on the number of variables and their domain the number of possibilities can change.
+     * @param variableList
+     * @param numericRanges
+     * @return
+     */
+    private int calculateTotalCombinations(Expression[] variableList, Map<Expression, Integer> numericRanges) {
         int totalCombinations = 1;
         for (Expression var : variableList) {
             if (numericRanges.containsKey(var)) {
@@ -149,32 +164,56 @@ public class TruthTable {
                 totalCombinations *= 2;
             }
         }
-
-        for (int i = 0; i < totalCombinations; i++) {
-            Map<Expression, Object> truthValues = new HashMap<>();
-            int product = 1;
-
-            for (Expression var : variableList) {
-                if (numericRanges.containsKey(var)) {
-                    // Handle numeric variables with extended domain
-                    int range = numericRanges.get(var);
-                    int value = (i / product) % (range + 1);
-                    truthValues.put(var, value);
-                    product *= (range + 1);
-                } else {
-                    // Handle boolean and string variables with binary domain
-                    Pair<Object, Object> bounds = variables.get(var);
-                    boolean value = ((i / product) % 2) == 1;
-                    truthValues.put(var, value ? bounds.b : bounds.a);
-                    product *= 2;
-                }
-            }
-
-            Object result = evaluateCondition(condition, truthValues);
-            truthValues.put(RESULT, isTrue(result));
-            table.add(truthValues);
-        }
+        return totalCombinations;
     }
+
+    /**
+     * <p>Identifies numeric variables from the list and maps them to their upper bounds.</p>
+     *
+     * <p></p>Numeric variables need special treatment and cannot be just treated as [0,1] because
+     * certain inequalities can only be filled by considering a wider domain of numbers</p>
+     *
+     * For example:
+     * - For condition "a > b && b > c" with domain [0,2]:
+     *   Returns map with {a->2, b->2, c->2}
+     * - For condition "a && b" (boolean variables):
+     *   Returns empty map
+     *
+     * @param variableList Array of Expression objects representing variables
+     * @return Map of numeric variables to their upper bounds
+     */
+    private Map<Expression, Integer> collectNumericRanges(Expression[] variableList) {
+        Map<Expression, Integer> numericRanges = new HashMap<>();
+        for (Expression v : variableList) {
+            Pair<Object, Object> bounds = variables.get(v);
+            if (bounds.a instanceof Integer && bounds.b instanceof Integer) {
+                numericRanges.put(v, (Integer) bounds.b);
+            }
+        }
+        return numericRanges;
+    }
+
+    private Map<Expression, Object> generateRowValues(Expression[] variableList,
+            Map<Expression, Integer> numericRanges, int combination) {
+        Map<Expression, Object> truthValues = new HashMap<>();
+        int product = 1;
+
+        for (Expression v : variableList) {
+            if (numericRanges.containsKey(v)) {
+                int range = numericRanges.get(v);
+                int value = (combination / product) % (range + 1);
+                truthValues.put(v, value);
+                product *= (range + 1);
+            } else {
+                Pair<Object, Object> bounds = variables.get(v);
+                boolean value = ((combination / product) % 2) == 1;
+                truthValues.put(v, value ? bounds.b : bounds.a);
+                product *= 2;
+            }
+        }
+        return truthValues;
+    }
+
     private void adjustDomain() {
         boolean all = true;
         for(Pair<Object, Object> p : variables.values()) {
@@ -206,6 +245,7 @@ public class TruthTable {
      * Prints the truth table for the given condition.
      *
      */
+    @SuppressWarnings("java:S106")
     public void printTruthTable() {
         writeTruthTable(System.out);
     }
@@ -248,6 +288,7 @@ public class TruthTable {
     /**
      * Prints the values that make the condition true.
      */
+    @SuppressWarnings("java:S106")
     public void printValues(boolean desiredState) {
         writeValues(desiredState, System.out);
     }
@@ -308,68 +349,56 @@ public class TruthTable {
      */
     private Object evaluateCondition(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isBinaryExpr()) {
-            var binaryExpr = condition.asBinaryExpr();
-            var leftExpr = binaryExpr.getLeft();
-            var rightExpr = binaryExpr.getRight();
-
-            if (isInequality(binaryExpr)) {
-                int left = (int) getValue(leftExpr, truthValues);
-                int right = (int) getValue(rightExpr, truthValues);
-
-                return switch (binaryExpr.getOperator()) {
-                    case LESS -> left < right;
-                    case GREATER -> left > right;
-                    case LESS_EQUALS -> left <= right;
-                    case GREATER_EQUALS -> left >= right;
-                    default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-                };
-            } else {
-                Object left = evaluateCondition(leftExpr, truthValues);
-                Object right = evaluateCondition(rightExpr, truthValues);
-                return switch (binaryExpr.getOperator()) {
-                    case AND -> ((Boolean) left) && (Boolean) right;
-                    case OR -> ((Boolean) left) || (Boolean) right;
-                    case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
-                    case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
-                    default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-                };
-            }
+            return evaluateBinaryExpression(condition.asBinaryExpr(), truthValues);
         } else if (condition.isUnaryExpr()) {
             var unaryExpr = condition.asUnaryExpr();
             Object value = evaluateCondition(unaryExpr.getExpression(), truthValues);
             return switch (unaryExpr.getOperator()) {
-                case LOGICAL_COMPLEMENT -> ! (Boolean)value;
+                case LOGICAL_COMPLEMENT -> !(Boolean) value;
                 default -> throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
             };
-        } else if (condition.isNameExpr()) {
+        } else if (condition.isMethodCallExpr()) {
+            return evaluateMethodCall(condition.asMethodCallExpr(), truthValues);
+        }
+
+        return evaluateBasicExpression(condition, truthValues);
+    }
+
+    private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
+        var leftExpr = binaryExpr.getLeft();
+        var rightExpr = binaryExpr.getRight();
+
+        if (isInequality(binaryExpr)) {
+            int left = (int) getValue(leftExpr, truthValues);
+            int right = (int) getValue(rightExpr, truthValues);
+
+            return switch (binaryExpr.getOperator()) {
+                case LESS -> left < right;
+                case GREATER -> left > right;
+                case LESS_EQUALS -> left <= right;
+                case GREATER_EQUALS -> left >= right;
+                default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+            };
+        }
+
+        Object left = evaluateCondition(leftExpr, truthValues);
+        Object right = evaluateCondition(rightExpr, truthValues);
+
+        return switch (binaryExpr.getOperator()) {
+            case AND -> ((Boolean) left) && (Boolean) right;
+            case OR -> ((Boolean) left) || (Boolean) right;
+            case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
+            case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
+            default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+        };
+    }
+
+    private Object evaluateBasicExpression(Expression condition, Map<Expression, Object> truthValues) {
+        if (condition.isNameExpr()) {
             return truthValues.get(condition);
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isStringLiteralExpr() || condition.isFieldAccessExpr()) {
-            return getValue(condition, truthValues);
-        }
-        else if (condition.isMethodCallExpr() ) {
-            if (condition.toString().contains("equals")) {
-                MethodCallExpr mce = condition.asMethodCallExpr();
-                Expression scope = mce.getScope().orElse(null);
-                Object scopeValue = truthValues.get(scope);
-                Expression argument = mce.getArgument(0);
-                if (argument.isLiteralExpr()) {
-                    if (scopeValue == null) {
-                        return argument.isNullLiteralExpr();
-                    }
-                    return scopeValue.equals(getValue(argument, truthValues));
-                }
-                else {
-                    Object arg = truthValues.get(argument);
-
-
-                    if (scopeValue == null) {
-                        return arg == null;
-                    }
-                    return scopeValue.equals(arg);
-                }
-            }
             return getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
             return null;
@@ -380,6 +409,28 @@ public class TruthTable {
         }
 
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
+    }
+
+    private Object evaluateMethodCall(MethodCallExpr condition, Map<Expression, Object> truthValues) {
+        if (condition.toString().contains("equals")) {
+            Expression scope = condition.getScope().orElse(null);
+            Object scopeValue = truthValues.get(scope);
+            Expression argument = condition.getArgument(0);
+
+            if (argument.isLiteralExpr()) {
+                if (scopeValue == null) {
+                    return argument.isNullLiteralExpr();
+                }
+                return scopeValue.equals(getValue(argument, truthValues));
+            } else {
+                Object arg = truthValues.get(argument);
+                if (scopeValue == null) {
+                    return arg == null;
+                }
+                return scopeValue.equals(arg);
+            }
+        }
+        return getValue(condition, truthValues);
     }
 
     /**
