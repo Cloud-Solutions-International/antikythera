@@ -13,6 +13,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -225,5 +227,70 @@ class TestTruthTable {
         String output = outContent.toString();
         assertTrue(output.contains("Values to make the condition true for: !a\na=false"));
 
+    }
+
+    @Test
+    void testEnclosedExpression() {
+        String condition = "(a && b) || c";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        // Test when enclosed expression is true
+        Map<Expression, Object> first = v.getFirst();
+        assertTrue(TruthTable.isTrue(first.get(new NameExpr("a")))
+                && TruthTable.isTrue(first.get(new NameExpr("b")))
+                || TruthTable.isTrue(first.get(new NameExpr("c"))));
+    }
+
+    @Test
+    void testIntegerLiteralExpression() {
+        String condition = "a > 5";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+
+        Map<Expression, Object> first = v.getFirst();
+        int value = (int) first.get(new NameExpr("a"));
+        assertTrue(value <= 5);
+    }
+
+    @Test
+    void testFieldAccess() {
+        String condition = "person.age > 18";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        Expression fieldAccess = v.getFirst().keySet().stream()
+                .filter(e -> e.isFieldAccessExpr())
+                .findFirst()
+                .orElse(null);
+        assertNotNull(fieldAccess);
+        assertTrue((int)v.getFirst().get(fieldAccess) > 18);
+    }
+
+    @Test
+    void testDomainAdjustmentWithLiterals() {
+        String condition = "a > 5 || a.equals(7)";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        // Test values larger than the default [0,1] domain
+        Set<Object> values = v.stream()
+                .map(m -> m.get(new NameExpr("a")))
+                .collect(Collectors.toSet());
+
+        assertTrue(values.contains(6));
+        assertTrue(values.contains(7));
     }
 }

@@ -215,20 +215,56 @@ public class TruthTable {
     }
 
     private void adjustDomain() {
-        boolean all = true;
+        // Check if all variables have default domain of [0,1]
+        boolean allDefaultDomain = true;
         for(Pair<Object, Object> p : variables.values()) {
-            if (! (p.a instanceof Integer a && p.b instanceof Integer b  && a == 0 && b == 1)) {
-                all = false;
+            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
+                allDefaultDomain = false;
                 break;
             }
         }
-        if (all) {
-            for(Expression e : variables.keySet()) {
-                variables.put(e, new Pair<>(0, variables.size() -1));
+
+        // If all variables have default domain, check conditions for integer literals
+        if (allDefaultDomain) {
+            int maxLiteral = findMaxIntegerLiteral();
+            if (maxLiteral > 1) {
+                for(Expression e : variables.keySet()) {
+                    variables.put(e, new Pair<>(0, maxLiteral));
+                }
+            } else {
+                // Original behavior for boolean/simple conditions
+                for(Expression e : variables.keySet()) {
+                    variables.put(e, new Pair<>(0, variables.size() - 1));
+                }
             }
         }
     }
 
+    private int findMaxIntegerLiteral() {
+        int maxValue = 1;
+        for (Expression condition : conditions) {
+            if (condition instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    // Check both sides for integer literals
+                    if (binaryExpr.getLeft().isIntegerLiteralExpr()) {
+                        int value = Integer.parseInt(binaryExpr.getLeft().asIntegerLiteralExpr().getValue());
+                        maxValue = Math.max(maxValue, value + 1);
+                    }
+                    if (binaryExpr.getRight().isIntegerLiteralExpr()) {
+                        int value = Integer.parseInt(binaryExpr.getRight().asIntegerLiteralExpr().getValue());
+                        maxValue = Math.max(maxValue, value + 1);
+                    }
+                }
+            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains("equals")) {
+                // Check equals method arguments for integer literals
+                if (methodCall.getArguments().size() > 0 && methodCall.getArgument(0).isIntegerLiteralExpr()) {
+                    int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
+                    maxValue = Math.max(maxValue, value + 1);
+                }
+            }
+        }
+        return maxValue;
+    }
     public static boolean isTrue(Object o) {
         if (o instanceof Boolean b) {
             return b;
@@ -521,8 +557,26 @@ public class TruthTable {
                 collector.put(n, new Pair<>(null, "T"));
             }
             else if (compareWith.isIntegerLiteralExpr()) {
-                int lower = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
-                collector.put(n, new Pair<>(lower, lower + 1));
+                int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
+                Node parent = n.getParentNode().orElse(null);
+
+                if (parent instanceof BinaryExpr binaryExpr) {
+                    if (isInequality(binaryExpr)) {
+                        // Adjust domain based on the inequality operator
+                        switch (binaryExpr.getOperator()) {
+                            case LESS -> collector.put(n, new Pair<>(0, literalValue));
+                            case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
+                            case GREATER -> collector.put(n, new Pair<>(literalValue + 1, literalValue + 3));
+                            case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
+                            default -> collector.put(n, new Pair<>(0, 1)); // fallback
+                        }
+                    } else {
+                        collector.put(n, new Pair<>(literalValue, literalValue));
+                    }
+                } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals("equals")) {
+                    // Handle a.equals(1) type expressions
+                    collector.put(n, new Pair<>(literalValue, literalValue));
+                }
             }
             else if (compareWith.isStringLiteralExpr()) {
                 collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
