@@ -294,7 +294,7 @@ public class TruthTable {
                 variables.replaceAll((e, v) -> new Pair<>(0, maxLiteral));
             } else {
                 for(Expression e : variables.keySet()) {
-                    variables.put(e, new Pair<>(0, variables.size() - 1));
+                    variables.put(e, new Pair<>(0, Math.max(1, variables.size() - 1)));
                 }
             }
         }
@@ -696,7 +696,7 @@ public class TruthTable {
                 if (isInequality(binaryExpr)) {
                     handleInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Pair<>(literalValue, literalValue));
+                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, literalValue);
