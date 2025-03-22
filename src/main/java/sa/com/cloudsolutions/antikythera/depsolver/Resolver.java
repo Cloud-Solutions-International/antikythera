@@ -105,8 +105,8 @@ public class Resolver {
                     else {
                         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
                         if (cu != null) {
-                            TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString());
-                            createFieldNode(value, t);
+                            AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
+                                    .ifPresent(t -> createFieldNode(value, t));
                         }
                     }
                 } catch (AntikytheraException e) {
@@ -164,7 +164,6 @@ public class Resolver {
                 Resolver.resolveArrayExpr(node, value);
             }
             else if (value.isClassExpr()) {
-
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
                 ImportUtils.addImport(node, ct.getName().toString());
             }
@@ -297,9 +296,9 @@ public class Resolver {
                 String fqn = AbstractCompiler.findFullyQualifiedName(scopeNode.getCompilationUnit(), resolvedType.getName().asString());
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
                 if (cu != null) {
-                    TypeDeclaration<?> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
-                    if (resolvedClass != null) {
-                        Optional<FieldDeclaration> field = resolvedClass.getFieldByName(fae.getNameAsString());
+                    Optional<TypeDeclaration<?>> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
+                    if (resolvedClass.isPresent()) {
+                        Optional<FieldDeclaration> field = resolvedClass.get().getFieldByName(fae.getNameAsString());
                         if (field.isPresent()) {
                             return Graph.createGraphNode(field.get());
                         }
@@ -545,9 +544,6 @@ public class Resolver {
                     }
                 }
             }
-            else {
-                
-            }
         }
     }
 
@@ -585,10 +581,8 @@ public class Resolver {
                     Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
 
                     if (!parent.get().isInterface()) {
-                        Optional<Callable> overRides = AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false);
-                        if (overRides.isPresent()) {
-                            Graph.createGraphNode(overRides.get().getCallableDeclaration());
-                        }
+                        AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
+                                .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
                     }
                 }
                 return Graph.createGraphNode(method);

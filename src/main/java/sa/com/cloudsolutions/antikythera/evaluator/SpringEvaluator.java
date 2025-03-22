@@ -63,7 +63,7 @@ public class SpringEvaluator extends Evaluator {
     private static final Map<String, RepositoryParser> repositories = new HashMap<>();
 
     /**
-     * List of generators that we have.
+     * <p>List of test generators that we have.</p>
      *
      * Generators ought to be seperated from the parsers/evaluators because different kinds of
      * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
@@ -89,12 +89,17 @@ public class SpringEvaluator extends Evaluator {
         super(className);
     }
 
+    public SpringEvaluator(String className, boolean lazy) {
+        super(className, lazy);
+    }
+
     /**
-     * Called by the java parser method visitor.
+     * <p>This is where the code evaluation really starts</p>
      *
-     * This is where the code evaluation begins. Note that we may run the same code repeatedly
-     * so that we can exercise all the paths in the code. This is done by setting the values
-     * of variables so that different branches in conditional statements are taken.
+     * The method will be called by the java parser method visitor. Note that we may run the same
+     * code repeatedly so that we can exercise all the paths in the code.
+     * This is done by setting the values of variables to ensure conditionals evaluate to both true
+     * state and the false state
      *
      * @param md The MethodDeclaration being worked on
      * @throws AntikytheraException if evaluation fails
@@ -162,10 +167,10 @@ public class SpringEvaluator extends Evaluator {
     }
 
     /**
-     * Execute a block of statements.
+     * <p>Execute a block of statements.</p>
      *
-     * We may end up executing the same block of statements repeatedly until all the branches
-     * have been covered.
+     * When generating tests; we may end up executing the same block of statements repeatedly until
+     * all the branches have been covered.
      *
      * @param statements the collection of statements that make up the block
      * @throws AntikytheraException if there are situations where we cannot process the block
@@ -301,7 +306,7 @@ public class SpringEvaluator extends Evaluator {
         String className = AbstractCompiler.findFullyQualifiedTypeName(variable);
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
-            var typeDecl = AbstractCompiler.getMatchingType(cu, shortName);
+            var typeDecl = AbstractCompiler.getMatchingType(cu, shortName).orElse(null);;
             if (typeDecl != null && typeDecl.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
 
@@ -379,40 +384,7 @@ public class SpringEvaluator extends Evaluator {
         generators.add(generator);
     }
 
-    /**
-     * Resolves fields while taking into consideration the AutoWired annotation of spring.
-     * When the field declaration is an interface, will try to find a suitable implementation.
-     *
-     * @param variable a variable declaration statement
-     * @param resolvedClass the name of the class that the field is of
-     * @return true if the resolution was successful
-     * @throws AntikytheraException when the field cannot be resolved
-     * @throws ReflectiveOperationException if a reflective operation goes wrong
-     */
-    @Override
-    Variable resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws AntikytheraException, ReflectiveOperationException {
-        /*
-         * Try to substitute an implementation for the interface.
-         */
-        String name = AbstractCompiler.findFullyQualifiedName(
-                AntikytheraRunTime.getCompilationUnit(resolvedClass),
-                variable.getType().asString());
-
-        Set<String> implementations = AntikytheraRunTime.findImplementations(name);
-        if (implementations != null) {
-            for (String impl : implementations) {
-                Variable v = super.resolveFieldRepresentedByCode(variable, impl);
-                if (v == null) {
-                    return autoWire(variable, impl);
-                }
-            }
-        }
-
-        Variable v = super.resolveFieldRepresentedByCode(variable, resolvedClass);
-        return (v == null) ? autoWire(variable, resolvedClass) :  v;
-    }
-
-     Variable autoWire(VariableDeclarator variable, String resolvedClass) {
+    Variable autoWire(VariableDeclarator variable, String resolvedClass) {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
@@ -425,17 +397,44 @@ public class SpringEvaluator extends Evaluator {
                     AntikytheraRunTime.autoWire(resolvedClass, v);
                 }
                 else {
-                    Evaluator eval = new SpringEvaluator(resolvedClass);
+                    Evaluator eval = new SpringEvaluator(resolvedClass, true);
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
+                    eval.setupFields();
+                    eval.invokeDefaultConstructor();
                 }
             }
+            fields.put(variable.getNameAsString(), v);
             return v;
         }
         return null;
     }
 
+    @Override
+    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
+        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, variableDeclarator.getTypeAsString());
+        if (resolvedClass != null) {
+            Variable v = autoWire(variableDeclarator, resolvedClass);
+            if (v == null) {
+                /*
+                 * Try to substitute an implementation for the interface.
+                 */
+                CompilationUnit targetCu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+                if (targetCu != null) {
+                    String name = AbstractCompiler.findFullyQualifiedName(targetCu,variableDeclarator.getType().asString());
+
+                    for (String impl : AntikytheraRunTime.findImplementations(name)) {
+                        v = autoWire(variableDeclarator, impl);
+                        if (v != null) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        super.setupField(field, variableDeclarator);
+    }
 
     @Override
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException, ReflectiveOperationException {
@@ -851,5 +850,6 @@ public class SpringEvaluator extends Evaluator {
             gen.setArgumentGenerator(argumentGenerator);
         }
     }
+
 }
 

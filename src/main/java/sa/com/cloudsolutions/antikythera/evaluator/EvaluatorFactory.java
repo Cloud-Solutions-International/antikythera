@@ -10,7 +10,7 @@ public class EvaluatorFactory {
         String parent = className.substring(0, className.lastIndexOf('.'));
         CompilationUnit secondary = AntikytheraRunTime.getCompilationUnit(parent);
 
-        if (primary.equals(secondary)) {
+        if (primary != null && primary.equals(secondary)) {
             InnerClassEvaluator eval = new InnerClassEvaluator(className);
             eval.setEnclosure(enclosure);
             return eval;

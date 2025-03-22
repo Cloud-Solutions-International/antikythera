@@ -165,7 +165,7 @@ public class AbstractCompiler {
         setupParser();
     }
 
-    static TypeDeclaration<?> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
+    static Optional<TypeDeclaration<?>> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
         String packageName = compilationUnit.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String name = fd.isClassOrInterfaceType() ? fd.asClassOrInterfaceType().getNameAsString() : fd.toString();
         String fileName = packageName + "." + name + SUFFIX;
@@ -177,7 +177,7 @@ public class AbstractCompiler {
 
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
@@ -224,8 +224,8 @@ public class AbstractCompiler {
         }
     }
 
-    private static List<TypeDeclaration> findContainedTypes(CompilationUnit cu) {
-        List<TypeDeclaration> types = new ArrayList<>();
+    private static List<TypeDeclaration<?>> findContainedTypes(CompilationUnit cu) {
+        List<TypeDeclaration<?>> types = new ArrayList<>();
         for (TypeDeclaration<?> type : cu.getTypes()) {
             types.add(type);
             findInners(type, types);
@@ -233,7 +233,7 @@ public class AbstractCompiler {
         return types;
     }
 
-    private static void findInners(TypeDeclaration cdecl, List<TypeDeclaration> inners) {
+    private static void findInners(TypeDeclaration<?> cdecl, List<TypeDeclaration<?>> inners) {
         for (Node child : cdecl.getChildNodes()) {
             if (child instanceof ClassOrInterfaceDeclaration cid) {
                 inners.add(cid);
@@ -267,7 +267,7 @@ public class AbstractCompiler {
         return param.getNameAsString();
     }
 
-    public static TypeDeclaration<?> resolveTypeSafely(ClassOrInterfaceType type, Node context) {
+    public static Optional<TypeDeclaration<?>> resolveTypeSafely(ClassOrInterfaceType type, Node context) {
 
         Optional<CompilationUnit> compilationUnit = context.findCompilationUnit();
         if (compilationUnit.isPresent()) {
@@ -275,26 +275,26 @@ public class AbstractCompiler {
 
             for (TypeDeclaration<?> t : cu.getTypes()) {
                 if (t.getNameAsString().equals(type.getNameAsString())) {
-                    return t;
+                    return Optional.of(t);
                 }
                 Optional<ClassOrInterfaceDeclaration> cid = t.findFirst(
                         ClassOrInterfaceDeclaration.class,
                         c -> c.getNameAsString().equals(type.getNameAsString())
                 );
                 if (cid.isPresent()) {
-                    return cid.get();
+                    return Optional.of(cid.get());
                 }
             }
 
             ImportWrapper wrapper = findImport(cu, type.getNameAsString());
             if (wrapper != null && wrapper.getType() != null) {
-                return wrapper.getType();
+                return Optional.of(wrapper.getType());
             }
 
             return findInSamePackage(cu, type);
         }
 
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -341,18 +341,16 @@ public class AbstractCompiler {
      * Finds the class inside the compilation unit that matches the class name
      * @param cu compilation unit
      * @param className the name of the class to find
-     * @return the type declaration or null if no match is found
+     * @return An optional of the type declaration
      */
-    public static TypeDeclaration<?> getMatchingType(CompilationUnit cu, String className) {
+    public static Optional<TypeDeclaration<?>> getMatchingType(CompilationUnit cu, String className) {
         for (TypeDeclaration<?> type : findContainedTypes(cu)) {
-            if (type.getNameAsString().equals(className)) {
-                return type;
-            }
-            if (className.equals(type.getFullyQualifiedName().orElse(null))) {
-                return type;
+            if (type.getNameAsString().equals(className)
+                    || className.equals(type.getFullyQualifiedName().orElse(null))) {
+                return Optional.of(type);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -429,7 +427,7 @@ public class AbstractCompiler {
          *    that we have loaded.
          */
 
-        TypeDeclaration<?> p = getMatchingType(cu, className);
+        TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
         if (p != null) {
             return p.getFullyQualifiedName().orElse(
                     cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("") + "." + p.getName());
@@ -554,7 +552,7 @@ public class AbstractCompiler {
                 if (!imp.isStatic()) {
                     CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
                     if (target != null) {
-                        TypeDeclaration<?> p = getMatchingType(target, importName.getIdentifier());
+                        TypeDeclaration<?> p = getMatchingType(target, importName.getIdentifier()).orElse(null);
                         wrapper.setExternal(false);
                         setTypeAndField(className, p, wrapper, target);
                     }
@@ -751,7 +749,7 @@ public class AbstractCompiler {
                     String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
                     if (cu != null) {
-                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString());
+                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString()).orElse(null);
                         Optional<Callable> method = findCallableDeclaration(methodCall, p);
                         if (method.isPresent()) {
                             return method;

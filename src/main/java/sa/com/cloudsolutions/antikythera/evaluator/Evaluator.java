@@ -120,13 +120,17 @@ public class Evaluator {
     protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
     public Evaluator (String className) {
+        this(className, false);
+    }
+
+    protected Evaluator(String className, boolean lazy) {
         this.className = className;
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
-        if (cu != null) {
-            this.setupFields(cu);
+        if (cu != null && !lazy) {
+            this.setupFields();
         }
     }
 
@@ -343,9 +347,9 @@ public class Evaluator {
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep)  {
-        TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (typeDeclaration != null) {
-            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.getFieldByName(fae.getNameAsString());
+        Optional<TypeDeclaration<?>> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
+        if (typeDeclaration.isPresent()) {
+            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.get().getFieldByName(fae.getNameAsString());
 
             if (fieldDeclaration.isPresent()) {
                 FieldDeclaration field = fieldDeclaration.get();
@@ -417,7 +421,7 @@ public class Evaluator {
                 /*
                  * This is not something that was created with class.forName or byte buddy.
                  */
-                this.fields.put(fieldName,variable);
+                this.fields.put(fieldName,v);
             }
 
         }
@@ -549,7 +553,7 @@ public class Evaluator {
      * @param oce the object creation expression.
      */
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
-        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context);
+        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().get(), this);
             annonymousOverrides(type, oce, eval);
@@ -605,7 +609,7 @@ public class Evaluator {
     }
 
     private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
-        TypeDeclaration<?> match;
+
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
         if (anonymousClassBody.isPresent()) {
             /*
@@ -613,24 +617,29 @@ public class Evaluator {
              */
             CompilationUnit cu = eval.getCompilationUnit().clone();
             eval.setCompilationUnit(cu);
-            match = AbstractCompiler.getMatchingType(cu, type.getNameAsString());
-            for(BodyDeclaration<?> body : anonymousClassBody.get()) {
-                if (body.isMethodDeclaration() && match != null) {
-                    MethodDeclaration md = body.asMethodDeclaration();
-                    MethodDeclaration replace = null;
+            AbstractCompiler.getMatchingType(cu, type.getNameAsString()).ifPresent(match ->
+                injectMethods(match, anonymousClassBody.get())
+            );
+        }
+    }
 
-                    for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
-                        if (method.getNameAsString().equals(md.getNameAsString())) {
-                            replace = method;
-                            break;
-                        }
+    private static void injectMethods(TypeDeclaration<?> match, NodeList<BodyDeclaration<?>> anonymousClassBody) {
+        for(BodyDeclaration<?> body : anonymousClassBody) {
+            if (body.isMethodDeclaration()) {
+                MethodDeclaration md = body.asMethodDeclaration();
+                MethodDeclaration replace = null;
+
+                for(MethodDeclaration method : match.findAll(MethodDeclaration.class)) {
+                    if (method.getNameAsString().equals(md.getNameAsString())) {
+                        replace = method;
+                        break;
                     }
-                    if (replace != null) {
-                        replace.replace(md);
-                    }
-                    else {
-                        match.addMember(md);
-                    }
+                }
+                if (replace != null) {
+                    replace.replace(md);
+                }
+                else {
+                    match.addMember(md);
                 }
             }
         }
@@ -727,7 +736,7 @@ public class Evaluator {
      * @param v The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getLocal(node, nameAsString);
+        Variable old = getValue(node, nameAsString);
         if (old != null) {
             old.setValue(v.getValue());
         }
@@ -846,11 +855,11 @@ public class Evaluator {
             case "System.in" -> System.in;
             default -> {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                if (cu != null) {
-                    TypeDeclaration<?> typeDecl = AbstractCompiler.getMatchingType(cu, s);
-                    if (typeDecl != null) {
-                        yield EvaluatorFactory.create(typeDecl.getFullyQualifiedName().orElse(null), this);
+                CompilationUnit targetCu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                if (targetCu != null) {
+                    Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.getMatchingType(targetCu, s);
+                    if (typeDecl.isPresent()) {
+                        yield EvaluatorFactory.create(typeDecl.get().getFullyQualifiedName().orElse(null), this);
                     }
                 }
                 yield null;
@@ -880,7 +889,7 @@ public class Evaluator {
                 }
                 else {
                     Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
-                    eval.setupFields(AntikytheraRunTime.getCompilationUnit(fullyQualifiedName));
+                    eval.setupFields();
                     v = new Variable(eval);
                 }
             }
@@ -961,8 +970,8 @@ public class Evaluator {
     public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
         returnFrom = null;
 
-        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.asClassOrInterfaceDeclaration());
+        Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
         if (n.isPresent() && n.get().isMethodDeclaration()) {
             Variable v = executeMethod(n.get().asMethodDeclaration());
             if (v != null && v.getValue() == null) {
@@ -1038,7 +1047,7 @@ public class Evaluator {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className)));
+                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
@@ -1108,6 +1117,26 @@ public class Evaluator {
         return locals;
     }
 
+    protected void invokeDefaultConstructor() {
+        String[] parts = className.split("\\.");
+        String shortName = parts[parts.length - 1];
+
+        for(ConstructorDeclaration decl : cu.findAll(ConstructorDeclaration.class)) {
+
+            if (decl.getParameters().isEmpty()) {
+                decl.findAncestor(TypeDeclaration.class).ifPresent(t -> {
+                    if(shortName.equals(t.getNameAsString())) {
+                        try {
+                            executeConstructor(decl);
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    }
+                });
+            }
+        }
+    }
+
     private static class MockReturnValueHandler implements Answer<Object> {
         @Override
         public Object answer(InvocationOnMock invocation) throws Throwable {
@@ -1131,26 +1160,36 @@ public class Evaluator {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
         if (imports.isEmpty()) {
+            String fqn = AbstractCompiler.findFullyQualifiedName(cu, t.getNameAsString());
+            if (fqn != null) {
+                return resolveNonPrimitiveField(fqn, variable, t);
+            }
             return setupPrimitiveOrBoxedField(variable, t);
         }
         else {
             for (ImportWrapper imp : imports) {
                 String resolvedClass = imp.getNameAsString();
-                Object f = Finch.getFinch(resolvedClass);
-                if (f != null) {
-                    Variable v = new Variable(t);
-                    v.setValue(f);
+                Variable v = resolveNonPrimitiveField(resolvedClass, variable, t);
+                if (v != null) {
                     return v;
-                } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-                    return setupPrimitiveOrBoxedField(variable, t);
-                } else {
-                    CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                    if (compilationUnit != null) {
-                        return resolveFieldRepresentedByCode(variable, resolvedClass);
-                    } else {
-                        logger.debug("Unsolved {}", resolvedClass);
-                    }
                 }
+            }
+        }
+        return null;
+    }
+
+    Variable resolveNonPrimitiveField(String resolvedClass, VariableDeclarator variable, ClassOrInterfaceType t) throws ReflectiveOperationException {
+        Object f = Finch.getFinch(resolvedClass);
+        if (f != null) {
+            Variable v = new Variable(t);
+            v.setValue(f);
+            return v;
+        } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
+            return setupPrimitiveOrBoxedField(variable, t);
+        } else {
+            CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+            if (compilationUnit != null) {
+                return resolveFieldRepresentedByCode(variable, resolvedClass);
             }
         }
         return null;
@@ -1181,9 +1220,8 @@ public class Evaluator {
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
-                        CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(cname);
                         Evaluator eval = EvaluatorFactory.create(cname, this);
-                        eval.setupFields(dep);
+
                         v = eval.getFields().get(name);
                         break;
                     }
@@ -1568,7 +1606,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    private void setupFields(CompilationUnit cu)  {
+    public void setupFields()  {
         cu.accept(new ControllerFieldVisitor(), null);
     }
 
@@ -1615,37 +1653,37 @@ public class Evaluator {
                 });
             });
         }
+    }
 
-        private void setupField(FieldDeclaration field, VariableDeclarator variable) {
-            try {
-                if (field.isStatic()) {
-                    Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variable.getNameAsString());
-                    if (s != null) {
-                        fields.put(variable.getNameAsString(), s);
-                        return;
-                    }
+    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
+        try {
+            if (field.isStatic()) {
+                Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variableDeclarator.getNameAsString());
+                if (s != null) {
+                    fields.put(variableDeclarator.getNameAsString(), s);
+                    return;
                 }
-                Variable v = identifyFieldDeclarations(variable);
-                if (v != null) {
-                    fields.put(variable.getNameAsString(), v);
-                    if (field.isStatic()) {
-                        v.setStatic(true);
-                        AntikytheraRunTime.setStaticVariable(getClassName(), variable.getNameAsString(), v);
-                    }
-                }
-            } catch (UnsolvedSymbolException e) {
-                logger.debug("ignore {}", variable);
-            } catch (IOException e) {
-                String action = Settings.getProperty("dependencies.on_error").toString();
-                if(action == null || action.equals("exit")) {
-                    throw new GeneratorException("Exception while processing fields", e);
-                }
-
-                logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
-
-            } catch (AntikytheraException|ReflectiveOperationException e) {
-                throw new GeneratorException(e);
             }
+            Variable v = identifyFieldDeclarations(variableDeclarator);
+            if (v != null) {
+                fields.put(variableDeclarator.getNameAsString(), v);
+                if (field.isStatic()) {
+                    v.setStatic(true);
+                    AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
+                }
+            }
+        } catch (UnsolvedSymbolException e) {
+            logger.debug("ignore {}", variableDeclarator);
+        } catch (IOException e) {
+            String action = Settings.getProperty("dependencies.on_error").toString();
+            if(action == null || action.equals("exit")) {
+                throw new GeneratorException("Exception while processing fields", e);
+            }
+
+            logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
+
+        } catch (AntikytheraException|ReflectiveOperationException e) {
+            throw new GeneratorException(e);
         }
     }
 
