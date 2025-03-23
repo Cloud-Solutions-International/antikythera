@@ -571,48 +571,55 @@ public class SpringEvaluator extends Evaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if(entry.getKey().isMethodCallExpr()) {
-
-                    LinkedList<Expression> chain = Evaluator.findScopeChain(entry.getKey());
-                    if (!chain.isEmpty()) {
-                        Expression expr = chain.getFirst();
-                        Variable v = getValue(ifst, expr.toString());
-                        if (v == null && expr.isNameExpr()) {
-                            /*
-                             * This is likely to be a static method.
-                             */
-                            String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
-                            if(fullname != null) {
-                                /*
-                                 * The only other possibility is static access on a class
-                                 */
-                                try {
-                                    Class.forName(fullname);
-
-                                } catch (ReflectiveOperationException e) {
-                                    /*
-                                     * Can probably be ignored
-                                     */
-                                    logger.info("Could not create class for {}", fullname);
-                                }
-                            }
-                        }
-
-                        if (v != null && v.getValue() instanceof Evaluator) {
-                            setupConditionalVariable(ifst, state, entry, expr);
-                        }
-                    }
+                    setupIfConditionThroughMethodCalls(ifst, state, entry);
                 } else if (entry.getKey().isNameExpr()) {
-                    NameExpr nameExpr = entry.getKey().asNameExpr();
-                    Variable v = getValue(ifst, nameExpr.getNameAsString());
-                    if (v.getType() instanceof PrimitiveType pt) {
-                        AssignExpr expr = new AssignExpr(
-                                new NameExpr(nameExpr.getNameAsString()),
-                                new IntegerLiteralExpr(entry.getValue().toString()),
-                                AssignExpr.Operator.ASSIGN
-                        );
-                        addPreCondition(ifst, state, expr);
+                    setupIfConditionThroughAssignment(ifst, state, entry);
+                }
+            }
+        }
+    }
+
+    private void setupIfConditionThroughAssignment(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry) {
+        NameExpr nameExpr = entry.getKey().asNameExpr();
+        Variable v = getValue(ifst, nameExpr.getNameAsString());
+        if (v.getType() instanceof PrimitiveType) {
+            AssignExpr expr = new AssignExpr(
+                    new NameExpr(nameExpr.getNameAsString()),
+                    new IntegerLiteralExpr(entry.getValue().toString()),
+                    AssignExpr.Operator.ASSIGN
+            );
+            addPreCondition(ifst, state, expr);
+        }
+    }
+
+    private void setupIfConditionThroughMethodCalls(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry) {
+        LinkedList<Expression> chain = Evaluator.findScopeChain(entry.getKey());
+        if (!chain.isEmpty()) {
+            Expression expr = chain.getFirst();
+            Variable v = getValue(ifst, expr.toString());
+            if (v == null && expr.isNameExpr()) {
+                /*
+                 * This is likely to be a static method.
+                 */
+                String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
+                if(fullname != null) {
+                    /*
+                     * The only other possibility is static access on a class
+                     */
+                    try {
+                        Class.forName(fullname);
+
+                    } catch (ReflectiveOperationException e) {
+                        /*
+                         * Can probably be ignored
+                         */
+                        logger.info("Could not create class for {}", fullname);
                     }
                 }
+            }
+
+            if (v != null && v.getValue() instanceof Evaluator) {
+                setupConditionalVariable(ifst, state, entry, expr);
             }
         }
     }
