@@ -5,6 +5,10 @@ import com.github.javaparser.ast.expr.Expression;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 public class BinaryOps {
+
+    private BinaryOps() {
+
+    }
     /**
      * Check that the left and right variables are equals
      * @param left a Variable
@@ -40,60 +44,56 @@ public class BinaryOps {
     }
 
     static Variable binaryOps(BinaryExpr.Operator operator, Expression leftExpression, Expression rightExpression, Variable left, Variable right) {
-        switch (operator) {
-            case EQUALS:
-                return BinaryOps.checkEquality(left, right);
+        return switch (operator) {
+            case EQUALS -> BinaryOps.checkEquality(left, right);
 
-            case AND:
-                return new Variable((boolean) left.getValue() && (boolean) right.getValue());
+            case AND -> new Variable((boolean) left.getValue() && (boolean) right.getValue());
 
-            case GREATER:
+            case GREATER -> {
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
+                    yield new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
+                throw new EvaluatorException(leftExpression, rightExpression);
+            }
 
-            case GREATER_EQUALS:
+            case GREATER_EQUALS -> {
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) >= 0);
+                    yield new Variable(NumericComparator.compare(left.getValue(), right.getValue()) >= 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
+                throw new EvaluatorException(leftExpression, rightExpression);
+            }
 
-            case LESS:
+            case LESS -> {
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) < 0);
+                    yield new Variable(NumericComparator.compare(left.getValue(), right.getValue()) < 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
+                throw new EvaluatorException(leftExpression, rightExpression);
+            }
 
-            case LESS_EQUALS:
+            case LESS_EQUALS -> {
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) <= 0);
+                    yield new Variable(NumericComparator.compare(left.getValue(), right.getValue()) <= 0);
                 }
-                throw new EvaluatorException("Cannot compare " + leftExpression + " and " + rightExpression);
+                throw new EvaluatorException(leftExpression, rightExpression);
+            }
 
-            case NOT_EQUALS:
+            case NOT_EQUALS -> {
                 Variable v = BinaryOps.checkEquality(left, right);
-                if (v.getValue() == null || Boolean.parseBoolean(v.getValue().toString())) {
-                    return new Variable(Boolean.FALSE);
-                }
-                return new Variable(Boolean.TRUE);
+                yield (v.getValue() == null || Boolean.parseBoolean(v.getValue().toString())) ?
+                    new Variable(Boolean.FALSE) : new Variable(Boolean.TRUE);
+            }
 
-            case OR:
-                if (  (left.getClazz().equals(Boolean.class) || left.getClazz().equals(boolean.class))
+            case OR -> {
+                if ((left.getClazz().equals(Boolean.class) || left.getClazz().equals(boolean.class))
                         && (right.getClazz().equals(Boolean.class) || right.getClazz().equals(boolean.class))) {
-                    return new Variable((Boolean) left.getValue() || (Boolean) right.getValue());
+                    yield new Variable((Boolean) left.getValue() || (Boolean) right.getValue());
                 }
-                return null;
+                yield null;
+            }
 
-            case PLUS:
-            case MINUS:
-            case MULTIPLY:
-            case DIVIDE:
-            case REMAINDER:
-                return Arithmetics.operate(left, right, operator);
+            case PLUS, MINUS, MULTIPLY, DIVIDE, REMAINDER -> Arithmetics.operate(left, right, operator);
 
-            default:
-                return null;
-        }
+            default -> null;
+        };
     }
 }
