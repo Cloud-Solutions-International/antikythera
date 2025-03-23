@@ -121,20 +121,28 @@ public class SpringEvaluator extends Evaluator {
 
         branching.clear();
         preConditions.clear();
+        final List<Integer> s = new ArrayList<>();
 
         md.accept(new VoidVisitorAdapter<Void>(){
             @Override
             public void visit(IfStmt stmt, Void arg) {
                 LineOfCode l = new LineOfCode(stmt);
                 branching.putIfAbsent(stmt.hashCode(), l);
+                s.add(1);
                 if(stmt.getElseStmt().isPresent()) {
+                    if (stmt.getElseStmt().get() instanceof BlockStmt) {
+                        s.add(1);
+                    }
                     stmt.getElseStmt().get().accept(this, arg);
+                }
+                else {
+                    s.add(1);
                 }
             }
         }, null);
 
         try {
-            for (visitNumber = 0; visitNumber < branching.size() * 2; visitNumber++) {
+            for (visitNumber = 0; visitNumber < s.size() ; visitNumber++) {
                 mockMethodArguments(md);
                 executeMethod(md);
             }
