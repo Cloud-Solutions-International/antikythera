@@ -11,7 +11,6 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -627,21 +626,17 @@ public class SpringEvaluator extends Evaluator {
     private void setupIfConditionThroughAssignment(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(ifst, nameExpr.getNameAsString());
-        if (v.getType() instanceof PrimitiveType) {
-            AssignExpr expr = new AssignExpr(
-                    new NameExpr(nameExpr.getNameAsString()),
-                    Reflect.createLiteralExpression(entry.getValue()),
-                    AssignExpr.Operator.ASSIGN
-            );
-            addPreCondition(ifst, state, expr);
-        } else {
-            AssignExpr expr = new AssignExpr(
-                    new NameExpr(nameExpr.getNameAsString()),
-                    new StringLiteralExpr(entry.getValue().toString()),
-                    AssignExpr.Operator.ASSIGN
-            );
-            addPreCondition(ifst, state, expr);
-        }
+
+        Expression valueExpr = v.getType() instanceof PrimitiveType
+            ? Reflect.createLiteralExpression(entry.getValue())
+            : new StringLiteralExpr(entry.getValue().toString());
+
+        AssignExpr expr = new AssignExpr(
+            new NameExpr(nameExpr.getNameAsString()),
+            valueExpr,
+            AssignExpr.Operator.ASSIGN
+        );
+        addPreCondition(ifst, state, expr);
     }
 
     private void setupIfConditionThroughMethodCalls(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry) {

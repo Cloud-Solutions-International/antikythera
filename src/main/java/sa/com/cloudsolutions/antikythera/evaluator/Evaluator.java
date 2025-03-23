@@ -1324,6 +1324,14 @@ public class Evaluator {
         }
     }
 
+    /**
+     * Copies a parameter from the stack into the local variable space of the method.
+     *
+     * @param md the method declaration into whose variable space this parameter will be copied
+     * @param p the parameter in question.
+     * @throws ReflectiveOperationException is not really thrown here but the sub classes might.
+     */
+    @SuppressWarnings("java:S1130")
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
         md.getBody().ifPresent(body ->
