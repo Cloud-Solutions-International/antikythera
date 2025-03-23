@@ -100,6 +100,40 @@ public class Conditional {
         }
     }
 
+    public void smallDiff(Double a) {
+        if (a > 1.1) {
+            System.out.print("Nearly 2!");
+        }
+        else if (a > 1.0) {
+            System.out.print("One!");
+        }
+    }
+
+    public void booleanWorks(Boolean b) {
+        if(b) {
+            System.out.println("True!");
+        }
+        else {
+            System.out.println("False!");
+        }
+    }
+
+    public void switchCase1(int a) {
+        switch(a) {
+            case 1:
+                System.out.print("One!");
+                break;
+            case 2:
+                System.out.print("Two!");
+                break;
+            case 3:
+                System.out.print("Three!");
+                break;
+            default:
+                System.out.print("Guess!");
+        }
+    }
+
 
     public static void main(String[] args) {
         Person p = new Person("Hello");

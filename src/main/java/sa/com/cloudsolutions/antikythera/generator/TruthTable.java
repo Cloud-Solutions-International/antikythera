@@ -14,6 +14,7 @@ import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
+import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -520,34 +521,24 @@ public class TruthTable {
         return evaluateBasicExpression(condition, truthValues);
     }
 
-    private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
-        var leftExpr = binaryExpr.getLeft();
-        var rightExpr = binaryExpr.getRight();
+private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
+    var leftExpr = binaryExpr.getLeft();
+    var rightExpr = binaryExpr.getRight();
+    Object left = evaluateCondition(leftExpr, truthValues);
+    Object right = evaluateCondition(rightExpr, truthValues);
 
-        if (isInequality(binaryExpr)) {
-            int left = (int) getValue(leftExpr, truthValues);
-            int right = (int) getValue(rightExpr, truthValues);
-
-            return switch (binaryExpr.getOperator()) {
-                case LESS -> left < right;
-                case GREATER -> left > right;
-                case LESS_EQUALS -> left <= right;
-                case GREATER_EQUALS -> left >= right;
-                default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-            };
-        }
-
-        Object left = evaluateCondition(leftExpr, truthValues);
-        Object right = evaluateCondition(rightExpr, truthValues);
-
-        return switch (binaryExpr.getOperator()) {
-            case AND -> ((Boolean) left) && (Boolean) right;
-            case OR -> ((Boolean) left) || (Boolean) right;
-            case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
-            case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
-            default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-        };
-    }
+    return switch (binaryExpr.getOperator()) {
+        case AND -> ((Boolean) left) && (Boolean) right;
+        case OR -> ((Boolean) left) || (Boolean) right;
+        case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
+        case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
+        case LESS -> NumericComparator.compare(left, right) < 0;
+        case GREATER -> NumericComparator.compare(left, right) > 0;
+        case LESS_EQUALS -> NumericComparator.compare(left, right) <= 0;
+        case GREATER_EQUALS -> NumericComparator.compare(left, right) >= 0;
+        default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+    };
+}
 
     private Object evaluateBasicExpression(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isNameExpr()) {

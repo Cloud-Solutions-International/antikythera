@@ -64,7 +64,7 @@ public class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, ZERO!One!Two!Three!",
             "conditional6, ZERO!One!Two!Three!","conditional7, ZERO!One!Two!Three!",
-            "conditional8, ZERO!One!Two!Three!"
+            "conditional8, ZERO!One!Two!Three!", "smallDiff, Nearly 2!One!", "booleanWorks, True!False!"
     })
     void testConditionals(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -78,5 +78,11 @@ public class TestConditional extends TestHelper {
         for (String part : parts) {
             assertTrue(s.contains(part));
         }
+    }
+
+    @Test
+    void testSwitchCase() {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("switchCase1")).orElseThrow();
     }
 }

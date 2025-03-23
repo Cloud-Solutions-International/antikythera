@@ -254,19 +254,7 @@ public class SpringEvaluator extends Evaluator {
                     }
                 }
             } else if (cond instanceof AssignExpr assignExpr) {
-                if (assignExpr.getTarget().toString().equals(p.getNameAsString())) {
-                    if (va.getClazz().equals(Integer.class)) {
-                        va.setValue(Integer.parseInt(assignExpr.getValue().toString()));
-                    } else if (va.getClazz().equals(Double.class)) {
-                        va.setValue(Double.parseDouble(assignExpr.getValue().toString()));
-                    } else if (va.getClazz().equals(Long.class)) {
-                        va.setValue(Long.parseLong(assignExpr.getValue().toString()));
-                    } else if (va.getClazz().equals(String.class) && assignExpr.getValue().isStringLiteralExpr()) {
-                        va.setValue(assignExpr.getValue().asStringLiteralExpr().getValue());
-                    } else {
-                        va.setValue(assignExpr.getValue());
-                    }
-                }
+                parameterAssignment(p, assignExpr, va);
             }
         }
 
@@ -275,6 +263,22 @@ public class SpringEvaluator extends Evaluator {
             p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
         });
 
+    }
+
+    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
+        if (assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+            if (va.getClazz().equals(Integer.class)) {
+                va.setValue(Integer.parseInt(assignExpr.getValue().toString()));
+            } else if (va.getClazz().equals(Double.class)) {
+                va.setValue(Double.parseDouble(assignExpr.getValue().toString()));
+            } else if (va.getClazz().equals(Long.class)) {
+                va.setValue(Long.parseLong(assignExpr.getValue().toString()));
+            } else if (va.getClazz().equals(String.class) && assignExpr.getValue().isStringLiteralExpr()) {
+                va.setValue(assignExpr.getValue().asStringLiteralExpr().getValue());
+            } else {
+                va.setValue(assignExpr.getValue());
+            }
+        }
     }
 
     /**
