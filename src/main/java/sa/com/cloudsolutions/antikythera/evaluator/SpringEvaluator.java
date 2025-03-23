@@ -186,6 +186,25 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
+    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
+        if (!assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+            return;
+        }
+
+        Expression value = assignExpr.getValue();
+        Object result = switch (va.getClazz().getSimpleName()) {
+            case "Integer" -> Integer.parseInt(value.toString());
+            case "Double" -> Double.parseDouble(value.toString());
+            case "Long" -> Long.parseLong(value.toString());
+            case "Float" -> Float.parseFloat(value.toString());
+            case "Boolean" -> value.isBooleanLiteralExpr() ? value.asBooleanLiteralExpr().getValue() : value;
+            case "Character" -> value.isCharLiteralExpr() ? value.asCharLiteralExpr().getValue() : value;
+            case "String" -> value.isStringLiteralExpr() ? value.asStringLiteralExpr().getValue() : value;
+            default -> value;
+        };
+        va.setValue(result);
+    }
+
     /**
      * <p>This is where the code evaluation really starts</p>
      * <p>
@@ -262,28 +281,6 @@ public class SpringEvaluator extends Evaluator {
             p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
         });
 
-    }
-
-    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
-        if (assignExpr.getTarget().toString().equals(p.getNameAsString())) {
-            if (va.getClazz().equals(Integer.class)) {
-                va.setValue(Integer.parseInt(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Double.class)) {
-                va.setValue(Double.parseDouble(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Long.class)) {
-                va.setValue(Long.parseLong(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Float.class)) {
-                va.setValue(Float.parseFloat(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Boolean.class) && assignExpr.getValue().isBooleanLiteralExpr()) {
-                va.setValue(assignExpr.getValue().asBooleanLiteralExpr().getValue());
-            } else if (va.getClazz().equals(Character.class) && assignExpr.getValue().isCharLiteralExpr()) {
-                va.setValue(assignExpr.getValue().asCharLiteralExpr().getValue());
-            } else if (va.getClazz().equals(String.class) && assignExpr.getValue().isStringLiteralExpr()) {
-                va.setValue(assignExpr.getValue().asStringLiteralExpr().getValue());
-            } else {
-                va.setValue(assignExpr.getValue());
-            }
-        }
     }
 
     /**
@@ -628,13 +625,13 @@ public class SpringEvaluator extends Evaluator {
         Variable v = getValue(ifst, nameExpr.getNameAsString());
 
         Expression valueExpr = v.getType() instanceof PrimitiveType
-            ? Reflect.createLiteralExpression(entry.getValue())
-            : new StringLiteralExpr(entry.getValue().toString());
+                ? Reflect.createLiteralExpression(entry.getValue())
+                : new StringLiteralExpr(entry.getValue().toString());
 
         AssignExpr expr = new AssignExpr(
-            new NameExpr(nameExpr.getNameAsString()),
-            valueExpr,
-            AssignExpr.Operator.ASSIGN
+                new NameExpr(nameExpr.getNameAsString()),
+                valueExpr,
+                AssignExpr.Operator.ASSIGN
         );
         addPreCondition(ifst, state, expr);
     }
@@ -673,8 +670,13 @@ public class SpringEvaluator extends Evaluator {
 
     private void setupConditionalVariable(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
-        String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
-        setter.setName("set" + name);
+        String name = entry.getKey().asMethodCallExpr().getNameAsString();
+        if (name.startsWith("is")) {
+            setter.setName("set" + name.substring(2));
+        }
+        else {
+            setter.setName("set" + name.substring(3));
+        }
         setter.setScope(scope);
 
         if (entry.getValue() == null) {

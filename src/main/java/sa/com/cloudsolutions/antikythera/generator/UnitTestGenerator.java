@@ -80,7 +80,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
 
-    private void loadExisting(File file) throws FileNotFoundException {
+    void loadExisting(File file) throws FileNotFoundException {
         gen = StaticJavaParser.parse(file);
         List<MethodDeclaration> remove = new ArrayList<>();
         for (MethodDeclaration md : gen.getType(0).getMethods()) {
@@ -124,7 +124,8 @@ public class UnitTestGenerator extends TestGenerator {
                 CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
                 TypeDeclaration<?> t = AbstractCompiler.getPublicType(cu);
                 for (FieldDeclaration fd : t.getFields()) {
-                    if (fd.getAnnotationByName("MockBean").isPresent()) {
+                    if (fd.getAnnotationByName("MockBean").isPresent() ||
+                            fd.getAnnotationByName("Mock").isPresent()) {
                         AntikytheraRunTime.markAsMocked(fd.getElementType());
                     }
                 }
@@ -344,7 +345,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void setCommonPath(String commonPath) {
-
+        throw new UnsupportedOperationException("Not needed here");
     }
 
     @Override
@@ -371,6 +372,11 @@ public class UnitTestGenerator extends TestGenerator {
         mockFields(compilationUnitUnderTest);
     }
 
+    /**
+     * Mock all the fields that have been marked as Autowired
+     * Mockito.Mock will be preferred over Mockito.MockBean
+     * @param cu the compilation unit that contains code to be tested.
+     */
     private void mockFields(CompilationUnit cu) {
         final TypeDeclaration<?> t = gen.getType(0);
         for (TypeDeclaration<?> decl : cu.getTypes()) {
