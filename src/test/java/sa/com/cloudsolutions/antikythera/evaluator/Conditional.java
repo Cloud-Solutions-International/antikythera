@@ -111,10 +111,10 @@ public class Conditional {
 
     public void booleanWorks(Boolean b) {
         if(b) {
-            System.out.println("True!");
+            System.out.print("True!");
         }
         else {
-            System.out.println("False!");
+            System.out.print("False!");
         }
     }
 

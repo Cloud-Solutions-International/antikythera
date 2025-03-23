@@ -273,6 +273,12 @@ public class SpringEvaluator extends Evaluator {
                 va.setValue(Double.parseDouble(assignExpr.getValue().toString()));
             } else if (va.getClazz().equals(Long.class)) {
                 va.setValue(Long.parseLong(assignExpr.getValue().toString()));
+            } else if (va.getClazz().equals(Float.class)) {
+                va.setValue(Float.parseFloat(assignExpr.getValue().toString()));
+            } else if (va.getClazz().equals(Boolean.class) && assignExpr.getValue().isBooleanLiteralExpr()) {
+                va.setValue(assignExpr.getValue().asBooleanLiteralExpr().getValue());
+            } else if (va.getClazz().equals(Character.class) && assignExpr.getValue().isCharLiteralExpr()) {
+                va.setValue(assignExpr.getValue().asCharLiteralExpr().getValue());
             } else if (va.getClazz().equals(String.class) && assignExpr.getValue().isStringLiteralExpr()) {
                 va.setValue(assignExpr.getValue().asStringLiteralExpr().getValue());
             } else {
@@ -624,7 +630,7 @@ public class SpringEvaluator extends Evaluator {
         if (v.getType() instanceof PrimitiveType) {
             AssignExpr expr = new AssignExpr(
                     new NameExpr(nameExpr.getNameAsString()),
-                    new IntegerLiteralExpr(entry.getValue().toString()),
+                    Reflect.createLiteralExpression(entry.getValue()),
                     AssignExpr.Operator.ASSIGN
             );
             addPreCondition(ifst, state, expr);

@@ -1,8 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
+import com.github.javaparser.ast.expr.CharLiteralExpr;
+import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -216,6 +221,20 @@ public class Reflect {
             case "char", "java.lang.Character" -> PrimitiveType.charType();
             case "java.lang.String" -> new ClassOrInterfaceType().setName("String");
             default -> null;
+        };
+    }
+
+    public static Expression createLiteralExpression(Object value) {
+        if (value == null) {
+            return new NullLiteralExpr();
+        }
+
+        return switch (value.getClass().getSimpleName()) {
+            case "Integer", "Long" -> new IntegerLiteralExpr(value.toString());
+            case "Double", "Float" -> new DoubleLiteralExpr(value.toString());
+            case "Boolean" -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
+            case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
+            default -> new StringLiteralExpr(value.toString());
         };
     }
 
