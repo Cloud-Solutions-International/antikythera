@@ -562,6 +562,8 @@ public class TruthTable {
             return evaluateCondition(condition.asEnclosedExpr().getInner(), truthValues);
         } else if (condition.isIntegerLiteralExpr()) {
             return getValue(condition, truthValues);
+        } else if (condition.isDoubleLiteralExpr()) {
+            return getValue(condition, truthValues);
         }
 
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
@@ -674,6 +676,12 @@ public class TruthTable {
             else if (compareWith.isIntegerLiteralExpr()) {
                 handleIntegerLiteral(n, collector, compareWith);
             }
+            else if (compareWith.isLongLiteralExpr()) {
+                handleLongLiteral(n, collector, compareWith);
+            }
+            else if (compareWith.isDoubleLiteralExpr()) {
+                handleDoubleLiteral(n, collector, compareWith);
+            }
             else if (compareWith.isStringLiteralExpr()) {
                 collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
             }
@@ -687,6 +695,59 @@ public class TruthTable {
             }
         }
 
+        private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                Expression compareWith) {
+            long literalValue = Long.parseLong(compareWith.asLongLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleLongInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 1));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, (int)literalValue);
+            }
+        }
+
+        private void handleLongInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                long literalValue, BinaryExpr binaryExpr) {
+            switch (binaryExpr.getOperator()) {
+                case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
+                case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
+                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+            }
+        }
+
+        private void handleDoubleLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                Expression compareWith) {
+            double literalValue = Double.parseDouble(compareWith.asDoubleLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleDoubleInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, (int)literalValue);
+            }
+        }
+
+        private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                double literalValue, BinaryExpr binaryExpr) {
+            switch (binaryExpr.getOperator()) {
+                case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
+                case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
+                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+            }
+        }
         private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
                 Expression compareWith) {
             int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());

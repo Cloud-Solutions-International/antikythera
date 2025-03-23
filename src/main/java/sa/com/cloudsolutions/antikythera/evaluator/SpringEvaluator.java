@@ -174,6 +174,10 @@ public class SpringEvaluator extends Evaluator {
                 if (assignExpr.getTarget().toString().equals(p.getNameAsString())) {
                     if (va.getClazz().equals(Integer.class)) {
                         va.setValue(Integer.parseInt(assignExpr.getValue().toString()));
+                    } else if (va.getClazz().equals(Double.class)) {
+                        va.setValue(Double.parseDouble(assignExpr.getValue().toString()));
+                    } else if (va.getClazz().equals(Long.class)) {
+                        va.setValue(Long.parseLong(assignExpr.getValue().toString()));
                     }
                     else {
                         va.setValue(assignExpr.getValue());

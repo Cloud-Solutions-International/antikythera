@@ -24,10 +24,19 @@ public class BinaryOps {
             }
             return new Variable(Boolean.FALSE);
         }
-        if (left.getValue() == right.getValue()) {
+
+        Object leftVal = left.getValue();
+        Object rightVal = right.getValue();
+
+        if (leftVal == rightVal) {
             return new Variable(Boolean.TRUE);
         }
-        return new Variable(left.getValue().equals(right.getValue()));
+
+        if (leftVal instanceof Number && rightVal instanceof Number) {
+            return new Variable(NumericComparator.compare(leftVal, rightVal) == 0);
+        }
+
+        return new Variable(leftVal.equals(rightVal));
     }
 
     static Variable binaryOps(BinaryExpr.Operator operator, Expression leftExpression, Expression rightExpression, Variable left, Variable right) {
