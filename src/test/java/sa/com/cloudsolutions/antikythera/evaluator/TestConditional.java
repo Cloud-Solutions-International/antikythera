@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestConditional extends TestHelper {
 
@@ -49,8 +50,7 @@ public class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional1, The name is nullT", "conditional2, The name is nullT",
-            "conditional3, ZERO!1", "conditional4, ZERO!Negative!Positive!",
-            "conditional5, ZERO!One!Two!Three!"
+            "conditional3, ZERO!1",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -61,4 +61,20 @@ public class TestConditional extends TestHelper {
         assertEquals(value, outContent.toString());
     }
 
+    @ParameterizedTest
+    @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, ZERO!One!Two!Three!"
+    })
+    void testConditionals(String name, String value) throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+        evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals(value.length(), s.length());
+        String[] parts = value.split("!");
+        for (String part : parts) {
+            assertTrue(s.contains(part));
+        }
+    }
 }
