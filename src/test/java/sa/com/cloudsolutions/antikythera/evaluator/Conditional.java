@@ -70,7 +70,6 @@ public class Conditional {
         }
     }
 
-
     public void conditional7(Long a) {
         if (a == 1) {
             System.out.print("One!");
@@ -79,6 +78,21 @@ public class Conditional {
             System.out.print("Two!");
         }
         else if (a == 3) {
+            System.out.print("Three!");
+        }
+        else {
+            System.out.print("ZERO!");
+        }
+    }
+
+    public void conditional8(String a) {
+        if (a.equals("1")) {
+            System.out.print("One!");
+        }
+        else if (a.equals("2")) {
+            System.out.print("Two!");
+        }
+        else if (a.equals("3")) {
             System.out.print("Three!");
         }
         else {

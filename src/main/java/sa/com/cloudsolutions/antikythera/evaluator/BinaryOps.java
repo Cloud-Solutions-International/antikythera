@@ -13,7 +13,7 @@ public class BinaryOps {
      * Check that the left and right variables are equals
      * @param left a Variable
      * @param right the other Variable
-     * @return a Variable holding either Boolean.TRUE or Boolean.FALSE
+     * @return a Variable holding either `Boolean.TRUE` or `Boolean.FALSE`
      */
     static Variable checkEquality(Variable left, Variable right) {
         if (left == null) {
