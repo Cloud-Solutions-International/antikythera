@@ -40,6 +40,20 @@ public class Conditional {
         }
     }
 
+    public void conditional5(int a) {
+        if (a == 1) {
+            System.out.print("One!");
+        }
+        else if (a == 2) {
+            System.out.print("Two!");
+        }
+        else if (a == 3) {
+            System.out.print("Three!");
+        }
+        else {
+            System.out.print("ZERO!");
+        }
+    }
     public static void main(String[] args) {
         Person p = new Person("Hello");
         Conditional c = new Conditional();

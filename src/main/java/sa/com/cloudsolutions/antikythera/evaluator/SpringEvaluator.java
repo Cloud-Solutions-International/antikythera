@@ -3,14 +3,18 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -164,6 +168,15 @@ public class SpringEvaluator extends Evaluator {
                     if (va.getValue() instanceof  Evaluator eval) {
                         MCEWrapper wrapper = wrapCallExpression(mce);
                         eval.executeLocalMethod(wrapper);
+                    }
+                }
+            } else if (cond instanceof AssignExpr assignExpr) {
+                if (assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+                    if (va.getClazz().equals(Integer.class)) {
+                        va.setValue(Integer.parseInt(assignExpr.getValue().toString()));
+                    }
+                    else {
+                        va.setValue(assignExpr.getValue());
                     }
                 }
             }
@@ -588,6 +601,17 @@ public class SpringEvaluator extends Evaluator {
                             setupConditionalVariable(ifst, state, entry, expr);
                         }
                     }
+                } else if (entry.getKey().isNameExpr()) {
+                    NameExpr nameExpr = entry.getKey().asNameExpr();
+                    Variable v = getValue(ifst, nameExpr.getNameAsString());
+                    if (v.getType() instanceof PrimitiveType pt) {
+                        AssignExpr expr = new AssignExpr(
+                                new NameExpr(nameExpr.getNameAsString()),
+                                new IntegerLiteralExpr(entry.getValue().toString()),
+                                AssignExpr.Operator.ASSIGN
+                        );
+                        addPreCondition(ifst, state, expr);
+                    }
                 }
             }
         }
@@ -610,11 +634,15 @@ public class SpringEvaluator extends Evaluator {
                 setter.addArgument(entry.getValue().toString());
             }
         }
+        addPreCondition(ifst, state, setter);
+    }
+
+    private void addPreCondition(IfStmt ifst, boolean state, Expression expr) {
         LineOfCode l = branching.get(ifst.hashCode());
-        l.addPrecondition(setter, state);
+        l.addPrecondition(expr, state);
         ifst.findAncestor(MethodDeclaration.class).ifPresent(md -> {
             Set<Expression> expressions = preConditions.computeIfAbsent(md, k -> new HashSet<>());
-            expressions.add(setter);
+            expressions.add(expr);
         });
     }
 
