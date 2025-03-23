@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
@@ -9,6 +8,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -42,7 +42,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 
-import javax.swing.text.html.Option;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -499,31 +498,40 @@ public class SpringEvaluator extends Evaluator {
         if (l == null) {
             return super.ifThenElseBlock(ifst);
         }
-        return switch (l.getPathTaken()) {
-            case LineOfCode.UNTAVELLED -> {
-                Variable v = super.ifThenElseBlock(ifst);
-                if ((boolean) v.getValue()) {
-                    l.setPathTaken(LineOfCode.TRUE_PATH);
-                    setupIfCondition(ifst, false);
-                }
-                else {
-                    l.setPathTaken(LineOfCode.FALSE_PATH);
-                    setupIfCondition(ifst, true);
-                }
-                yield v;
-            }
-            case LineOfCode.FALSE_PATH -> {
-                setupIfCondition(ifst, true);
-                l.setPathTaken(LineOfCode.BOTH_PATHS);
-                yield super.ifThenElseBlock(ifst);
-            }
-            case LineOfCode.TRUE_PATH -> {
+
+        Variable v = evaluateExpression(ifst.getCondition());
+        boolean result = (boolean) v.getValue();
+        Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
+
+        if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
+            if (result) {
+                l.setPathTaken(LineOfCode.TRUE_PATH);
+                /* we have not been this way before. In this first execution of the code, we
+                 * are taking the true path. We need to leave a flag behind so that in the
+                 * next execution we will know to take the false path.
+                 */
                 setupIfCondition(ifst, false);
-                l.setPathTaken(LineOfCode.BOTH_PATHS);
-                yield super.ifThenElseBlock(ifst);
+                super.executeStatement(ifst.getThenStmt());
             }
-            default -> null;
-        };
+            else {
+                l.setPathTaken(LineOfCode.FALSE_PATH);
+                setupIfCondition(ifst, true);
+                super.executeStatement(elseStmt);
+            }
+        }
+        else {
+            /*
+             * We have been this way before so lets take the path not taken.
+             */
+            l.setPathTaken(LineOfCode.BOTH_PATHS);
+            if (result) {
+                super.executeStatement(ifst.getThenStmt());
+            }
+            else {
+                super.executeStatement(elseStmt);
+            }
+        }
+        return v;
     }
 
     /**
