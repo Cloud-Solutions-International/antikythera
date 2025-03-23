@@ -732,10 +732,10 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
                 double literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
-                case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
+                case LESS -> collector.put(n, new Pair<>(literalValue - 1, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 0.0001));
+                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 0.0001));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 0.0001));
                 default -> collector.put(n, new Pair<>(0, 1)); // fallback
             }
         }
