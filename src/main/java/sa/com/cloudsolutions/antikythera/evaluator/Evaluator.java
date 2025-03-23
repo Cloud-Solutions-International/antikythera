@@ -1320,16 +1320,15 @@ public class Evaluator {
         NodeList<Parameter> parameters = md.getParameters();
 
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            setupParameter(md, parameters, i);
+            setupParameter(md, parameters.get(i));
         }
     }
 
-    void setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) throws ReflectiveOperationException {
-        Parameter p = parameters.get(i);
+    void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
-        md.getBody().ifPresent(body -> {
-            setLocal(body, p.getNameAsString(), va);
-        });
+        md.getBody().ifPresent(body ->
+            setLocal(body, p.getNameAsString(), va)
+        );
     }
 
     /**

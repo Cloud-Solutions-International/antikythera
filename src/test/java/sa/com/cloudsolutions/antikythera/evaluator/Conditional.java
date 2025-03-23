@@ -30,7 +30,7 @@ public class Conditional {
 
     public void conditional4(Person person) {
         if (person.getId() < 0) {
-            System.out.print("Negative");
+            System.out.print("Negative!");
         }
         else if (person.getId() > 1) {
             System.out.print("Positive!");

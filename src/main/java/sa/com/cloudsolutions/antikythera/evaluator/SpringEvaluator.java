@@ -82,6 +82,7 @@ public class SpringEvaluator extends Evaluator {
     private MethodDeclaration currentMethod;
 
     private static final HashMap<Integer, LineOfCode> branching = new HashMap<>();
+    private int visitNumber;
 
     private boolean onTest;
 
@@ -133,7 +134,7 @@ public class SpringEvaluator extends Evaluator {
         }, null);
 
         try {
-            for (int i = 0; i < branching.size() * 2; i++) {
+            for (visitNumber = 0; visitNumber < branching.size() * 2; visitNumber++) {
                 mockMethodArguments(md);
                 executeMethod(md);
             }
@@ -143,18 +144,18 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    void setupParameter(MethodDeclaration md, NodeList<Parameter> parameters, int i) throws ReflectiveOperationException {
-        Parameter p = parameters.get(i);
+    void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
-
+        int count = 0;
         for (Expression cond : preConditions.getOrDefault(md, Collections.emptySet())) {
+            if (count++ == visitNumber) {
+                break;
+            }
             if (cond instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne) {
-                    if (ne.getNameAsString().equals(p.getNameAsString())) {
-                        if (va.getValue() instanceof  Evaluator eval) {
-                            MCEWrapper wrapper = wrapCallExpression(mce);
-                            eval.executeLocalMethod(wrapper);
-                        }
+                if (mce.getScope().get() instanceof NameExpr ne && ne.getNameAsString().equals(p.getNameAsString())) {
+                    if (va.getValue() instanceof  Evaluator eval) {
+                        MCEWrapper wrapper = wrapCallExpression(mce);
+                        eval.executeLocalMethod(wrapper);
                     }
                 }
             }
