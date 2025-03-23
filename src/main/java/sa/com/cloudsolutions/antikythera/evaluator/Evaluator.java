@@ -1438,8 +1438,8 @@ public class Evaluator {
             executeDoWhile(stmt.asDoStmt());
 
         } else if(stmt.isSwitchStmt()) {
-            SwitchStmt switchExpr = stmt.asSwitchStmt();
-            System.out.println("switch missing");
+            executeSwitchStatement(stmt.asSwitchStmt());
+
         } else if(stmt.isWhileStmt()) {
             /*
              * Old fashioned while statement
@@ -1461,6 +1461,33 @@ public class Evaluator {
             loops.addLast(Boolean.FALSE);
         } else {
             logger.info("Unhandled statement: {}", stmt);
+        }
+    }
+
+    private void executeSwitchStatement(SwitchStmt switchStmt) throws Exception {
+        boolean matchFound = false;
+        Statement defaultStmt = null;
+
+        for (var entry : switchStmt.getEntries()) {
+            NodeList<Expression> labels = entry.getLabels();
+            for (Expression label : labels) {
+                if(label.isIntegerLiteralExpr()) {
+                    BinaryExpr bin = new BinaryExpr(switchStmt.getSelector(), label.asIntegerLiteralExpr(), BinaryExpr.Operator.EQUALS);
+                    Variable v = evaluateExpression(bin);
+                    if ((boolean) v.getValue()) {
+                        executeBlock(entry.getStatements());
+                        matchFound = true;
+                        break;
+                    }
+                }
+            }
+            if (labels.isEmpty()) {
+                defaultStmt = entry.getStatements().get(0);
+            }
+        }
+
+        if (!matchFound && defaultStmt != null) {
+            executeStatement(defaultStmt);
         }
     }
 

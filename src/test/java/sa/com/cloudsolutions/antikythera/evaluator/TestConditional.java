@@ -80,9 +80,14 @@ public class TestConditional extends TestHelper {
         }
     }
 
-    @Test
-    void testSwitchCase() {
+    @ParameterizedTest
+    @CsvSource({"1, One!","2, Two!","3, Three!","4, Guess!"})
+    void testSwitchCase(String key, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("switchCase1")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(Integer.parseInt(key)));
+        evaluator.executeMethod(method);
+        assertEquals(value, outContent.toString());
     }
 }
