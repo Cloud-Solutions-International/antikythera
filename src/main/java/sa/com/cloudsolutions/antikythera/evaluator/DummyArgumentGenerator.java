@@ -49,8 +49,8 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 }
             } else {
                 Evaluator o = new SpringEvaluator(fullClassName);
-                o.setupFields(AntikytheraRunTime.getCompilationUnit(fullClassName));
                 v = new Variable(o);
+                v.setType(t);
             }
         }
         return v;

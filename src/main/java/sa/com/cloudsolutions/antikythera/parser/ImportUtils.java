@@ -12,6 +12,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 
 public class ImportUtils {
+    private ImportUtils() {}
+
     public static GraphNode addImport(GraphNode node, Expression expr) {
         if (expr.isNameExpr()) {
             return ImportUtils.addImport(node, expr.asNameExpr().getNameAsString());
@@ -26,13 +28,9 @@ public class ImportUtils {
             if (n == null) {
                 // possibly an inner class
                 node.getEnclosingType().findFirst(TypeDeclaration.class,
-                        td -> td.getNameAsString().equals(ct.getNameAsString())).ifPresent(td -> {
-                    try {
-                        Graph.createGraphNode(td);
-                    } catch (AntikytheraException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                        td -> td.getNameAsString().equals(ct.getNameAsString()))
+                        .ifPresent(Graph::createGraphNode
+                );
             }
         }
         else {
@@ -55,20 +53,14 @@ public class ImportUtils {
                 } else if (imp.getImport().isAsterisk() && !imp.isExternal()) {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                     if (cu != null) {
-                        TypeDeclaration<?> td = AbstractCompiler.getMatchingType(cu, name);
-                        if (td != null) {
-                            Graph.createGraphNode(td);
-                        }
+                        AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
                     }
                 }
             } else {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (cu != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, name);
-                    if (t != null) {
-                        returnValue = Graph.createGraphNode(t);
-                    }
+                    AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
                 }
             }
         } catch (AntikytheraException e) {

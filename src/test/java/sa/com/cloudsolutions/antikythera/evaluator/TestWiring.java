@@ -4,8 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -17,9 +16,9 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestLoops extends  TestHelper {
+public class TestWiring extends TestHelper{
 
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Loops";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Wiring";
     CompilationUnit cu;
 
     @BeforeAll
@@ -29,23 +28,17 @@ public class TestLoops extends  TestHelper {
     }
 
     @BeforeEach
-    void each() {
+    void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
-        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator = new SpringEvaluator(SAMPLE_CLASS);
         System.setOut(new PrintStream(outContent));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"forLoop", "forLoopWithBreak", "whileLoop", "doWhileLoop", "forEach","forEach2",
-            "whileLoopWithBreak","forEachLoop","forEachLoopWithBreak", "forLoopWithReturn", "forEach3", "forEach5"})
-    void testLoops(String methodName) throws AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(methodName)).orElseThrow();
+    @Test
+    void testInitializer() throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
         Variable v = evaluator.executeMethod(method);
-        if(methodName.equals("forLoopWithReturn")) {
-            assertEquals("Hello world", v.getValue());
-        } else {
-            assertNull(v.getValue());
-        }
-        assertEquals("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n", outContent.toString());
+        assertNull(v.getValue());
+        assertEquals("Fatty Bolger\n", outContent.toString());
     }
 }

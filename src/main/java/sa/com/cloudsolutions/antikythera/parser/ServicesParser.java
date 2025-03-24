@@ -36,15 +36,13 @@ public class ServicesParser {
         if (this.cu == null) {
             throw new AntikytheraException("Class not found: " + cls);
         }
-        evaluator = new SpringEvaluator(cls);
+        evaluator = new SpringEvaluator(cls, true);
         generator = (UnitTestGenerator) Factory.create("unit", cu);
 
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
         generator.setupImports();
         generator.addBeforeClass();
-
-        evaluator.setupFields(cu);
     }
 
     public void start() {
@@ -76,6 +74,7 @@ public class ServicesParser {
     }
 
     private void eval() {
+        evaluator.setupFields();
         for (MethodDeclaration md : methods) {
             evaluateMethod(md, new DummyArgumentGenerator());
         }

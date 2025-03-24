@@ -28,6 +28,7 @@ public class Variable {
      * True if this represents a primitive type as the value
      */
     private boolean primitive;
+    private boolean stat;
 
     /**
      * Create an object having the given value and java parser type.
@@ -84,6 +85,14 @@ public class Variable {
                 // can be silently ignored
             }
         }
+    }
+
+    public void setStatic(boolean s) {
+        this.stat = s;
+    }
+
+    public boolean isStatic() {
+        return stat;
     }
 
     public void setPrimitive(boolean primitive) {

@@ -22,12 +22,14 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -56,9 +58,13 @@ class TestSpringEvaluator {
 
         // calling with out setting up the proper set of arguments will result in null because
         // the method will not be executed in the absence of the required arguments
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
-        eval.executeMethod(md);
-        assertNull(eval.returnValue);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, methodDeclaration -> {
+            if (methodDeclaration.getNameAsString().equals("get")) {
+                return true;
+            }
+            return false;
+        }).orElseThrow();
+        assertThrows(NoSuchElementException.class , () -> eval.executeMethod(md));
 
         AntikytheraRunTime.push(new Variable(1L));
         eval.executeMethod(md);
@@ -154,21 +160,22 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        assertTrue(evaluator.autoWire(variable, PERSON_REPO));
+        assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);
     }
 
     @Test
     void testAutoWireWithMock() {
-        SpringEvaluator evaluator = new SpringEvaluator("sa.com.cloudsolutions.service.Service");
-        CompilationUnit cu = evaluator.getCompilationUnit();
+        final String sample = "sa.com.cloudsolutions.service.Service";
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(sample);
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         AntikytheraRunTime.markAsMocked(fieldDecl.getElementType());
 
-        assertTrue(evaluator.autoWire(variable, PERSON_REPO));
+        SpringEvaluator evaluator = new SpringEvaluator(sample);
+        assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);
         assertInstanceOf(MockingEvaluator.class, f.getValue());
@@ -191,7 +198,7 @@ class TestSpringEvaluator {
         // Get the field from the parsed class
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        assertFalse(evaluator.autoWire(variable, "TestClass"));
+        assertNull(evaluator.autoWire(variable, "TestClass"));
     }
 }
 

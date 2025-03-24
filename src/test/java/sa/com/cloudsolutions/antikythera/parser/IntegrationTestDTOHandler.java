@@ -78,7 +78,6 @@ class IntegrationTestDTOHandler {
         handler.parse(AbstractCompiler.classToPath("sa.com.cloudsolutions.dto.MediumDTO"));
 
         Evaluator eval = new Evaluator("sa.com.cloudsolutions.dto.MediumDTO");
-        eval.setupFields(handler.getCompilationUnit());
 
         Variable v = eval.getFields().get("group");
         assertNotNull(v);

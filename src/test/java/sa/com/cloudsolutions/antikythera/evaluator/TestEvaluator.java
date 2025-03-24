@@ -44,7 +44,6 @@ class TestEvaluator extends TestHelper {
     @BeforeEach
     void each() {
         evaluator = new Evaluator(CLASS_UNDER_TEST);
-        evaluator.setupFields(AntikytheraRunTime.getCompilationUnit(CLASS_UNDER_TEST));
     }
 
     @Test
@@ -196,7 +195,6 @@ class TestEvaluatorWithFinches extends TestHelper {
 
         Finch.clear();
         Evaluator eval = new Evaluator("TestClass");
-        eval.setupFields(cu);
 
         Variable v = eval.getFields().get("hello");
         assertNotNull(v);
