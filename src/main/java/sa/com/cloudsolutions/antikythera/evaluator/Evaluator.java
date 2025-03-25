@@ -62,7 +62,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -996,6 +995,12 @@ public class Evaluator {
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
         if (call instanceof MethodCallExpr methodCall) {
             Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+            if (cdecl.isEmpty()) {
+                Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(cu, getClassName());
+                if (t.isPresent() && t.get().isClassOrInterfaceDeclaration()) {
+                    cdecl = Optional.of(t.get().asClassOrInterfaceDeclaration());
+                }
+            }
             if (cdecl.isPresent()) {
                 /*
                  * At this point we are searching for the method call in the current class. For example,
@@ -1060,7 +1065,7 @@ public class Evaluator {
 
     static Class<?> getClass(String className) {
         try {
-            return Class.forName(className);
+            return AbstractCompiler.loadClass(className);
         } catch (ClassNotFoundException e) {
             logger.info("Could not find class {}", className);
         }
@@ -1311,34 +1316,27 @@ public class Evaluator {
         return null;
     }
 
-    protected boolean setupParameters(MethodDeclaration md) {
+    protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
-        ArrayList<Boolean> missing = new ArrayList<>();
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Parameter p = parameters.get(i);
 
-            Variable va = AntikytheraRunTime.pop();
-            if (md.getBody().isPresent()) {
-                // repository methods for example don't have bodies
-                setLocal(md.getBody().get(), p.getNameAsString(), va);
-                p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
-            }
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            setupParameter(md, parameters.get(i));
         }
-        return missing.isEmpty();
     }
 
-    private static void setupRequestParam(AnnotationExpr a , Variable va, ArrayList<Boolean> missing) {
-        if (a.isNormalAnnotationExpr()) {
-            NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
-            for (MemberValuePair pair : ne.getPairs()) {
-                if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
-                    return;
-                }
-            }
-        }
-        if (va == null) {
-            missing.add(true);
-        }
+    /**
+     * Copies a parameter from the stack into the local variable space of the method.
+     *
+     * @param md the method declaration into whose variable space this parameter will be copied
+     * @param p the parameter in question.
+     * @throws ReflectiveOperationException is not really thrown here but the sub classes might.
+     */
+    @SuppressWarnings("java:S1130")
+    void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
+        Variable va = AntikytheraRunTime.pop();
+        md.getBody().ifPresent(body ->
+            setLocal(body, p.getNameAsString(), va)
+        );
     }
 
     /**
@@ -1448,8 +1446,8 @@ public class Evaluator {
             executeDoWhile(stmt.asDoStmt());
 
         } else if(stmt.isSwitchStmt()) {
-            SwitchStmt switchExpr = stmt.asSwitchStmt();
-            System.out.println("switch missing");
+            executeSwitchStatement(stmt.asSwitchStmt());
+
         } else if(stmt.isWhileStmt()) {
             /*
              * Old fashioned while statement
@@ -1471,6 +1469,33 @@ public class Evaluator {
             loops.addLast(Boolean.FALSE);
         } else {
             logger.info("Unhandled statement: {}", stmt);
+        }
+    }
+
+    private void executeSwitchStatement(SwitchStmt switchStmt) throws Exception {
+        boolean matchFound = false;
+        Statement defaultStmt = null;
+
+        for (var entry : switchStmt.getEntries()) {
+            NodeList<Expression> labels = entry.getLabels();
+            for (Expression label : labels) {
+                if(label.isIntegerLiteralExpr()) {
+                    BinaryExpr bin = new BinaryExpr(switchStmt.getSelector(), label.asIntegerLiteralExpr(), BinaryExpr.Operator.EQUALS);
+                    Variable v = evaluateExpression(bin);
+                    if ((boolean) v.getValue()) {
+                        executeBlock(entry.getStatements());
+                        matchFound = true;
+                        break;
+                    }
+                }
+            }
+            if (labels.isEmpty()) {
+                defaultStmt = entry.getStatements().get(0);
+            }
+        }
+
+        if (!matchFound && defaultStmt != null) {
+            executeStatement(defaultStmt);
         }
     }
 
@@ -1743,5 +1768,4 @@ public class Evaluator {
         }
         return chain;
     }
-
 }

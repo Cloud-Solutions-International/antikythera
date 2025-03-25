@@ -11,8 +11,10 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
+import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -24,17 +26,18 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Generates and print truth tables for given conditionals
+ * <p>Generate (and print) truth tables for given conditionals</p>
  *
- * Comparisions involving Object.equals() are tricky. The range of values to assign to the variable
- * depends on the argument to the equals method. Obviously when the scope is null null.equals leads
- * to Null Pointer Exceptions, so work arounds will have to be used.
+ * Comparisons involving Object.equals() are tricky. The range of values to assign to the variable
+ * depends on the argument to the `equals` method. Obviously when the scope is null `null.equals`
+ * leads to Null Pointer Exceptions, so workarounds will have to be used.
  *
  * The values assigned may have its domain in Strings, Boolean or any other objects. This
  * implementation will only consider Numeric, Boolean and String expressions.
  */
 public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
+    public static final String EQUALS_CALL = "equals";
     /**
      * The condition that this truth table is for
      */
@@ -42,7 +45,7 @@ public class TruthTable {
     /**
      * Collection of variables involved in the condition.
      * the key will be the expression representing the variable and the value will be a Pair
-     * representing the lower and upper bounds for the expresion
+     * representing the lower and upper bounds for the expression
      */
     private final HashMap<Expression, Pair<Object, Object>> variables;
 
@@ -51,6 +54,10 @@ public class TruthTable {
      */
     private final Set<Expression> conditions;
 
+    /**
+     * If any c
+     */
+    private final HashMap<Expression, List<Expression>> constraints;
     /**
      * The matrix of values for the variables and the result of the condition
      */
@@ -62,7 +69,6 @@ public class TruthTable {
      */
     public TruthTable(String conditionCode) {
         this(StaticJavaParser.parseExpression(conditionCode));
-
     }
 
     /**
@@ -73,15 +79,7 @@ public class TruthTable {
         this.condition = condition;
         this.variables = new HashMap<>();
         this.conditions = new HashSet<>();
-
-        /*
-         * A single IF statement may have multiple binary expressions attached to it, first step
-         * is to identify all of them.
-         */
-        this.condition.accept(new ConditionCollector(), conditions);
-        this.condition.accept(new VariableCollector(), variables);
-
-        generateTruthTable();
+        this.constraints = new HashMap<>();
     }
 
     private static boolean isInequality(BinaryExpr binaryExpr) {
@@ -91,15 +89,16 @@ public class TruthTable {
                 || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
     }
 
+
     /**
      * Main method to test the truth table generation and printing with different conditions.
      *
      * @param args Command line arguments.
      */
+    @SuppressWarnings("java:S106")
     public static void main(String[] args) {
         String[] conditions = {
                 "!a",
-                "a.equals(\"null\")", // this is a string literal so we have to handle it carefully
                 "a > b && c == d",
                 "a > b",
                 "a == b",
@@ -116,6 +115,7 @@ public class TruthTable {
 
         for (String condition : conditions) {
             TruthTable generator = new TruthTable(condition);
+            generator.generateTruthTable();
             generator.printTruthTable();
             generator.printValues(true);
             generator.printValues(false);
@@ -126,40 +126,263 @@ public class TruthTable {
     /**
      * Generates a truth table for the given condition.
      */
-    private void generateTruthTable() {
-        Expression[] variableList = variables.keySet().toArray(new Expression[0]);
-        int numRows = (int) Math.pow(2, variableList.length);
+    public void generateTruthTable() {
+        this.condition.accept(new ConditionCollector(), conditions);
+        this.condition.accept(new VariableCollector(), variables);
+        adjustDomain();
 
+        Expression[] variableList = variables.keySet().toArray(new Expression[0]);
+        table = new ArrayList<>();
+        generateCombinations(variableList);
+    }
+
+    /**
+     * Creates and fills the truth table.
+     * @param variableList all the variables in the conditional.
+     */
+    private void generateCombinations(Expression[] variableList) {
+        Map<Expression, Interval> numericRanges = collectNumericRanges(variableList);
+        int totalCombinations = calculateTotalCombinations(variableList, numericRanges);
         table = new ArrayList<>();
 
-        for (int i = 0; i < numRows; i++) {
-            Map<Expression, Object> truthValues = new HashMap<>();
-            for (int j = 0; j < variableList.length; j++) {
-                Expression variable = variableList[j];
-                Pair<Object, Object> bounds = variables.get(variable);
-
-                boolean value = (i & (1 << j)) != 0;
-                if (value) {
-                    if (bounds.a != null) {
-                        truthValues.put(variable, bounds.a);
-                    } else {
-                        truthValues.put(variable, bounds.b);
-                    }
-                }
-                else {
-                    if (bounds.a != null) {
-                        truthValues.put(variable, bounds.b);
-                    } else {
-                        truthValues.put(variable, null);
-                    }
-                }
-
+        for (int i = 0; i < totalCombinations; i++) {
+            Map<Expression, Object> truthValues = generateRowValues(variableList, numericRanges, i);
+            // Only add combinations that satisfy all constraints
+            if (satisfiesConstraints(truthValues)) {
+                Object result = evaluateCondition(condition, truthValues);
+                truthValues.put(RESULT, isTrue(result));
+                table.add(truthValues);
             }
-            Object result = evaluateCondition(condition, truthValues);
-
-            truthValues.put(RESULT, isTrue(result));
-            table.add(truthValues);
         }
+    }
+
+    private boolean satisfiesConstraints(Map<Expression, Object> truthValues) {
+        for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
+            Expression variable = constraint.getKey();
+            for (Expression constraintExpr : constraint.getValue()) {
+                if (constraintExpr instanceof BinaryExpr binaryExpr) {
+                    if (!satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
+            Map<Expression, Object> truthValues) {
+        Object value = truthValues.get(variable);
+        if (!(value instanceof Integer intValue)) {
+            return true;
+        }
+
+        int literalValue = Integer.parseInt(
+                binaryExpr.getRight().isIntegerLiteralExpr() ?
+                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
+                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
+        );
+
+        boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
+        return switch (binaryExpr.getOperator()) {
+            case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
+            case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
+            case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
+            case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
+            case EQUALS -> intValue == literalValue;
+            default -> true;
+        };
+    }
+
+    /**
+     * Depending on the number of variables and their domain the number of possibilities can change.
+     * @param variableList all the variables in the truth table.
+     * @param domain the domain of values for integer literals
+     * @return the total number of combinations that are available to us.
+     */
+    private int calculateTotalCombinations(Expression[] variableList,
+            Map<Expression, Interval> domain) {
+        int totalCombinations = 1;
+        for (Expression v : variableList) {
+            if (domain.containsKey(v)) {
+                totalCombinations *= domain.get(v).width;
+            } else {
+                totalCombinations *= 2;
+            }
+        }
+        return totalCombinations;
+    }
+    /**
+     * <p>Identifies numeric variables from the list and maps them to their upper bounds.</p>
+     *
+     * <p></p>Numeric variables need special treatment and cannot be just treated as [0,1] because
+     * certain inequalities can only be filled by considering a wider domain of numbers</p>
+     *
+     * For example:
+     * - For condition "a > b && b > c" with domain [0,2]:
+     *   Returns map with {a->2, b->2, c->2}
+     * - For condition "a && b" (boolean variables):
+     *   Returns empty map
+     *
+     * @param variableList Array of Expression objects representing variables
+     * @return Map of numeric variables to their upper bounds
+     */
+
+    private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
+        Map<Expression, Interval> numericRanges = new HashMap<>();
+        for (Expression v : variableList) {
+            Pair<Object, Object> bounds = variables.get(v);
+            if (bounds.a instanceof Integer min && bounds.b instanceof Integer max) {
+                numericRanges.put(v, new Interval(min, max));
+            }
+        }
+        return numericRanges;
+    }
+
+    /**
+     * <p>Generates values for each variable in a single row of the truth table.</p>
+     *
+     * <p>This method converts a numerical combination into specific values for each variable by:
+     * 1. For numeric variables (with extended domains):
+     *    - Uses modulo arithmetic to select a value within the variable's range
+     *    - Example: For range [0,5], combination 7 with product 2 gives (7/2)%6 = 3
+     * 2. For non-numeric variables (typically boolean or string):
+     *    - Uses binary choice (0 or 1) to select between lower and upper bounds
+     *    - Example: For boolean, combination 3 with product 2 gives (3/2)%2 = 1 -> true</p>
+     *
+     * <p>The 'product' variable maintains the stride length for each variable position, ensuring
+     * all possible combinations are covered systematically.</p>
+     *
+     * @param variableList Array of variables to assign values to
+     * @param domain Map of variables to their maximum values (for numeric variables)
+     * @param combination Current combination number being processed
+     * @return Map of variable expressions to their assigned values
+     */
+    private Map<Expression, Object> generateRowValues(Expression[] variableList,
+                                                      Map<Expression, Interval> domain, int combination) {
+        Map<Expression, Object> truthValues = new HashMap<>();
+        int product = 1;
+
+        for (Expression v : variableList) {
+            if (domain.containsKey(v)) {
+                Interval range = domain.get(v);
+                int value = range.min + (combination / product) % range.width;
+                truthValues.put(v, value);
+                product *= range.width;
+            } else {
+                Pair<Object, Object> bounds = variables.get(v);
+                boolean value = ((combination / product) % 2) == 1;
+                truthValues.put(v, value ? bounds.b : bounds.a);
+                product *= 2;
+            }
+        }
+        return truthValues;
+    }
+
+    private void adjustDomain() {
+        // First handle the regular domain adjustment
+        boolean allDefaultDomain = true;
+        for(Pair<Object, Object> p : variables.values()) {
+            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
+                allDefaultDomain = false;
+                break;
+            }
+        }
+
+        if (allDefaultDomain) {
+            int maxLiteral = findMaxIntegerLiteral();
+            if (maxLiteral > 1) {
+                variables.replaceAll((e, v) -> new Pair<>(0, maxLiteral));
+            } else {
+                for(Expression e : variables.keySet()) {
+                    variables.put(e, new Pair<>(0, Math.max(1, variables.size() - 1)));
+                }
+            }
+        }
+
+        // Then handle constraints
+        for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
+            Expression variable = constraint.getKey();
+            for (Expression constraintExpr : constraint.getValue()) {
+                if (constraintExpr instanceof BinaryExpr binaryExpr) {
+                    adjustDomainForConstraint(variable, binaryExpr);
+                }
+            }
+        }
+    }
+
+    private void adjustDomainForConstraint(Expression variable, BinaryExpr constraint) {
+        if (!variables.containsKey(variable)) {
+            return;
+        }
+
+        Expression value = constraint.getRight().isIntegerLiteralExpr() ?
+            constraint.getRight() : constraint.getLeft();
+        if (!value.isIntegerLiteralExpr()) {
+            return;
+        }
+
+        int literalValue = Integer.parseInt(value.asIntegerLiteralExpr().getValue());
+        Pair<Object, Object> currentDomain = variables.get(variable);
+
+        if (!(currentDomain.a instanceof Integer && currentDomain.b instanceof Integer)) {
+            return;
+        }
+
+        Interval newInterval = calculateNewInterval(
+            new Interval((Integer) currentDomain.a, (Integer) currentDomain.b),
+            literalValue,
+            constraint.getOperator(),
+            constraint.getLeft().toString().equals(variable.toString())
+        );
+
+        variables.put(variable, new Pair<>(newInterval.min, newInterval.max));
+    }
+
+    private Interval calculateNewInterval(Interval current, int literalValue,
+            BinaryExpr.Operator operator, boolean varOnLeft) {
+        return switch (operator) {
+            case GREATER -> varOnLeft ?
+                new Interval(literalValue + 1, Math.max(current.max, literalValue + 2)) :
+                new Interval(Math.min(current.min, literalValue - 2), literalValue - 1);
+            case GREATER_EQUALS -> varOnLeft ?
+                new Interval(literalValue, Math.max(current.max, literalValue + 1)) :
+                new Interval(Math.min(current.min, literalValue - 1), literalValue);
+            case LESS -> varOnLeft ?
+                new Interval(Math.min(current.min, literalValue - 1), literalValue - 1) :
+                new Interval(literalValue + 1, Math.max(current.max, literalValue + 1));
+            case LESS_EQUALS -> varOnLeft ?
+                new Interval(Math.min(current.min, literalValue), literalValue) :
+                new Interval(literalValue, Math.max(current.max, literalValue));
+            case EQUALS -> new Interval(literalValue, literalValue);
+            default -> current;
+        };
+    }
+
+    private int findMaxIntegerLiteral() {
+        int maxValue = 1;
+        for (Expression condition : conditions) {
+            if (condition instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    // Check both sides for integer literals
+                    if (binaryExpr.getLeft().isIntegerLiteralExpr()) {
+                        int value = Integer.parseInt(binaryExpr.getLeft().asIntegerLiteralExpr().getValue());
+                        maxValue = Math.max(maxValue, value + 1);
+                    }
+                    if (binaryExpr.getRight().isIntegerLiteralExpr()) {
+                        int value = Integer.parseInt(binaryExpr.getRight().asIntegerLiteralExpr().getValue());
+                        maxValue = Math.max(maxValue, value + 1);
+                    }
+                }
+            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
+                // Check equals method arguments for integer literals
+                if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
+                    int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
+                    maxValue = Math.max(maxValue, value + 1);
+                }
+            }
+        }
+        return maxValue;
     }
 
     public static boolean isTrue(Object o) {
@@ -178,6 +401,7 @@ public class TruthTable {
      * Prints the truth table for the given condition.
      *
      */
+    @SuppressWarnings("java:S106")
     public void printTruthTable() {
         writeTruthTable(System.out);
     }
@@ -220,6 +444,7 @@ public class TruthTable {
     /**
      * Prints the values that make the condition true.
      */
+    @SuppressWarnings("java:S106")
     public void printValues(boolean desiredState) {
         writeValues(desiredState, System.out);
     }
@@ -280,76 +505,81 @@ public class TruthTable {
      */
     private Object evaluateCondition(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isBinaryExpr()) {
-            var binaryExpr = condition.asBinaryExpr();
-            var leftExpr = binaryExpr.getLeft();
-            var rightExpr = binaryExpr.getRight();
-
-            if (isInequality(binaryExpr)) {
-                int left = (int) getValue(leftExpr, truthValues);
-                int right = (int) getValue(rightExpr, truthValues);
-
-                return switch (binaryExpr.getOperator()) {
-                    case LESS -> left < right;
-                    case GREATER -> left > right;
-                    case LESS_EQUALS -> left <= right;
-                    case GREATER_EQUALS -> left >= right;
-                    default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-                };
-            } else {
-                Object left = evaluateCondition(leftExpr, truthValues);
-                Object right = evaluateCondition(rightExpr, truthValues);
-                return switch (binaryExpr.getOperator()) {
-                    case AND -> ((Boolean) left) && (Boolean) right;
-                    case OR -> ((Boolean) left) || (Boolean) right;
-                    case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
-                    case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
-                    default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-                };
-            }
+            return evaluateBinaryExpression(condition.asBinaryExpr(), truthValues);
         } else if (condition.isUnaryExpr()) {
             var unaryExpr = condition.asUnaryExpr();
             Object value = evaluateCondition(unaryExpr.getExpression(), truthValues);
-            return switch (unaryExpr.getOperator()) {
-                case LOGICAL_COMPLEMENT -> ! (Boolean)value;
-                default -> throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
-            };
-        } else if (condition.isNameExpr()) {
+            if (unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                    return !(Boolean) value;
+            } else {
+                throw new UnsupportedOperationException("Unsupported operator: " + unaryExpr.getOperator());
+            }
+        } else if (condition.isMethodCallExpr()) {
+            return evaluateMethodCall(condition.asMethodCallExpr(), truthValues);
+        }
+
+        return evaluateBasicExpression(condition, truthValues);
+    }
+
+private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
+    var leftExpr = binaryExpr.getLeft();
+    var rightExpr = binaryExpr.getRight();
+    Object left = evaluateCondition(leftExpr, truthValues);
+    Object right = evaluateCondition(rightExpr, truthValues);
+
+    return switch (binaryExpr.getOperator()) {
+        case AND -> ((Boolean) left) && (Boolean) right;
+        case OR -> ((Boolean) left) || (Boolean) right;
+        case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
+        case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
+        case LESS -> NumericComparator.compare(left, right) < 0;
+        case GREATER -> NumericComparator.compare(left, right) > 0;
+        case LESS_EQUALS -> NumericComparator.compare(left, right) <= 0;
+        case GREATER_EQUALS -> NumericComparator.compare(left, right) >= 0;
+        default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+    };
+}
+
+    private Object evaluateBasicExpression(Expression condition, Map<Expression, Object> truthValues) {
+        if (condition.isNameExpr()) {
             return truthValues.get(condition);
         } else if (condition.isBooleanLiteralExpr()) {
             return condition.asBooleanLiteralExpr().getValue();
         } else if (condition.isStringLiteralExpr() || condition.isFieldAccessExpr()) {
             return getValue(condition, truthValues);
-        }
-        else if (condition.isMethodCallExpr() ) {
-            if (condition.toString().contains("equals")) {
-                MethodCallExpr mce = condition.asMethodCallExpr();
-                Expression scope = mce.getScope().orElse(null);
-                Object scopeValue = truthValues.get(scope);
-                Expression argument = mce.getArgument(0);
-                if (argument.isLiteralExpr()) {
-                    if (scopeValue == null) {
-                        return argument.isNullLiteralExpr();
-                    }
-                    return scopeValue.equals(getValue(argument, truthValues));
-                }
-                else {
-                    Object arg = truthValues.get(argument);
-
-
-                    if (scopeValue == null) {
-                        return arg == null;
-                    }
-                    return scopeValue.equals(arg);
-                }
-            }
-            return getValue(condition, truthValues);
         } else if (condition.isNullLiteralExpr()) {
             return null;
         } else if (condition.isEnclosedExpr()) {
             return evaluateCondition(condition.asEnclosedExpr().getInner(), truthValues);
+        } else if (condition.isIntegerLiteralExpr()) {
+            return getValue(condition, truthValues);
+        } else if (condition.isDoubleLiteralExpr()) {
+            return getValue(condition, truthValues);
         }
 
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
+    }
+
+    private Object evaluateMethodCall(MethodCallExpr condition, Map<Expression, Object> truthValues) {
+        if (condition.toString().contains(EQUALS_CALL)) {
+            Expression scope = condition.getScope().orElse(null);
+            Object scopeValue = truthValues.get(scope);
+            Expression argument = condition.getArgument(0);
+
+            if (argument.isLiteralExpr()) {
+                if (scopeValue == null) {
+                    return argument.isNullLiteralExpr();
+                }
+                return scopeValue.equals(getValue(argument, truthValues));
+            } else {
+                Object arg = truthValues.get(argument);
+                if (scopeValue == null) {
+                    return arg == null;
+                }
+                return scopeValue.equals(arg);
+            }
+        }
+        return getValue(condition, truthValues);
     }
 
     /**
@@ -384,45 +614,44 @@ public class TruthTable {
         return table;
     }
 
+    public void addConstraint(NameExpr name, BinaryExpr constraint) {
+        constraints.computeIfAbsent(name, k -> new ArrayList<>()).add(constraint);
+    }
+
 
     /**
      * Collects variable names from the condition expression.
      */
     private class VariableCollector extends VoidVisitorAdapter<HashMap<Expression, Pair<Object, Object>>> {
         /**
-         * Identify name expressions.
-         * We will get a lot of false positives here where the name expression is part of a component
-         * that is being captured else where. So we have to carefully filter them out.
+         * Processes variable names found in conditional expressions and determines their value domains.
+         * For each name expression encountered:
+         * - If part of an equals() comparison with null, sets domain to [null, "T"]
+         * - If part of a numeric comparison, sets domain to [0, numberOfVariables ]
+         * - If part of a string comparison, sets domain to [null, "literal"]
+         * - For boolean conditions, sets domain to [true, false]
+         * Filters out name expressions that are part of method calls or field access.
          *
-         * @param n NameExpr
-         * @param collector HashMap<Expression, Pair<Object, Object>>
+         * @param n The name expression to analyze
+         * @param collector Map storing variable domains as Pairs of lower/upper bounds
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (n.getParentNode().isEmpty()) {
-                collector.put(n, new Pair<>(true, false));
-            } else {
-                Node parent = n.getParentNode().get();
-                if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
-                    Expression arg = mce.getArgument(0);
-                    findDomain(n, collector, arg);
-                } else if (parent instanceof BinaryExpr b) {
-                    if (b.getLeft().equals(n)) {
-                        findDomain(n, collector, b.getRight());
-                    }
-                    else {
-                        findDomain(n, collector, b.getLeft());
-                    }
-                } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
-                    if(isInequalityPresent()) {
-                        collector.put(n, new Pair<>(0, 1));
-                    }
-                    else {
-                        collector.put(n, new Pair<>(true, false));
-                    }
-                }
-            }
+            n.getParentNode().ifPresentOrElse(
+                    parent -> handleParentNode(n, parent, collector),
+                    () -> collector.put(n, new Pair<>(true, false))
+            );
             super.visit(n, collector);
+        }
+
+        private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
+            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS_CALL)) {
+                findDomain(n, collector, mce.getArgument(0));
+            } else if (parent instanceof BinaryExpr b) {
+                findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
+            } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
+                collector.put(n, new Pair<>(false, true));
+            }
         }
 
         /**
@@ -436,8 +665,13 @@ public class TruthTable {
                 collector.put(n, new Pair<>(null, "T"));
             }
             else if (compareWith.isIntegerLiteralExpr()) {
-                int lower = Integer.valueOf(compareWith.asIntegerLiteralExpr().getValue());
-                collector.put(n, new Pair<>(lower, lower + 1));
+                handleIntegerLiteral(n, collector, compareWith);
+            }
+            else if (compareWith.isLongLiteralExpr()) {
+                handleLongLiteral(n, collector, compareWith);
+            }
+            else if (compareWith.isDoubleLiteralExpr()) {
+                handleDoubleLiteral(n, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
                 collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
@@ -452,9 +686,106 @@ public class TruthTable {
             }
         }
 
+        private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                Expression compareWith) {
+            long literalValue = Long.parseLong(compareWith.asLongLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleLongInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 1));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, (int)literalValue);
+            }
+        }
+
+        private void handleLongInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                long literalValue, BinaryExpr binaryExpr) {
+            switch (binaryExpr.getOperator()) {
+                case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
+                case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
+                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+            }
+        }
+
+        private void handleDoubleLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                Expression compareWith) {
+            double literalValue = Double.parseDouble(compareWith.asDoubleLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleDoubleInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, (int)literalValue);
+            }
+        }
+
+        private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                double literalValue, BinaryExpr binaryExpr) {
+            switch (binaryExpr.getOperator()) {
+                case LESS -> collector.put(n, new Pair<>(literalValue - 1, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 0.0001));
+                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 0.0001));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 0.0001));
+                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+            }
+        }
+        private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                Expression compareWith) {
+            int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, literalValue);
+            }
+        }
+
+        private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                int literalValue, BinaryExpr binaryExpr) {
+            switch (binaryExpr.getOperator()) {
+                case LESS -> collector.put(n, new Pair<>(literalValue -1, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
+                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
+                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+            }
+        }
+
+        private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                int literalValue) {
+            if (collector.containsKey(n)) {
+                Pair<Object, Object> existingBounds = collector.get(n);
+                if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
+                    if (literalValue < min) {
+                        collector.put(n, new Pair<>(literalValue, max));
+                    } else if (literalValue > max) {
+                        collector.put(n, new Pair<>(min, literalValue));
+                    }
+                    // If literalValue is within bounds, no action needed
+                }
+            } else {
+                collector.put(n, new Pair<>(literalValue, literalValue));
+            }
+        }
+
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (!m.getNameAsString().equals("equals")) {
+            if (!m.getNameAsString().equals(EQUALS_CALL)) {
                 Optional<Node> parent = m.getParentNode();
 
                  if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
@@ -510,17 +841,30 @@ public class TruthTable {
         }
 
         /**
-         * In this scenario a method call expression will always be Object.equals call or a method returning boolean
+         * In this scenario a method call expression will always be `Object.equals` call or a method
+         * returning boolean
          * @param m the method call expression
          * @param collector for all the conditional expressions encountered.
          *
          */
         @Override
         public void visit(MethodCallExpr m, Set<Expression> collector) {
-            if(m.toString().contains("equals")) {
+            if(m.toString().contains(EQUALS_CALL)) {
                 collector.add(m);
             }
             super.visit(m, collector);
+        }
+    }
+
+    private static class Interval {
+        final int min;
+        final int max;
+        final int width;
+
+        Interval(int min, int max) {
+            this.min = min;
+            this.max = max;
+            this.width = max - min + 1;
         }
     }
 }

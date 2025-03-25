@@ -1,7 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 
-class NumericComparator {
+public class NumericComparator {
     private NumericComparator() {
     }
 

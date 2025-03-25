@@ -1,8 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
+import com.github.javaparser.ast.expr.CharLiteralExpr;
+import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -30,11 +35,12 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class Reflect {
-    public static final String BOOLEAN = "boolean";
-    public static final String FLOAT = "float";
+    public static final String PRIMITIVE_BOOLEAN = "boolean";
+    public static final String PRIMITIVE_FLOAT = "float";
     public static final String PRIMITIVE_DOUBLE = "double";
     public static final String INTEGER = "Integer";
     public static final String DOUBLE = "Double";
+    public static final String FLOAT = "Float";
     /**
      * Keeps a map of wrapper types to their primitive counterpart
      * for example : Integer.class -> int.class
@@ -172,10 +178,10 @@ public class Reflect {
 
     public static String primitiveToWrapper(String className) {
         return switch (className) {
-            case BOOLEAN -> "java.lang.Boolean";
+            case PRIMITIVE_BOOLEAN -> "java.lang.Boolean";
             case "int" -> "java.lang.Integer";
             case "long" -> "java.lang.Long";
-            case FLOAT -> "java.lang.Float";
+            case PRIMITIVE_FLOAT -> "java.lang.Float";
             case PRIMITIVE_DOUBLE -> "java.lang.Double";
             case "char" -> "java.lang.Character";
             default -> className;
@@ -188,12 +194,12 @@ public class Reflect {
             case INTEGER -> Integer.class;
             case PRIMITIVE_DOUBLE -> double.class;
             case DOUBLE -> Double.class;
-            case BOOLEAN -> boolean.class;
+            case PRIMITIVE_BOOLEAN -> boolean.class;
             case "Boolean" -> Boolean.class;
             case "long" -> long.class;
             case "Long" -> Long.class;
-            case FLOAT -> float.class;
-            case "Float" -> Float.class;
+            case PRIMITIVE_FLOAT -> float.class;
+            case FLOAT -> Float.class;
             case "short" -> short.class;
             case "Short" -> Short.class;
             case "byte" -> byte.class;
@@ -207,10 +213,10 @@ public class Reflect {
     public static Type getComponentType(Class<?> clazz) {
         return switch (clazz.getName()) {
             case "int", "java.lang.Integer" -> PrimitiveType.intType();
-            case "double", "java.lang.Double" -> PrimitiveType.doubleType();
-            case "boolean", "java.lang.Boolean" -> PrimitiveType.booleanType();
+            case PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> PrimitiveType.doubleType();
+            case PRIMITIVE_BOOLEAN, "java.lang.Boolean" -> PrimitiveType.booleanType();
             case "long", "java.lang.Long", "java.lang.BigDecimal" -> PrimitiveType.longType();
-            case "float", "java.lang.Float" -> PrimitiveType.floatType();
+            case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
             case "short", "java.lang.Short" -> PrimitiveType.shortType();
             case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
             case "char", "java.lang.Character" -> PrimitiveType.charType();
@@ -219,13 +225,27 @@ public class Reflect {
         };
     }
 
+    public static Expression createLiteralExpression(Object value) {
+        if (value == null) {
+            return new NullLiteralExpr();
+        }
+
+        return switch (value.getClass().getSimpleName()) {
+            case "Integer", "Long" -> new IntegerLiteralExpr(value.toString());
+            case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
+            case "Boolean" -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
+            case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
+            default -> new StringLiteralExpr(value.toString());
+        };
+    }
+
     public static Object getDefault(String elementType) {
         return switch (elementType) {
             case "int" -> 0;
             case PRIMITIVE_DOUBLE -> 0.0;
-            case BOOLEAN -> false;
+            case PRIMITIVE_BOOLEAN -> false;
             case "long" -> 0L;
-            case FLOAT -> 0.0f;
+            case PRIMITIVE_FLOAT -> 0.0f;
             case "short" -> Short.valueOf("0");
             case "byte", "char" -> 0x0;
             default -> null;
@@ -286,9 +306,9 @@ public class Reflect {
 
             case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
 
-            case "Boolean", "boolean" -> createVariable(false, "Boolean", "false");
+            case "Boolean", PRIMITIVE_BOOLEAN -> createVariable(false, "Boolean", "false");
 
-            case "float", "Float", "double", DOUBLE -> createVariable(0.0, DOUBLE, "0.0");
+            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE -> createVariable(0.0, DOUBLE, "0.0");
 
             case INTEGER, "int" -> createVariable(0, INTEGER, "0");
 

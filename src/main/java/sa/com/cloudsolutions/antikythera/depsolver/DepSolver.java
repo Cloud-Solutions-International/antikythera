@@ -217,15 +217,14 @@ public class DepSolver {
 
     private void callableSearch(GraphNode node, CallableDeclaration<?> cd)  {
         String className = node.getEnclosingType().getNameAsString();
-        Optional<TypeDeclaration> c = node.getDestination().findFirst(TypeDeclaration.class,
-                t -> t.getNameAsString().equals(className));
+        node.getDestination().findFirst(TypeDeclaration.class,
+                t -> t.getNameAsString().equals(className)).ifPresent(c -> {
+                    node.getTypeDeclaration().addMember(cd);
+                    if (cd.isAbstract() && node.getEnclosingType().getFullyQualifiedName().isPresent()) {
+                        methodOverrides(cd, node.getEnclosingType().getFullyQualifiedName().get());
+                    }
+                });
 
-        if (c.isPresent()) {
-            node.getTypeDeclaration().addMember(cd);
-            if (cd.isAbstract() && node.getEnclosingType().getFullyQualifiedName().isPresent()) {
-                methodOverrides(cd, node.getEnclosingType().getFullyQualifiedName().get());
-            }
-        }
         searchMethodParameters(node, cd.getParameters());
 
         names.clear();
