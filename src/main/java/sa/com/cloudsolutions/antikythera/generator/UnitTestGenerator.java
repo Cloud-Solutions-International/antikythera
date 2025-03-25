@@ -44,8 +44,8 @@ public class UnitTestGenerator extends TestGenerator {
     private boolean autoWired;
     private String instanceName;
 
-    private BiConsumer<Parameter, Variable> mocker;
-    private Consumer<Expression> applyPrecondition;
+    private final BiConsumer<Parameter, Variable> mocker;
+    private final Consumer<Expression> applyPrecondition;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -210,14 +210,14 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (!autoWired) {
-            if (! testClass.getAnnotationByName("ContextConfiguration").isPresent()) {
+            if (testClass.getAnnotationByName("ContextConfiguration").isEmpty()) {
                 gen.addImport("org.springframework.test.context.ContextConfiguration");
                 NormalAnnotationExpr contextConfig = new NormalAnnotationExpr();
                 contextConfig.setName("ContextConfiguration");
                 contextConfig.addPair("classes", String.format("{%s.class}", classUnderTest.getNameAsString()));
                 testClass.addAnnotation(contextConfig);
             }
-            if (! testClass.getAnnotationByName("ExtendWith").isPresent()) {
+            if (testClass.getAnnotationByName("ExtendWith").isEmpty()) {
                 gen.addImport("org.junit.jupiter.api.extension.ExtendWith");
                 gen.addImport("org.springframework.test.context.junit.jupiter.SpringExtension");
                 NormalAnnotationExpr extendsWith = new NormalAnnotationExpr();
@@ -228,7 +228,7 @@ public class UnitTestGenerator extends TestGenerator {
 
             instanceName =  ClassProcessor.classToInstanceName( classUnderTest.getNameAsString());
 
-            if (!testClass.getFieldByName(classUnderTest.getNameAsString()).isPresent()) {
+            if (testClass.getFieldByName(classUnderTest.getNameAsString()).isEmpty()) {
                 FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
                 fd.addAnnotation("Autowired");
             }

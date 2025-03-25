@@ -265,11 +265,11 @@ public class SpringEvaluator extends Evaluator {
                 break;
             }
             if (cond instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne && ne.getNameAsString().equals(p.getNameAsString())) {
-                    if (va.getValue() instanceof Evaluator eval) {
-                        MCEWrapper wrapper = wrapCallExpression(mce);
-                        eval.executeLocalMethod(wrapper);
-                    }
+                if (mce.getScope().get() instanceof NameExpr ne
+                        && ne.getNameAsString().equals(p.getNameAsString())
+                        && va.getValue() instanceof Evaluator eval) {
+                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
+                    eval.executeLocalMethod(wrapper);
                 }
             } else if (cond instanceof AssignExpr assignExpr) {
                 parameterAssignment(p, assignExpr, va);
