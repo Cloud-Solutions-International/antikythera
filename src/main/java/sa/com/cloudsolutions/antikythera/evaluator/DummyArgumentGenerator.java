@@ -48,7 +48,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     }
                 }
             } else {
-                Evaluator o = new SpringEvaluator(fullClassName);
+                Evaluator o = EvaluatorFactory.create(fullClassName, SpringEvaluator.class);
                 v = new Variable(o);
                 v.setType(t);
             }

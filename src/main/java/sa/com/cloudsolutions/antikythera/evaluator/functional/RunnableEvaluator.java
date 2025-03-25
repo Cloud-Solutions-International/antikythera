@@ -7,10 +7,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 public class RunnableEvaluator extends FPEvaluator implements Runnable {
 
-    public RunnableEvaluator(String className) {
-        super(className);
-    }
-
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()

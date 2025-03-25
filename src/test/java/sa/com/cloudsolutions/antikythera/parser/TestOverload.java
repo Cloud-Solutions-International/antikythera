@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.depsolver.Resolver;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -91,7 +92,7 @@ class TestOverlord extends TestHelper {
         protected FindMethodDeclarationCompiler() throws IOException {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Overlord.java");
             cu = getJavaParser().parse(file).getResult().get();
-            evaluator = new Evaluator(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
+            evaluator = EvaluatorFactory.create(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
         }
     }
 }

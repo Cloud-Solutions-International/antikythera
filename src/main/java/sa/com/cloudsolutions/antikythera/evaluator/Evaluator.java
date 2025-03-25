@@ -83,17 +83,17 @@ public class Evaluator {
      * <p>These are specific to a block statement. A block statement may also be an
      * entire method. The primary key will be the hashcode of the block statement.</p>
      */
-    private final Map<Integer, Map<String, Variable>> locals ;
+    private Map<Integer, Map<String, Variable>> locals ;
 
     /**
      * The fields that were encountered in the current class.
      */
-    protected final Map<String, Variable> fields;
+    protected Map<String, Variable> fields;
 
     /**
      * The fully qualified name of the class for which we created this evaluator.
      */
-    private final String className;
+    private String className;
 
     /**
      * The compilation unit that is being processed by the expression engine
@@ -112,17 +112,16 @@ public class Evaluator {
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
-    protected final Deque<TryStmt> catching = new LinkedList<>();
+    protected Deque<TryStmt> catching = new LinkedList<>();
     /**
      * The preconditions that need to be met before the test can be executed.
      */
-    protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
+    protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
-    public Evaluator (String className) {
-        this(className, false);
-    }
+    protected Evaluator() {}
 
-    protected Evaluator(String className, boolean lazy) {
+
+    public void initialize(String className, boolean lazy) {
         this.className = className;
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
@@ -1093,7 +1092,7 @@ public class Evaluator {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                v = new Variable(new MockingEvaluator(fqdn));
+                v = new Variable(EvaluatorFactory.create(fqdn, MockingEvaluator.class));
             }
             else {
                 v = useMockito(fqdn);
@@ -1148,7 +1147,7 @@ public class Evaluator {
             Class<?> returnType = invocation.getMethod().getReturnType();
             String clsName = returnType.getName();
             if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
-                return new Evaluator(clsName);
+                return EvaluatorFactory.create(clsName, Evaluator.class);
             }
             else {
                 Object obj = Reflect.getDefault(returnType);

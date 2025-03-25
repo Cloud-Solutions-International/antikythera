@@ -11,9 +11,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import java.util.function.Function;
 
 public class FunctionEvaluator<T,R> extends FPEvaluator<T> implements Function<T,R> {
-    public FunctionEvaluator(String className) {
-        super(className);
-    }
 
     @Override
     public Type getType() {

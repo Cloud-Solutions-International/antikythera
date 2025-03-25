@@ -32,7 +32,7 @@ public class TestConditional extends TestHelper {
     @BeforeEach
     void each() {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
-        evaluator = new SpringEvaluator(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
     }
 

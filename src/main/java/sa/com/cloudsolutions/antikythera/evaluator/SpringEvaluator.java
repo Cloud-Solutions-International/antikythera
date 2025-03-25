@@ -85,19 +85,7 @@ public class SpringEvaluator extends Evaluator {
     private MethodDeclaration currentMethod;
     private int visitNumber;
     private boolean onTest;
-
-    /**
-     * It is better to use create evaluator
-     *
-     * @param className the name of the class associated with this evaluator
-     */
-    public SpringEvaluator(String className) {
-        super(className);
-    }
-
-    public SpringEvaluator(String className, boolean lazy) {
-        super(className, lazy);
-    }
+    private int branchCount;
 
     private static void setupRequestParam(AnnotationExpr a) {
         if (a.isNormalAnnotationExpr()) {
@@ -219,6 +207,20 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+        beforeVisit(md);
+        try {
+            for (visitNumber = 0; visitNumber < branchCount; visitNumber++) {
+                getLocals().clear();
+                setupFields();
+                mockMethodArguments(md);
+                executeMethod(md);
+            }
+        } catch (AUTException aex) {
+            logger.warn("This has probably been handled {}", aex.getMessage());
+        }
+    }
+
+    private void beforeVisit(MethodDeclaration md) {
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration) {
                 currentMethod = md;
@@ -245,15 +247,7 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
         }, null);
-
-        try {
-            for (visitNumber = 0; visitNumber < s.size(); visitNumber++) {
-                mockMethodArguments(md);
-                executeMethod(md);
-            }
-        } catch (AUTException aex) {
-            logger.warn("This has probably been handled {}", aex.getMessage());
-        }
+        branchCount = s.size();
     }
 
     @Override
@@ -470,12 +464,12 @@ public class SpringEvaluator extends Evaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 if (AntikytheraRunTime.isMocked(fd.getElementType())) {
-                    Evaluator eval = new MockingEvaluator(resolvedClass);
+                    Evaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);
                 } else {
-                    Evaluator eval = new SpringEvaluator(resolvedClass, true);
+                    Evaluator eval = EvaluatorFactory.create(resolvedClass, SpringEvaluator.class);
                     v = new Variable(eval);
                     v.setType(variable.getType());
                     AntikytheraRunTime.autoWire(resolvedClass, v);

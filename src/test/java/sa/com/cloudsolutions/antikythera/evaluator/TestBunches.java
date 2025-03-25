@@ -40,7 +40,7 @@ public class TestBunches  {
 
     @BeforeEach
     void each() throws AntikytheraException {
-        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         System.setOut(new PrintStream(outContent));
     }

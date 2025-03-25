@@ -11,10 +11,6 @@ import java.util.function.Consumer;
 
 public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> {
 
-    public ConsumerEvaluator(String className) {
-        super(className);
-    }
-
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()

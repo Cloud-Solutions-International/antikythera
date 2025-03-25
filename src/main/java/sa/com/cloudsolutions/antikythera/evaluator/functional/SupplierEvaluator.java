@@ -10,10 +10,6 @@ import java.util.function.Supplier;
 
 public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> {
 
-    public SupplierEvaluator(String className) {
-        super(className);
-    }
-
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()

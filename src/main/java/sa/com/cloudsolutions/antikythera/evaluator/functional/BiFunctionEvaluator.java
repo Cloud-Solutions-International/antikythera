@@ -11,10 +11,6 @@ import java.util.function.BiFunction;
 
 public class BiFunctionEvaluator<T, U, R> extends FPEvaluator<T> implements BiFunction<T, U, R> {
 
-    public BiFunctionEvaluator(String className) {
-        super(className);
-    }
-
     @Override
     public Type getType() {
         return new ClassOrInterfaceType()

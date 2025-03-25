@@ -43,12 +43,12 @@ class TestEvaluator extends TestHelper {
 
     @BeforeEach
     void each() {
-        evaluator = new Evaluator(CLASS_UNDER_TEST);
+        evaluator = EvaluatorFactory.create(CLASS_UNDER_TEST, Evaluator.class);
     }
 
     @Test
     void evaluateExpressionReturnsIntegerLiteral() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
         Expression expr = new IntegerLiteralExpr(42);
         Variable result = evaluator.evaluateExpression(expr);
         assertEquals(42, result.getValue());
@@ -56,7 +56,7 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateExpressionReturnsStringLiteral() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
         Expression expr = new StringLiteralExpr("test");
         Variable result = evaluator.evaluateExpression(expr);
         assertEquals("test", result.getValue());
@@ -64,7 +64,7 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateExpressionReturnsVariableValue() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
         Variable expected = new Variable(42);
         evaluator.setLocal(new IntegerLiteralExpr(42), "testVar", expected);
         Expression expr = new NameExpr("testVar");
@@ -74,7 +74,7 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateBinaryExpression() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
         Variable result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new IntegerLiteralExpr("40"), new IntegerLiteralExpr("2"));
         assertEquals(42, result.getValue());
@@ -90,7 +90,7 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateMethodCallPrintsToSystemOut() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));
         MethodCallExpr methodCall = new MethodCallExpr(new FieldAccessExpr(new NameExpr("System"), "out"), "println", NodeList.nodeList(new StringLiteralExpr("Hello World")));
@@ -101,7 +101,7 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void executeViaDataAnnotation() throws ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
 
         // Create a class declaration with @Data annotation
         ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration()
@@ -114,7 +114,7 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void executeViaGetterSetterAnnotation() throws ReflectiveOperationException {
-        Evaluator evaluator = new Evaluator("");
+        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
 
         // Create a class declaration with @Data annotation
         ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration()
@@ -177,7 +177,7 @@ class TestEvaluatorWithFinches extends TestHelper {
     @Test
     void testFinching() throws ClassNotFoundException {
         Finch.clear();
-        new Evaluator("");
+        EvaluatorFactory.create("", Evaluator.class);
         assertNotNull(Finch.getFinch("sa.com.cloudsolutions.Hello"));
     }
 
@@ -194,7 +194,7 @@ class TestEvaluatorWithFinches extends TestHelper {
         AntikytheraRunTime.addClass("TestClass", cu);
 
         Finch.clear();
-        Evaluator eval = new Evaluator("TestClass");
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
 
         Variable v = eval.getFields().get("hello");
         assertNotNull(v);

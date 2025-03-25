@@ -23,6 +23,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -75,7 +76,7 @@ public class RestControllerParser extends DepsolvingParser {
 
         TypeDeclaration<?> type = AbstractCompiler.getPublicType(cu);
 
-        evaluator = new SpringEvaluator(type.getFullyQualifiedName().get());
+        evaluator = EvaluatorFactory.create(type.getFullyQualifiedName().get(), SpringEvaluator.class);
         evaluator.setOnTest(true);
 
         SpringTestGenerator generator = new SpringTestGenerator(cu);

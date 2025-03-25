@@ -26,7 +26,7 @@ class TestNesting extends TestHelper{
     @CsvSource({"t1, Hello World", "t2, from outer method"})
     void testNesting(String name, String output) throws ReflectiveOperationException {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
-        evaluator = new Evaluator("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Nesting", Evaluator.class);
         System.setOut(new PrintStream(outContent));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
