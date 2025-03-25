@@ -118,6 +118,9 @@ public class Evaluator {
      */
     protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
+    protected boolean lazy;
+    protected boolean initialized;
+
     protected Evaluator() {}
 
 
@@ -127,6 +130,7 @@ public class Evaluator {
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
+        this.lazy = lazy;
         if (cu != null && !lazy) {
             this.setupFields();
         }
@@ -1092,7 +1096,12 @@ public class Evaluator {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                v = new Variable(EvaluatorFactory.create(fqdn, MockingEvaluator.class));
+                if (lazy) {
+                    v = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
+                }
+                else {
+                    v = new Variable(EvaluatorFactory.create(fqdn, MockingEvaluator.class));
+                }
             }
             else {
                 v = useMockito(fqdn);
@@ -1632,6 +1641,7 @@ public class Evaluator {
 
     public void setupFields()  {
         cu.accept(new ControllerFieldVisitor(), null);
+        initialized = true;
     }
 
     protected String getClassName() {

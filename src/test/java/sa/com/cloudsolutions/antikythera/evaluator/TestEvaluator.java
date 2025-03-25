@@ -194,7 +194,7 @@ class TestEvaluatorWithFinches extends TestHelper {
         AntikytheraRunTime.addClass("TestClass", cu);
 
         Finch.clear();
-        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
+        Evaluator eval = EvaluatorFactory.create("TestClass", Evaluator.class);
 
         Variable v = eval.getFields().get("hello");
         assertNotNull(v);

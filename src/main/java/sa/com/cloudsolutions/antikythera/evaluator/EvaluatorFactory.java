@@ -39,4 +39,15 @@ public class EvaluatorFactory {
             throw new AntikytheraException(e);
         }
     }
+
+    public static <T extends Evaluator> T createLazily(String className, Class<T> evaluatorType) {
+        try {
+            Constructor<?> cons = evaluatorType.getDeclaredConstructor();
+            Evaluator eval = (Evaluator) cons.newInstance();
+            eval.initialize(className, true);
+            return evaluatorType.cast(eval);
+        } catch (ReflectiveOperationException e) {
+            throw new AntikytheraException(e);
+        }
+    }
 }

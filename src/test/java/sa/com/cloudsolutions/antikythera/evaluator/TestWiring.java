@@ -30,13 +30,14 @@ class TestWiring extends TestHelper{
     @BeforeEach
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
-        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
+        evaluator = EvaluatorFactory.createLazily(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testInitializer() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
+
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
         assertEquals("Fatty Bolger\n", outContent.toString());
