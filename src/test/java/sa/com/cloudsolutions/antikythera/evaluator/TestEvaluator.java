@@ -168,14 +168,14 @@ class TestEvaluator extends TestHelper {
 class TestEvaluatorWithFinches extends TestHelper {
 
     @BeforeAll
-    static void setup() throws IOException, ClassNotFoundException {
+    static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/finches.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
 
     @Test
-    void testFinching() throws ClassNotFoundException {
+    void testFinching() {
         Finch.clear();
         EvaluatorFactory.create("", Evaluator.class);
         assertNotNull(Finch.getFinch("sa.com.cloudsolutions.Hello"));

@@ -52,7 +52,7 @@ class ServicesParserTest {
     }
 
     @Test
-    void startShouldProcessAllPublicMethods() throws IOException {
+    void startShouldProcessAllPublicMethods() {
         CompilationUnit cu = StaticJavaParser.parse("""
             public class TestService {
                 public void method1() {}
@@ -67,7 +67,7 @@ class ServicesParserTest {
     }
 
     @Test
-    void startWithMethodShouldProcessSpecificMethod() throws IOException {
+    void startWithMethodShouldProcessSpecificMethod()  {
         CompilationUnit cu = StaticJavaParser.parse("""
             public class TestService {
                 public void targetMethod() {}

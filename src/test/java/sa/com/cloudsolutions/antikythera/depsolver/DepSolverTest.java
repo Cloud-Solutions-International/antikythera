@@ -27,14 +27,14 @@ class DepSolverTest extends TestHelper {
     private ClassOrInterfaceDeclaration sourceClass;
 
     @BeforeAll
-    public static void setup() throws IOException {
+    static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
 
     @BeforeEach
-    public void each() throws Exception {
+    void each() throws Exception {
         depSolver = DepSolver.createSolver();
         depSolver.reset();
 

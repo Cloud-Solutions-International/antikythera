@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
 import java.io.File;
@@ -26,9 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ITRepositoryParser {
+class ITRepositoryParser {
     @BeforeAll
-    public static void setup() throws IOException {
+    static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.preProcess();
     }
@@ -84,8 +83,6 @@ public class ITRepositoryParser {
                         assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
                                 ex.toString());
                     } catch (JSQLParserException e) {
-                        throw new RuntimeException(e);
-                    } catch (AntikytheraException e) {
                         throw new RuntimeException(e);
                     }
 

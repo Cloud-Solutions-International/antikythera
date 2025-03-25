@@ -9,7 +9,7 @@ public class Wiring {
     Second s;
 
     public Wiring() {
-
+        // empty by choice
     }
 
     void doStuff() {
