@@ -1665,17 +1665,17 @@ public class Evaluator {
         @Override
         public void visit(InitializerDeclaration init, Void arg) {
             super.visit(init, arg);
-            init.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
-                cdecl.getFullyQualifiedName().ifPresent(className -> {
-                    if (className.equals(getClassName())) {
-                        try {
-                            executeBlock(init.getBody().getStatements());
-                        } catch (ReflectiveOperationException e) {
-                            throw new AntikytheraException(e);
+            init.findAncestor(ClassOrInterfaceDeclaration.class)
+                    .flatMap(ClassOrInterfaceDeclaration::getFullyQualifiedName)
+                    .ifPresent(name -> {
+                        if (name.equals(getClassName())) {
+                            try {
+                                executeBlock(init.getBody().getStatements());
+                            } catch (ReflectiveOperationException e) {
+                                throw new AntikytheraException(e);
+                            }
                         }
-                    }
-                });
-            });
+                    });
         }
     }
 

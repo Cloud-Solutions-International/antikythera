@@ -77,3 +77,13 @@ class Second {
         return name;
     }
 }
+
+
+class A {
+    B b = new B();
+}
+
+class B {
+    A a = new A();
+
+}

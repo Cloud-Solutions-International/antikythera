@@ -21,13 +21,13 @@ public class EvaluatorFactory {
         CompilationUnit secondary = AntikytheraRunTime.getCompilationUnit(parent);
 
         if (primary != null && primary.equals(secondary)) {
-            return EvaluatorFactory.createLazily(c, InnerClassEvaluator.class);
+            return EvaluatorFactory.create(c, InnerClassEvaluator.class);
         }
 
         if (enclosure instanceof SpringEvaluator) {
-            return EvaluatorFactory.createLazily(c, InnerClassEvaluator.class);
+            return EvaluatorFactory.create(c, InnerClassEvaluator.class);
         }
-        return EvaluatorFactory.createLazily(c, Evaluator.class);
+        return EvaluatorFactory.create(c, Evaluator.class);
     }
 
     public static Evaluator create(String className) {
@@ -36,7 +36,16 @@ public class EvaluatorFactory {
 
     public static <T extends Evaluator> T create(String className, Class<T> evaluatorType) {
         Context c = new Context(className);
-        return createLazily(c, evaluatorType);
+        return create(c, evaluatorType);
+    }
+
+    private static <T extends Evaluator> T create(Context c, Class<T> evaluatorType) {
+        Evaluator eval = createLazily(c, evaluatorType);
+        if (eval.getCompilationUnit() != null) {
+            eval.setupFields();
+            eval.initializeFields();
+        }
+        return evaluatorType.cast(eval);
     }
 
     public static <T extends Evaluator> T createLazily(String className, Class<T> evaluatorType) {
@@ -48,11 +57,6 @@ public class EvaluatorFactory {
         try {
             Constructor<T> constructor = evaluatorType.getDeclaredConstructor(Context.class);
             Evaluator eval = constructor.newInstance(c);
-            if (eval.getCompilationUnit() != null) {
-                eval.setupFields();
-                eval.initializeFields();
-            }
-
             return evaluatorType.cast(eval);
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);

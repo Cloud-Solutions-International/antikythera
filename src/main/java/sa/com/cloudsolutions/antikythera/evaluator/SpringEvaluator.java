@@ -467,19 +467,16 @@ public class SpringEvaluator extends Evaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                if (AntikytheraRunTime.isMocked(fd.getElementType())) {
-                    Evaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
-                    v = new Variable(eval);
-                    v.setType(variable.getType());
-                    AntikytheraRunTime.autoWire(resolvedClass, v);
-                } else {
-                    Evaluator eval = EvaluatorFactory.create(resolvedClass, SpringEvaluator.class);
-                    v = new Variable(eval);
-                    v.setType(variable.getType());
-                    AntikytheraRunTime.autoWire(resolvedClass, v);
-                    eval.setupFields();
-                    eval.invokeDefaultConstructor();
-                }
+                Evaluator eval = AntikytheraRunTime.isMocked(fd.getElementType())
+                    ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
+                    : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
+
+                v = new Variable(eval);
+                v.setType(variable.getType());
+                AntikytheraRunTime.autoWire(resolvedClass, v);
+                eval.setupFields();
+                eval.initializeFields();
+                eval.invokeDefaultConstructor();
             }
             fields.put(variable.getNameAsString(), v);
             return v;
