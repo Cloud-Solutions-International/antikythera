@@ -118,22 +118,12 @@ public class Evaluator {
      */
     protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
-    protected boolean lazy;
-    protected boolean initialized;
-
-    protected Evaluator() {}
-
-
-    public void initialize(String className, boolean lazy) {
-        this.className = className;
+    protected Evaluator(EvaluatorFactory.Context context) {
+        this.className = context.getClassName();
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
-        this.lazy = lazy;
-        if (cu != null && !lazy) {
-            this.setupFields();
-        }
     }
 
     /**
@@ -1096,12 +1086,7 @@ public class Evaluator {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                if (lazy) {
-                    v = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
-                }
-                else {
-                    v = new Variable(EvaluatorFactory.create(fqdn, MockingEvaluator.class));
-                }
+                v = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
             }
             else {
                 v = useMockito(fqdn);
@@ -1640,8 +1625,7 @@ public class Evaluator {
     }
 
     public void setupFields()  {
-        cu.accept(new ControllerFieldVisitor(), null);
-        initialized = true;
+        cu.accept(new LazyFieldVisitor(), null);
     }
 
     protected String getClassName() {
@@ -1653,12 +1637,12 @@ public class Evaluator {
      *
      * When we initialize a class the fields also need to be initialized, so here we are
      */
-    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
+    private class LazyFieldVisitor extends VoidVisitorAdapter<Void> {
         /**
          * The field visitor will be used to identify the fields that are being used in the class
          *
          * @param field the field to inspect
-         * @param arg not used
+         * @param arg   not used
          */
         @Override
         public void visit(FieldDeclaration field, Void arg) {
@@ -1671,7 +1655,9 @@ public class Evaluator {
                 });
             }
         }
+    }
 
+    private class FieldVisitor extends VoidVisitorAdapter<Void> {
         @Override
         public void visit(InitializerDeclaration init, Void arg) {
             super.visit(init, arg);

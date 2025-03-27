@@ -10,6 +10,10 @@ import java.util.Map;
 
 public class MockingEvaluator extends Evaluator {
 
+    protected MockingEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+    }
+
     @Override
     public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException {
     }

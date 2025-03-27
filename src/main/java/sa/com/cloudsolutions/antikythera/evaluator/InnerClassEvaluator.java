@@ -14,8 +14,9 @@ import java.util.Optional;
 public class InnerClassEvaluator extends Evaluator {
     protected Evaluator enclosure;
 
-    protected InnerClassEvaluator() {
-        super();
+    protected InnerClassEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+        this.enclosure = context.getEnclosure();
     }
 
     @Override

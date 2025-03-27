@@ -4,12 +4,18 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.BiFunction;
 
 public class BiFunctionEvaluator<T, U, R> extends FPEvaluator<T> implements BiFunction<T, U, R> {
+
+    protected BiFunctionEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+        this.enclosure = context.getEnclosure();
+    }
 
     @Override
     public Type getType() {

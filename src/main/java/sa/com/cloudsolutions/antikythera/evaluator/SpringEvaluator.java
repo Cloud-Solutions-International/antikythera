@@ -87,6 +87,10 @@ public class SpringEvaluator extends Evaluator {
     private boolean onTest;
     private int branchCount;
 
+    protected SpringEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+    }
+
     private static void setupRequestParam(AnnotationExpr a) {
         if (a.isNormalAnnotationExpr()) {
             NormalAnnotationExpr ne = a.asNormalAnnotationExpr();

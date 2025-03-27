@@ -3,12 +3,18 @@ package sa.com.cloudsolutions.antikythera.evaluator.functional;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Supplier;
 
 public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> {
+
+    protected SupplierEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+        this.enclosure = context.getEnclosure();
+    }
 
     @Override
     public Type getType() {

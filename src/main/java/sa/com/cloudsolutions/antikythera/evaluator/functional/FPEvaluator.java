@@ -26,6 +26,10 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     protected MethodDeclaration methodDeclaration;
     Expression expr;
 
+    protected FPEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+    }
+
     public static Variable create(LambdaExpr lambda, Evaluator enclosure) {
         LambdaExpr lambdaExpr = lambda.clone();
         lambdaExpr.setParentNode(lambda.getParentNode().orElseThrow());

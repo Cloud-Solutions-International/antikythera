@@ -31,6 +31,7 @@ class TestWiring extends TestHelper{
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.createLazily(SAMPLE_CLASS, SpringEvaluator.class);
+        evaluator.setupFields();
         System.setOut(new PrintStream(outContent));
     }
 
