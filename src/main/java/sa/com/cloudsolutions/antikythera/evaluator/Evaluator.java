@@ -1628,6 +1628,10 @@ public class Evaluator {
         cu.accept(new LazyFieldVisitor(), null);
     }
 
+    public void initializeFields() {
+        cu.accept(new FieldVisitor(), null);
+    }
+
     protected String getClassName() {
         return className;
     }

@@ -4,6 +4,8 @@ import com.github.javaparser.ast.CompilationUnit;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+
 
 public class EvaluatorFactory {
     private EvaluatorFactory() {}
@@ -35,25 +37,25 @@ public class EvaluatorFactory {
     }
 
     public static <T extends Evaluator> T createLazily(String className, Class<T> evaluatorType) {
+        Context c = new Context(className);
+        return createLazily(c, evaluatorType);
+    }
+
+    public static <T extends Evaluator> T createLazily(Context c , Class<T> evaluatorType) {
         try {
-            Constructor<?> cons = evaluatorType.getDeclaredConstructor();
-            Evaluator eval = (Evaluator) cons.newInstance();
+            Constructor<T> constructor = evaluatorType.getDeclaredConstructor(Context.class);
+            Evaluator eval = constructor.newInstance(c);
+            eval.setupFields();
+            eval.initializeFields();
             return evaluatorType.cast(eval);
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
         }
     }
 
-    public static <T extends Evaluator> T createLazily(Context c , Class<T> evaluatorType) {
-        Evaluator eval = new Evaluator(c);
-        return evaluatorType.cast(eval);
-    }
-
     public static class Context {
         String className;
         Evaluator enclosure;
-
-        private Context() {}
 
         private Context(String className) {
             this.className = className;
