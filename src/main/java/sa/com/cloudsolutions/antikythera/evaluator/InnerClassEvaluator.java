@@ -14,10 +14,10 @@ import java.util.Optional;
 public class InnerClassEvaluator extends Evaluator {
     protected Evaluator enclosure;
 
-    public InnerClassEvaluator(String className) {
-        super(className);
+    protected InnerClassEvaluator(EvaluatorFactory.Context context) {
+        super(context);
+        this.enclosure = context.getEnclosure();
     }
-
 
     @Override
     public Variable getValue(Node n, String name) {

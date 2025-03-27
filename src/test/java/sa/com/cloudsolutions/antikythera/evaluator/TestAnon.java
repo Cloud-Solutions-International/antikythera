@@ -28,7 +28,7 @@ class TestAnon extends TestHelper{
 
     @BeforeEach
     void each() {
-        evaluator = new Evaluator(CLASS_UNDER_TEST);
+        evaluator = EvaluatorFactory.create(CLASS_UNDER_TEST, Evaluator.class);
         System.setOut(new PrintStream(outContent));
     }
 

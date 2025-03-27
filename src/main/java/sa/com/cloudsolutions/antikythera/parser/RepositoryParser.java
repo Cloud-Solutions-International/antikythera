@@ -4,6 +4,7 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 import net.sf.jsqlparser.JSQLParserException;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
@@ -477,7 +478,7 @@ public class RepositoryParser extends ClassProcessor {
 
         if (ann != null && ann.isSingleMemberAnnotationExpr()) {
             try {
-                Evaluator eval = new Evaluator(className);
+                Evaluator eval = EvaluatorFactory.create(className);
                 Variable v = eval.evaluateExpression(
                         ann.asSingleMemberAnnotationExpr().getMemberValue()
                 );

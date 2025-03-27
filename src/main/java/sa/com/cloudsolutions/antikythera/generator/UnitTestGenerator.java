@@ -44,8 +44,8 @@ public class UnitTestGenerator extends TestGenerator {
     private boolean autoWired;
     private String instanceName;
 
-    private BiConsumer<Parameter, Variable> mocker;
-    private Consumer<Expression> applyPrecondition;
+    private final BiConsumer<Parameter, Variable> mocker;
+    private final Consumer<Expression> applyPrecondition;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -80,7 +80,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
 
-    private void loadExisting(File file) throws FileNotFoundException {
+    void loadExisting(File file) throws FileNotFoundException {
         gen = StaticJavaParser.parse(file);
         List<MethodDeclaration> remove = new ArrayList<>();
         for (MethodDeclaration md : gen.getType(0).getMethods()) {
@@ -124,7 +124,8 @@ public class UnitTestGenerator extends TestGenerator {
                 CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
                 TypeDeclaration<?> t = AbstractCompiler.getPublicType(cu);
                 for (FieldDeclaration fd : t.getFields()) {
-                    if (fd.getAnnotationByName("MockBean").isPresent()) {
+                    if (fd.getAnnotationByName("MockBean").isPresent() ||
+                            fd.getAnnotationByName("Mock").isPresent()) {
                         AntikytheraRunTime.markAsMocked(fd.getElementType());
                     }
                 }
@@ -209,14 +210,14 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (!autoWired) {
-            if (! testClass.getAnnotationByName("ContextConfiguration").isPresent()) {
+            if (testClass.getAnnotationByName("ContextConfiguration").isEmpty()) {
                 gen.addImport("org.springframework.test.context.ContextConfiguration");
                 NormalAnnotationExpr contextConfig = new NormalAnnotationExpr();
                 contextConfig.setName("ContextConfiguration");
                 contextConfig.addPair("classes", String.format("{%s.class}", classUnderTest.getNameAsString()));
                 testClass.addAnnotation(contextConfig);
             }
-            if (! testClass.getAnnotationByName("ExtendWith").isPresent()) {
+            if (testClass.getAnnotationByName("ExtendWith").isEmpty()) {
                 gen.addImport("org.junit.jupiter.api.extension.ExtendWith");
                 gen.addImport("org.springframework.test.context.junit.jupiter.SpringExtension");
                 NormalAnnotationExpr extendsWith = new NormalAnnotationExpr();
@@ -227,7 +228,7 @@ public class UnitTestGenerator extends TestGenerator {
 
             instanceName =  ClassProcessor.classToInstanceName( classUnderTest.getNameAsString());
 
-            if (!testClass.getFieldByName(classUnderTest.getNameAsString()).isPresent()) {
+            if (testClass.getFieldByName(classUnderTest.getNameAsString()).isEmpty()) {
                 FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
                 fd.addAnnotation("Autowired");
             }
@@ -344,7 +345,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void setCommonPath(String commonPath) {
-
+        throw new UnsupportedOperationException("Not needed here");
     }
 
     @Override
@@ -371,6 +372,11 @@ public class UnitTestGenerator extends TestGenerator {
         mockFields(compilationUnitUnderTest);
     }
 
+    /**
+     * Mock all the fields that have been marked as Autowired
+     * Mockito.Mock will be preferred over Mockito.MockBean
+     * @param cu the compilation unit that contains code to be tested.
+     */
     private void mockFields(CompilationUnit cu) {
         final TypeDeclaration<?> t = gen.getType(0);
         for (TypeDeclaration<?> decl : cu.getTypes()) {

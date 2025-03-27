@@ -85,18 +85,10 @@ public class SpringEvaluator extends Evaluator {
     private MethodDeclaration currentMethod;
     private int visitNumber;
     private boolean onTest;
+    private int branchCount;
 
-    /**
-     * It is better to use create evaluator
-     *
-     * @param className the name of the class associated with this evaluator
-     */
-    public SpringEvaluator(String className) {
-        super(className);
-    }
-
-    public SpringEvaluator(String className, boolean lazy) {
-        super(className, lazy);
+    protected SpringEvaluator(EvaluatorFactory.Context context) {
+        super(context);
     }
 
     private static void setupRequestParam(AnnotationExpr a) {
@@ -186,6 +178,25 @@ public class SpringEvaluator extends Evaluator {
         return false;
     }
 
+    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
+        if (!assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+            return;
+        }
+
+        Expression value = assignExpr.getValue();
+        Object result = switch (va.getClazz().getSimpleName()) {
+            case "Integer" -> Integer.parseInt(value.toString());
+            case "Double" -> Double.parseDouble(value.toString());
+            case "Long" -> Long.parseLong(value.toString());
+            case "Float" -> Float.parseFloat(value.toString());
+            case "Boolean" -> value.isBooleanLiteralExpr() ? value.asBooleanLiteralExpr().getValue() : value;
+            case "Character" -> value.isCharLiteralExpr() ? value.asCharLiteralExpr().getValue() : value;
+            case "String" -> value.isStringLiteralExpr() ? value.asStringLiteralExpr().getValue() : value;
+            default -> value;
+        };
+        va.setValue(result);
+    }
+
     /**
      * <p>This is where the code evaluation really starts</p>
      * <p>
@@ -200,6 +211,20 @@ public class SpringEvaluator extends Evaluator {
      */
     @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
+        beforeVisit(md);
+        try {
+            for (visitNumber = 0; visitNumber < branchCount; visitNumber++) {
+                getLocals().clear();
+                setupFields();
+                mockMethodArguments(md);
+                executeMethod(md);
+            }
+        } catch (AUTException aex) {
+            logger.warn("This has probably been handled {}", aex.getMessage());
+        }
+    }
+
+    private void beforeVisit(MethodDeclaration md) {
         md.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration) {
                 currentMethod = md;
@@ -226,15 +251,7 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
         }, null);
-
-        try {
-            for (visitNumber = 0; visitNumber < s.size(); visitNumber++) {
-                mockMethodArguments(md);
-                executeMethod(md);
-            }
-        } catch (AUTException aex) {
-            logger.warn("This has probably been handled {}", aex.getMessage());
-        }
+        branchCount = s.size();
     }
 
     @Override
@@ -246,11 +263,11 @@ public class SpringEvaluator extends Evaluator {
                 break;
             }
             if (cond instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne && ne.getNameAsString().equals(p.getNameAsString())) {
-                    if (va.getValue() instanceof Evaluator eval) {
-                        MCEWrapper wrapper = wrapCallExpression(mce);
-                        eval.executeLocalMethod(wrapper);
-                    }
+                if (mce.getScope().get() instanceof NameExpr ne
+                        && ne.getNameAsString().equals(p.getNameAsString())
+                        && va.getValue() instanceof Evaluator eval) {
+                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
+                    eval.executeLocalMethod(wrapper);
                 }
             } else if (cond instanceof AssignExpr assignExpr) {
                 parameterAssignment(p, assignExpr, va);
@@ -262,28 +279,6 @@ public class SpringEvaluator extends Evaluator {
             p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
         });
 
-    }
-
-    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
-        if (assignExpr.getTarget().toString().equals(p.getNameAsString())) {
-            if (va.getClazz().equals(Integer.class)) {
-                va.setValue(Integer.parseInt(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Double.class)) {
-                va.setValue(Double.parseDouble(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Long.class)) {
-                va.setValue(Long.parseLong(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Float.class)) {
-                va.setValue(Float.parseFloat(assignExpr.getValue().toString()));
-            } else if (va.getClazz().equals(Boolean.class) && assignExpr.getValue().isBooleanLiteralExpr()) {
-                va.setValue(assignExpr.getValue().asBooleanLiteralExpr().getValue());
-            } else if (va.getClazz().equals(Character.class) && assignExpr.getValue().isCharLiteralExpr()) {
-                va.setValue(assignExpr.getValue().asCharLiteralExpr().getValue());
-            } else if (va.getClazz().equals(String.class) && assignExpr.getValue().isStringLiteralExpr()) {
-                va.setValue(assignExpr.getValue().asStringLiteralExpr().getValue());
-            } else {
-                va.setValue(assignExpr.getValue());
-            }
-        }
     }
 
     /**
@@ -472,19 +467,16 @@ public class SpringEvaluator extends Evaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                if (AntikytheraRunTime.isMocked(fd.getElementType())) {
-                    Evaluator eval = new MockingEvaluator(resolvedClass);
-                    v = new Variable(eval);
-                    v.setType(variable.getType());
-                    AntikytheraRunTime.autoWire(resolvedClass, v);
-                } else {
-                    Evaluator eval = new SpringEvaluator(resolvedClass, true);
-                    v = new Variable(eval);
-                    v.setType(variable.getType());
-                    AntikytheraRunTime.autoWire(resolvedClass, v);
-                    eval.setupFields();
-                    eval.invokeDefaultConstructor();
-                }
+                Evaluator eval = AntikytheraRunTime.isMocked(fd.getElementType())
+                    ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
+                    : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
+
+                v = new Variable(eval);
+                v.setType(variable.getType());
+                AntikytheraRunTime.autoWire(resolvedClass, v);
+                eval.setupFields();
+                eval.initializeFields();
+                eval.invokeDefaultConstructor();
             }
             fields.put(variable.getNameAsString(), v);
             return v;
@@ -628,13 +620,13 @@ public class SpringEvaluator extends Evaluator {
         Variable v = getValue(ifst, nameExpr.getNameAsString());
 
         Expression valueExpr = v.getType() instanceof PrimitiveType
-            ? Reflect.createLiteralExpression(entry.getValue())
-            : new StringLiteralExpr(entry.getValue().toString());
+                ? Reflect.createLiteralExpression(entry.getValue())
+                : new StringLiteralExpr(entry.getValue().toString());
 
         AssignExpr expr = new AssignExpr(
-            new NameExpr(nameExpr.getNameAsString()),
-            valueExpr,
-            AssignExpr.Operator.ASSIGN
+                new NameExpr(nameExpr.getNameAsString()),
+                valueExpr,
+                AssignExpr.Operator.ASSIGN
         );
         addPreCondition(ifst, state, expr);
     }
@@ -673,8 +665,13 @@ public class SpringEvaluator extends Evaluator {
 
     private void setupConditionalVariable(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
-        String name = entry.getKey().asMethodCallExpr().getNameAsString().substring(3);
-        setter.setName("set" + name);
+        String name = entry.getKey().asMethodCallExpr().getNameAsString();
+        if (name.startsWith("is")) {
+            setter.setName("set" + name.substring(2));
+        }
+        else {
+            setter.setName("set" + name.substring(3));
+        }
         setter.setScope(scope);
 
         if (entry.getValue() == null) {

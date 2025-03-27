@@ -14,6 +14,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
@@ -36,7 +37,7 @@ public class ServicesParser {
         if (this.cu == null) {
             throw new AntikytheraException("Class not found: " + cls);
         }
-        evaluator = new SpringEvaluator(cls, true);
+        evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);
         generator = (UnitTestGenerator) Factory.create("unit", cu);
 
         evaluator.addGenerator(generator);
@@ -103,7 +104,4 @@ public class ServicesParser {
         }
     }
 
-    private boolean checkEligible(MethodDeclaration md) {
-        return !md.isPublic();
-    }
 }

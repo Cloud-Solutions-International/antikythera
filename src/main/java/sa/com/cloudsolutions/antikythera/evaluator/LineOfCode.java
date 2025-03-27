@@ -17,13 +17,13 @@ public class LineOfCode {
      * The state of the variables required such that an if condition evaluates to true.
      * This will be applicable only for IF statement expressions.
      */
-    private List<Expression> trueState = new ArrayList<>();
+    private final List<Expression> trueState = new ArrayList<>();
 
     /**
      * The state of the variables required such that an if condition evaluates to false.
      * This will be applicable only for IF statement expressions.
      */
-    private List<Expression> falseState = new ArrayList<>();
+    private final List<Expression> falseState = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.

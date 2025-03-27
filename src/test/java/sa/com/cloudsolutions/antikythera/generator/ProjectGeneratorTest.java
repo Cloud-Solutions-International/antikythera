@@ -37,7 +37,7 @@ class ProjectGeneratorTest {
     }
 
     @Test
-    void getInstanceReturnsSameInstance() throws IOException {
+    void getInstanceReturnsSameInstance() {
         Antikythera instance1 = Antikythera.getInstance();
         Antikythera instance2 = Antikythera.getInstance();
         assertSame(instance1, instance2);

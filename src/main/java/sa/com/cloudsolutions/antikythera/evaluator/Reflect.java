@@ -231,7 +231,7 @@ public class Reflect {
         }
 
         return switch (value.getClass().getSimpleName()) {
-            case "Integer", "Long" -> new IntegerLiteralExpr(value.toString());
+            case INTEGER, "Long" -> new IntegerLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
             case "Boolean" -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
             case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
@@ -495,6 +495,7 @@ public class Reflect {
                     return method;
                 }
             } catch (NoSuchMethodException ignored) {
+                // not a concern
             }
         }
 
@@ -507,6 +508,7 @@ public class Reflect {
                     return method;
                 }
             } catch (NoSuchMethodException ignored) {
+                // not a concern
             }
             superclass = superclass.getSuperclass();
         }

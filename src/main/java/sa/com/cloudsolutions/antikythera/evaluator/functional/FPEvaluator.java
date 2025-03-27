@@ -14,6 +14,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
@@ -21,11 +22,12 @@ import java.util.Map;
 import java.util.Optional;
 
 public abstract class FPEvaluator<T> extends InnerClassEvaluator {
+    public static final String OBJECT_TYPE = "Object";
     protected MethodDeclaration methodDeclaration;
     Expression expr;
 
-    FPEvaluator(String className) {
-        super(className);
+    public FPEvaluator(EvaluatorFactory.Context context) {
+        super(context);
     }
 
     public static Variable create(LambdaExpr lambda, Evaluator enclosure) {
@@ -46,10 +48,10 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
         md.setType(new VoidType());
 
         if (lambdaExpr.getBody().findFirst(ReturnStmt.class).isPresent()) {
-            md.setType(new ClassOrInterfaceType().setName("Object"));
+            md.setType(new ClassOrInterfaceType().setName(OBJECT_TYPE));
         } else {
             if (isReturning(lambdaExpr)) {
-                md.setType(new ClassOrInterfaceType().setName("Object"));
+                md.setType(new ClassOrInterfaceType().setName(OBJECT_TYPE));
                 Statement last = body.getStatements().get(body.getStatements().size() - 1);
                 addReturnStatement(body, last);
             }
@@ -58,7 +60,7 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
         for (Parameter param : lambdaExpr.getParameters()) {
             md.addParameter(param);
             if (param.getType() instanceof UnknownType) {
-                param.setType("Object");
+                param.setType(OBJECT_TYPE);
             }
         }
 
@@ -73,19 +75,19 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     private static FPEvaluator<?> createEvaluator(MethodDeclaration md) {
         if (md.getBody().orElseThrow().findFirst(ReturnStmt.class).isPresent()) {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
-                case 0 -> new SupplierEvaluator<>("java.util.function.Supplier");
-                case 1 -> new FunctionEvaluator<>("java.util.function.Function");
-                case 2 -> new BiFunctionEvaluator<>("java.util.function.BiFunction");
-                default -> null;
+                case 0 -> EvaluatorFactory.create("java.util.function.Supplier", SupplierEvaluator.class);
+                case 1 -> EvaluatorFactory.create("java.util.function.Function", FunctionEvaluator.class);
+                case 2 -> EvaluatorFactory.create("java.util.function.BiFunction", BiFunctionEvaluator.class);
+                default -> throw new UnsupportedOperationException("Not supported yet.");
             };
             eval.setMethod(md);
             return eval;
         } else {
             FPEvaluator<?> eval = switch (md.getParameters().size()) {
-                case 0 -> new RunnableEvaluator("java.lang.Runnable");
-                case 1 -> new ConsumerEvaluator<>("java.util.function.Consumer");
-                case 2 -> new BiConsumerEvaluator<>("java.util.function.BiConsumer");
-                default -> null;
+                case 0 -> EvaluatorFactory.create("java.lang.Runnable", RunnableEvaluator.class);
+                case 1 -> EvaluatorFactory.create("java.util.function.Consumer", ConsumerEvaluator.class);
+                case 2 -> EvaluatorFactory.create("java.util.function.BiConsumer", BiConsumerEvaluator.class);
+                default -> throw new UnsupportedOperationException("Not supported yet.");
             };
 
             eval.setMethod(md);

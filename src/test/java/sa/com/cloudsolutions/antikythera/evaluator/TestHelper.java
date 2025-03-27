@@ -25,7 +25,7 @@ public class TestHelper {
     }
 
     @BeforeAll
-    static void setup() throws IOException, ReflectiveOperationException {
+    static void setup() throws IOException {
         Settings.loadConfigMap();
     }
 }

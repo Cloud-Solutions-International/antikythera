@@ -16,7 +16,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestWiring extends TestHelper{
+class TestWiring extends TestHelper{
 
     private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Wiring";
     CompilationUnit cu;
@@ -30,13 +30,15 @@ public class TestWiring extends TestHelper{
     @BeforeEach
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
-        evaluator = new SpringEvaluator(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.createLazily(SAMPLE_CLASS, SpringEvaluator.class);
+        evaluator.setupFields();
         System.setOut(new PrintStream(outContent));
     }
 
     @Test
     void testInitializer() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
+
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
         assertEquals("Fatty Bolger\n", outContent.toString());

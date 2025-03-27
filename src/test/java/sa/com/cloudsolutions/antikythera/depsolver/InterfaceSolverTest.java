@@ -11,9 +11,9 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class InterfaceSolverTest {
+class InterfaceSolverTest {
     @BeforeAll
-    public static void setup() throws IOException {
+    static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
     }
 

@@ -9,7 +9,7 @@ public class Wiring {
     Second s;
 
     public Wiring() {
-
+        // empty by choice
     }
 
     void doStuff() {
@@ -76,4 +76,14 @@ class Second {
     public String getName() {
         return name;
     }
+}
+
+
+class A {
+    B b = new B();
+}
+
+class B {
+    A a = new A();
+
 }

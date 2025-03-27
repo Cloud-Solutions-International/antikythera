@@ -26,6 +26,8 @@ import java.util.Optional;
 
 public class FunctionalConverter {
 
+    private FunctionalConverter() {}
+
     /**
      * Converts a MethodReferenceExpr to a LambdaExpr
      */

@@ -10,12 +10,8 @@ import java.util.Map;
 
 public class MockingEvaluator extends Evaluator {
 
-    public MockingEvaluator(String fqdn) {
-        super(fqdn);
-    }
-
-    @Override
-    public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException {
+    protected MockingEvaluator(EvaluatorFactory.Context context) {
+        super(context);
     }
 
     @Override

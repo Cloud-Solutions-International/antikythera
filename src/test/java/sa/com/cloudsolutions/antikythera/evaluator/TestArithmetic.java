@@ -35,7 +35,7 @@ class TestArithmetic extends  TestHelper {
 
     @BeforeEach
     void each() throws IOException {
-        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         System.setOut(new PrintStream(outContent));
     }

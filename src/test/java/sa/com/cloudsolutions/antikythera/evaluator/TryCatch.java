@@ -16,7 +16,7 @@ public class TryCatch {
         try {
             try {
                 String s = null;
-                int c = s.length();
+                s.length();
                 System.out.println("This bit of code should not be executed");
 
             } catch (NullPointerException e) {
@@ -26,7 +26,7 @@ public class TryCatch {
             }
 
             String t = null;
-            int d = t.length();
+            t.length();
             System.out.println("This bit of code should not be executed");
 
         } catch (NullPointerException e) {
@@ -49,7 +49,7 @@ public class TryCatch {
     public void tryNPE() {
         try {
             String s = null;
-            int c = s.length();
+            s.length();
             System.out.println("This bit of code should not be executed");
         } catch (NullPointerException e) {
             System.out.println("Caught an exception");
