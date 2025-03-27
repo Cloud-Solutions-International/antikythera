@@ -51,8 +51,6 @@ public class EvaluatorFactory {
             if (eval.getCompilationUnit() != null) {
                 eval.setupFields();
                 eval.initializeFields();
-            } else {
-                logger.warn("No compilation unit for {}", c.getClassName());
             }
 
             return evaluatorType.cast(eval);

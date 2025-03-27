@@ -12,7 +12,7 @@ import java.util.function.BiConsumer;
 
 public class BiConsumerEvaluator<T, U> extends FPEvaluator<T> implements BiConsumer<T, U> {
 
-    protected BiConsumerEvaluator(EvaluatorFactory.Context context) {
+    public BiConsumerEvaluator(EvaluatorFactory.Context context) {
         super(context);
         this.enclosure = context.getEnclosure();
     }

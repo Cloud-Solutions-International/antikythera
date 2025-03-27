@@ -26,7 +26,7 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     protected MethodDeclaration methodDeclaration;
     Expression expr;
 
-    protected FPEvaluator(EvaluatorFactory.Context context) {
+    public FPEvaluator(EvaluatorFactory.Context context) {
         super(context);
     }
 

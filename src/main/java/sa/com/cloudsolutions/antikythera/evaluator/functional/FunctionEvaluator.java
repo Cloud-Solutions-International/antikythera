@@ -13,7 +13,7 @@ import java.util.function.Function;
 
 public class FunctionEvaluator<T,R> extends FPEvaluator<T> implements Function<T,R> {
 
-    protected FunctionEvaluator(EvaluatorFactory.Context context) {
+    public FunctionEvaluator(EvaluatorFactory.Context context) {
         super(context);
         this.enclosure = context.getEnclosure();
     }

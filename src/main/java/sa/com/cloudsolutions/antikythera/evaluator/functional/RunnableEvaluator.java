@@ -8,7 +8,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 public class RunnableEvaluator extends FPEvaluator implements Runnable {
 
-    protected RunnableEvaluator(EvaluatorFactory.Context context) {
+    public RunnableEvaluator(EvaluatorFactory.Context context) {
         super(context);
         this.enclosure = context.getEnclosure();
     }

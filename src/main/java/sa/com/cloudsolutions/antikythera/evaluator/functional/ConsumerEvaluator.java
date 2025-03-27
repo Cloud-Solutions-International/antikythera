@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 
 public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> {
 
-    protected ConsumerEvaluator(EvaluatorFactory.Context context) {
+    public ConsumerEvaluator(EvaluatorFactory.Context context) {
         super(context);
         this.enclosure = context.getEnclosure();
     }

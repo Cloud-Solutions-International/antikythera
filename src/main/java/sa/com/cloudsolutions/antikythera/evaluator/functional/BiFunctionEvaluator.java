@@ -12,7 +12,7 @@ import java.util.function.BiFunction;
 
 public class BiFunctionEvaluator<T, U, R> extends FPEvaluator<T> implements BiFunction<T, U, R> {
 
-    protected BiFunctionEvaluator(EvaluatorFactory.Context context) {
+    public BiFunctionEvaluator(EvaluatorFactory.Context context) {
         super(context);
         this.enclosure = context.getEnclosure();
     }

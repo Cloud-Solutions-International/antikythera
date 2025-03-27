@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 
 public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> {
 
-    protected SupplierEvaluator(EvaluatorFactory.Context context) {
+    public SupplierEvaluator(EvaluatorFactory.Context context) {
         super(context);
         this.enclosure = context.getEnclosure();
     }
