@@ -1,13 +1,16 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 
 
 public class EvaluatorFactory {
+    private static final Logger logger = LoggerFactory.getLogger(EvaluatorFactory.class);
+
     private EvaluatorFactory() {}
 
     public static Evaluator create(String className, Evaluator enclosure) {
@@ -45,8 +48,13 @@ public class EvaluatorFactory {
         try {
             Constructor<T> constructor = evaluatorType.getDeclaredConstructor(Context.class);
             Evaluator eval = constructor.newInstance(c);
-            eval.setupFields();
-            eval.initializeFields();
+            if (eval.getCompilationUnit() != null) {
+                eval.setupFields();
+                eval.initializeFields();
+            } else {
+                logger.warn("No compilation unit for {}", c.getClassName());
+            }
+
             return evaluatorType.cast(eval);
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
