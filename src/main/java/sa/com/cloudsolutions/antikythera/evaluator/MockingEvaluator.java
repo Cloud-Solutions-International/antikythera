@@ -15,10 +15,6 @@ public class MockingEvaluator extends Evaluator {
     }
 
     @Override
-    public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException {
-    }
-
-    @Override
     public Map<String, Variable> getFields() {
         return null;
     }

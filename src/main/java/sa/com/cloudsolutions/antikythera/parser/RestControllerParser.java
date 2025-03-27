@@ -61,6 +61,7 @@ public class RestControllerParser extends DepsolvingParser {
         Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
     }
 
+    @Override
     public void start() throws EvaluatorException, IOException {
         if(cu != null && cu.getPackageDeclaration().isPresent()) {
             processRestController(cu.getPackageDeclaration().get());
