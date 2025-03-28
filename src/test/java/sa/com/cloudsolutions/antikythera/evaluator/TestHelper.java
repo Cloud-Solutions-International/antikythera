@@ -21,6 +21,7 @@ public class TestHelper {
     void tearDown() {
         System.setOut(standardOut);
         AntikytheraRunTime.reset();
+        AntikytheraRunTime.resetAutowires();
         DepSolver.getNames().clear();
     }
 

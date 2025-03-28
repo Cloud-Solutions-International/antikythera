@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -29,23 +30,17 @@ class UnitTestGeneratorTest {
 
     @BeforeAll
     static void beforeClass() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
-
 
     @BeforeEach
     void setUp() {
-        cu = new CompilationUnit();
-        cu.setPackageDeclaration("sa.com.cloudsolutions.antikythera.generator");
-        classUnderTest = cu.addClass("DummyService");
-        classUnderTest.addField("DummyRepository", "dummyRepository").addAnnotation("Autowired");
-
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
+        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md->md.getNameAsString().equals("queries2")).get();
         unitTestGenerator = new UnitTestGenerator(cu);
-
-        methodUnderTest = new MethodDeclaration();
-        methodUnderTest.setName("dummyMethod");
-        classUnderTest.addMember(methodUnderTest);
         unitTestGenerator.setArgumentGenerator(new NullArgumentGenerator());
         unitTestGenerator.setPreConditions(new HashSet<>());
         unitTestGenerator.setAsserter(new JunitAsserter());
@@ -58,8 +53,8 @@ class UnitTestGeneratorTest {
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
         TypeDeclaration<?> testClass = testCu.getType(0);
 
-        Optional<FieldDeclaration> mockedField = testClass.getFieldByName("dummyRepository");
-        assertTrue(mockedField.isPresent(), "The field 'dummyRepository' should be present in the test class.");
+        Optional<FieldDeclaration> mockedField = testClass.getFieldByName("personRepository");
+        assertTrue(mockedField.isPresent());
         assertTrue(mockedField.get().getAnnotationByName("MockBean").isPresent(), "The field 'dummyRepository' should be annotated with @MockBean.");
 
         assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.springframework.boot.test.mock.mockito.MockBean")),
@@ -70,15 +65,14 @@ class UnitTestGeneratorTest {
 
     @Test
     void testCreateInstanceA() {
-        classUnderTest.addAnnotation("Service");
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
     }
 
     @Test
     void testCreateInstanceB() {
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
     }
 
     @Test
@@ -87,7 +81,7 @@ class UnitTestGeneratorTest {
         constructor.addParameter("String", "param");
 
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
     }
 
     @Test
