@@ -474,9 +474,11 @@ public class SpringEvaluator extends Evaluator {
                 v = new Variable(eval);
                 v.setType(variable.getType());
                 AntikytheraRunTime.autoWire(resolvedClass, v);
-                eval.setupFields();
-                eval.initializeFields();
-                eval.invokeDefaultConstructor();
+                if (! (eval instanceof MockingEvaluator)) {
+                    eval.setupFields();
+                    eval.initializeFields();
+                    eval.invokeDefaultConstructor();
+                }
             }
             fields.put(variable.getNameAsString(), v);
             return v;

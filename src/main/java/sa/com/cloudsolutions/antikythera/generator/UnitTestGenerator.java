@@ -320,8 +320,8 @@ public class UnitTestGenerator extends TestGenerator {
         StringBuilder b = new StringBuilder();
 
         Type t = methodUnderTest.getType();
-        if (t != null) {
-            b.append(t.asString() + " resp = ");
+        if (t != null && !t.toString().equals("void")) {
+            b.append(t.asString()).append(" resp = ");
         }
         b.append(instanceName + "." + methodUnderTest.getNameAsString() + "(");
         for (int i = 0 ; i < methodUnderTest.getParameters().size(); i++) {

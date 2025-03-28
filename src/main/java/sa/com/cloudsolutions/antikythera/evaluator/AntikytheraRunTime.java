@@ -90,6 +90,9 @@ public class AntikytheraRunTime {
 
     public static void reset() {
         stack.clear();
+    }
+
+    public static void resetAutowires() {
         mockedFields.clear();
         autowired.clear();
     }
@@ -112,6 +115,9 @@ public class AntikytheraRunTime {
     }
 
     public static void markAsMocked(String className) {
+        if (className == null) {
+            throw new RuntimeException("Cant be");
+        }
         mockedFields.add(className);
     }
 
