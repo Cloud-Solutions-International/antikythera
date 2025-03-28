@@ -57,15 +57,11 @@ public class UnitTestGenerator extends TestGenerator {
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
 
         File file = new File(filePath);
-        if (file.exists()) {
-            try {
-                loadExisting(file);
-            } catch (FileNotFoundException e) {
-                logger.warn("Could not find file: {}" , filePath);
-                createTestClass(className, packageDecl);
-            }
-        }
-        else {
+
+        try {
+            loadExisting(file);
+        } catch (FileNotFoundException e) {
+            logger.warn("Could not find file: {}" , filePath);
             createTestClass(className, packageDecl);
         }
 
@@ -78,7 +74,6 @@ public class UnitTestGenerator extends TestGenerator {
             this.applyPrecondition = this::applyPreconditionWithEvaluator;
         }
     }
-
 
     void loadExisting(File file) throws FileNotFoundException {
         gen = StaticJavaParser.parse(file);
@@ -98,6 +93,7 @@ public class UnitTestGenerator extends TestGenerator {
             if (t.isClassOrInterfaceDeclaration()) {
                 loadBaseClassForTest(t.asClassOrInterfaceDeclaration());
             }
+            identifyMockedTypes(t);
         }
     }
 
@@ -122,15 +118,20 @@ public class UnitTestGenerator extends TestGenerator {
                     AbstractCompiler.classToPath(base);
             try {
                 CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
-                TypeDeclaration<?> t = AbstractCompiler.getPublicType(cu);
-                for (FieldDeclaration fd : t.getFields()) {
-                    if (fd.getAnnotationByName("MockBean").isPresent() ||
-                            fd.getAnnotationByName("Mock").isPresent()) {
-                        AntikytheraRunTime.markAsMocked(fd.getElementType());
-                    }
+                for (TypeDeclaration<?> t : cu.getTypes()) {
+                    identifyMockedTypes(t);
                 }
             } catch (FileNotFoundException e) {
                 throw new AntikytheraException("Base class could not be loaded for tests.");
+            }
+        }
+    }
+
+    private static void identifyMockedTypes(TypeDeclaration<?> t) {
+        for (FieldDeclaration fd : t.getFields()) {
+            if (fd.getAnnotationByName("MockBean").isPresent() ||
+                    fd.getAnnotationByName("Mock").isPresent()) {
+                AntikytheraRunTime.markAsMocked(fd.getElementType());
             }
         }
     }

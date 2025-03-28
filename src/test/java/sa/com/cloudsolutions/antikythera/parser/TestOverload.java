@@ -92,7 +92,8 @@ class TestOverlord extends TestHelper {
         protected FindMethodDeclarationCompiler() throws IOException {
             File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Overlord.java");
             cu = getJavaParser().parse(file).getResult().get();
-            evaluator = EvaluatorFactory.create(cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get());
+            evaluator = EvaluatorFactory.create(
+                    cu.getType(0).asClassOrInterfaceDeclaration().getFullyQualifiedName().get(), Evaluator.class);
         }
     }
 }

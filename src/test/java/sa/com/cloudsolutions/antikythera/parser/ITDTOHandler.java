@@ -78,7 +78,7 @@ class ITDTOHandler {
         DTOHandler handler = new DTOHandler();
         handler.parse(AbstractCompiler.classToPath("sa.com.cloudsolutions.dto.MediumDTO"));
 
-        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.dto.MediumDTO");
+        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.dto.MediumDTO", Evaluator.class);
 
         Variable v = eval.getFields().get("group");
         assertNotNull(v);

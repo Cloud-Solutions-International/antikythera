@@ -4,9 +4,12 @@ import com.github.javaparser.ast.expr.BinaryExpr;
 
 public class Arithmetics {
 
+    private Arithmetics() {
+
+    }
     /**
      * Simple arithmetic operations.
-     * String can be added to anything but numbers are tricker.
+     * String can be added to anything but numbers are trickier.
      * @param left the left operand
      * @param right the right operand
      * @return the result of the add operation which may be arithmatic or string concatenation

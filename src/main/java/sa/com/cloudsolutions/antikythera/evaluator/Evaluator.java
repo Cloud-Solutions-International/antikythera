@@ -83,17 +83,17 @@ public class Evaluator {
      * <p>These are specific to a block statement. A block statement may also be an
      * entire method. The primary key will be the hashcode of the block statement.</p>
      */
-    private Map<Integer, Map<String, Variable>> locals ;
+    private final Map<Integer, Map<String, Variable>> locals ;
 
     /**
      * The fields that were encountered in the current class.
      */
-    protected Map<String, Variable> fields;
+    protected final Map<String, Variable> fields;
 
     /**
      * The fully qualified name of the class for which we created this evaluator.
      */
-    private String className;
+    private final String className;
 
     /**
      * The compilation unit that is being processed by the expression engine
@@ -456,7 +456,7 @@ public class Evaluator {
                 if (decl.getType().isPrimitiveType()) {
                     Object obj = Reflect.getDefault(decl.getType().asString());
                     v = new Variable(decl.getType(), obj);
-                    v.setPrimitive(true);
+
                 }
                 else {
                     v = new Variable(decl.getType(),null);
@@ -1273,7 +1273,6 @@ public class Evaluator {
         else {
             v = new Variable(variable.getType(), Reflect.getDefault(variable.getType().toString()));
         }
-        v.setPrimitive(true);
         return v;
     }
 
@@ -1443,7 +1442,7 @@ public class Evaluator {
 
         } else if(stmt.isWhileStmt()) {
             /*
-             * Old fashioned while statement
+             * Old-fashioned while statement
              */
             executeWhile(stmt.asWhileStmt());
 
@@ -1730,14 +1729,14 @@ public class Evaluator {
     }
 
     /**
-     * People have a nasty habit of chaining a sequence of method calls.
+     * <p>People have a nasty habit of chaining a sequence of method calls.</p>
      *
      * If you are a D3.js programmer, this is probably the only way you do things. Even
      * Byte Buddy seems to behave the same. But at the end of the day how so you handle this?
      * You need to place them in a stack and pop them off one by one!
      *
-     * @param expr
-     * @return
+     * @param expr the expression for which we need to determine the scope change
+     * @return the scope chain
      */
     public static LinkedList<Expression> findScopeChain(Expression expr) {
         LinkedList<Expression> chain = new LinkedList<>();

@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import org.slf4j.Logger;
 
@@ -29,21 +28,16 @@ public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
     Set<MethodDeclaration> methods = new java.util.HashSet<>();
     CompilationUnit cu;
+    String cls;
     SpringEvaluator evaluator;
     UnitTestGenerator generator;
 
     public ServicesParser(String cls) {
+        this.cls = cls;
         this.cu = AntikytheraRunTime.getCompilationUnit(cls);
         if (this.cu == null) {
             throw new AntikytheraException("Class not found: " + cls);
         }
-        evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);
-        generator = (UnitTestGenerator) Factory.create("unit", cu);
-
-        evaluator.addGenerator(generator);
-        evaluator.setOnTest(true);
-        generator.setupImports();
-        generator.addBeforeClass();
     }
 
     public void start() {
@@ -75,7 +69,6 @@ public class ServicesParser {
     }
 
     private void eval() {
-        evaluator.setupFields();
         for (MethodDeclaration md : methods) {
             evaluateMethod(md, new DummyArgumentGenerator());
         }
@@ -86,6 +79,13 @@ public class ServicesParser {
     }
 
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+        generator = (UnitTestGenerator) Factory.create("unit", cu);
+        generator.setupImports();
+        generator.addBeforeClass();
+
+        evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);
+        evaluator.addGenerator(generator);
+        evaluator.setOnTest(true);
         evaluator.setArgumentGenerator(gen);
         evaluator.reset();
         evaluator.resetColors();
