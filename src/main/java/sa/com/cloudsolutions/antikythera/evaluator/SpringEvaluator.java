@@ -467,7 +467,7 @@ public class SpringEvaluator extends Evaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                Evaluator eval = AntikytheraRunTime.isMocked(fd.getElementType())
+                Evaluator eval = AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
                     ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
                     : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -521,7 +521,8 @@ public class SpringEvaluator extends Evaluator {
                     if (fieldName != null) {
                         Variable field = fields.get(fieldName);
                         if (field != null && field.getType() != null) {
-                            isMocked = AntikytheraRunTime.isMocked(field.getType());
+                            isMocked = AntikytheraRunTime.isMocked(null);
+                            throw new RuntimeException("Complete this");
                         }
                     }
                     if (!isMocked) {

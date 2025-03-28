@@ -25,6 +25,7 @@ class TestReturnValue extends TestHelper {
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
+        AntikytheraRunTime.reset();
     }
 
     @BeforeEach

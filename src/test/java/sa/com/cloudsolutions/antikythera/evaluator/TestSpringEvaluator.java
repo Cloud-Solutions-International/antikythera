@@ -170,7 +170,7 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        AntikytheraRunTime.markAsMocked(fieldDecl.getElementType());
+        AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(variable));
 
         SpringEvaluator evaluator = EvaluatorFactory.create(sample, SpringEvaluator.class);
         assertNotNull(evaluator.autoWire(variable, PERSON_REPO));

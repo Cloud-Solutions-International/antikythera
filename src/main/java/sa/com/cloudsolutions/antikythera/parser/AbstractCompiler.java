@@ -180,6 +180,7 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+
     public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
         Optional<CompilationUnit> cu = variable.findCompilationUnit();
         if (cu.isPresent()) {

@@ -1082,7 +1082,7 @@ public class Evaluator {
 
     @SuppressWarnings("java:S3776")
     Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        if (AntikytheraRunTime.isMocked(variable.getType())) {
+        if (AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
