@@ -51,7 +51,7 @@ public class UnitTestGenerator extends TestGenerator {
         super(cu);
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
-        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "AKTest";
 
         filePath = basePath.replace("main","test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
