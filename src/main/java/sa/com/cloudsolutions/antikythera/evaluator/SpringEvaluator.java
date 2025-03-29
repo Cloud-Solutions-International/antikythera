@@ -218,6 +218,9 @@ public class SpringEvaluator extends Evaluator {
                 setupFields();
                 mockMethodArguments(md);
                 executeMethod(md);
+
+                Set<Expression> conditions = preConditions.computeIfAbsent(md, k -> new HashSet<>());
+                conditions.addAll(preconditionsInProgress);
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
@@ -233,6 +236,7 @@ public class SpringEvaluator extends Evaluator {
 
         branching.clear();
         preConditions.clear();
+        preconditionsInProgress.clear();
         final List<Integer> s = new ArrayList<>();
 
         md.accept(new VoidVisitorAdapter<Void>() {
@@ -254,6 +258,15 @@ public class SpringEvaluator extends Evaluator {
         branchCount = s.size();
     }
 
+    /**
+     * Set up the parameters required for the method call.
+     * If there are any preconditions that need to be applied to get branch coverage the parameters
+     * will be updated to reflect those preconditions.
+     *
+     * @param md the method declaration into whose variable space this parameter will be copied
+     * @param p the parameter in question.
+     * @throws ReflectiveOperationException if a reflection operation fails
+     */
     @Override
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
@@ -692,10 +705,7 @@ public class SpringEvaluator extends Evaluator {
     private void addPreCondition(IfStmt ifst, boolean state, Expression expr) {
         LineOfCode l = branching.get(ifst.hashCode());
         l.addPrecondition(expr, state);
-        ifst.findAncestor(MethodDeclaration.class).ifPresent(md -> {
-            Set<Expression> expressions = preConditions.computeIfAbsent(md, k -> new HashSet<>());
-            expressions.add(expr);
-        });
+        preconditionsInProgress.add(expr);
     }
 
     public void resetColors() {

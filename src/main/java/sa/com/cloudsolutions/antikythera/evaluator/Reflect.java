@@ -180,7 +180,7 @@ public class Reflect {
         return switch (className) {
             case PRIMITIVE_BOOLEAN -> "java.lang.Boolean";
             case "int" -> "java.lang.Integer";
-            case "long" -> "java.lang.Long";
+            case "long" -> Long.class.getName();
             case PRIMITIVE_FLOAT -> "java.lang.Float";
             case PRIMITIVE_DOUBLE -> "java.lang.Double";
             case "char" -> "java.lang.Character";
