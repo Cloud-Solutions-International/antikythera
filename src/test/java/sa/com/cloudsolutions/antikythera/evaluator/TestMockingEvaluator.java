@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.VoidType;
 import org.junit.jupiter.api.BeforeAll;
@@ -11,6 +12,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,5 +70,25 @@ class TestMockingEvaluator {
 
         Variable result = mockingEvaluator.executeMethod(unknownMethod);
         assertNull(result.getValue());
+    }
+
+    @Test
+    void mockReturnFromCompilationUnitHandlesSimpleTypes() {
+        // Setup
+        MethodDeclaration methodDecl = new MethodDeclaration();
+        CompilationUnit cu = new CompilationUnit();
+        cu.addImport("java.lang.String");
+        methodDecl.setParentNode(cu);
+
+        ClassOrInterfaceType returnType = new ClassOrInterfaceType()
+                .setName("String");
+        methodDecl.setType(returnType);
+
+        // Execute
+        Variable result = mockingEvaluator.mockReturnFromCompilationUnit(methodDecl, methodDecl, returnType);
+
+        // Verify
+        assertNotNull(result);
+        assertEquals("Ibuprofen", result.getValue());
     }
 }

@@ -59,20 +59,25 @@ public class MockingEvaluator extends Evaluator {
             return result;
         }
 
+        return mockReturnFromCompilationUnit(cd, md, returnType);
+    }
+
+    Variable mockReturnFromCompilationUnit(CallableDeclaration<?> cd, MethodDeclaration md, Type returnType) {
+        Variable result = null;
         if (cd.findCompilationUnit().isPresent()) {
             CompilationUnit cu1 = cd.findCompilationUnit().get();
             if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.asClassOrInterfaceType().getNameAsString());
                 result = Reflect.variableFactory(fqdn);
                 addMockitoExpression(md, result.getValue());
-                return result;
             }
-            String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
-            result = Reflect.variableFactory(fqdn);
-            addMockitoExpression(md, result.getValue());
-            return result;
+            else {
+                String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
+                result = Reflect.variableFactory(fqdn);
+                addMockitoExpression(md, result.getValue());
+            }
         }
-        return null;
+        return result;
     }
 
     private void addMockitoExpression(MethodDeclaration md, Object returnValue) {
