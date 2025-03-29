@@ -28,6 +28,7 @@ import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -218,27 +219,11 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (!autoWired) {
-            if (testClass.getAnnotationByName("ContextConfiguration").isEmpty()) {
-                gen.addImport("org.springframework.test.context.ContextConfiguration");
-                NormalAnnotationExpr contextConfig = new NormalAnnotationExpr();
-                contextConfig.setName("ContextConfiguration");
-                contextConfig.addPair("classes", String.format("{%s.class}", classUnderTest.getNameAsString()));
-                testClass.addAnnotation(contextConfig);
-            }
-            if (testClass.getAnnotationByName("ExtendWith").isEmpty()) {
-                gen.addImport("org.junit.jupiter.api.extension.ExtendWith");
-                gen.addImport("org.springframework.test.context.junit.jupiter.SpringExtension");
-                NormalAnnotationExpr extendsWith = new NormalAnnotationExpr();
-                extendsWith.setName("ExtendWith");
-                extendsWith.addPair("value", "SpringExtension.class");
-                testClass.addAnnotation(extendsWith);
-            }
-
             instanceName =  ClassProcessor.classToInstanceName( classUnderTest.getNameAsString());
 
             if (testClass.getFieldByName(classUnderTest.getNameAsString()).isEmpty()) {
                 FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
-                fd.addAnnotation("Autowired");
+                fd.addAnnotation("InjectMocks");
             }
             autoWired = true;
         }
@@ -359,6 +344,17 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void addBeforeClass() {
         mockFields();
+
+        MethodDeclaration before = new MethodDeclaration();
+        before.setType(void.class);
+        before.addAnnotation("BeforeEach");
+        before.setName("setUp");
+        BlockStmt beforeBody = new BlockStmt();
+        before.setBody(beforeBody);
+        beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
+
+        gen.getType(0).addMember(before);
+
     }
 
     @Override
@@ -369,7 +365,7 @@ public class UnitTestGenerator extends TestGenerator {
             AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
         }
 
-        gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
+        gen.addImport("org.mockito.Mock");
         gen.addImport("org.mockito.Mockito");
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
@@ -378,6 +374,8 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         mockFields(compilationUnitUnderTest);
+
+
     }
 
     /**
@@ -393,7 +391,7 @@ public class UnitTestGenerator extends TestGenerator {
                 if (fd.getAnnotationByName("Autowired").isPresent() && !AntikytheraRunTime.isMocked(fullyQualifiedTypeName)) {
                     AntikytheraRunTime.markAsMocked(fullyQualifiedTypeName);
                     FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                    field.addAnnotation("MockBean");
+                    field.addAnnotation("Mock");
                     ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
                     if (wrapper != null) {
                         gen.addImport(wrapper.getImport());

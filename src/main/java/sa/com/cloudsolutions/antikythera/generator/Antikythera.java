@@ -247,6 +247,7 @@ public class Antikythera {
         Files.createDirectories(parentDir.toPath());
         try (FileWriter writer = new FileWriter(file)) {
             writer.write(content);
+            writer.flush();
         }
     }
 
