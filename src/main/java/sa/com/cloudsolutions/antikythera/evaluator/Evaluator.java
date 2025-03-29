@@ -125,6 +125,7 @@ public class Evaluator {
      * These will be copied to the preConditions map
      */
     protected List<Expression> preconditionsInProgress = new ArrayList<>();
+    protected String variableName;
 
     protected Evaluator(EvaluatorFactory.Context context) {
         this.className = context.getClassName();
@@ -1094,7 +1095,9 @@ public class Evaluator {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                v = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
+                Evaluator eval = EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class);
+                eval.setVariableName(variable.getNameAsString());
+                v = new Variable(eval);
             }
             else {
                 v = useMockito(fqdn);
@@ -1109,6 +1112,10 @@ public class Evaluator {
                 return resolvePrimitiveFields(variable);
             }
         }
+    }
+
+    private void setVariableName(String variableName) {
+        this.variableName = variableName;
     }
 
     private static Variable useMockito(String fqdn) throws ClassNotFoundException {

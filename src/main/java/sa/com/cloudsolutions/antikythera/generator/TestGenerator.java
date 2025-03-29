@@ -9,7 +9,9 @@ import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public abstract class TestGenerator {
@@ -37,8 +39,23 @@ public abstract class TestGenerator {
 
     protected Set<Expression> preConditions;
 
+    static List<Expression> whenThen = new ArrayList<>();
+
     protected TestGenerator(CompilationUnit cu) {
+
         this.compilationUnitUnderTest = cu;
+    }
+
+    public static void clearWhenThen() {
+        whenThen.clear();
+    }
+
+    public static void addWhenThen(Expression expr) {
+        whenThen.add(expr);
+    }
+
+    public static List<Expression> getWhenThen() {
+        return whenThen;
     }
 
     protected String createTestName(MethodDeclaration md) {
@@ -76,24 +93,24 @@ public abstract class TestGenerator {
     public abstract void createTests(MethodDeclaration md, MethodResponse response);
 
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
-        MethodDeclaration testMethod = new MethodDeclaration();
+        MethodDeclaration tm = new MethodDeclaration();
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
         {
             String comment = String.format("Method under test: %s.%s()%nArgument generator : %s%nAuthor : Antikythera%n",
                     c.getNameAsString(), md.getNameAsString(), argumentGenerator.getClass().getSimpleName());
-            testMethod.setJavadocComment(comment);
+            tm.setJavadocComment(comment);
         });
 
-        testMethod.setName(createTestName(md));
+        tm.setName(createTestName(md));
 
         BlockStmt body = new BlockStmt();
 
-        testMethod.setType(new VoidType());
+        tm.setType(new VoidType());
 
-        testMethod.setBody(body);
-        testMethod.addAnnotation("Test");
-        return testMethod;
+        tm.setBody(body);
+        tm.addAnnotation("Test");
+        return tm;
     }
 
     /**

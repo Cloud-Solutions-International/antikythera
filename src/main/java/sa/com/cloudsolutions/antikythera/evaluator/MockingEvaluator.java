@@ -16,6 +16,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class MockingEvaluator extends Evaluator {
@@ -81,15 +82,37 @@ public class MockingEvaluator extends Evaluator {
                     "when"
             );
 
+            // Create the method call with appropriate parameters
             MethodCallExpr methodCall = new MethodCallExpr()
-                    .setName(md.getNameAsString())
-                    .setArguments(new NodeList<>());
+                    .setScope(new NameExpr(variableName))
+                    .setName(md.getNameAsString());
 
+            // Add any() matchers for each parameter
+            NodeList<Expression> args = new NodeList<>();
+            md.getParameters().forEach(param -> {
+                String typeName = param.getType().asString();
+                MethodCallExpr matcher = new MethodCallExpr(
+                        new NameExpr("Mockito"),
+                        switch (typeName) {
+                            case "String" -> "anyString";
+                            case "int", "Integer" -> "anyInt";
+                            case "long", "Long" -> "anyLong";
+                            case "double", "Double" -> "anyDouble";
+                            case "boolean", "Boolean" -> "anyBoolean";
+                            default -> "any";
+                        }
+                );
+
+                args.add(matcher);
+            });
+            methodCall.setArguments(args);
+
+            // Complete the when().thenReturn() expression
             mockitoWhen.setArguments(new NodeList<>(methodCall));
+            MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
+                    .setArguments(new NodeList<>(expressionFactory(returnValue.getClass().getName())));
 
-            Expression returnExpr = expressionFactory(returnValue.getClass().getName());
-            new MethodCallExpr(mockitoWhen, "thenReturn")
-                    .setArguments(new NodeList<>(returnExpr));
+            TestGenerator.addWhenThen(thenReturn);
         }
     }
 
