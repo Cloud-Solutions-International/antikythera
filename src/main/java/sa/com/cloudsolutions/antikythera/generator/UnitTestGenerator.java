@@ -206,10 +206,9 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void autoWireClass(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        gen.addImport("org.mockito.InjectMocks");
 
         if (!autoWired) {
-            gen.addImport("org.springframework.beans.factory.annotation.Autowired");
-
             for (FieldDeclaration fd : testClass.getFields()) {
                 if (fd.getElementType().asString().equals(classUnderTest.getNameAsString())) {
                     autoWired = true;
@@ -365,6 +364,8 @@ public class UnitTestGenerator extends TestGenerator {
             AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
         }
 
+        gen.addImport("org.mockito.MockitoAnnotations");
+        gen.addImport("org.junit.jupiter.api.BeforeEach");
         gen.addImport("org.mockito.Mock");
         gen.addImport("org.mockito.Mockito");
 
