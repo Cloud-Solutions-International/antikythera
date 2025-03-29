@@ -29,6 +29,7 @@ class TestMockingEvaluator {
     @BeforeEach
     void setUp() {
         mockingEvaluator = EvaluatorFactory.create("", MockingEvaluator.class);
+        mockingEvaluator.setVariableName("Bada");
         cu = new CompilationUnit();
         voidMethod = new MethodDeclaration();
         voidMethod.setType(new VoidType());

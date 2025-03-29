@@ -1114,7 +1114,7 @@ public class Evaluator {
         }
     }
 
-    private void setVariableName(String variableName) {
+    void setVariableName(String variableName) {
         this.variableName = variableName;
     }
 

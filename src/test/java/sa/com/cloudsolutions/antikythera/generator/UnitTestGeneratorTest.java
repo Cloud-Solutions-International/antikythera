@@ -55,22 +55,16 @@ class UnitTestGeneratorTest {
 
         Optional<FieldDeclaration> mockedField = testClass.getFieldByName("personRepository");
         assertTrue(mockedField.isPresent());
-        assertTrue(mockedField.get().getAnnotationByName("MockBean").isPresent(), "The field 'dummyRepository' should be annotated with @MockBean.");
+        assertTrue(mockedField.get().getAnnotationByName("Mock").isPresent(), "The field 'dummyRepository' should be annotated with @Mock.");
 
-        assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.springframework.boot.test.mock.mockito.MockBean")),
-                "The import for @MockBean should be present.");
+        assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mock")),
+                "The import for @Mock should be present.");
         assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mockito")),
                 "The import for Mockito should be present.");
     }
 
     @Test
     void testCreateInstanceA() {
-        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
-    }
-
-    @Test
-    void testCreateInstanceB() {
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
     }
