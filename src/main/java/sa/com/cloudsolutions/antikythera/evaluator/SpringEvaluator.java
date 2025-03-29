@@ -240,19 +240,21 @@ public class SpringEvaluator extends Evaluator {
         final List<Integer> s = new ArrayList<>();
 
         md.accept(new VoidVisitorAdapter<Void>() {
-            @Override
+           @Override
             public void visit(IfStmt stmt, Void arg) {
-                LineOfCode l = new LineOfCode(stmt);
-                branching.putIfAbsent(stmt.hashCode(), l);
-                s.add(1);
-                if (stmt.getElseStmt().isPresent()) {
-                    if (stmt.getElseStmt().get() instanceof BlockStmt) {
-                        s.add(1);
-                    }
-                    stmt.getElseStmt().get().accept(this, arg);
-                } else {
-                    s.add(1);
+                branching.putIfAbsent(stmt.hashCode(), new LineOfCode(stmt));
+                s.add(1); // Count the main if branch
+
+                Optional<Statement> elseStmt = stmt.getElseStmt();
+                if (elseStmt.isEmpty()) {
+                    s.add(1); // Count empty else branch
+                    return;
                 }
+                Statement elseStatement = elseStmt.get();
+                if (elseStatement instanceof BlockStmt) {
+                    s.add(1); // Count block else branch
+                }
+                elseStatement.accept(this, arg); // Visit else branch
             }
         }, null);
         branchCount = s.size();
