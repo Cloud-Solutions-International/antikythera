@@ -306,11 +306,11 @@ public class Reflect {
 
             case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
 
-            case "Boolean", PRIMITIVE_BOOLEAN -> createVariable(false, "Boolean", "false");
+            case "Boolean", PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(false, "Boolean", "false");
 
-            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE -> createVariable(0.0, DOUBLE, "0.0");
+            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> createVariable(0.0, DOUBLE, "0.0");
 
-            case INTEGER, "int" -> createVariable(0, INTEGER, "0");
+            case INTEGER, "int", "java.lang.Integer" -> createVariable(0, INTEGER, "0");
 
             case "Long", "long", "java.lang.Long" -> createVariable(-100L, "Long", "-100");
 
