@@ -40,6 +40,8 @@ public abstract class TestGenerator {
     protected Set<Expression> preConditions;
 
     static List<Expression> whenThen = new ArrayList<>();
+    static Set<String> dependencies = new HashSet<>();
+
 
     protected TestGenerator(CompilationUnit cu) {
 
@@ -56,6 +58,14 @@ public abstract class TestGenerator {
 
     public static List<Expression> getWhenThen() {
         return whenThen;
+    }
+
+    public static void addDependency(String s) {
+        dependencies.add(s);
+    }
+
+    public static Set<String> getDependencies() {
+        return dependencies;
     }
 
     protected String createTestName(MethodDeclaration md) {

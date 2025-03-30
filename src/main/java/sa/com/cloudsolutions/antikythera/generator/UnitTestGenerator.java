@@ -144,6 +144,7 @@ public class UnitTestGenerator extends TestGenerator {
         createInstance();
         mockArguments();
         addWhens();
+        addDependencies();
         String invocation = invokeMethod();
 
         if (response.getException() == null) {
@@ -153,6 +154,12 @@ public class UnitTestGenerator extends TestGenerator {
         else {
             String[] parts = invocation.split("=");
             assertThrows(parts.length == 2 ? parts[1] : parts[0], response);
+        }
+    }
+
+    private void addDependencies() {
+        for (String s : TestGenerator.getDependencies()) {
+            gen.addImport(s);
         }
     }
 

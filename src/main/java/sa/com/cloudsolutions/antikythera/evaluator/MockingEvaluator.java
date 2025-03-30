@@ -69,13 +69,12 @@ public class MockingEvaluator extends Evaluator {
             if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.asClassOrInterfaceType().getNameAsString());
                 result = Reflect.variableFactory(fqdn);
-                addMockitoExpression(md, result.getValue());
             }
             else {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
                 result = Reflect.variableFactory(fqdn);
-                addMockitoExpression(md, result.getValue());
             }
+            addMockitoExpression(md, result.getValue());
         }
         return result;
     }
@@ -121,42 +120,54 @@ public class MockingEvaluator extends Evaluator {
         }
     }
 
-    public static Expression expressionFactory(String qualifiedName) {
+    static Expression expressionFactory(String qualifiedName) {
         if (qualifiedName == null) {
             return new NullLiteralExpr();
         }
 
         return switch (qualifiedName) {
-            case "List", "java.util.List", "java.util.ArrayList" ->
-                new ObjectCreationExpr()
+            case "List", "java.util.List", "java.util.ArrayList" -> {
+                TestGenerator.addDependency("java.util.ArrayList");
+                yield new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName("ArrayList"))
                     .setArguments(new NodeList<>());
+            }
 
-            case "Map", "java.util.Map", "java.util.HashMap" ->
-                new ObjectCreationExpr()
+            case "Map", "java.util.Map", "java.util.HashMap" -> {
+                TestGenerator.addDependency("java.util.HashMap");
+                yield new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName("HashMap"))
                     .setArguments(new NodeList<>());
+            }
 
-            case "java.util.TreeMap" ->
-                new ObjectCreationExpr()
+            case "java.util.TreeMap" -> {
+                TestGenerator.addDependency("java.util.TreeMap");
+                yield new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName("TreeMap"))
                     .setArguments(new NodeList<>());
+            }
 
-            case "Set", "java.util.Set", "java.util.HashSet" ->
-                new ObjectCreationExpr()
+            case "Set", "java.util.Set", "java.util.HashSet" -> {
+                TestGenerator.addDependency("java.util.HashSet");
+                yield new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName("HashSet"))
                     .setArguments(new NodeList<>());
+            }
 
-            case "java.util.TreeSet" ->
-                new ObjectCreationExpr()
+            case "java.util.TreeSet" -> {
+                TestGenerator.addDependency("java.util.TreeSet");
+                yield new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName("TreeSet"))
                     .setArguments(new NodeList<>());
+            }
 
-            case "java.util.Optional" ->
-                new MethodCallExpr(
+            case "java.util.Optional" -> {
+                TestGenerator.addDependency("java.util.Optional");
+                yield new MethodCallExpr(
                     new NameExpr("Optional"),
                     "empty"
                 );
+            }
 
             case "Boolean", Reflect.PRIMITIVE_BOOLEAN ->
                 new BooleanLiteralExpr(false);
