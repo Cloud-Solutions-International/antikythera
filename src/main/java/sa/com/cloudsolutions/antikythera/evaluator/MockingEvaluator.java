@@ -92,23 +92,7 @@ public class MockingEvaluator extends Evaluator {
                     .setName(md.getNameAsString());
 
             // Add any() matchers for each parameter
-            NodeList<Expression> args = new NodeList<>();
-            md.getParameters().forEach(param -> {
-                String typeName = param.getType().asString();
-                MethodCallExpr matcher = new MethodCallExpr(
-                        new NameExpr("Mockito"),
-                        switch (typeName) {
-                            case "String" -> "anyString";
-                            case "int", "Integer" -> "anyInt";
-                            case "long", "Long" -> "anyLong";
-                            case "double", "Double" -> "anyDouble";
-                            case "boolean", "Boolean" -> "anyBoolean";
-                            default -> "any";
-                        }
-                );
-
-                args.add(matcher);
-            });
+            NodeList<Expression> args = fakeArguments(md);
             methodCall.setArguments(args);
 
             // Complete the when().thenReturn() expression
@@ -118,6 +102,27 @@ public class MockingEvaluator extends Evaluator {
 
             TestGenerator.addWhenThen(thenReturn);
         }
+    }
+
+    static NodeList<Expression> fakeArguments(MethodDeclaration md) {
+        NodeList<Expression> args = new NodeList<>();
+        md.getParameters().forEach(param -> {
+            String typeName = param.getType().asString();
+            MethodCallExpr matcher = new MethodCallExpr(
+                    new NameExpr("Mockito"),
+                    switch (typeName) {
+                        case "String" -> "anyString";
+                        case "int", "Integer" -> "anyInt";
+                        case "long", "Long" -> "anyLong";
+                        case "double", "Double" -> "anyDouble";
+                        case "boolean", "Boolean" -> "anyBoolean";
+                        default -> "any";
+                    }
+            );
+
+            args.add(matcher);
+        });
+        return args;
     }
 
     static Expression expressionFactory(String qualifiedName) {

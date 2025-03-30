@@ -3,6 +3,9 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
@@ -155,5 +158,36 @@ class TestMockingEvaluator {
             type.setTypeArguments(typeArgs);
         }
         return type;
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "String,     anyString",
+        "int,        anyInt",
+        "Integer,    anyInt",
+        "long,       anyLong",
+        "Long,       anyLong",
+        "double,     anyDouble",
+        "Double,     anyDouble",
+        "boolean,    anyBoolean",
+        "Boolean,    anyBoolean",
+        "Object,     any"
+    })
+    void fakeArgumentsCreatesCorrectMatchers(String parameterType, String expectedMatcher) {
+        // Setup
+        MethodDeclaration methodDecl = new MethodDeclaration();
+        Parameter parameter = new Parameter()
+                .setType(parameterType)
+                .setName("param");
+        methodDecl.addParameter(parameter);
+
+        // Execute
+        NodeList<Expression> args = MockingEvaluator.fakeArguments(methodDecl);
+
+        // Verify
+        assertEquals(1, args.size());
+        MethodCallExpr matcher = (MethodCallExpr) args.get(0);
+        assertEquals("Mockito", matcher.getScope().get().toString());
+        assertEquals(expectedMatcher, matcher.getNameAsString());
     }
 }
