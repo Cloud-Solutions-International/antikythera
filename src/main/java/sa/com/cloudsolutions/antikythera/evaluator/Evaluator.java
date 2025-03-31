@@ -689,7 +689,7 @@ public class Evaluator {
         Node n = node;
 
         while (n != null) {
-            BlockStmt block = findBlockStatement(n);
+            BlockStmt block = AbstractCompiler.findBlockStatement(n);
             int hash = (block != null) ? block.hashCode() : 0;
             if (hash == 0) {
                 for(Map<String, Variable> entry : locals.values()) {
@@ -733,31 +733,12 @@ public class Evaluator {
             old.setValue(v.getValue());
         }
         else {
-            BlockStmt block = findBlockStatement(node);
+            BlockStmt block = AbstractCompiler.findBlockStatement(node);
             int hash = (block != null) ? block.hashCode() : 0;
 
             Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
             localVars.put(nameAsString, v);
         }
-    }
-
-    /**
-     * Recursively traverse parents to find a block statement.
-     * @param expr the expression to start from
-     * @return the block statement that contains expr
-     */
-    private static BlockStmt findBlockStatement(Node expr) {
-        Node currentNode = expr;
-        while (currentNode != null) {
-            if (currentNode instanceof BlockStmt blockStmt) {
-                return blockStmt;
-            }
-            if (currentNode instanceof MethodDeclaration md) {
-                return md.getBody().orElse(null);
-            }
-            currentNode = currentNode.getParentNode().orElse(null);
-        }
-        return null; // No block statement found
     }
 
     /**
