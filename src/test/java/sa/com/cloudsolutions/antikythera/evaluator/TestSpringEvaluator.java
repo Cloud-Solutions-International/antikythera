@@ -25,12 +25,10 @@ import java.lang.reflect.Field;
 import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -54,7 +52,7 @@ class TestSpringEvaluator {
     @Test
     void testSimpleController() throws AntikytheraException, ReflectiveOperationException {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.controller.SimpleController");
-        SpringEvaluator eval = new SpringEvaluator("sa.com.cloudsolutions.controller.SimpleController");
+        SpringEvaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.controller.SimpleController", SpringEvaluator.class);
 
         // calling with out setting up the proper set of arguments will result in null because
         // the method will not be executed in the absence of the required arguments
@@ -73,7 +71,7 @@ class TestSpringEvaluator {
 
     @Test
     void testGetFieldClass() {
-        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
         evaluator.setCompilationUnit(new CompilationUnit());
         // Test with NameExpr and different Variable types
         NameExpr nameExpr = new NameExpr("testField");
@@ -86,7 +84,7 @@ class TestSpringEvaluator {
         assertEquals("java.lang.String", evaluator.getFieldClass(nameExpr));
 
         // Test with a Variable containing an Evaluator
-        SpringEvaluator innerEvaluator = new SpringEvaluator("TestInnerClass");
+        SpringEvaluator innerEvaluator = EvaluatorFactory.create("TestInnerClass", SpringEvaluator.class);
         Variable evaluatorVariable = new Variable(innerEvaluator);
         evaluator.getFields().put("evaluatorField", evaluatorVariable);
         assertEquals("TestInnerClass", evaluator.getFieldClass(new NameExpr("evaluatorField")));
@@ -101,7 +99,7 @@ class TestSpringEvaluator {
 
     @Test
     void testExecuteSource() throws AntikytheraException, ReflectiveOperationException {
-        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
         evaluator.setCompilationUnit(new CompilationUnit());
 
         MethodCallExpr methodCall = new MethodCallExpr();
@@ -114,13 +112,13 @@ class TestSpringEvaluator {
 
     @Test
     void testCreateTestsUnhappy() {
-        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
         assertNull(evaluator.createTests(null));
     }
 
     @Test
     void testCreateTests() throws ReflectiveOperationException {
-        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
 
         // Access private currentMethod field via reflection
         Field currentMethodField = SpringEvaluator.class.getDeclaredField("currentMethod");
@@ -155,7 +153,7 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithAutowiredField() {
-        SpringEvaluator evaluator = new SpringEvaluator("sa.com.cloudsolutions.service.Service");
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.Service", SpringEvaluator.class);
         CompilationUnit cu = evaluator.getCompilationUnit();
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
@@ -174,7 +172,7 @@ class TestSpringEvaluator {
         VariableDeclarator variable = fieldDecl.getVariable(0);
         AntikytheraRunTime.markAsMocked(fieldDecl.getElementType());
 
-        SpringEvaluator evaluator = new SpringEvaluator(sample);
+        SpringEvaluator evaluator = EvaluatorFactory.create(sample, SpringEvaluator.class);
         assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);
@@ -192,7 +190,7 @@ class TestSpringEvaluator {
 
         CompilationUnit cu = StaticJavaParser.parse(testClass);
         AntikytheraRunTime.addClass("TestClass", cu);
-        SpringEvaluator evaluator = new SpringEvaluator("TestClass");
+        SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
         evaluator.setCompilationUnit(cu);
 
         // Get the field from the parsed class
@@ -214,7 +212,7 @@ class TestSpringEvaluatorAgain {
         String cls = "sa.com.cloudsolutions.antikythera.evaluator.Functional";
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("printHello")).get();
-        SpringEvaluator eval = new SpringEvaluator(cls);
+        SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);
 
         ArgumentGenerator argGen = mock(ArgumentGenerator.class);
         eval.setArgumentGenerator(argGen);

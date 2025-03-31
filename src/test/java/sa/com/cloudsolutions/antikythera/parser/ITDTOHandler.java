@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.DTOHandler;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.File;
@@ -18,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class IntegrationTestDTOHandler {
+class ITDTOHandler {
     @BeforeAll
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
@@ -77,7 +78,7 @@ class IntegrationTestDTOHandler {
         DTOHandler handler = new DTOHandler();
         handler.parse(AbstractCompiler.classToPath("sa.com.cloudsolutions.dto.MediumDTO"));
 
-        Evaluator eval = new Evaluator("sa.com.cloudsolutions.dto.MediumDTO");
+        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.dto.MediumDTO");
 
         Variable v = eval.getFields().get("group");
         assertNotNull(v);

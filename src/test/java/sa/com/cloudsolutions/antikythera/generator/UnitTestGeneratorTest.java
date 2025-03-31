@@ -13,6 +13,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Optional;
@@ -51,7 +52,7 @@ class UnitTestGeneratorTest {
     }
 
     @Test
-    void testMockFields() throws IOException {
+    void testMockFields() {
         classUnderTest.addAnnotation("Service");
         unitTestGenerator.mockFields();
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
@@ -87,5 +88,18 @@ class UnitTestGeneratorTest {
 
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+    }
+
+    @Test
+    void testLoadExisting() throws IOException {
+        // Get the actual FactoryTest.java from source directory
+        File testFile = new File("src/test/java/sa/com/cloudsolutions/antikythera/generator/FactoryTest.java");
+        assertTrue(testFile.exists(), testFile.getAbsolutePath() + " does not exist");
+
+        // Execute loadExisting
+        unitTestGenerator.loadExisting(testFile);
+        assertNotNull(unitTestGenerator.gen);
+        assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
+
     }
 }

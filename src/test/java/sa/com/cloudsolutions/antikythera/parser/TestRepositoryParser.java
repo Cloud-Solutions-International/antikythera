@@ -91,7 +91,6 @@ class TestRepositoryParser {
 
     @Test
     void testProcess() throws IOException {
-        RepositoryParser parser = new RepositoryParser();
         AntikytheraRunTime.resetAll();
         AbstractCompiler.preProcess();
 

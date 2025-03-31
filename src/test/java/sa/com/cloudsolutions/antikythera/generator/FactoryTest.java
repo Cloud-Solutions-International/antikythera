@@ -32,6 +32,11 @@ class FactoryTest {
         assertNotNull(generator);
     }
 
+    /**
+     * Author : Antikythera
+     * This test was not really written by Antikythera, but having this annotation makes it
+     * possible to use this test as an input to another unit test!
+     */
     @Test
     void createIntegrationTestGeneratorReturnsNull() {
         TestGenerator generator = Factory.create("integration", cu);

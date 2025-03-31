@@ -28,7 +28,7 @@ class TestMockingEvaluator {
 
     @BeforeEach
     void setUp() {
-        mockingEvaluator = new MockingEvaluator("");
+        mockingEvaluator = EvaluatorFactory.create("", MockingEvaluator.class);
         cu = new CompilationUnit();
         voidMethod = new MethodDeclaration();
         voidMethod.setType(new VoidType());

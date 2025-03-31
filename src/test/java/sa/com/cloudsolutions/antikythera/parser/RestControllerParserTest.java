@@ -20,7 +20,6 @@ class RestControllerParserTest {
         Settings.loadConfigMap();
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
-        String controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
         parser = new RestControllerParser("sa.com.cloudsolutions.controller.ComplexController");
     }
 

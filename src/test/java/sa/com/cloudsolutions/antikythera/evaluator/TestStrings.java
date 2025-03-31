@@ -28,7 +28,7 @@ class TestStrings extends TestHelper{
     @BeforeEach
     void each()  {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
-        evaluator = new Evaluator(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         System.setOut(new PrintStream(outContent));
     }
 

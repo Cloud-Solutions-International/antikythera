@@ -17,19 +17,19 @@ public class LineOfCode {
      * The state of the variables required such that an if condition evaluates to true.
      * This will be applicable only for IF statement expressions.
      */
-    private List<Expression> trueState = new ArrayList<>();
+    private final List<Expression> trueState = new ArrayList<>();
 
     /**
      * The state of the variables required such that an if condition evaluates to false.
      * This will be applicable only for IF statement expressions.
      */
-    private List<Expression> falseState = new ArrayList<>();
+    private final List<Expression> falseState = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.
      * This is the default value for color for all nodes.
      */
-    public static final int UNTAVELLED = 0;
+    public static final int UNTRAVELLED = 0;
     /**
      * Represents the stage where we have traversed the false path
      */

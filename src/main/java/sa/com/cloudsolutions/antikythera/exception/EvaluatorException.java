@@ -1,10 +1,15 @@
 package sa.com.cloudsolutions.antikythera.exception;
 
+import com.github.javaparser.ast.expr.Expression;
+
 public class EvaluatorException extends AntikytheraException {
     private int error;
     public static final int NPE = 1;
     public static final int INTERNAL_SERVER_ERROR = 2;
 
+    public EvaluatorException(Expression left, Expression right) {
+        super("Could not perform binary operation on " + left + " and " + right);
+    }
     public EvaluatorException(String message) {
         super(message);
     }

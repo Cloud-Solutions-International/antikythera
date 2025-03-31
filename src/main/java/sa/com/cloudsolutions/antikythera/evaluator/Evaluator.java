@@ -62,7 +62,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -84,17 +83,17 @@ public class Evaluator {
      * <p>These are specific to a block statement. A block statement may also be an
      * entire method. The primary key will be the hashcode of the block statement.</p>
      */
-    private final Map<Integer, Map<String, Variable>> locals ;
+    private Map<Integer, Map<String, Variable>> locals ;
 
     /**
      * The fields that were encountered in the current class.
      */
-    protected final Map<String, Variable> fields;
+    protected Map<String, Variable> fields;
 
     /**
      * The fully qualified name of the class for which we created this evaluator.
      */
-    private final String className;
+    private String className;
 
     /**
      * The compilation unit that is being processed by the expression engine
@@ -113,25 +112,18 @@ public class Evaluator {
 
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
-    protected final Deque<TryStmt> catching = new LinkedList<>();
+    protected Deque<TryStmt> catching = new LinkedList<>();
     /**
      * The preconditions that need to be met before the test can be executed.
      */
-    protected final Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
+    protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
-    public Evaluator (String className) {
-        this(className, false);
-    }
-
-    protected Evaluator(String className, boolean lazy) {
-        this.className = className;
+    protected Evaluator(EvaluatorFactory.Context context) {
+        this.className = context.getClassName();
         cu = AntikytheraRunTime.getCompilationUnit(className);
         locals = new HashMap<>();
         fields = new HashMap<>();
         Finch.loadFinches();
-        if (cu != null && !lazy) {
-            this.setupFields();
-        }
     }
 
     /**
@@ -977,6 +969,12 @@ public class Evaluator {
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
         if (call instanceof MethodCallExpr methodCall) {
             Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+            if (cdecl.isEmpty()) {
+                Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(cu, getClassName());
+                if (t.isPresent() && t.get().isClassOrInterfaceDeclaration()) {
+                    cdecl = Optional.of(t.get().asClassOrInterfaceDeclaration());
+                }
+            }
             if (cdecl.isPresent()) {
                 /*
                  * At this point we are searching for the method call in the current class. For example,
@@ -1041,7 +1039,7 @@ public class Evaluator {
 
     static Class<?> getClass(String className) {
         try {
-            return Class.forName(className);
+            return AbstractCompiler.loadClass(className);
         } catch (ClassNotFoundException e) {
             logger.info("Could not find class {}", className);
         }
@@ -1069,7 +1067,7 @@ public class Evaluator {
             String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                v = new Variable(new MockingEvaluator(fqdn));
+                v = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
             }
             else {
                 v = useMockito(fqdn);
@@ -1124,7 +1122,7 @@ public class Evaluator {
             Class<?> returnType = invocation.getMethod().getReturnType();
             String clsName = returnType.getName();
             if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
-                return new Evaluator(clsName);
+                return EvaluatorFactory.create(clsName, Evaluator.class);
             }
             else {
                 Object obj = Reflect.getDefault(returnType);
@@ -1292,34 +1290,27 @@ public class Evaluator {
         return null;
     }
 
-    protected boolean setupParameters(MethodDeclaration md) {
+    protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
-        ArrayList<Boolean> missing = new ArrayList<>();
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Parameter p = parameters.get(i);
 
-            Variable va = AntikytheraRunTime.pop();
-            if (md.getBody().isPresent()) {
-                // repository methods for example don't have bodies
-                setLocal(md.getBody().get(), p.getNameAsString(), va);
-                p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
-            }
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            setupParameter(md, parameters.get(i));
         }
-        return missing.isEmpty();
     }
 
-    private static void setupRequestParam(AnnotationExpr a , Variable va, ArrayList<Boolean> missing) {
-        if (a.isNormalAnnotationExpr()) {
-            NormalAnnotationExpr ne = a.asNormalAnnotationExpr();
-            for (MemberValuePair pair : ne.getPairs()) {
-                if (pair.getNameAsString().equals("required") && pair.getValue().toString().equals("false")) {
-                    return;
-                }
-            }
-        }
-        if (va == null) {
-            missing.add(true);
-        }
+    /**
+     * Copies a parameter from the stack into the local variable space of the method.
+     *
+     * @param md the method declaration into whose variable space this parameter will be copied
+     * @param p the parameter in question.
+     * @throws ReflectiveOperationException is not really thrown here but the sub classes might.
+     */
+    @SuppressWarnings("java:S1130")
+    void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
+        Variable va = AntikytheraRunTime.pop();
+        md.getBody().ifPresent(body ->
+            setLocal(body, p.getNameAsString(), va)
+        );
     }
 
     /**
@@ -1429,8 +1420,8 @@ public class Evaluator {
             executeDoWhile(stmt.asDoStmt());
 
         } else if(stmt.isSwitchStmt()) {
-            SwitchStmt switchExpr = stmt.asSwitchStmt();
-            System.out.println("switch missing");
+            executeSwitchStatement(stmt.asSwitchStmt());
+
         } else if(stmt.isWhileStmt()) {
             /*
              * Old fashioned while statement
@@ -1452,6 +1443,33 @@ public class Evaluator {
             loops.addLast(Boolean.FALSE);
         } else {
             logger.info("Unhandled statement: {}", stmt);
+        }
+    }
+
+    private void executeSwitchStatement(SwitchStmt switchStmt) throws Exception {
+        boolean matchFound = false;
+        Statement defaultStmt = null;
+
+        for (var entry : switchStmt.getEntries()) {
+            NodeList<Expression> labels = entry.getLabels();
+            for (Expression label : labels) {
+                if(label.isIntegerLiteralExpr()) {
+                    BinaryExpr bin = new BinaryExpr(switchStmt.getSelector(), label.asIntegerLiteralExpr(), BinaryExpr.Operator.EQUALS);
+                    Variable v = evaluateExpression(bin);
+                    if ((boolean) v.getValue()) {
+                        executeBlock(entry.getStatements());
+                        matchFound = true;
+                        break;
+                    }
+                }
+            }
+            if (labels.isEmpty()) {
+                defaultStmt = entry.getStatements().get(0);
+            }
+        }
+
+        if (!matchFound && defaultStmt != null) {
+            executeStatement(defaultStmt);
         }
     }
 
@@ -1588,7 +1606,11 @@ public class Evaluator {
     }
 
     public void setupFields()  {
-        cu.accept(new ControllerFieldVisitor(), null);
+        cu.accept(new LazyFieldVisitor(), null);
+    }
+
+    public void initializeFields() {
+        cu.accept(new FieldVisitor(), null);
     }
 
     protected String getClassName() {
@@ -1600,12 +1622,12 @@ public class Evaluator {
      *
      * When we initialize a class the fields also need to be initialized, so here we are
      */
-    private class ControllerFieldVisitor extends VoidVisitorAdapter<Void> {
+    private class LazyFieldVisitor extends VoidVisitorAdapter<Void> {
         /**
          * The field visitor will be used to identify the fields that are being used in the class
          *
          * @param field the field to inspect
-         * @param arg not used
+         * @param arg   not used
          */
         @Override
         public void visit(FieldDeclaration field, Void arg) {
@@ -1618,21 +1640,23 @@ public class Evaluator {
                 });
             }
         }
+    }
 
+    private class FieldVisitor extends VoidVisitorAdapter<Void> {
         @Override
         public void visit(InitializerDeclaration init, Void arg) {
             super.visit(init, arg);
-            init.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
-                cdecl.getFullyQualifiedName().ifPresent(className -> {
-                    if (className.equals(getClassName())) {
-                        try {
-                            executeBlock(init.getBody().getStatements());
-                        } catch (ReflectiveOperationException e) {
-                            throw new AntikytheraException(e);
+            init.findAncestor(ClassOrInterfaceDeclaration.class)
+                    .flatMap(ClassOrInterfaceDeclaration::getFullyQualifiedName)
+                    .ifPresent(name -> {
+                        if (name.equals(getClassName())) {
+                            try {
+                                executeBlock(init.getBody().getStatements());
+                            } catch (ReflectiveOperationException e) {
+                                throw new AntikytheraException(e);
+                            }
                         }
-                    }
-                });
-            });
+                    });
         }
     }
 
@@ -1724,5 +1748,4 @@ public class Evaluator {
         }
         return chain;
     }
-
 }

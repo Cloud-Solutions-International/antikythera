@@ -34,6 +34,7 @@ public class Functional {
         printHello( a -> { return "Hello " + a; });
     }
 
+    @SuppressWarnings("java:S1117")
     private void greet3() {
         printHello( (a,b) -> "Hello " + a + " " + b);
     }
@@ -44,6 +45,7 @@ public class Functional {
         System.out.println();
     }
 
+    @SuppressWarnings("java:S1117")
     private void sorting2() {
         Collections.sort(numbers, (a,b) -> b - a);
         numbers.forEach(System.out::print);
