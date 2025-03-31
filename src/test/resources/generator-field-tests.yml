@@ -14,6 +14,8 @@ base_path: ${projects_folder}/antikythera/src/test/java
 # com.csi.phr
 base_package: sa.com.cloudsolutions
 
+base_test_class: sa.com.cloudsolutions.antikythera.generator.DummyBase
+
 # The controllers settings determines where the controllers can be found. If you
 # specify a package name it will iterate through all the controllers in that
 # package. If you specify an individual controller it will only generate tests

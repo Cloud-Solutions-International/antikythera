@@ -107,7 +107,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void loadBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
-        String base = Settings.getProperty("base_class", String.class).orElse(null);
+        String base = Settings.getProperty("base_test_class", String.class).orElse(null);
         if (base != null) {
             if (!testClass.getExtendedTypes().stream().map(Type::asString).filter(s -> s.equals(base)).findFirst().isPresent()) {
                 testClass.addExtendedType(base);

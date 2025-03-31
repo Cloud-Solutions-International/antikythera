@@ -39,7 +39,7 @@ class UnitTestGeneratorTest {
     void setUp() {
         cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
-        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md->md.getNameAsString().equals("queries2")).get();
+        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
         unitTestGenerator = new UnitTestGenerator(cu);
         unitTestGenerator.setArgumentGenerator(new NullArgumentGenerator());
         unitTestGenerator.setPreConditions(new HashSet<>());
@@ -89,5 +89,41 @@ class UnitTestGeneratorTest {
         assertNotNull(unitTestGenerator.gen);
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
 
+    }
+}
+
+class UnitTestGeneratorMoreTest {
+
+    private UnitTestGenerator unitTestGenerator;
+    private CompilationUnit cu;
+    private ClassOrInterfaceDeclaration classUnderTest;
+
+    @BeforeAll
+    static void beforeClass() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
+    }
+
+    /**
+     * The base class should be added to the class under test.
+     */
+    @Test
+    void testAddingBaseClassToTestClass() {
+        CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.generator.DummyBase");
+        assertNotNull(base);
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
+        classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
+        unitTestGenerator = new UnitTestGenerator(cu);
+
+        assertTrue(classUnderTest.getExtendedTypes().isEmpty());
+        CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
+        assertNotNull(testCu);
+        TypeDeclaration<?> publicType = AbstractCompiler.getPublicType(testCu);
+        assertNotNull(publicType);
+        assertEquals("OverlordAKTest", publicType.getNameAsString());
+        assertTrue(publicType.asClassOrInterfaceDeclaration().getExtendedTypes()
+                .stream()
+                .anyMatch(t -> t.asString().equals("sa.com.cloudsolutions.antikythera.generator.DummyBase")));
     }
 }
