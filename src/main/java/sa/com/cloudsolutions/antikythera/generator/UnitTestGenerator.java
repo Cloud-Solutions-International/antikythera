@@ -90,7 +90,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         for (TypeDeclaration<?> t : gen.getTypes()) {
             if (t.isClassOrInterfaceDeclaration()) {
-                loadBaseClassForTest(t.asClassOrInterfaceDeclaration());
+                loadPredefinedBaseClassForTest(t.asClassOrInterfaceDeclaration());
             }
             identifyMockedTypes(t);
         }
@@ -103,17 +103,23 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         ClassOrInterfaceDeclaration testClass = gen.addClass(className);
-        loadBaseClassForTest(testClass);
+        loadPredefinedBaseClassForTest(testClass);
     }
 
-    private void loadBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
+    /**
+     * <p>Loads a base class that is common to all generated test classes.</p>
+     *
+     * Provided that an entry called base_test_class exists in the settings file and the source for
+     * that class can be found.
+     *
+     * @param testClass the declaration of the test suite being built
+     */
+    private void loadPredefinedBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
         String base = Settings.getProperty("base_test_class", String.class).orElse(null);
-        if (base != null) {
-            if (!testClass.getExtendedTypes().stream().map(Type::asString).filter(s -> s.equals(base)).findFirst().isPresent()) {
-                testClass.addExtendedType(base);
-            }
-            String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
-            String helperPath = basePath.replace("main","test") + File.separator +
+        if (base != null && testClass.getExtendedTypes().isEmpty()) {
+            testClass.addExtendedType(base);
+            String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
+            String helperPath = basePath.replace("main", "test") + File.separator +
                     AbstractCompiler.classToPath(base);
             try {
                 CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
@@ -124,6 +130,11 @@ public class UnitTestGenerator extends TestGenerator {
                 throw new AntikytheraException("Base class could not be loaded for tests.");
             }
         }
+        /*
+         * we dont need to worry about else conditions here because that's already covered in the
+         * loadExisting method
+         */
+
     }
 
     private static void identifyMockedTypes(TypeDeclaration<?> t) {

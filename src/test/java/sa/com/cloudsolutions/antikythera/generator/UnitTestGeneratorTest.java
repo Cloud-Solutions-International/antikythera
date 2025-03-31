@@ -38,6 +38,7 @@ class UnitTestGeneratorTest {
     @BeforeEach
     void setUp() {
         cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        assertNotNull(cu);
         classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
         methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
         unitTestGenerator = new UnitTestGenerator(cu);
@@ -94,10 +95,6 @@ class UnitTestGeneratorTest {
 
 class UnitTestGeneratorMoreTest {
 
-    private UnitTestGenerator unitTestGenerator;
-    private CompilationUnit cu;
-    private ClassOrInterfaceDeclaration classUnderTest;
-
     @BeforeAll
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
@@ -112,9 +109,11 @@ class UnitTestGeneratorMoreTest {
     void testAddingBaseClassToTestClass() {
         CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.generator.DummyBase");
         assertNotNull(base);
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
-        classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
-        unitTestGenerator = new UnitTestGenerator(cu);
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
+        assertNotNull(cu);
+
+        ClassOrInterfaceDeclaration classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
+        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
 
         assertTrue(classUnderTest.getExtendedTypes().isEmpty());
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
