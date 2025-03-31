@@ -42,7 +42,7 @@ class MockReturnValueHandler implements Answer<Object> {
         return result;
     }
 
-    private void whenThen(InvocationOnMock invocation, Object result, String clsName) {
+    void whenThen(InvocationOnMock invocation, Object result, String clsName) {
         if (result != null) {
             try {
                 String mockName = invocation.getMock().getClass().getInterfaces()[0]

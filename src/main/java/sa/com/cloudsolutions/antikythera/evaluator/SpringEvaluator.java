@@ -46,6 +46,7 @@ import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -482,23 +483,46 @@ public class SpringEvaluator extends Evaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                Evaluator eval = AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
-                    ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
-                    : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
-
-                v = new Variable(eval);
-                v.setType(variable.getType());
-                AntikytheraRunTime.autoWire(resolvedClass, v);
-                if (! (eval instanceof MockingEvaluator)) {
-                    eval.setupFields();
-                    eval.initializeFields();
-                    eval.invokeDefaultConstructor();
+                if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
+                    v = autoWireFromSourceCode(variable, resolvedClass, fd);
+                } else {
+                    v = autoWireFromByteCode(resolvedClass);
                 }
             }
             fields.put(variable.getNameAsString(), v);
             return v;
         }
         return null;
+    }
+
+    private static Variable autoWireFromByteCode(String resolvedClass) {
+        try {
+            Class<?> cls = AbstractCompiler.loadClass(resolvedClass);
+            if (!cls.isInterface()) {
+                Constructor<?> c = cls.getConstructor();
+                return new Variable(c.newInstance());
+            }
+            return null;
+        } catch (ReflectiveOperationException e) {
+            throw new AntikytheraException(e);
+        }
+    }
+
+    private static Variable autoWireFromSourceCode(VariableDeclarator variable, String resolvedClass, FieldDeclaration fd) {
+        Variable v;
+        Evaluator eval = AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
+            ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
+            : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
+
+        v = new Variable(eval);
+        v.setType(variable.getType());
+        AntikytheraRunTime.autoWire(resolvedClass, v);
+        if (! (eval instanceof MockingEvaluator)) {
+            eval.setupFields();
+            eval.initializeFields();
+            eval.invokeDefaultConstructor();
+        }
+        return v;
     }
 
     @Override

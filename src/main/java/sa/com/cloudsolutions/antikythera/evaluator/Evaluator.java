@@ -1087,18 +1087,18 @@ public class Evaluator {
         return BinaryOps.binaryOps(operator, leftExpression, rightExpression, left, right);
     }
 
-    @SuppressWarnings("java:S3776")
+    @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
-            String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
+            String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
-            if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                Evaluator eval = EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class);
+            if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
+                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
                 eval.setVariableName(variable.getNameAsString());
                 v = new Variable(eval);
             }
             else {
-                v = useMockito(fqdn);
+                v = useMockito(fqn);
             }
             v.setType(variable.getType());
             return v;
