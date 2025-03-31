@@ -9,8 +9,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -27,6 +29,7 @@ class UnitTestGeneratorTest {
     private CompilationUnit cu;
     private ClassOrInterfaceDeclaration classUnderTest;
     private MethodDeclaration methodUnderTest;
+    private ArgumentGenerator argumentGenerator;
 
     @BeforeAll
     static void beforeClass() throws IOException {
@@ -40,15 +43,17 @@ class UnitTestGeneratorTest {
         cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
         classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
-        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
+
         unitTestGenerator = new UnitTestGenerator(cu);
-        unitTestGenerator.setArgumentGenerator(new NullArgumentGenerator());
+        argumentGenerator = Mockito.mock(NullArgumentGenerator.class);
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setPreConditions(new HashSet<>());
         unitTestGenerator.setAsserter(new JunitAsserter());
     }
 
     @Test
     void testMockFields() {
+
         classUnderTest.addAnnotation("Service");
         unitTestGenerator.mockFields();
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
@@ -66,12 +71,24 @@ class UnitTestGeneratorTest {
 
     @Test
     void testCreateInstanceA() {
+        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
+        Mockito.verify(argumentGenerator, Mockito.never()).getArguments();
+    }
+
+    @Test
+    void testCreateInstanceB() {
+        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries3")).get();
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries3Test"));
+        Mockito.verify(argumentGenerator, Mockito.times(1)).getArguments();
+
     }
 
     @Test
     void testCreateInstanceC() {
+        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
         ConstructorDeclaration constructor = classUnderTest.addConstructor();
         constructor.addParameter("String", "param");
 
@@ -89,6 +106,8 @@ class UnitTestGeneratorTest {
         unitTestGenerator.loadExisting(testFile);
         assertNotNull(unitTestGenerator.gen);
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
+
+        assertTrue(AntikytheraRunTime.isMocked("java.util.zip.Adler32"));
 
     }
 }
