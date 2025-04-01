@@ -463,7 +463,6 @@ public class AbstractCompiler {
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package
-             * but it can probably still be found in the same package as the current CU
              */
         }
 
@@ -472,9 +471,13 @@ public class AbstractCompiler {
             return packageName + className;
         } catch (ClassNotFoundException ex) {
             /*
-             * Once again ignore the exception. We don't have the class in the lang package
-             * but it can probably still be found in the same package as the current CU
+             * Once again ignore the exception. We don't have the class in the lang package.
+             * But there's one last thing that we can do, check if the given name is actually a
+             * fully qualified name!
              */
+            if (className.contains(".")) {
+                return className;
+            }
             return null;
         }
     }

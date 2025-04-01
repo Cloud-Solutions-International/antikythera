@@ -10,6 +10,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -45,6 +47,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     private final BiConsumer<Parameter, Variable> mocker;
     private final Consumer<Expression> applyPrecondition;
+    private CompilationUnit baseTestClass;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -118,23 +121,35 @@ public class UnitTestGenerator extends TestGenerator {
         String base = Settings.getProperty("base_test_class", String.class).orElse(null);
         if (base != null && testClass.getExtendedTypes().isEmpty()) {
             testClass.addExtendedType(base);
-            String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
-            String helperPath = basePath.replace("main", "test") + File.separator +
-                    AbstractCompiler.classToPath(base);
-            try {
-                CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
-                for (TypeDeclaration<?> t : cu.getTypes()) {
-                    identifyMockedTypes(t);
-                }
-            } catch (FileNotFoundException e) {
-                throw new AntikytheraException("Base class could not be loaded for tests.");
+            loadPredefinedBaseClassForTest(base);
+        }
+        else if (!testClass.getExtendedTypes().isEmpty()) {
+            SimpleName n = testClass.getExtendedTypes().get(0).getName();
+            String baseClassName = n.toString();
+            String fqn = AbstractCompiler.findFullyQualifiedName(testClass.findAncestor(CompilationUnit.class).orElseThrow(),
+                    baseClassName);
+            if (fqn != null) {
+                loadPredefinedBaseClassForTest(testClass);
+            } else {
+                n.getParentNode().ifPresent(p ->
+                    loadPredefinedBaseClassForTest(p.toString())
+                );
             }
         }
-        /*
-         * we dont need to worry about else conditions here because that's already covered in the
-         * loadExisting method
-         */
+    }
 
+    private void loadPredefinedBaseClassForTest(String baseClassName) {
+        String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
+        String helperPath = basePath.replace("main", "test") + File.separator +
+                AbstractCompiler.classToPath(baseClassName);
+        try {
+            baseTestClass = StaticJavaParser.parse(new File(helperPath));
+            for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
+                identifyMockedTypes(t);
+            }
+        } catch (FileNotFoundException e) {
+            throw new AntikytheraException("Base class could not be loaded for tests.");
+        }
     }
 
     private static void identifyMockedTypes(TypeDeclaration<?> t) {
@@ -176,8 +191,33 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void addWhens() {
         for (Expression expr : whenThen) {
+            if( expr instanceof MethodCallExpr mce) {
+                Optional<Expression> scope = mce.getScope();
+                if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped){
+
+                    Optional<Expression> arg = scoped.getArguments().getFirst();
+                    if (arg.isPresent() && baseTestClass != null
+                            && arg.get() instanceof MethodCallExpr argMethod
+                            && mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
+                        continue;
+                    }
+                }
+            }
             getBody(testMethod).addStatement(expr);
         }
+    }
+
+    private boolean mockedByBaseTestClass(Expression arg) {
+        for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
+            for (FieldDeclaration fd : t.getFields()) {
+                if ( (fd.getAnnotationByName("MockBean").isPresent() ||
+                        fd.getAnnotationByName("Mock").isPresent()) &&
+                            fd.getVariable(0).getNameAsString().equals(arg.toString())) {
+                        return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void createInstance() {
@@ -391,8 +431,6 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         mockFields(compilationUnitUnderTest);
-
-
     }
 
     /**
