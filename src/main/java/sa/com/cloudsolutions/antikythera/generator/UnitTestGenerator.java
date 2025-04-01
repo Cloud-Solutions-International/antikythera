@@ -367,7 +367,7 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt beforeBody = new BlockStmt();
         before.setBody(beforeBody);
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
-
+        before.setJavadocComment("Author : Antikytherra");
         gen.getType(0).addMember(before);
 
     }

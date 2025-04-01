@@ -26,9 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class UnitTestGeneratorTest {
 
     private UnitTestGenerator unitTestGenerator;
-    private CompilationUnit cu;
     private ClassOrInterfaceDeclaration classUnderTest;
-    private MethodDeclaration methodUnderTest;
     private ArgumentGenerator argumentGenerator;
 
     @BeforeAll
@@ -40,7 +38,7 @@ class UnitTestGeneratorTest {
 
     @BeforeEach
     void setUp() {
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
         classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
 
@@ -71,7 +69,8 @@ class UnitTestGeneratorTest {
 
     @Test
     void testCreateInstanceA() {
-        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
         Mockito.verify(argumentGenerator, Mockito.never()).getArguments();
@@ -79,7 +78,8 @@ class UnitTestGeneratorTest {
 
     @Test
     void testCreateInstanceB() {
-        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries3")).get();
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries3")).orElseThrow();
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries3Test"));
         Mockito.verify(argumentGenerator, Mockito.times(1)).getArguments();
@@ -88,7 +88,8 @@ class UnitTestGeneratorTest {
 
     @Test
     void testCreateInstanceC() {
-        methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("queries2")).get();
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
         ConstructorDeclaration constructor = classUnderTest.addConstructor();
         constructor.addParameter("String", "param");
 
