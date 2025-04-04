@@ -44,5 +44,12 @@ public class Service {
         List<EmployeeDepartmentDTO> employeeDepartmentDTO = departmentRepository.findEmployeeDepartmentDTOByDepartmentId(1L);
     }
 
+    public void queries4(Long id) {
+        Optional<Person> p = personRepository.findById(id);
+    }
+
+    public void queries5(int id) {
+        Optional<Person> p = personRepository.findById(id);
+    }
 }
 

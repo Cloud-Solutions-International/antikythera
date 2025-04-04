@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import java.nio.file.Files;
@@ -29,6 +28,7 @@ import java.util.Scanner;
  */
 public class Settings {
     public static final String APPLICATION_HOST = "application.host";
+    private static final String VARIABLES = "variables";
     /**
      * HashMap to store the configurations.
      */
@@ -47,11 +47,7 @@ public class Settings {
         if (props == null) {
             props = new HashMap<>();
             File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
-            if (yamlFile.exists()) {
-                loadYamlConfig(yamlFile);
-            } else {
-                throw new FileNotFoundException(yamlFile.getPath());
-            }
+            loadYamlConfig(yamlFile);
         }
     }
 
@@ -74,8 +70,8 @@ public class Settings {
 
         Map<String, Object> yamlProps = mapper.readValue(yamlFile, new TypeReference<Map<String, Object>>() {});
 
-        Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault("variables", new HashMap<>());
-        props.put("variables", variables);
+        Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault(VARIABLES, new HashMap<>());
+        props.put(VARIABLES, variables);
 
         if (variables != null) {
             variables.replaceAll((k, value) -> replaceEnvVariables((String) value));
@@ -127,7 +123,7 @@ public class Settings {
         for (Map.Entry<String, Object> entry : source.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
-            if (value != null && !key.equals("variables")) {
+            if (value != null && !key.equals(VARIABLES)) {
                 if (value instanceof Map) {
                     Map<String, Object> nestedMap = new HashMap<>();
                     replaceVariables((Map<String, Object>) value, nestedMap);
@@ -159,7 +155,7 @@ public class Settings {
      * @return the updated value
      */
     private static String replaceYamlVariables(String value) {
-        Map<String, Object> variablesMap = (Map<String, Object>) props.get("variables");
+        Map<String, Object> variablesMap = (Map<String, Object>) props.get(VARIABLES);
         for (Map.Entry<String, Object> variable : variablesMap.entrySet()) {
             String key = "${" + variable.getKey() + "}";
             String varValue = (String) variable.getValue();
@@ -313,4 +309,15 @@ public class Settings {
             return p.readValueAs(LinkedHashMap.class);
         }
     }
+
+    /**
+     * Use with caution - this will overwrite the existing value.
+     * only intended for use in tests.
+     * @param key the key to replace or create
+     * @param value the new value to assign.
+     */
+    public void setProperty(String key, Object value) {
+        props.put(key, value);
+    }
+
 }

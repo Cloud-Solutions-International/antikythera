@@ -14,11 +14,14 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -95,6 +98,17 @@ class UnitTestGeneratorTest {
 
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
+    }
+
+    @Test
+    void testCreateInstanceD() {
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries4")).orElseThrow();
+        Map<String, Variable> map = new HashMap<>();
+        map.put("id", new Variable(100L));
+        Mockito.when(argumentGenerator.getArguments()).thenReturn(map);
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries4Test"));
     }
 
     @Test

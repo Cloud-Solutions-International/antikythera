@@ -305,11 +305,10 @@ public class UnitTestGenerator extends TestGenerator {
         String fullName = AbstractCompiler.findFullyQualifiedName(compilationUnitUnderTest, t.asString());
         if (fullName != null) {
             CompilationUnit cu = Graph.getDependencies().get(fullName);
-            ClassOrInterfaceDeclaration cdecl = AbstractCompiler.getPublicType(cu).asClassOrInterfaceDeclaration();
-            if (cdecl != null) {
-                instantiateClass(cdecl, nameAsString);
-            } else {
-                throw new AntikytheraException("Could not find class for " + t.asString());
+            if (cu != null) {
+                AbstractCompiler.getMatchingType(cu, t.asString()).ifPresentOrElse(type ->
+                    instantiateClass(type.asClassOrInterfaceDeclaration(), nameAsString)
+                , () -> {throw new AntikytheraException("Could not find matching type " + fullName);});
             }
         }
     }
