@@ -64,4 +64,14 @@ class TestFields extends TestHelper {
         assertNull(v.getValue());
         assertEquals("false\n", outContent.toString() );
     }
+
+    @Test
+    void testJson() throws AntikytheraException, ReflectiveOperationException {
+        evaluator.setupFields();
+        evaluator.initializeFields();
+        MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("jsonDump")).orElseThrow();
+        Variable v = evaluator.executeMethod(ts);
+        assertNull(v.getValue());
+        assertEquals("false\n", outContent.toString() );
+    }
 }

@@ -34,6 +34,12 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.implementation.bind.annotation.AllArguments;
+import net.bytebuddy.implementation.bind.annotation.Origin;
+import net.bytebuddy.implementation.bind.annotation.RuntimeType;
+import net.bytebuddy.matcher.ElementMatchers;
 import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
 
@@ -215,6 +221,37 @@ public class Evaluator {
             return evaluateExpression(expr.asCastExpr().getExpression());
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
+        } else if (expr.isClassExpr()) {
+            ClassExpr classExpr = expr.asClassExpr();
+            String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
+
+            if (fullyQualifiedName != null) {
+                try {
+                    // Try to load the class as a compiled binary
+                    Class<?> loadedClass = AbstractCompiler.loadClass(fullyQualifiedName);
+                    return new Variable(loadedClass);
+                } catch (ClassNotFoundException e) {
+                    // Class not found as binary, check if available as source
+                    CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                    if (sourceCU != null) {
+                        // Create dynamic class using ByteBuddy
+                        Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
+                        Class<?> dynamicClass = new ByteBuddy()
+                            .subclass(Object.class)
+                            .name(fullyQualifiedName)
+                            .method(ElementMatchers.any())
+                            .intercept(MethodDelegation.to(new MethodInterceptor(evaluator)))
+                            .make()
+                            .load(Thread.currentThread().getContextClassLoader())
+                            .getLoaded();
+
+                        Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                        Variable v = new Variable(instance);
+                        v.setClazz(dynamicClass);
+                        return v;
+                    }
+                }
+            }
         }
         return null;
     }
@@ -1023,6 +1060,7 @@ public class Evaluator {
         return null;
     }
 
+    @SuppressWarnings("java:S1172")
     Variable executeMethod(Method m) {
         logger.error("NOt implemented yet");
         throw new AntikytheraException("Not yet implemented"); // but see MockingEvaluator
@@ -1222,12 +1260,13 @@ public class Evaluator {
             Variable v = new Variable(t);
             v.setValue(f);
             return v;
-        } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-            return setupPrimitiveOrBoxedField(variable, t);
-        } else {
+        } else if (resolvedClass != null) {
             CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
             if (compilationUnit != null) {
                 return resolveFieldRepresentedByCode(variable, resolvedClass);
+            }
+            else {
+                return setupPrimitiveOrBoxedField(variable, t);
             }
         }
         return null;

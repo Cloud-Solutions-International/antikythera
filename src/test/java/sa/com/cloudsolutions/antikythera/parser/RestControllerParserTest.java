@@ -4,6 +4,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.io.File;
@@ -17,6 +18,7 @@ class RestControllerParserTest {
 
     @BeforeEach
     void setUp() throws IOException {
+        AntikytheraRunTime.reset();
         Settings.loadConfigMap();
         outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
 
