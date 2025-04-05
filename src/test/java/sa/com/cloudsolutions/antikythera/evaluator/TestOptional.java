@@ -1,11 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -17,7 +17,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class OptEvaluatorTest {
+class TestOptional {
 
     private static Evaluator evaluator;
 
@@ -53,7 +53,7 @@ class OptEvaluatorTest {
     @Test
     void testGetOrNullNotNull() throws ReflectiveOperationException {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("getOrNull")).orElseThrow();
+                m -> m.getNameAsString().equals("getOrNull1")).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(1));
         Variable result = evaluator.executeMethod(method);
@@ -61,20 +61,22 @@ class OptEvaluatorTest {
         assertEquals(1,result.getValue());
     }
 
-    @Test
-    void testGetOrNull() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @ValueSource(strings = {"getOrNull1", "getOrNull2", "getOrNull3"})
+    void testGetOrNull(String name) throws ReflectiveOperationException {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("getOrNull")).orElseThrow();
+                m -> m.getNameAsString().equals(name)).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(0));
         Variable result = evaluator.executeMethod(method);
         assertNull(result.getValue());
     }
 
-    @Test
-    void getWithoutThrow() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @ValueSource(strings = {"getOrThrow1", "getOrThrow2"})
+    void getWithoutThrow(String name) throws ReflectiveOperationException {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("getOrThrow")).orElseThrow();
+                m -> m.getNameAsString().equals(name)).orElseThrow();
 
         AntikytheraRunTime.push(new Variable(1));
         Variable result = evaluator.executeMethod(method);
@@ -85,7 +87,7 @@ class OptEvaluatorTest {
     @Test
     void getThrowsException() {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("getOrThrow")).orElseThrow();
+                m -> m.getNameAsString().equals("getOrThrow1")).orElseThrow();
 
         Throwable ex = assertThrows(AntikytheraException.class, () -> {
             AntikytheraRunTime.push(new Variable(0));

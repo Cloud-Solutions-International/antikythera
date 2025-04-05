@@ -11,15 +11,28 @@ public class Opt {
         }
     }
 
-    Integer getOrNull(int id) {
+    Integer getOrNull1(int id) {
         return getById(id).orElse(null);
+    }
+
+    Integer getOrNull2(int id) {
+        return this.getById(id).orElse(null);
+    }
+
+    Integer getOrNull3(int id) {
+        Opt instance = new Opt();
+        return instance.getById(id).orElse(null);
     }
 
     Integer getOrThrowIllegal(int id) {
         return getById(id).orElseThrow(() -> new IllegalArgumentException("ID not found"));
     }
 
-    Integer getOrThrow(int id) {
+    Integer getOrThrow1(int id) {
         return getById(id).orElseThrow();
+    }
+
+    Integer getOrThrow2(int id) {
+        return this.getById(id).orElseThrow();
     }
 }
