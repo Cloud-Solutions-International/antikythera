@@ -421,6 +421,18 @@ public class AbstractCompiler {
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
         /*
+         * If the compilation unit is null, this may be part of the java.lang package.
+         */
+        if (cu == null) {
+            try {
+                Class.forName("java.lang." + className);
+                return "java.lang." + className;
+            } catch (ClassNotFoundException e) {
+                return null;
+            }
+        }
+
+        /*
          * First check if the compilation unit directly contains it.
          * Then check if there exists an import that ends with the short class name as it's last component.
          * Check if the package folder contains a java source file with the same name

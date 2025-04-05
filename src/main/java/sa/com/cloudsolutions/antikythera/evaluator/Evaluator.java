@@ -656,13 +656,7 @@ public class Evaluator {
      */
     private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
         try {
-            String resolvedClass = null;
-            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
-            if (importDeclaration != null) {
-                resolvedClass = importDeclaration.getImport().isAsterisk()
-                        ? importDeclaration.getSimplified().getNameAsString()
-                        : importDeclaration.getNameAsString();
-            }
+            String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, type.getNameAsString());
 
             Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
             ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
@@ -817,10 +811,11 @@ public class Evaluator {
                         else if (expr.isLambdaExpr()) {
                             Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
                             if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
-                                Variable v = (Variable) supplier.get();
-                                if (v.getValue() instanceof RuntimeException exception) {
+                                Object result =  supplier.get();
+                                if (result instanceof RuntimeException exception) {
                                     throw exception;
                                 }
+                                return new Variable(result);
                             }
                         }
                         else if (expr.isNameExpr()) {

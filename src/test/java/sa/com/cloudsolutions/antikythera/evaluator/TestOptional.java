@@ -7,10 +7,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -85,10 +87,25 @@ class OptEvaluatorTest {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getOrThrow")).orElseThrow();
 
-        assertThrows(IllegalArgumentException.class, () -> {
+        Throwable ex = assertThrows(AntikytheraException.class, () -> {
             AntikytheraRunTime.push(new Variable(0));
             evaluator.executeMethod(method);
         });
+
+        assertInstanceOf(NoSuchElementException.class, ex.getCause(), "Cause should be IllegalArgumentException");
+    }
+
+    @Test
+    void getThrowsIllegalException() {
+        MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("getOrThrowIllegal")).orElseThrow();
+
+        Throwable ex = assertThrows(AntikytheraException.class, () -> {
+            AntikytheraRunTime.push(new Variable(0));
+            evaluator.executeMethod(method);
+        });
+
+        assertInstanceOf(IllegalArgumentException.class, ex.getCause(), "Cause should be IllegalArgumentException");
     }
 }
 

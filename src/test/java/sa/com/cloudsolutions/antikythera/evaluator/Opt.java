@@ -15,7 +15,11 @@ public class Opt {
         return getById(id).orElse(null);
     }
 
-    Integer getOrThrow(int id) {
+    Integer getOrThrowIllegal(int id) {
         return getById(id).orElseThrow(() -> new IllegalArgumentException("ID not found"));
+    }
+
+    Integer getOrThrow(int id) {
+        return getById(id).orElseThrow();
     }
 }
