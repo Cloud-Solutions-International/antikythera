@@ -9,6 +9,8 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -100,15 +102,21 @@ class UnitTestGeneratorTest {
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
     }
 
-    @Test
-    void testCreateInstanceD() {
+    @ParameterizedTest
+    @CsvSource({"queries4, long", "queries5, int"})
+    void testCreateInstanceD(String name, String type) {
         MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("queries4")).orElseThrow();
+                md -> md.getNameAsString().equals(name)).orElseThrow();
         Map<String, Variable> map = new HashMap<>();
-        map.put("id", new Variable(100L));
+        if (type.equals("long")) {
+            map.put("id", new Variable(100L));
+        }
+        else {
+            map.put("id", new Variable(100));
+        }
         Mockito.when(argumentGenerator.getArguments()).thenReturn(map);
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries4Test"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains(name + "Test"));
     }
 
     @Test
