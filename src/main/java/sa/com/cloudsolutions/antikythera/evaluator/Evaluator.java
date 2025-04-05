@@ -794,11 +794,7 @@ public class Evaluator {
 
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional) {
-            if (optional.isPresent()) {
-                Object result = optional.get();
-
-            }
-            else {
+            if (optional.isEmpty()){
                 if (methodCall.getNameAsString().equals("orElseThrow")) {
                     if (methodCall.getArguments().isEmpty()) {
                         throw new NoSuchElementException();
@@ -946,18 +942,25 @@ public class Evaluator {
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
         validateReflectiveMethod(v, reflectionArguments, method);
-        Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
+        reflectionArguments.setMethod(method);
+        reflectionArguments.finalizeArguments();
+        invokeReflectively(v, reflectionArguments);
+        return returnValue;
+    }
 
-       try {
-           returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
-           if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-               returnValue.setClazz(method.getReturnType());
-           }
+    private void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+        Method method = reflectionArguments.getMethod();
+        Object[] finalArgs = reflectionArguments.getFinalArgs();
+        try {
 
-       } catch (IllegalAccessException e) {
-           invokeinAccessibleMethod(v, reflectionArguments, method);
-       }
-       return returnValue;
+            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                returnValue.setClazz(method.getReturnType());
+            }
+
+        } catch (IllegalAccessException e) {
+            invokeinAccessibleMethod(v, reflectionArguments);
+        }
     }
 
     private static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
@@ -970,8 +973,9 @@ public class Evaluator {
     }
 
     @SuppressWarnings("java:S3011")
-    private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments, Method method) throws ReflectiveOperationException {
-        Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
+    private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+        Method method = reflectionArguments.getMethod();
+        Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
 
@@ -1003,12 +1007,18 @@ public class Evaluator {
 
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
-        if (n.isPresent() && n.get().isMethodDeclaration()) {
-            Variable v = executeMethod(n.get().asMethodDeclaration());
-            if (v != null && v.getValue() == null) {
-                v.setType(n.get().asMethodDeclaration().getType());
+        if (n.isPresent()) {
+            if (n.get().isMethodDeclaration()) {
+                Variable v = executeMethod(n.get().asMethodDeclaration());
+                if (v != null && v.getValue() == null) {
+                    v.setType(n.get().asMethodDeclaration().getType());
+                }
+                return v;
             }
-            return v;
+            else {
+               logger.error("NOt implemented yet");
+               throw new AntikytheraException("Not yet implemented");
+            }
         }
 
         return null;

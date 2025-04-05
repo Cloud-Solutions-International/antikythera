@@ -562,8 +562,7 @@ public class SpringEvaluator extends Evaluator {
                     if (fieldName != null) {
                         Variable field = fields.get(fieldName);
                         if (field != null && field.getType() != null) {
-                            isMocked = AntikytheraRunTime.isMocked(null);
-                            throw new RuntimeException("Complete this");
+                            isMocked = AntikytheraRunTime.isMocked(fieldClass);
                         }
                     }
                     if (!isMocked) {

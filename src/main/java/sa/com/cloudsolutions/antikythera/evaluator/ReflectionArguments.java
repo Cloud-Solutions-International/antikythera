@@ -1,10 +1,15 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import java.lang.reflect.Method;
+
 public class ReflectionArguments {
     /**
      * The name of the method that will have to be matched in a class for relfection.
      */
     private final String methodName;
+
+    private Method method;
+
     /**
      * the invoke method requires arguments to be presented as an array of objects.
      */
@@ -22,6 +27,8 @@ public class ReflectionArguments {
      * Some methods have a scope, we may need it for additional type resolutions.
      */
     private Variable scope;
+
+    private Object[] finalArgs;
 
     public ReflectionArguments(String methodName, Object[] args, Class<?>[] argumentTypes) {
         this.methodName = methodName;
@@ -55,5 +62,23 @@ public class ReflectionArguments {
 
     public void setEnclosure(Evaluator enclosure) {
         this.enclosure = enclosure;
+    }
+
+    public void setMethod(Method method) {
+        this.method = method;
+    }
+
+    public Method getMethod() {
+        return method;
+    }
+
+    public void finalizeArguments() {
+        finalArgs = method.getParameterTypes().length == 1 &&
+                method.getParameterTypes()[0].equals(Object[].class) ?
+                new Object[]{ getArguments() } : getArguments();
+    }
+
+    public Object[] getFinalArgs() {
+        return finalArgs;
     }
 }

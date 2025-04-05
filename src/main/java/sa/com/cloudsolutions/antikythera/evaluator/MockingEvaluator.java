@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -16,13 +17,75 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
+
+import java.lang.reflect.Method;
+import java.util.Optional;
 
 public class MockingEvaluator extends Evaluator {
 
     protected MockingEvaluator(EvaluatorFactory.Context context) {
         super(context);
+    }
+
+    /**
+     * Execute a method call.
+     * @param wrapper the method call expression wrapped so that the argument types are available
+     * @return the result of executing that code.
+     * @throws EvaluatorException if there is an error evaluating the method call or if the
+     *          feature is not yet implemented.
+     */
+    @Override
+    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+        returnFrom = null;
+
+        Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
+        if (n.isPresent() ) {
+            if (n.get().isMethod()) {
+                Method m = n.get().getMethod();
+                Class<?> returnType = m.getReturnType();
+
+                Variable result = Reflect.variableFactory(returnType.getName());
+                if (result != null) {
+                    MethodCallExpr mockitoWhen = new MethodCallExpr(
+                            new NameExpr("Mockito"),
+                            "when"
+                    );
+
+                    // Create the method call with appropriate parameters
+                    MethodCallExpr methodCall = new MethodCallExpr()
+                            .setScope(new NameExpr(variableName))
+                            .setName(m.getName());
+
+                    // Add any() matchers for each parameter
+                    NodeList<Expression> args = new NodeList<>();
+                    java.lang.reflect.Parameter[] parameters = m.getParameters();
+                    for (java.lang.reflect.Parameter p : parameters) {
+                        String typeName = p.getType().getSimpleName();
+                        args.add(createMockitoArgument(typeName));
+                    }
+                    methodCall.setArguments(args);
+
+                    // Complete the when().thenReturn() expression
+                    mockitoWhen.setArguments(new NodeList<>(methodCall));
+                    MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
+                            .setArguments(new NodeList<>(expressionFactory(returnType.getName())));
+
+                    TestGenerator.addWhenThen(thenReturn);
+                    return result;
+                }
+            }
+            else {
+                return super.executeMethod(wrapper);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -108,21 +171,23 @@ public class MockingEvaluator extends Evaluator {
         NodeList<Expression> args = new NodeList<>();
         md.getParameters().forEach(param -> {
             String typeName = param.getType().asString();
-            MethodCallExpr matcher = new MethodCallExpr(
-                    new NameExpr("Mockito"),
-                    switch (typeName) {
-                        case "String" -> "anyString";
-                        case "int", "Integer" -> "anyInt";
-                        case "long", "Long" -> "anyLong";
-                        case "double", "Double" -> "anyDouble";
-                        case "boolean", "Boolean" -> "anyBoolean";
-                        default -> "any";
-                    }
-            );
-
-            args.add(matcher);
+            args.add(createMockitoArgument(typeName));
         });
         return args;
+    }
+
+    private static MethodCallExpr createMockitoArgument(String typeName) {
+        return new MethodCallExpr(
+                new NameExpr("Mockito"),
+                switch (typeName) {
+                    case "String" -> "anyString";
+                    case "int", "Integer" -> "anyInt";
+                    case "long", "Long" -> "anyLong";
+                    case "double", "Double" -> "anyDouble";
+                    case "boolean", "Boolean" -> "anyBoolean";
+                    default -> "any";
+                }
+        );
     }
 
     static Expression expressionFactory(String qualifiedName) {

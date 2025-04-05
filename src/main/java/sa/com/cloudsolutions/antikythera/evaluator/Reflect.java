@@ -474,13 +474,6 @@ public class Reflect {
         return null;
     }
 
-    public static Object[] buildObjects(ReflectionArguments reflectionArguments, Method method) {
-        return method.getParameterTypes().length == 1 &&
-                method.getParameterTypes()[0].equals(Object[].class) ?
-                new Object[]{reflectionArguments.getArguments()} :
-                reflectionArguments.getArguments();
-    }
-
     public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         Method method = Reflect.findMethod(clazz, reflectionArguments);
         if (method != null) return method;
