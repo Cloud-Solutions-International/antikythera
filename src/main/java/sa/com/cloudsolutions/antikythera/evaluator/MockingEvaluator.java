@@ -4,7 +4,6 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -17,11 +16,8 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
-import sa.com.cloudsolutions.antikythera.parser.Callable;
-import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
@@ -30,32 +26,6 @@ public class MockingEvaluator extends Evaluator {
 
     protected MockingEvaluator(EvaluatorFactory.Context context) {
         super(context);
-    }
-
-    /**
-     * Execute a method call.
-     * @param wrapper the method call expression wrapped so that the argument types are available
-     * @return the result of executing that code.
-     * @throws EvaluatorException if there is an error evaluating the method call or if the
-     *          feature is not yet implemented.
-     */
-    @Override
-    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
-        returnFrom = null;
-
-        Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
-        if (n.isPresent() ) {
-            if (n.get().isMethod()) {
-                Variable result = executeMethod(n.get().getMethod());
-                if (result != null) return result;
-            }
-            else {
-                return super.executeMethod(wrapper);
-            }
-        }
-
-        return null;
     }
 
     @Override
