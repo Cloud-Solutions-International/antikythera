@@ -7,6 +7,7 @@ import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -272,16 +273,25 @@ public class Reflect {
 
     private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
         Variable v = new Variable(initialValue);
-        ObjectCreationExpr expr = new ObjectCreationExpr()
-                .setType(new ClassOrInterfaceType().setName(typeName));
 
-        if (stringValue != null) {
-            expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
-        } else {
-            expr.setArguments(NodeList.nodeList());
+        switch (typeName) {
+            case "Long", DOUBLE, INTEGER, FLOAT, "Boolean" -> {
+                Expression scope = new NameExpr(typeName);
+                Expression mce = new MethodCallExpr(scope, "valueOf")
+                    .addArgument(new StringLiteralExpr(initialValue.toString()));
+                v.setInitializer(mce);
+            }
+            default -> {
+                ObjectCreationExpr expr = new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName(typeName));
+                if (stringValue != null) {
+                    expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
+                } else {
+                    expr.setArguments(NodeList.nodeList());
+                }
+                v.setInitializer(expr);
+            }
         }
-
-        v.setInitializer(expr);
         return v;
     }
 
