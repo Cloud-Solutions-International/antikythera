@@ -135,8 +135,9 @@ public class MockingEvaluator extends Evaluator {
 
     Variable mockReturnFromCompilationUnit(CallableDeclaration<?> cd, MethodDeclaration md, Type returnType) {
         Variable result = null;
-        if (cd.findCompilationUnit().isPresent()) {
-            CompilationUnit cu1 = cd.findCompilationUnit().get();
+        Optional<CompilationUnit> compilationUnit = cd.findCompilationUnit();
+        if (compilationUnit.isPresent()) {
+            CompilationUnit cu1 = compilationUnit.get();
             if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.asClassOrInterfaceType().getNameAsString());
                 result = Reflect.variableFactory(fqdn);
