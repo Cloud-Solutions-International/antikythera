@@ -47,38 +47,8 @@ public class MockingEvaluator extends Evaluator {
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
         if (n.isPresent() ) {
             if (n.get().isMethod()) {
-                Method m = n.get().getMethod();
-                Class<?> returnType = m.getReturnType();
-
-                Variable result = Reflect.variableFactory(returnType.getName());
-                if (result != null) {
-                    MethodCallExpr mockitoWhen = new MethodCallExpr(
-                            new NameExpr("Mockito"),
-                            "when"
-                    );
-
-                    // Create the method call with appropriate parameters
-                    MethodCallExpr methodCall = new MethodCallExpr()
-                            .setScope(new NameExpr(variableName))
-                            .setName(m.getName());
-
-                    // Add any() matchers for each parameter
-                    NodeList<Expression> args = new NodeList<>();
-                    java.lang.reflect.Parameter[] parameters = m.getParameters();
-                    for (java.lang.reflect.Parameter p : parameters) {
-                        String typeName = p.getType().getSimpleName();
-                        args.add(createMockitoArgument(typeName));
-                    }
-                    methodCall.setArguments(args);
-
-                    // Complete the when().thenReturn() expression
-                    mockitoWhen.setArguments(new NodeList<>(methodCall));
-                    MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
-                            .setArguments(new NodeList<>(expressionFactory(returnType.getName())));
-
-                    TestGenerator.addWhenThen(thenReturn);
-                    return result;
-                }
+                Variable result = executeMethod(n.get().getMethod());
+                if (result != null) return result;
             }
             else {
                 return super.executeMethod(wrapper);
@@ -86,6 +56,44 @@ public class MockingEvaluator extends Evaluator {
         }
 
         return null;
+    }
+
+    @Override
+    Variable executeMethod(Method m) {
+        Class<?> returnType = m.getReturnType();
+
+        Variable result = Reflect.variableFactory(returnType.getName());
+        if (result != null) {
+            MethodCallExpr methodCall = buildMockitoWhen(m.getName(), returnType.getName());
+            NodeList<Expression> args = new NodeList<>();
+            java.lang.reflect.Parameter[] parameters = m.getParameters();
+            for (java.lang.reflect.Parameter p : parameters) {
+                String typeName = p.getType().getSimpleName();
+                args.add(createMockitoArgument(typeName));
+            }
+            methodCall.setArguments(args);
+
+            return result;
+        }
+        return null;
+    }
+
+    MethodCallExpr buildMockitoWhen(String name, String returnType) {
+        MethodCallExpr mockitoWhen = new MethodCallExpr(
+                new NameExpr("Mockito"),
+                "when"
+        );
+
+        MethodCallExpr methodCall = new MethodCallExpr()
+                .setScope(new NameExpr(variableName))
+                .setName(name);
+        mockitoWhen.setArguments(new NodeList<>(methodCall));
+
+        MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
+                .setArguments(new NodeList<>(expressionFactory(returnType)));
+        TestGenerator.addWhenThen(thenReturn);
+
+        return methodCall;
     }
 
     /**
@@ -144,26 +152,9 @@ public class MockingEvaluator extends Evaluator {
 
     private void addMockitoExpression(MethodDeclaration md, Object returnValue) {
         if (returnValue != null) {
-            MethodCallExpr mockitoWhen = new MethodCallExpr(
-                    new NameExpr("Mockito"),
-                    "when"
-            );
-
-            // Create the method call with appropriate parameters
-            MethodCallExpr methodCall = new MethodCallExpr()
-                    .setScope(new NameExpr(variableName))
-                    .setName(md.getNameAsString());
-
-            // Add any() matchers for each parameter
+            MethodCallExpr methodCall = buildMockitoWhen(md.getNameAsString(), returnValue.getClass().getName());
             NodeList<Expression> args = fakeArguments(md);
             methodCall.setArguments(args);
-
-            // Complete the when().thenReturn() expression
-            mockitoWhen.setArguments(new NodeList<>(methodCall));
-            MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
-                    .setArguments(new NodeList<>(expressionFactory(returnValue.getClass().getName())));
-
-            TestGenerator.addWhenThen(thenReturn);
         }
     }
 

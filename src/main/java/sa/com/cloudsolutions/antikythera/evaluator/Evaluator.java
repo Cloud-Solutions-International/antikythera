@@ -1016,12 +1016,16 @@ public class Evaluator {
                 return v;
             }
             else {
-               logger.error("NOt implemented yet");
-               throw new AntikytheraException("Not yet implemented");
+               executeMethod(n.get().getMethod());
             }
         }
 
         return null;
+    }
+
+    Variable executeMethod(Method m) {
+        logger.error("NOt implemented yet");
+        throw new AntikytheraException("Not yet implemented"); // but see MockingEvaluator
     }
 
     /**
