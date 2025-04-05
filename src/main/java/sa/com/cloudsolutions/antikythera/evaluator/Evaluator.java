@@ -38,6 +38,7 @@ import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
 
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -66,6 +67,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -797,7 +799,40 @@ public class Evaluator {
         }
 
         Variable variable = evaluateScopeChain(chain);
+        if (variable.getValue() instanceof Optional<?> optional) {
+            if (optional.isPresent()) {
+                Object result = optional.get();
 
+            }
+            else {
+                if (methodCall.getNameAsString().equals("orElseThrow")) {
+                    if (methodCall.getArguments().isEmpty()) {
+                        throw new NoSuchElementException();
+                    }
+                    else {
+                        Expression expr = methodCall.getArguments().get(0);
+                        if (expr.isMethodCallExpr()) {
+                            evaluateMethodCall(expr.asMethodCallExpr());
+                        }
+                        else if (expr.isLambdaExpr()) {
+                            Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
+                            if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
+                                Variable v = (Variable) supplier.get();
+                                if (v.getValue() instanceof RuntimeException exception) {
+                                    throw exception;
+                                }
+                            }
+                        }
+                        else if (expr.isNameExpr()) {
+                            resolveExpression(expr.asNameExpr());
+                        }
+                        else {
+                            evaluateExpression(expr);
+                        }
+                    }
+                }
+            }
+        }
         return evaluateMethodCall(variable, methodCall);
     }
 
@@ -899,10 +934,12 @@ public class Evaluator {
 
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
         if (v != null) {
-            if (v.getValue() instanceof Evaluator eval && eval.getCompilationUnit() != null) {
+            Object value = v.getValue();
+            if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 return eval.executeMethod(wrapper);
             }
+
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
