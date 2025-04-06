@@ -245,9 +245,9 @@ public class Evaluator {
                             .load(Thread.currentThread().getContextClassLoader())
                             .getLoaded();
 
-                        Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-                        Variable v = new Variable(instance);
-                        v.setClazz(dynamicClass);
+                        //Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                        Variable v = new Variable(dynamicClass);
+                        v.setClazz(Class.class);
                         return v;
                     }
                 }

@@ -15,6 +15,7 @@ public class MethodInterceptor {
 
     @RuntimeType
     public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+        System.out.println(method.getName());
         return "HELLO";
     }
 }
