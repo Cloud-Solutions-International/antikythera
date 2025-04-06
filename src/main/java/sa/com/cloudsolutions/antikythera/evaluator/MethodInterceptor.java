@@ -18,4 +18,8 @@ public class MethodInterceptor {
         System.out.println(method.getName());
         return "HELLO";
     }
+
+    public Evaluator getEvaluator() {
+        return evaluator;
+    }
 }

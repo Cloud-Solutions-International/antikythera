@@ -1,8 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
@@ -26,14 +26,16 @@ public class DTOBuddy {
      * We will iterate through all the fields declared in the source code and make fake fields
      *  accordingly so that they show up in reflective inspections.
      *
-     * @param dtoType The ClassOrInterfaceType from which to build our byte buddy
+     * @param intercepter the MethodInterceptor to be used for the dynamic class.
      * @return an instance of the class that was faked.
      * @throws ReflectiveOperationException If an error occurs during reflection operations.
      */
-    public static Class<?> createDynamicClass(ClassOrInterfaceDeclaration dtoType)
-            throws ReflectiveOperationException {
+    public static Class<?> createDynamicClass(MethodInterceptor intercepter) throws ReflectiveOperationException {
+        Evaluator eval = intercepter.getEvaluator();
+        CompilationUnit cu = eval.getCompilationUnit();
+        TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
         String className = dtoType.getNameAsString();
-        CompilationUnit cu = dtoType.findCompilationUnit().orElseThrow();
+
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();

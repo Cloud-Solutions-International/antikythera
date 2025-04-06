@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Type;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -34,8 +36,9 @@ class TestDTOBuddy extends TestHelper {
 
     @Test
     void createDynamicDto() throws ReflectiveOperationException {
-        ClassOrInterfaceDeclaration cdecl = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
-        Class<?> clazz = DTOBuddy.createDynamicClass(cdecl);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "Employee").orElseThrow();
+        Class<?> clazz = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
         Object instance = clazz.getDeclaredConstructor().newInstance();
         assertNotNull(instance);
 
