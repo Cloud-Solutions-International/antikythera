@@ -222,7 +222,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
+    private Variable evaluateClassExpression(Expression expr) throws ReflectiveOperationException {
         ClassExpr classExpr = expr.asClassExpr();
         String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
 

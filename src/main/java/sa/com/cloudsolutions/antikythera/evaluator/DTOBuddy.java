@@ -32,7 +32,7 @@ public class DTOBuddy {
      * @return an instance of the class that was faked.
      * @throws ReflectiveOperationException If an error occurs during reflection operations.
      */
-    public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
+    public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ReflectiveOperationException {
         Evaluator eval = interceptor.getEvaluator();
         CompilationUnit cu = eval.getCompilationUnit();
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();

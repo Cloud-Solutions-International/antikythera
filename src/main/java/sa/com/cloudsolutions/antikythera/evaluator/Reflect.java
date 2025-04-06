@@ -17,7 +17,6 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
-import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -159,8 +158,8 @@ public class Reflect {
 
             // Check if the argument is already a proxy
             if (Proxy.isProxyClass(args[i].getClass())) {
-                FunctionalInvocationHandler handler = (FunctionalInvocationHandler) Proxy.getInvocationHandler(args[i]);
-                evaluator = handler.getEvaluator();
+                MethodInterceptor handler = (MethodInterceptor) Proxy.getInvocationHandler(args[i]);
+                evaluator = (FPEvaluator<?>) handler.getEvaluator();
             } else if (args[i] instanceof FPEvaluator<?>) {
                 evaluator = (FPEvaluator<?>) args[i];
             }
@@ -169,7 +168,7 @@ public class Reflect {
                 Object proxy = Proxy.newProxyInstance(
                         argumentTypes[i].getClassLoader(),
                         new Class<?>[]{functional},
-                        new FunctionalInvocationHandler(evaluator)
+                        new MethodInterceptor(evaluator)
                 );
                 args[i] = proxy;
                 argumentTypes[i] = functional;
