@@ -1,21 +1,18 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.Optional;
+import java.util.List;
+
 
 /**
  * Create fake objects using DTO Buddy for DTOs, Entities and possibly other types of classes
@@ -27,6 +24,9 @@ public class DTOBuddy {
     /**
      * Dynamically create a class matching the given type declaration and then create an instance.
      *
+     * We will iterate through all the fields declared in the source code and make fake fields
+     *  accordingly so that they show up in reflective inspections.
+     *
      * @param dtoType The ClassOrInterfaceType from which to build our byte buddy
      * @return an instance of the class that was faked.
      * @throws ReflectiveOperationException If an error occurs during reflection operations.
@@ -34,82 +34,27 @@ public class DTOBuddy {
     public static Object createDynamicDTO(ClassOrInterfaceDeclaration dtoType)
             throws ReflectiveOperationException {
         String className = dtoType.getNameAsString();
-        Class<?> clazz = createDynamicDTO(dtoType.resolve().asReferenceType().getDeclaredFields(), className);
-        Object instance = clazz.getDeclaredConstructor().newInstance();
-        setDefaults(dtoType.resolve().asReferenceType().getDeclaredFields(), instance);
-        return instance;
-    }
+        CompilationUnit cu = dtoType.findCompilationUnit().orElseThrow();
+        List<FieldDeclaration> fields = dtoType.getFields();
 
-    /**
-     * Dynamically create a class matching the given type declaration and then create an instance.
-     *
-     * @param qualifiedName This is a fully qualified name for the class
-     * @param dtoType The ResolvedTypeDeclaration representing the DTO.
-     * @return The created DTO instance.
-     * @throws ReflectiveOperationException If an error occurs during reflection operations.
-     */
-    public static Object createDynamicDTO(String qualifiedName, ResolvedTypeDeclaration dtoType) throws ReflectiveOperationException {
-        Class<?> clazz = createDynamicDTO(dtoType.asReferenceType().getDeclaredFields(), qualifiedName);
-        Object instance = clazz.getDeclaredConstructor().newInstance();
-        setDefaults(dtoType.asReferenceType().getDeclaredFields(), instance);
-        return instance;
-    }
-
-    /**
-     * Sets default values for fields annotated with @Id.
-     *
-     * @param fields The collection of fields that were discovered by java parser
-     * @param instance The instance of the DTO.
-     * @throws ReflectiveOperationException If an error occurs during reflection operations.
-     */
-    private static void setDefaults(Collection<ResolvedFieldDeclaration> fields, Object instance) throws ReflectiveOperationException {
-        Class<?> clazz = instance.getClass();
-
-        for (ResolvedFieldDeclaration field : fields) {
-            Optional<Node> a = field.toAst();
-            if (a.isPresent()) {
-                Node node = a.get();
-                if (node instanceof FieldDeclaration fieldDeclaration) {
-                    if (fieldDeclaration.getAnnotationByName("Id").isPresent()) {
-                        String fieldName = field.getName();
-                        Type t = fieldDeclaration.getElementType();
-                        String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-
-                        Method method = clazz.getMethod(setterName, Class.forName(field.getType().describe()));
-                        method.invoke(instance, Long.valueOf("10"));
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Create a fake class using byte buddy based on the given class name, methods and fields.
-     *
-     * We will iterate through all the fields declared in the source code and make fake fields
-     * accordingly so that they show up in reflective inspections.
-     *
-     * @param fields The collection of ResolvedFieldDeclaration representing the fields.
-     * @param className The name of the class to be created.
-     * @return The created DTO class.
-     */
-    public static Class<?> createDynamicDTO(Collection<ResolvedFieldDeclaration> fields, String className) throws ReflectiveOperationException {
         ByteBuddy byteBuddy = new ByteBuddy();
         DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className);
 
-        for (ResolvedFieldDeclaration field : fields) {
-            String fieldName = field.getName();
+        for (FieldDeclaration field : fields) {
+            VariableDeclarator vd = field.getVariable(0);
+            String fieldName = vd.getNameAsString();
             String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
             String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
 
-            // Get the field type
+
             TypeDescription.Generic fieldType = null;
-            if (field.getType().isPrimitive()) {
-                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(resolvePrimitiveType(field.getType().describe()));
+            if (vd.getType().isPrimitiveType()) {
+                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(resolvePrimitiveType(vd.getTypeAsString()));
             }
             else {
                 try {
-                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(field.getType().describe()));
+                    String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
+                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
                 } catch (ClassNotFoundException cex) {
                     // This field has a class that's not coming from an external library, but it's only available
                     // as source code. We need to create a dynamic class for it.
@@ -145,9 +90,10 @@ public class DTOBuddy {
                     .intercept(FieldAccessor.ofField(fieldName));
         }
 
-        return builder.make()
+        Class<?> clazz = builder.make()
                 .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.CHILD_FIRST)
                 .getLoaded();
+        return clazz.getDeclaredConstructor().newInstance();
     }
 
     /**
