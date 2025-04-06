@@ -576,7 +576,8 @@ public class Evaluator {
                 }
 
                 // Create the dynamic DTO with the extracted arguments
-                Object instance = DTOBuddy.createDynamicDTO(type, constructorArgs);
+                ImportWrapper imp = AbstractCompiler.findImport(cu, type.getNameAsString());
+                Object instance = DTOBuddy.createDynamicDTO(imp.getType().asClassOrInterfaceDeclaration());
                 return new Variable(type, instance);
             } catch (Exception e) {
                 logger.error("An error occurred in creating a variable with bytebuddy", e);

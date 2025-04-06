@@ -28,24 +28,6 @@ public class DTOBuddy {
      * Dynamically create a class matching the given type declaration and then create an instance.
      *
      * @param dtoType The ClassOrInterfaceType from which to build our byte buddy
-     * @param constructorArgs The arguments to be passed to the constructor.
-     * @return An instance of the created class.
-     * @throws ReflectiveOperationException If an error occurs during reflection operations.
-     */
-    public static Object createDynamicDTO(ClassOrInterfaceType dtoType, Object ...constructorArgs)
-            throws ReflectiveOperationException {
-        String className = dtoType.resolve().asReferenceType().getQualifiedName();
-
-        Class<?> clazz = createDynamicDTO(dtoType.resolve().asReferenceType().getDeclaredFields(), className);
-        Object instance = clazz.getDeclaredConstructor().newInstance();
-        setDefaults(dtoType.resolve().asReferenceType().getDeclaredFields(), instance);
-        return instance;
-    }
-
-    /**
-     * Dynamically create a class matching the given type declaration and then create an instance.
-     *
-     * @param dtoType The ClassOrInterfaceType from which to build our byte buddy
      * @return an instance of the class that was faked.
      * @throws ReflectiveOperationException If an error occurs during reflection operations.
      */
@@ -102,21 +84,18 @@ public class DTOBuddy {
     }
 
     /**
-     * Create a fake class using byte buddy based on the given class name, constructor and fields
+     * Create a fake class using byte buddy based on the given class name, methods and fields.
+     *
+     * We will iterate through all the fields declared in the source code and make fake fields
+     * accordingly so that they show up in reflective inspections.
      *
      * @param fields The collection of ResolvedFieldDeclaration representing the fields.
      * @param className The name of the class to be created.
-     * @param constructorArgs The arguments to be passed to the constructor.
      * @return The created DTO class.
      */
-    public static Class<?> createDynamicDTO(Collection<ResolvedFieldDeclaration> fields, String className, Object... constructorArgs) throws ReflectiveOperationException {
+    public static Class<?> createDynamicDTO(Collection<ResolvedFieldDeclaration> fields, String className) throws ReflectiveOperationException {
         ByteBuddy byteBuddy = new ByteBuddy();
         DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className);
-
-        // Define constructor with specific parameters and call super()
-//        builder = builder.defineConstructor(Visibility.PUBLIC)
-//                .withParameters(getConstructorParameterTypes(constructorArgs))
-//                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()));
 
         for (ResolvedFieldDeclaration field : fields) {
             String fieldName = field.getName();
@@ -190,20 +169,4 @@ public class DTOBuddy {
             default: throw new IllegalArgumentException("Unknown primitive type: " + typeName);
         }
     }
-
-    /**
-     * Gets the parameter types for the constructor from the provided arguments.
-     *
-     * @param constructorArgs The arguments to be passed to the constructor.
-     * @return An array of Class objects representing the parameter types.
-     */
-    private static Class<?>[] getConstructorParameterTypes(Object... constructorArgs) {
-        Class<?>[] parameterTypes = new Class<?>[constructorArgs.length];
-        for (int i = 0; i < constructorArgs.length; i++) {
-            parameterTypes[i] = constructorArgs[i].getClass();
-        }
-        return parameterTypes;
-    }
-
-
 }
