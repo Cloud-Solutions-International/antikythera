@@ -49,7 +49,8 @@ public class DTOBuddy {
 
             TypeDescription.Generic fieldType = null;
             if (vd.getType().isPrimitiveType()) {
-                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(resolvePrimitiveType(vd.getTypeAsString()));
+                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
+                        Reflect.getComponentClass(vd.getTypeAsString()));
             }
             else {
                 try {
@@ -96,23 +97,4 @@ public class DTOBuddy {
         return clazz.getDeclaredConstructor().newInstance();
     }
 
-    /**
-     * Resolves the primitive type from its name.
-     *
-     * @param typeName The name of the primitive type.
-     * @return The Class object representing the primitive type.
-     */
-    private static Class<?> resolvePrimitiveType(String typeName) {
-        switch (typeName) {
-            case "boolean": return boolean.class;
-            case "byte": return byte.class;
-            case "char": return char.class;
-            case "short": return short.class;
-            case "int": return int.class;
-            case "long": return long.class;
-            case "float": return float.class;
-            case "double": return double.class;
-            default: throw new IllegalArgumentException("Unknown primitive type: " + typeName);
-        }
-    }
 }
