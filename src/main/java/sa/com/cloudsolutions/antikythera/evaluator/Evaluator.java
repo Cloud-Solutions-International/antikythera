@@ -36,9 +36,6 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.implementation.bind.annotation.AllArguments;
-import net.bytebuddy.implementation.bind.annotation.Origin;
-import net.bytebuddy.implementation.bind.annotation.RuntimeType;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
@@ -222,34 +219,40 @@ public class Evaluator {
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {
-            ClassExpr classExpr = expr.asClassExpr();
-            String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
+            Variable loadedClass = evaluateClassExpression(expr);
+            if (loadedClass != null) return loadedClass;
+        }
+        return null;
+    }
 
-            if (fullyQualifiedName != null) {
-                try {
-                    // Try to load the class as a compiled binary
-                    Class<?> loadedClass = AbstractCompiler.loadClass(fullyQualifiedName);
-                    return new Variable(loadedClass);
-                } catch (ClassNotFoundException e) {
-                    // Class not found as binary, check if available as source
-                    CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                    if (sourceCU != null) {
-                        // Create dynamic class using ByteBuddy
-                        Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
-                        Class<?> dynamicClass = new ByteBuddy()
-                            .subclass(Object.class)
-                            .name(fullyQualifiedName)
-                            .method(ElementMatchers.any())
-                            .intercept(MethodDelegation.to(new MethodInterceptor(evaluator)))
-                            .make()
-                            .load(Thread.currentThread().getContextClassLoader())
-                            .getLoaded();
+    private Variable evaluateClassExpression(Expression expr) {
+        ClassExpr classExpr = expr.asClassExpr();
+        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
 
-                        //Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-                        Variable v = new Variable(dynamicClass);
-                        v.setClazz(Class.class);
-                        return v;
-                    }
+        if (fullyQualifiedName != null) {
+            try {
+                // Try to load the class as a compiled binary
+                Class<?> loadedClass = AbstractCompiler.loadClass(fullyQualifiedName);
+                return new Variable(loadedClass);
+            } catch (ClassNotFoundException e) {
+                // Class not found as binary, check if available as source
+                CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                if (sourceCU != null) {
+                    // Create dynamic class using ByteBuddy
+                    Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
+                    Class<?> dynamicClass = new ByteBuddy()
+                        .subclass(Object.class)
+                        .name(fullyQualifiedName)
+                        .method(ElementMatchers.any())
+                        .intercept(MethodDelegation.to(new MethodInterceptor(evaluator)))
+                        .make()
+                        .load(Thread.currentThread().getContextClassLoader())
+                        .getLoaded();
+
+                    //Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                    Variable v = new Variable(dynamicClass);
+                    v.setClazz(Class.class);
+                    return v;
                 }
             }
         }

@@ -8,7 +8,6 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
-import net.bytebuddy.implementation.FieldAccessor;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.List;
@@ -43,8 +42,6 @@ public class DTOBuddy {
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
-            String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-            String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
 
 
             TypeDescription.Generic fieldType = null;
@@ -80,15 +77,6 @@ public class DTOBuddy {
 
             // Define field
             builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
-
-            // Define getter
-            builder = builder.defineMethod(getterName, fieldType, net.bytebuddy.description.modifier.Visibility.PUBLIC)
-                    .intercept(FieldAccessor.ofField(fieldName));
-
-            // Define setter
-            builder = builder.defineMethod(setterName, void.class, net.bytebuddy.description.modifier.Visibility.PUBLIC)
-                    .withParameter(fieldType)
-                    .intercept(FieldAccessor.ofField(fieldName));
         }
 
         Class<?> clazz = builder.make()
