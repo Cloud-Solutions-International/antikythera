@@ -15,6 +15,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import net.bytebuddy.ByteBuddy;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -150,26 +151,22 @@ public class Reflect {
         return reflectionArguments;
     }
 
-    private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
+    private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) throws ReflectiveOperationException {
 
         Class<?> functional = getFunctionalInterface(argumentTypes[i]);
         if (functional != null) {
             FPEvaluator<?> evaluator = null;
 
             // Check if the argument is already a proxy
-            if (Proxy.isProxyClass(args[i].getClass())) {
-                MethodInterceptor handler = (MethodInterceptor) Proxy.getInvocationHandler(args[i]);
-                evaluator = (FPEvaluator<?>) handler.getEvaluator();
+            if (DTOBuddy.isByteBuddyClass(args[i].getClass())) {
+
             } else if (args[i] instanceof FPEvaluator<?>) {
                 evaluator = (FPEvaluator<?>) args[i];
             }
 
             if (evaluator != null) {
-                Object proxy = Proxy.newProxyInstance(
-                        argumentTypes[i].getClassLoader(),
-                        new Class<?>[]{functional},
-                        new MethodInterceptor(evaluator)
-                );
+                Class<?> clazz = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+                Object proxy = clazz.getDeclaredConstructor().newInstance();
                 args[i] = proxy;
                 argumentTypes[i] = functional;
             }
@@ -342,7 +339,7 @@ public class Reflect {
      * @return a Method instance or null.
      */
     @SuppressWarnings("java:S1872")
-    public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+    public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
 
@@ -397,7 +394,7 @@ public class Reflect {
      * @param argumentTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
-    public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] argumentTypes, Object[] arguments) {
+    public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] argumentTypes, Object[] arguments) throws ReflectiveOperationException {
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             Class<?>[] parameterTypes = c.getParameterTypes();
             if (parameterTypes.length != argumentTypes.length) {
@@ -428,7 +425,7 @@ public class Reflect {
      * @return true if a match has been found.
      */
     private static boolean matchArgumentVsParameter(Class<?>[] argumentTypes, Class<?>[] parameterTypes,
-                                                    Object[] arguments, int i) {
+                                                    Object[] arguments, int i) throws ReflectiveOperationException {
         if (arguments.length < parameterTypes.length) {
             return false;
         }
@@ -473,7 +470,7 @@ public class Reflect {
         return null;
     }
 
-    public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+    public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = Reflect.findMethod(clazz, reflectionArguments);
         if (method != null) return method;
 

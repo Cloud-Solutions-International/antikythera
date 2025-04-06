@@ -786,7 +786,7 @@ public class AbstractCompiler {
                                 if (method != null) {
                                     return Optional.of(new Callable(method));
                                 }
-                            } catch (ClassNotFoundException e) {
+                            } catch (ReflectiveOperationException e) {
                                 return Optional.empty();
                             }
                         }
