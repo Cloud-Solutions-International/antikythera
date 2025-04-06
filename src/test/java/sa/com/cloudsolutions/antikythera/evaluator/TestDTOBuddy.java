@@ -11,7 +11,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -36,8 +35,8 @@ class TestDTOBuddy extends TestHelper {
     @Test
     void createDynamicDto() throws ReflectiveOperationException {
         ClassOrInterfaceDeclaration cdecl = cu.getTypes().get(0).asClassOrInterfaceDeclaration();
-
-        Object instance = DTOBuddy.createDynamicDTO(cdecl);
+        Class<?> clazz = DTOBuddy.createDynamicClass(cdecl);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
         assertNotNull(instance);
 
         for(FieldDeclaration fd : cdecl.getFields()) {

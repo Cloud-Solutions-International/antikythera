@@ -30,7 +30,7 @@ public class DTOBuddy {
      * @return an instance of the class that was faked.
      * @throws ReflectiveOperationException If an error occurs during reflection operations.
      */
-    public static Object createDynamicDTO(ClassOrInterfaceDeclaration dtoType)
+    public static Class<?> createDynamicClass(ClassOrInterfaceDeclaration dtoType)
             throws ReflectiveOperationException {
         String className = dtoType.getNameAsString();
         CompilationUnit cu = dtoType.findCompilationUnit().orElseThrow();
@@ -79,10 +79,9 @@ public class DTOBuddy {
             builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
         }
 
-        Class<?> clazz = builder.make()
+        return builder.make()
                 .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.CHILD_FIRST)
                 .getLoaded();
-        return clazz.getDeclaredConstructor().newInstance();
     }
 
 }
