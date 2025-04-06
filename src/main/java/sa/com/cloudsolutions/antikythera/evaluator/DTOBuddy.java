@@ -8,6 +8,8 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.List;
@@ -26,12 +28,12 @@ public class DTOBuddy {
      * We will iterate through all the fields declared in the source code and make fake fields
      *  accordingly so that they show up in reflective inspections.
      *
-     * @param intercepter the MethodInterceptor to be used for the dynamic class.
+     * @param interceptor the MethodInterceptor to be used for the dynamic class.
      * @return an instance of the class that was faked.
      * @throws ReflectiveOperationException If an error occurs during reflection operations.
      */
-    public static Class<?> createDynamicClass(MethodInterceptor intercepter) throws ReflectiveOperationException {
-        Evaluator eval = intercepter.getEvaluator();
+    public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
+        Evaluator eval = interceptor.getEvaluator();
         CompilationUnit cu = eval.getCompilationUnit();
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
         String className = dtoType.getNameAsString();
@@ -39,7 +41,9 @@ public class DTOBuddy {
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className);
+        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
+                .method(ElementMatchers.any())
+                .intercept(MethodDelegation.to(interceptor));
 
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);

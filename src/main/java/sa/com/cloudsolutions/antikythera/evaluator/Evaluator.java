@@ -34,9 +34,6 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
-import net.bytebuddy.ByteBuddy;
-import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.matcher.ElementMatchers;
 import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
 
@@ -225,7 +222,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateClassExpression(Expression expr) {
+    private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
         ClassExpr classExpr = expr.asClassExpr();
         String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
 
@@ -240,14 +237,7 @@ public class Evaluator {
                 if (sourceCU != null) {
                     // Create dynamic class using ByteBuddy
                     Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
-                    Class<?> dynamicClass = new ByteBuddy()
-                        .subclass(Object.class)
-                        .name(fullyQualifiedName)
-                        .method(ElementMatchers.any())
-                        .intercept(MethodDelegation.to(new MethodInterceptor(evaluator)))
-                        .make()
-                        .load(Thread.currentThread().getContextClassLoader())
-                        .getLoaded();
+                    Class<?> dynamicClass = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
                     //Object instance = dynamicClass.getDeclaredConstructor().newInstance();
                     Variable v = new Variable(dynamicClass);
