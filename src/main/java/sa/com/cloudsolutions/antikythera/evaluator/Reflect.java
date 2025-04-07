@@ -174,6 +174,15 @@ public class Reflect {
                 args[i] = proxy;
                 argumentTypes[i] = functional;
             }
+        } else if (args[i] instanceof Evaluator eval){
+            MethodInterceptor interceptor = new MethodInterceptor(eval);
+            try {
+                Class<?> c = DTOBuddy.createDynamicClass(interceptor);
+                args[i] = c.getDeclaredConstructor().newInstance();
+                argumentTypes[i] = c;
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
+            }
         }
     }
 

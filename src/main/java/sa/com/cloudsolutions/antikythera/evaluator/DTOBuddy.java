@@ -38,6 +38,11 @@ public class DTOBuddy {
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
         String className = dtoType.getNameAsString();
 
+        Class<?> clazz = AntikytheraRunTime.getInjectedClass(className);
+        if (clazz != null) {
+            return clazz;
+        }
+
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();
@@ -85,9 +90,11 @@ public class DTOBuddy {
             builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
         }
 
-        return builder.make()
-                .load(DTOBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.CHILD_FIRST)
+        clazz = builder. make()
+                .load(Thread.currentThread().getContextClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
+        AntikytheraRunTime.addInjectedClass(className, clazz);
+        return clazz;
     }
 
 }

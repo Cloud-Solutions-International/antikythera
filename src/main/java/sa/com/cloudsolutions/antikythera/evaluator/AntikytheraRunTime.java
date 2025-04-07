@@ -58,6 +58,8 @@ public class AntikytheraRunTime {
 
     protected static final Map<String, Map<String,Variable>> statics = new HashMap<>();
 
+    protected static final Map<String, Class<?>> injectedClasses = new HashMap<>();
+
     private AntikytheraRunTime() {}
 
     public static CompilationUnit getCompilationUnit(String cls) {
@@ -123,6 +125,14 @@ public class AntikytheraRunTime {
 
     public static boolean isMocked(String className) {
         return mockedFields.contains(className);
+    }
+
+    public static Class<?> getInjectedClass(String className) {
+        return injectedClasses.get(className);
+    }
+
+    public static void addInjectedClass(String className, Class<?> clazz) {
+        injectedClasses.put(className, clazz);
     }
 
     static class ClassInfo {
