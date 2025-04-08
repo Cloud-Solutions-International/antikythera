@@ -16,6 +16,7 @@ import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
@@ -860,5 +861,25 @@ public class AbstractCompiler {
         } else {
             return new UnknownType();
         }
+    }
+
+
+    /**
+     * Recursively traverse parents to find a block statement.
+     * @param expr the expression to start from
+     * @return the block statement that contains expr
+     */
+    public static BlockStmt findBlockStatement(Node expr) {
+        Node currentNode = expr;
+        while (currentNode != null) {
+            if (currentNode instanceof BlockStmt blockStmt) {
+                return blockStmt;
+            }
+            if (currentNode instanceof MethodDeclaration md) {
+                return md.getBody().orElse(null);
+            }
+            currentNode = currentNode.getParentNode().orElse(null);
+        }
+        return null; // No block statement found
     }
 }
