@@ -5,7 +5,6 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
 
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -25,14 +24,14 @@ public class AntikytheraRunTime {
      */
     private static final Map<String, ClassInfo> resolved = new HashMap<>();
     /**
-     * <p>We are not using a stack data structure here, but a Deque. This is because Deque is a
-     * double-ended queue, which can be used as a stack. It is more efficient than a Stack ADT.
-     * Because in java the stack is synchronized.</p>
+     * <p>Arguments will be pushed into the stack in a left to right order.
+     * They will be popped out in the reverse order with the right most element being popped
+     * out first.</p>
      *
      * While it's normal practice to also place the return value of a method call into the
      * stack, we are not doing so in here.
      */
-    protected static final Deque<Variable> stack = new LinkedList<>();
+    protected static final LinkedList<Variable> stack = new LinkedList<>();
 
     /**
      * Stores the interfaces and their implementations.
@@ -95,7 +94,7 @@ public class AntikytheraRunTime {
     }
 
     public static void push(Variable variable) {
-        stack.push(variable);
+        stack.addLast(variable);
     }
 
     public static Variable pop() {

@@ -26,8 +26,8 @@ public class BiConsumerEvaluator<T, U> extends FPEvaluator<T> implements BiConsu
 
     @Override
     public void accept(T t, U u) {
-        AntikytheraRunTime.push(new Variable(u));
         AntikytheraRunTime.push(new Variable(t));
+        AntikytheraRunTime.push(new Variable(u));
 
         try {
             executeMethod(methodDeclaration);

@@ -216,7 +216,7 @@ public class SpringEvaluator extends Evaluator {
      * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
     void mockMethodArguments(MethodDeclaration md) throws ReflectiveOperationException {
-        for (int i = md.getParameters().size() - 1; i >= 0; i--) {
+        for (int i = 0 ; i < md.getParameters().size() ; ++i) {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);
         }
@@ -250,7 +250,7 @@ public class SpringEvaluator extends Evaluator {
                         for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
                             q.getMethodArguments().add(null);
                         }
-                        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
+                        for (int i = 0 ; i < methodCall.getArguments().size() ; i++) {
                             QueryMethodArgument qa = new QueryMethodArgument(methodCall.getArgument(i), i, AntikytheraRunTime.pop());
                             q.getMethodArguments().set(i, qa);
                         }

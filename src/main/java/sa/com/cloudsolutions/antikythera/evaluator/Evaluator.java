@@ -584,7 +584,7 @@ public class Evaluator {
         Deque<Type> args = new ArrayDeque<>();
         mce.setArgumentTypes(argTypes);
 
-        for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
+        for (int i = 0 ; i <  oce.getArguments().size() - 1; i++) {
             /*
              * Push method arguments
              */
@@ -1314,15 +1314,13 @@ public class Evaluator {
     protected boolean setupParameters(MethodDeclaration md) {
         NodeList<Parameter> parameters = md.getParameters();
         ArrayList<Boolean> missing = new ArrayList<>();
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
-            Parameter p = parameters.get(i);
-
+        for (Parameter p : parameters) {
             Variable va = AntikytheraRunTime.pop();
-            if (md.getBody().isPresent()) {
+            md.getBody().ifPresent(stmt -> {
                 // repository methods for example don't have bodies
-                setLocal(md.getBody().get(), p.getNameAsString(), va);
+                setLocal(stmt, p.getNameAsString(), va);
                 p.getAnnotationByName("RequestParam").ifPresent(ann -> setupRequestParam(ann, va, missing));
-            }
+            });
         }
         return missing.isEmpty();
     }
@@ -1353,8 +1351,7 @@ public class Evaluator {
             NodeList<Parameter> parameters = md.getParameters();
 
             returnValue = null;
-            for (int i = parameters.size() - 1; i >= 0; i--) {
-                Parameter p = parameters.get(i);
+            for (Parameter p : parameters) {
                 setLocal(cd.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
             }
 
