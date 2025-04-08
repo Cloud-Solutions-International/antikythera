@@ -584,7 +584,7 @@ public class Evaluator {
         Deque<Type> args = new ArrayDeque<>();
         mce.setArgumentTypes(argTypes);
 
-        for (int i = 0 ; i <  oce.getArguments().size() - 1; i++) {
+        for (int i = 0 ; i <  oce.getArguments().size() ; i++) {
             /*
              * Push method arguments
              */
