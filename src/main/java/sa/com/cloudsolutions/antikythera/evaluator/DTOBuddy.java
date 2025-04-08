@@ -52,7 +52,7 @@ public class DTOBuddy {
                 .intercept(MethodDelegation.to(interceptor));
 
         builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), builder);
+        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
         clazz = builder. make()
                 .load(Evaluator.class.getClassLoader())
@@ -61,29 +61,35 @@ public class DTOBuddy {
         return clazz;
     }
 
-    private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, DynamicType.Builder<?> builder) throws ClassNotFoundException {
+    private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
+            DynamicType.Builder<?> builder, MethodInterceptor interceptor) throws ClassNotFoundException {
+
         for (MethodDeclaration method : methods) {
             String methodName = method.getNameAsString();
-            String returnType = method.getType().asString();
 
             // Get parameter types
             Class<?>[] parameterTypes = method.getParameters().stream()
                 .map(p -> {
                     try {
-                        String typeName = p.getType().asString();
-                        return Reflect.getComponentClass(typeName);
+                        if (p.getType().isPrimitiveType()) {
+                            return Reflect.getComponentClass(p.getTypeAsString());
+                        }
+                        else {
+                            String fullName = AbstractCompiler.findFullyQualifiedName(cu, p.getType().asString());
+                            return Reflect.getComponentClass(fullName);
+                        }
                     } catch (ClassNotFoundException e) {
                         throw new RuntimeException(e);
                     }
                 })
                 .toArray(Class<?>[]::new);
 
-            // Define method with parameters
+            // Define method with parameters and delegate to the interceptor instance
             builder = builder.defineMethod(methodName,
-                    Reflect.getComponentClass(returnType),
+                    Object.class,
                     net.bytebuddy.description.modifier.Visibility.PUBLIC)
                 .withParameters(parameterTypes)
-                .intercept(MethodDelegation.to(MethodInterceptor.class));
+                .intercept(MethodDelegation.to(interceptor));  // Use interceptor instance
         }
         return builder;
     }
