@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import net.bytebuddy.ByteBuddy;
@@ -23,10 +24,10 @@ public class DTOBuddy {
     protected DTOBuddy() {}
 
     /**
-     * Dynamically create a class matching the given type declaration and then create an instance.
+     * <p>Dynamically create a class matching given type declaration and then create an instance</p>
      *
      * We will iterate through all the fields declared in the source code and make fake fields
-     *  accordingly so that they show up in reflective inspections.
+     * accordingly so that they show up in reflective inspections.
      *
      * @param interceptor the MethodInterceptor to be used for the dynamic class.
      * @return an instance of the class that was faked.
@@ -50,6 +51,44 @@ public class DTOBuddy {
                 .method(ElementMatchers.any())
                 .intercept(MethodDelegation.to(interceptor));
 
+        builder = addFields(fields, cu, builder);
+        builder = addMethods(dtoType.getMethods(), builder);
+
+        clazz = builder. make()
+                .load(Evaluator.class.getClassLoader())
+                .getLoaded();
+        AntikytheraRunTime.addInjectedClass(className, clazz);
+        return clazz;
+    }
+
+    private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, DynamicType.Builder<?> builder) throws ClassNotFoundException {
+        for (MethodDeclaration method : methods) {
+            String methodName = method.getNameAsString();
+            String returnType = method.getType().asString();
+
+            // Get parameter types
+            Class<?>[] parameterTypes = method.getParameters().stream()
+                .map(p -> {
+                    try {
+                        String typeName = p.getType().asString();
+                        return Reflect.getComponentClass(typeName);
+                    } catch (ClassNotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .toArray(Class<?>[]::new);
+
+            // Define method with parameters
+            builder = builder.defineMethod(methodName,
+                    Reflect.getComponentClass(returnType),
+                    net.bytebuddy.description.modifier.Visibility.PUBLIC)
+                .withParameters(parameterTypes)
+                .intercept(MethodDelegation.to(MethodInterceptor.class));
+        }
+        return builder;
+    }
+
+    private static DynamicType.Builder<?> addFields(List<FieldDeclaration> fields, CompilationUnit cu, DynamicType.Builder<?> builder) throws ClassNotFoundException {
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
@@ -65,23 +104,7 @@ public class DTOBuddy {
                     String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
                     fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
                 } catch (ClassNotFoundException cex) {
-                    // This field has a class that's not coming from an external library, but it's only available
-                    // as source code. We need to create a dynamic class for it.
 
-                    // then again there are cycles!
-
-//                    String qualifiedName = field.getType().asReferenceType().getQualifiedName();
-//                    if (qualifiedName.startsWith("java.util")) {
-//                        if (qualifiedName.equals("java.util.List")) {
-//                            fieldType = TypeDescription.Generic.Builder.parameterizedType(List.class, Object.class).build();
-//                        } else {
-//                            Class<?> clazz = Class.forName(qualifiedName);
-//                            fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(clazz);
-//                        }
-//                    } else {
-//                        Object o = DTOBuddy.createDynamicDTO(qualifiedName, field.getType().asReferenceType().getTypeDeclaration().get());
-//                        fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(o.getClass());
-//                    }
                     continue;
                 }
             }
@@ -89,12 +112,7 @@ public class DTOBuddy {
             // Define field
             builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
         }
-
-        clazz = builder. make()
-                .load(Evaluator.class.getClassLoader())
-                .getLoaded();
-        AntikytheraRunTime.addInjectedClass(className, clazz);
-        return clazz;
+        return builder;
     }
 
 }

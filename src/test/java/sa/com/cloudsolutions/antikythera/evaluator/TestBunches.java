@@ -33,6 +33,7 @@ public class TestBunches  {
 
     @BeforeAll
     static void setup() throws IOException {
+        AntikytheraRunTime.reset();
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
