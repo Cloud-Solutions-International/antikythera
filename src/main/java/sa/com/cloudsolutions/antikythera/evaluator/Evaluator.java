@@ -444,17 +444,22 @@ public class Evaluator {
                     : getValue(expr, fae.getScope().toString());
 
             Object obj = variable.getValue();
-            try {
-                Field field = obj.getClass().getDeclaredField(fieldName);
-                field.setAccessible(true);
-                field.set(obj, v.getValue());
-            } catch (ReflectiveOperationException|NullPointerException e) {
-                /*
-                 * This is not something that was created with class.forName or byte buddy.
-                 */
-                this.fields.put(fieldName,v);
-            }
+            if (obj instanceof Evaluator eval) {
+                eval.getFields().put(fae.getNameAsString(), v);
+            } else {
+                try {
+                    Field field = obj.getClass().getDeclaredField(fieldName);
+                    field.setAccessible(true);
+                    field.set(obj, v.getValue());
+                } catch (ReflectiveOperationException | NullPointerException e) {
+                    /*
+                     * This is not something that was created with class.forName or byte buddy.
+                     */
+                    Expression scope = fae.getScope();
 
+                    this.fields.put(fieldName, v);
+                }
+            }
         }
         else if(target.isNameExpr()) {
             String name = target.asNameExpr().getNameAsString();

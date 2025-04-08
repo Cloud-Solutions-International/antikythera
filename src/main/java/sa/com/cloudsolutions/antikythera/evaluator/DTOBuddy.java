@@ -91,7 +91,7 @@ public class DTOBuddy {
         }
 
         clazz = builder. make()
-                .load(Thread.currentThread().getContextClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                .load(Evaluator.class.getClassLoader())
                 .getLoaded();
         AntikytheraRunTime.addInjectedClass(className, clazz);
         return clazz;

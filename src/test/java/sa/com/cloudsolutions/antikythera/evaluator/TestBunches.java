@@ -63,7 +63,7 @@ public class TestBunches  {
     void testWithDTO() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTO")).orElseThrow();
         evaluator.executeMethod(withDTO);
-        assertTrue(outContent.toString().contains("Bunches.DTO]"));
+        assertTrue(outContent.toString().startsWith("[Biggles 10]"));
     }
 
 
