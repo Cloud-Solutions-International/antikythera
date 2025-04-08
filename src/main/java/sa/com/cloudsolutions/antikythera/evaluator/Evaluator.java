@@ -1314,7 +1314,9 @@ public class Evaluator {
     protected boolean setupParameters(MethodDeclaration md) {
         NodeList<Parameter> parameters = md.getParameters();
         ArrayList<Boolean> missing = new ArrayList<>();
-        for (Parameter p : parameters) {
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            Parameter p = parameters.get(i);
+
             Variable va = AntikytheraRunTime.pop();
             md.getBody().ifPresent(stmt -> {
                 // repository methods for example don't have bodies
