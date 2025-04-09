@@ -113,15 +113,27 @@ class TestOptional extends TestHelper {
         assertInstanceOf(IllegalArgumentException.class, ex.getCause(), "Cause should be IllegalArgumentException");
     }
 
-    @Test
-    void testIfPresent() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"1, 'ID: 1'", "0, ''"})
+    void testIfPresent(Integer a, String b) throws ReflectiveOperationException {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("ifPresent")).orElseThrow();
 
-        AntikytheraRunTime.push(new Variable(1));
+        AntikytheraRunTime.push(new Variable(a));
         evaluator.executeMethod(method);
 
-        assertEquals("ID: 1\n", outContent.toString());
+        assertEquals(b, outContent.toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1, 'ID: 1'", "0, ''"})
+    void testIfEmpty(Integer a, String b) throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("ifEmpty")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(a));
+        evaluator.executeMethod(method);
+
+        assertEquals(b, outContent.toString());
     }
 }
-
