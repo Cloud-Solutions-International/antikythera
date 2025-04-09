@@ -11,6 +11,17 @@ public class Opt {
         }
     }
 
+    void ifPresent() {
+        getById(1).ifPresent(id -> System.out.println("ID: " + id));
+    }
+
+    void ifEmpty() {
+        getById(0).ifPresentOrElse(
+            id -> System.out.println("ID: " + id),
+            () -> System.out.println("ID not found")
+        );
+    }
+
     Integer getOrNull1(int id) {
         return getById(id).orElse(null);
     }

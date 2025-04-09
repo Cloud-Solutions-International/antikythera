@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.Type;
 
 import java.util.Deque;
 import java.util.HashMap;
@@ -57,8 +56,6 @@ public class AntikytheraRunTime {
     protected static final Map<String, Variable> autowired = new HashMap<>();
 
     protected static final Map<String, Map<String,Variable>> statics = new HashMap<>();
-
-    protected static final Map<String, Class<?>> injectedClasses = new HashMap<>();
 
     private AntikytheraRunTime() {}
 
@@ -117,22 +114,11 @@ public class AntikytheraRunTime {
     }
 
     public static void markAsMocked(String className) {
-        if (className == null) {
-            throw new RuntimeException("Cant be");
-        }
         mockedFields.add(className);
     }
 
     public static boolean isMocked(String className) {
         return mockedFields.contains(className);
-    }
-
-    public static Class<?> getInjectedClass(String className) {
-        return injectedClasses.get(className);
-    }
-
-    public static void addInjectedClass(String className, Class<?> clazz) {
-        injectedClasses.put(className, clazz);
     }
 
     static class ClassInfo {

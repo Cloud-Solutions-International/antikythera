@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -12,12 +13,13 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class TestOptional {
+class TestOptional extends TestHelper {
 
     private static Evaluator evaluator;
 
@@ -27,6 +29,11 @@ class TestOptional {
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Opt", Evaluator.class);
+    }
+
+    @BeforeEach
+    void each() throws AntikytheraException {
+        System.setOut(new PrintStream(outContent));
     }
 
     @ParameterizedTest
@@ -89,10 +96,8 @@ class TestOptional {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getOrThrow1")).orElseThrow();
 
-        Throwable ex = assertThrows(AntikytheraException.class, () -> {
-            AntikytheraRunTime.push(new Variable(0));
-            evaluator.executeMethod(method);
-        });
+        AntikytheraRunTime.push(new Variable(0));
+        Throwable ex = assertThrows(AntikytheraException.class, () -> evaluator.executeMethod(method));
 
         assertInstanceOf(NoSuchElementException.class, ex.getCause(), "Cause should be IllegalArgumentException");
     }
@@ -102,12 +107,21 @@ class TestOptional {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getOrThrowIllegal")).orElseThrow();
 
-        Throwable ex = assertThrows(AntikytheraException.class, () -> {
-            AntikytheraRunTime.push(new Variable(0));
-            evaluator.executeMethod(method);
-        });
+        AntikytheraRunTime.push(new Variable(0));
+        Throwable ex = assertThrows(AntikytheraException.class, () -> evaluator.executeMethod(method));
 
         assertInstanceOf(IllegalArgumentException.class, ex.getCause(), "Cause should be IllegalArgumentException");
+    }
+
+    @Test
+    void testIfPresent() throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("ifPresent")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(1));
+        evaluator.executeMethod(method);
+
+        assertEquals("ID: 1\n", outContent.toString());
     }
 }
 

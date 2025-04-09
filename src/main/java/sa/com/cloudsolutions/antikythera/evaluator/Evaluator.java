@@ -809,6 +809,9 @@ public class Evaluator {
                     }
                 }
             }
+            else if (methodCall.getNameAsString().equals("ifPresent")) {
+                AntikytheraRunTime.push(new Variable(optional.get()));
+            }
         }
         return evaluateMethodCall(variable, methodCall);
     }
