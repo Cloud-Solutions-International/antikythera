@@ -39,10 +39,6 @@ public class DTOBuddy {
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
         String className = dtoType.getNameAsString();
 
-        Class<?> clazz = AntikytheraRunTime.getInjectedClass(className);
-        if (clazz != null) {
-            return clazz;
-        }
 
         List<FieldDeclaration> fields = dtoType.getFields();
 
@@ -54,11 +50,9 @@ public class DTOBuddy {
         builder = addFields(fields, cu, builder);
         builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
-        clazz = builder. make()
+        return builder. make()
                 .load(Evaluator.class.getClassLoader())
                 .getLoaded();
-        AntikytheraRunTime.addInjectedClass(className, clazz);
-        return clazz;
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
