@@ -122,6 +122,7 @@ public class Functional {
         f.greet3();
         f.sorting1();
         f.sorting2();
+        System.out.println("People");
         f.people1();
         f.people2();
         f.people3();

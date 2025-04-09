@@ -85,11 +85,13 @@ public class DTOBuddy {
                 .toArray(Class<?>[]::new);
 
             // Define method with parameters and delegate to the interceptor instance
-            builder = builder.defineMethod(methodName,
-                    Object.class,
-                    net.bytebuddy.description.modifier.Visibility.PUBLIC)
-                .withParameters(parameterTypes)
-                .intercept(MethodDelegation.to(interceptor));  // Use interceptor instance
+                builder = builder.defineMethod(methodName,
+                        Object.class,
+                        net.bytebuddy.description.modifier.Visibility.PUBLIC)
+                    .withParameters(parameterTypes)
+                    .intercept(MethodDelegation.withDefaultConfiguration()
+                        .filter(ElementMatchers.named("intercept"))
+                        .to(new MethodInterceptor.Interceptor(interceptor, method)));
         }
         return builder;
     }

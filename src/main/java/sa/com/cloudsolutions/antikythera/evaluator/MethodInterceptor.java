@@ -17,36 +17,36 @@ public class MethodInterceptor {
 
 
     @RuntimeType
-    public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
-        // Find the matching source method in the compilation unit
-        String methodName = method.getName();
-
-        // Get the compilation unit from the evaluator
-        CompilationUnit cu = evaluator.getCompilationUnit();
-
-        // Find the method declaration that matches this bytecode method
-        MethodDeclaration methodDecl = cu.findFirst(MethodDeclaration.class,
-            m -> m.getNameAsString().equals(methodName) &&
-                 m.getParameters().size() == args.length).orElse(null);
-
-        if (methodDecl != null) {
-            // Push arguments onto stack in reverse order (as expected by evaluator)
-            for (int i = args.length - 1; i >= 0; i--) {
-                AntikytheraRunTime.push(new Variable(args[i]));
-            }
-
-            // Execute the method using source code evaluation
-            Variable result = evaluator.executeMethod(methodDecl);
-
-            // Return the actual value from the Variable wrapper
-            return result != null ? result.getValue() : null;
+    public Object intercept(Method method, Object[] args, MethodDeclaration methodDecl) throws ReflectiveOperationException {
+        // Push arguments onto stack in reverse order
+        for (int i = args.length - 1; i >= 0; i--) {
+            AntikytheraRunTime.push(new Variable(args[i]));
         }
 
-        return null;
+        // Execute the method using source code evaluation
+        Variable result = evaluator.executeMethod(methodDecl);
+
+        // Return the actual value from the Variable wrapper
+        return result != null ? result.getValue() : null;
     }
 
 
     public Evaluator getEvaluator() {
         return evaluator;
+    }
+
+    public static class Interceptor {
+        private final MethodInterceptor parent;
+        private final MethodDeclaration sourceMethod;
+
+        public Interceptor(MethodInterceptor parent, MethodDeclaration sourceMethod) {
+            this.parent = parent;
+            this.sourceMethod = sourceMethod;
+        }
+
+        @RuntimeType
+        public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+            return parent.intercept(method, args, sourceMethod);
+        }
     }
 }
