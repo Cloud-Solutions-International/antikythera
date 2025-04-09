@@ -216,8 +216,7 @@ public class Evaluator {
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {
-            Variable loadedClass = evaluateClassExpression(expr);
-            if (loadedClass != null) return loadedClass;
+            return evaluateClassExpression(expr);
         }
         return null;
     }
@@ -235,11 +234,9 @@ public class Evaluator {
                 // Class not found as binary, check if available as source
                 CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (sourceCU != null) {
-                    // Create dynamic class using ByteBuddy
                     Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
                     Class<?> dynamicClass = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
-                    //Object instance = dynamicClass.getDeclaredConstructor().newInstance();
                     Variable v = new Variable(dynamicClass);
                     v.setClazz(Class.class);
                     return v;
@@ -455,8 +452,6 @@ public class Evaluator {
                     /*
                      * This is not something that was created with class.forName or byte buddy.
                      */
-                    Expression scope = fae.getScope();
-
                     this.fields.put(fieldName, v);
                 }
             }
