@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.type.Type;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
@@ -13,6 +14,7 @@ import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.lang.reflect.Array;
 import java.util.List;
 
 
@@ -65,13 +67,31 @@ public class DTOBuddy {
             Class<?>[] parameterTypes = method.getParameters().stream()
                 .map(p -> {
                     try {
-                        if (p.getType().isPrimitiveType()) {
-                            return Reflect.getComponentClass(p.getTypeAsString());
+                        if (p.getType().isArrayType()) {
+                            // Get the element type without [] suffix
+                            Type elementType = p.getType().asArrayType().getElementType();
+
+                            Class<?> componentType;
+                            if (elementType.isPrimitiveType()) {
+                                componentType = Reflect.getComponentClass(elementType.asString());
+                            } else {
+                                String fullName = AbstractCompiler.findFullyQualifiedName(cu, elementType.asString());
+                                componentType = Reflect.getComponentClass(fullName);
+                            }
+
+                            // Create an empty array of the correct type
+                            return Array.newInstance(componentType, 0).getClass();
+
+                        } else {
+                            // Handle non-array types as before
+                            if (p.getType().isPrimitiveType()) {
+                                return Reflect.getComponentClass(p.getTypeAsString());
+                            } else {
+                                String fullName = AbstractCompiler.findFullyQualifiedName(cu, p.getType().asString());
+                                return Reflect.getComponentClass(fullName);
+                            }
                         }
-                        else {
-                            String fullName = AbstractCompiler.findFullyQualifiedName(cu, p.getType().asString());
-                            return Reflect.getComponentClass(fullName);
-                        }
+
                     } catch (ClassNotFoundException e) {
                         throw new RuntimeException(e);
                     }
