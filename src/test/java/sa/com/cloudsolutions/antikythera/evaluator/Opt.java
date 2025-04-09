@@ -11,12 +11,12 @@ public class Opt {
         }
     }
 
-    void ifPresent() {
-        getById(1).ifPresent(id -> System.out.println("ID: " + id));
+    void ifPresent(int a) {
+        getById(a).ifPresent(id -> System.out.println("ID: " + id));
     }
 
-    void ifEmpty() {
-        getById(0).ifPresentOrElse(
+    void ifEmpty(int a) {
+        getById(a).ifPresentOrElse(
             id -> System.out.println("ID: " + id),
             () -> System.out.println("ID not found")
         );

@@ -122,11 +122,11 @@ class TestOptional extends TestHelper {
         AntikytheraRunTime.push(new Variable(a));
         evaluator.executeMethod(method);
 
-        assertEquals(b, outContent.toString());
+        assertEquals(b, outContent.toString().strip());
     }
 
     @ParameterizedTest
-    @CsvSource({"1, 'ID: 1'", "0, ''"})
+    @CsvSource({"1, 'ID: 1'", "0, ID not found"})
     void testIfEmpty(Integer a, String b) throws ReflectiveOperationException {
         MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("ifEmpty")).orElseThrow();
@@ -134,6 +134,6 @@ class TestOptional extends TestHelper {
         AntikytheraRunTime.push(new Variable(a));
         evaluator.executeMethod(method);
 
-        assertEquals(b, outContent.toString());
+        assertEquals(b, outContent.toString().strip());
     }
 }
