@@ -429,7 +429,10 @@ public class AbstractCompiler {
                 Class.forName("java.lang." + className);
                 return "java.lang." + className;
             } catch (ClassNotFoundException e) {
-                return null;
+                /*
+                 * dirty hack to handle an extreme edge case
+                 */
+                return className.equals("Optional") ? "java.util.Optional" : null;
             }
         }
 
@@ -491,6 +494,7 @@ public class AbstractCompiler {
             if (className.contains(".")) {
                 return className;
             }
+
             return null;
         }
     }

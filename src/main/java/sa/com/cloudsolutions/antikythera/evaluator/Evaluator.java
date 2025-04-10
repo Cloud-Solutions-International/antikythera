@@ -780,9 +780,14 @@ public class Evaluator {
 
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional) {
+            String methodName = methodCall.getNameAsString();
             if (optional.isEmpty()){
-                if (methodCall.getNameAsString().equals("orElseThrow")) {
+                if (methodName.equals("orElseThrow")) {
                     if (methodCall.getArguments().isEmpty()) {
+                        /*
+                         * Simulation of throwing a no such element exception when the optional
+                         * is empty.
+                         */
                         throw new NoSuchElementException();
                     }
                     else {
@@ -809,7 +814,7 @@ public class Evaluator {
                     }
                 }
             }
-            else if (methodCall.getNameAsString().equals("ifPresent")) {
+            else if (methodName.equals("ifPresent") || methodName.equals("flatMap")) {
                 AntikytheraRunTime.push(new Variable(optional.get()));
             }
         }
