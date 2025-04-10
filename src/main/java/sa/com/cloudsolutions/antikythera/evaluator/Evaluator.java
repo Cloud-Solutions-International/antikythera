@@ -1015,7 +1015,7 @@ public class Evaluator {
                 return v;
             }
             else {
-               executeMethod(n.get().getMethod());
+               return executeMethod(n.get().getMethod());
             }
         }
 
@@ -1257,6 +1257,7 @@ public class Evaluator {
                         break;
                     }
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
+                        ImportWrapper wrap = AbstractCompiler.findImport(cu, name);
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         Evaluator eval = EvaluatorFactory.create(cname, this);

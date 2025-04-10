@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import java.util.ArrayList;
 import java.util.Optional;
 
 public class Opt {
@@ -72,8 +73,15 @@ public class Opt {
                 .flatMap(val -> Optional.of("Mapped: " + val));
     }
 
+    Optional<Object> ofNullable(Object o) {
+        return Optional.ofNullable(o);
+    }
+
     public static void main(String[] args) {
         Opt opt = new Opt();
         System.out.println(opt.flatMapToString(1));
+        System.out.println(opt.ofNullable(null));
+        System.out.println(opt.ofNullable(10));
+        System.out.println(opt.ofNullable(new ArrayList<>()));
     }
 }

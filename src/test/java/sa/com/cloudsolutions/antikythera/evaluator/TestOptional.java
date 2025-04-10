@@ -208,4 +208,28 @@ class TestOptional extends TestHelper {
         assertEquals(isPresent, optionalResult.isPresent());
         assertEquals(expected, "" + optionalResult.orElse(null));
     }
+
+    @Test
+    void testOfNullable() throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("ofNullable"))
+                .orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(null));
+        Variable result = evaluator.executeMethod(method);
+        Optional<?> optionalResult = (Optional<?>) result.getValue();
+        assertTrue(optionalResult.isEmpty());
+    }
+
+    @Test
+    void testOfNullableNotNull() throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("ofNullable"))
+                .orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(new File("aa")));
+        Variable result = evaluator.executeMethod(method);
+        Optional<?> optionalResult = (Optional<?>) result.getValue();
+        assertTrue(optionalResult.isPresent());
+    }
 }
