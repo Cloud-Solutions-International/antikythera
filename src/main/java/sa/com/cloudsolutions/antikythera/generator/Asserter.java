@@ -15,6 +15,7 @@ public abstract class Asserter {
     private static final Logger logger = LoggerFactory.getLogger(Asserter.class);
 
     public abstract Expression assertNotNull(String variable);
+    public abstract Expression assertNull(String variable);
     public abstract void setupImports(CompilationUnit gen);
     public abstract Expression assertEquals(String rhs, String lhs);
     public abstract Expression assertThrows(String invocation, MethodResponse response);

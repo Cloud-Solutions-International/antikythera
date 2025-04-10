@@ -15,6 +15,14 @@ public class TestNgAsserter extends  Asserter {
         return aNotNull;
     }
 
+
+    @Override
+    public Expression assertNull(String variable) {
+        MethodCallExpr aNotNull = new MethodCallExpr(new NameExpr("Assert"), "assertNull");
+        aNotNull.addArgument(new NameExpr(variable));
+        return aNotNull;
+    }
+
     @Override
     public void setupImports(CompilationUnit gen) {
         gen.addImport("org.testng.annotations.Test");

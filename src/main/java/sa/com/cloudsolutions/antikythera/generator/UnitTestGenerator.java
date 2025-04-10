@@ -385,8 +385,13 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         if (t != null) {
             addClassImports(t);
-            body.addStatement(asserter.assertNotNull("resp"));
-            asserter.addFieldAsserts(response, body);
+            if (response.getBody() != null && response.getBody().getValue() != null) {
+                body.addStatement(asserter.assertNotNull("resp"));
+                asserter.addFieldAsserts(response, body);
+            }
+            else {
+                body.addStatement(asserter.assertNull("resp"));
+            }
         }
     }
 
