@@ -136,4 +136,76 @@ class TestOptional extends TestHelper {
 
         assertEquals(b, outContent.toString().strip());
     }
+
+
+    @ParameterizedTest
+    @CsvSource({
+            "1, 'Value: 1'",
+            "0, 'No value'"
+    })
+    void testMap(int id, String expected) throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("mapToString"))
+                .orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(id));
+        Variable result = evaluator.executeMethod(method);
+        assertEquals(expected, result.getValue());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "2, true",
+            "1, false",
+            "0, false"
+    })
+    void testFilter(int id, boolean isPresent) throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("getEvenNumber"))
+                .orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(id));
+        Variable result = evaluator.executeMethod(method);
+
+        assertInstanceOf(Optional.class, result.getValue());
+        Optional<?> optionalResult = (Optional<?>) result.getValue();
+        assertEquals(isPresent, optionalResult.isPresent());
+        if (isPresent) {
+            assertEquals(id , optionalResult.orElse(null));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "1, 1",
+            "0, -1"
+    })
+    void getOrSupply(int id, int expected) throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("getOrSupply"))
+                .orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(id));
+        Variable result = evaluator.executeMethod(method);
+        assertEquals(expected, result.getValue());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "1, true, 'Mapped: 1'",
+            "0, false, null"
+    })
+    void testFlatMap(int id, boolean isPresent, String expected) throws ReflectiveOperationException {
+        MethodDeclaration method = evaluator.getCompilationUnit()
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("flatMapToString"))
+                .orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(id));
+        Variable result = evaluator.executeMethod(method);
+
+        assertInstanceOf(Optional.class, result.getValue());
+        Optional<?> optionalResult = (Optional<?>) result.getValue();
+        assertEquals(isPresent, optionalResult.isPresent());
+        assertEquals(expected, "" + optionalResult.orElse(null));
+    }
 }
