@@ -205,6 +205,7 @@ public class UnitTestGenerator extends TestGenerator {
             }
             getBody(testMethod).addStatement(expr);
         }
+        whenThen.clear();
     }
 
     private boolean mockedByBaseTestClass(Expression arg) {
@@ -411,7 +412,7 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt beforeBody = new BlockStmt();
         before.setBody(beforeBody);
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
-        before.setJavadocComment("Author : Antikytherra");
+        before.setJavadocComment("Author : Antikythera");
         gen.getType(0).addMember(before);
 
     }
