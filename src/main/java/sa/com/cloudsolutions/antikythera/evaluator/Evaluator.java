@@ -779,46 +779,51 @@ public class Evaluator {
         }
 
         Variable variable = evaluateScopeChain(chain);
-        if (variable.getValue() instanceof Optional<?> optional) {
-            String methodName = methodCall.getNameAsString();
-            if (optional.isEmpty()){
-                if (methodName.equals("orElseThrow")) {
-                    if (methodCall.getArguments().isEmpty()) {
-                        /*
-                         * Simulation of throwing a no such element exception when the optional
-                         * is empty.
-                         */
-                        throw new NoSuchElementException();
-                    }
-                    else {
-                        Expression expr = methodCall.getArguments().get(0);
-                        if (expr.isMethodCallExpr()) {
-                            evaluateMethodCall(expr.asMethodCallExpr());
-                        }
-                        else if (expr.isLambdaExpr()) {
-                            Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
-                            if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
-                                Object result =  supplier.get();
-                                if (result instanceof RuntimeException exception) {
-                                    throw exception;
-                                }
-                                return new Variable(result);
-                            }
-                        }
-                        else if (expr.isNameExpr()) {
-                            resolveExpression(expr.asNameExpr());
-                        }
-                        else {
-                            evaluateExpression(expr);
-                        }
-                    }
-                }
-            }
-            else if (methodName.equals("ifPresent") || methodName.equals("flatMap")) {
-                AntikytheraRunTime.push(new Variable(optional.get()));
+        if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
+            Variable o = handleOptionalEmpties(methodCall);
+            if (o != null) {
+                return null;
             }
         }
         return evaluateMethodCall(variable, methodCall);
+    }
+
+    private Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
+        String methodName = methodCall.getNameAsString();
+
+        if (methodName.equals("orElseThrow")) {
+            if (methodCall.getArguments().isEmpty()) {
+                /*
+                 * Simulation of throwing a no such element exception when the optional
+                 * is empty.
+                 */
+                throw new NoSuchElementException();
+            }
+            else {
+                Expression expr = methodCall.getArguments().get(0);
+                if (expr.isMethodCallExpr()) {
+                    evaluateMethodCall(expr.asMethodCallExpr());
+                }
+                else if (expr.isLambdaExpr()) {
+                    Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
+                    if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
+                        Object result =  supplier.get();
+                        if (result instanceof RuntimeException exception) {
+                            throw exception;
+                        }
+                        return new Variable(result);
+                    }
+                }
+                else if (expr.isNameExpr()) {
+                    resolveExpression(expr.asNameExpr());
+                }
+                else {
+                    evaluateExpression(expr);
+                }
+            }
+        }
+
+        return null;
     }
 
     public Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
