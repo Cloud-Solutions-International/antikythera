@@ -553,23 +553,21 @@ public class SpringEvaluator extends Evaluator {
     @Override
     public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException, ReflectiveOperationException {
         try {
-            if (methodCall.getScope().isPresent()) {
-                Expression scope = methodCall.getScope().get();
-                String fieldClass = getFieldClass(scope);
+            Optional<Expression> scope = methodCall.getScope();
+            if (scope.isPresent()) {
+                String fieldClass = getFieldClass(scope.get());
                 if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
                     boolean isMocked = false;
-                    String fieldName = getFieldName(scope);
-                    if (fieldName != null) {
-                        Variable field = fields.get(fieldName);
-                        if (field != null && field.getType() != null) {
-                            isMocked = AntikytheraRunTime.isMocked(fieldClass);
-                        }
+                    String fieldName = getFieldName(scope.get());
+                    if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
+                        isMocked = AntikytheraRunTime.isMocked(fieldClass);
                     }
                     if (!isMocked) {
                         return executeSource(methodCall);
                     }
                 }
             }
+
             return super.evaluateMethodCall(v, methodCall);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
@@ -656,22 +654,23 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void setupIfConditionThroughAssignment(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(ifst, nameExpr.getNameAsString());
 
         Expression init = v.getInitializer();
         if (init != null) {
-            Optional<MethodDeclaration> md = ifst.findAncestor(MethodDeclaration.class);
-            if (md.isPresent()) {
-                String paramName = nameExpr.getNameAsString();
-                for (Parameter param : md.get().getParameters()) {
-                    if (param.getNameAsString().equals(paramName)) {
-                        setupIfConditionThroughAssignment(ifst, state, entry, v);
-                        return;
-                    }
+            MethodDeclaration md = ifst.findAncestor(MethodDeclaration.class).orElseThrow();
+
+            String paramName = nameExpr.getNameAsString();
+            for (Parameter param : md.getParameters()) {
+                if (param.getNameAsString().equals(paramName)) {
+                    setupIfConditionThroughAssignment(ifst, state, entry, v);
+                    return;
                 }
             }
+
             LinkedList<Expression> chain = Evaluator.findScopeChain(init);
             setupIfConditionThroughMethodCalls(ifst, state, entry, chain);
             return;
