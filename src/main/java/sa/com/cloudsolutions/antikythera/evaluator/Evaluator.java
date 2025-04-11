@@ -782,7 +782,7 @@ public class Evaluator {
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(methodCall);
             if (o != null) {
-                return null;
+                return o;
             }
         }
         return evaluateMethodCall(variable, methodCall);
@@ -1121,15 +1121,11 @@ public class Evaluator {
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator,
                                       Expression leftExpression, Expression rightExpression) throws ReflectiveOperationException {
         Variable left = evaluateExpression(leftExpression);
-        left.setInitializer(leftExpression);
-
         if(operator.equals(BinaryExpr.Operator.OR) && (boolean)left.getValue()) {
              return new Variable(Boolean.TRUE);
         }
 
         Variable right = evaluateExpression(rightExpression);
-        right.setInitializer(rightExpression);
-
         return BinaryOps.binaryOps(operator, leftExpression, rightExpression, left, right);
     }
 
