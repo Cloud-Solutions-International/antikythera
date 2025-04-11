@@ -917,5 +917,15 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
+        LinkedList<Expression> chain = findScopeChain(methodCall);
+        if (!chain.isEmpty()) {
+            Expression first = chain.getFirst();
+            if (first.isMethodCallExpr()) {
+
+            }
+        }
+        return super.handleOptionalEmpties(methodCall);
+    }
 }
 

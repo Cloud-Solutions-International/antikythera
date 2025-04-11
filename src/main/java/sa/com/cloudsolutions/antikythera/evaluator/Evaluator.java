@@ -788,7 +788,7 @@ public class Evaluator {
         return evaluateMethodCall(variable, methodCall);
     }
 
-    private Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
         String methodName = methodCall.getNameAsString();
 
         if (methodName.equals("orElseThrow")) {
@@ -1253,7 +1253,7 @@ public class Evaluator {
                         break;
                     }
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
-                        ImportWrapper wrap = AbstractCompiler.findImport(cu, name);
+                        /* todo : change this to use abstractcompiler methods */
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         Evaluator eval = EvaluatorFactory.create(cname, this);

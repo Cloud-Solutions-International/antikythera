@@ -17,8 +17,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestConditional extends TestHelper {
-
+class TestConditional extends TestHelper {
 
     public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
     CompilationUnit cu;
@@ -89,5 +88,33 @@ public class TestConditional extends TestHelper {
         AntikytheraRunTime.push(new Variable(Integer.parseInt(key)));
         evaluator.executeMethod(method);
         assertEquals(value, outContent.toString());
+    }
+}
+
+class TestConditionalWithOptional extends TestHelper {
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Opt";
+    CompilationUnit cu;
+
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
+    }
+
+    @BeforeEach
+    void each() {
+        cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
+        System.setOut(new PrintStream(outContent));
+    }
+
+    @Test
+    void testVisit() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("ifEmpty")).orElseThrow();
+        evaluator.visit(method);
+        assertEquals("value", outContent.toString());
     }
 }
