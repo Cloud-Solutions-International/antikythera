@@ -660,6 +660,28 @@ public class SpringEvaluator extends Evaluator {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(ifst, nameExpr.getNameAsString());
 
+        Expression init = v.getInitializer();
+        if (init != null) {
+            Optional<MethodDeclaration> md = ifst.findAncestor(MethodDeclaration.class);
+            if (md.isPresent()) {
+                String paramName = nameExpr.getNameAsString();
+                for (Parameter param : md.get().getParameters()) {
+                    if (param.getNameAsString().equals(paramName)) {
+                        setupIfConditionThroughAssignment(ifst, state, entry, v);
+                        return;
+                    }
+                }
+            }
+            LinkedList<Expression> chain = Evaluator.findScopeChain(init);
+            setupIfConditionThroughMethodCalls(ifst, state, entry, chain);
+            return;
+        }
+
+        setupIfConditionThroughAssignment(ifst, state, entry, v);
+    }
+
+    private void setupIfConditionThroughAssignment(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry, Variable v) {
+        NameExpr nameExpr = entry.getKey().asNameExpr();
         Expression valueExpr = v.getType() instanceof PrimitiveType
                 ? Reflect.createLiteralExpression(entry.getValue())
                 : new StringLiteralExpr(entry.getValue().toString());
@@ -672,11 +694,15 @@ public class SpringEvaluator extends Evaluator {
         addPreCondition(ifst, state, expr);
     }
 
-    private void setupIfConditionThroughMethodCalls(IfStmt ifst, boolean state, Map.Entry<Expression, Object> entry) {
+    private void setupIfConditionThroughMethodCalls(IfStmt ifStmt, boolean state, Map.Entry<Expression, Object> entry) {
         LinkedList<Expression> chain = Evaluator.findScopeChain(entry.getKey());
+        setupIfConditionThroughMethodCalls(ifStmt, state, entry, chain);
+    }
+
+    private void setupIfConditionThroughMethodCalls(IfStmt ifStmt, boolean state, Map.Entry<Expression, Object> entry, LinkedList<Expression> chain) {
         if (!chain.isEmpty()) {
             Expression expr = chain.getFirst();
-            Variable v = getValue(ifst, expr.toString());
+            Variable v = getValue(ifStmt, expr.toString());
             if (v == null && expr.isNameExpr()) {
                 /*
                  * This is likely to be a static method.
@@ -699,7 +725,7 @@ public class SpringEvaluator extends Evaluator {
             }
 
             if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariable(ifst, state, entry, expr);
+                setupConditionalVariable(ifStmt, state, entry, expr);
             }
         }
     }
