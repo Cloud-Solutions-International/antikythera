@@ -5,11 +5,12 @@ import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class ScopeChain {
-    LinkedList<Scope> chain = new LinkedList<>();
+    List<Scope> chain = new ArrayList<>();
 
     private ScopeChain(){}
 
@@ -56,12 +57,8 @@ public class ScopeChain {
         return chain.isEmpty();
     }
 
-    public Scope pollLast() {
-        return chain.pollLast();
-    }
-
-    public Scope getFirst() {
-        return chain.getFirst();
+    public List<Scope> getChain() {
+        return chain;
     }
 
     public static class Scope {

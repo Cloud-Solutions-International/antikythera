@@ -705,7 +705,7 @@ public class SpringEvaluator extends Evaluator {
 
     private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, ScopeChain chain) {
         if (!chain.isEmpty()) {
-            Expression expr = chain.getFirst().getExpression();
+            Expression expr = chain.getChain().getFirst().getExpression();
             Variable v = getValue(stmt, expr.toString());
             if (v == null && expr.isNameExpr()) {
                 /*
@@ -936,7 +936,7 @@ public class SpringEvaluator extends Evaluator {
                 branchCount++;
             }
 
-            Expression first = chain.getFirst().getExpression();
+            Expression first = chain.getChain().getFirst().getExpression();
             if (first.isMethodCallExpr()) {
                 MethodCallExpr firstCall = first.asMethodCallExpr();
                 MCEWrapper wrapper = new MCEWrapper(firstCall);

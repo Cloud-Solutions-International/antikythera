@@ -826,8 +826,7 @@ public class Evaluator {
 
     public Variable evaluateScopeChain(ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = null;
-        while(!chain.isEmpty()) {
-            ScopeChain.Scope scope = chain.pollLast();
+        for (ScopeChain.Scope scope : chain.getChain().reversed()) {
             Expression expr2 = scope.getExpression();
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());

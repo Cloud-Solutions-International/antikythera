@@ -17,7 +17,7 @@ class TestScopeChain extends TestHelper {
         ScopeChain scopeChain = ScopeChain.findScopeChain(expr);
 
         assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a method call chain.");
-        assertTrue(scopeChain.pollLast().getExpression().toString().equals("obj"), 
+        assertTrue(scopeChain.getChain().getLast().getExpression().toString().equals("obj"),
                    "The last scope in the chain should be 'obj'.");
     }
 
@@ -29,7 +29,7 @@ class TestScopeChain extends TestHelper {
         ScopeChain scopeChain = ScopeChain.findScopeChain(expr);
 
         assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a field access chain.");
-        assertTrue(scopeChain.pollLast().getExpression().toString().equals("obj"), 
+        assertTrue(scopeChain.getChain().getLast().getExpression().toString().equals("obj"),
                    "The last scope in the chain should be 'obj'.");
     }
 
@@ -41,7 +41,7 @@ class TestScopeChain extends TestHelper {
         ScopeChain scopeChain = ScopeChain.findScopeChain(expr);
 
         assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a mixed chain.");
-        assertTrue(scopeChain.pollLast().getExpression().toString().equals("obj"), 
+        assertTrue(scopeChain.getChain().getLast().getExpression().toString().equals("obj"),
                    "The last scope in the chain should be 'obj'.");
     }
 
