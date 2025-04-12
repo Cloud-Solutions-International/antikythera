@@ -22,6 +22,8 @@ public class MCEWrapper {
      */
     NodeList<Type> argumentTypes;
 
+    Callable matchingCallable;
+
     public MCEWrapper(NodeWithArguments<?> oce) {
         this.methodCallExpr = oce;
         argumentTypes = new NodeList<>();
@@ -84,5 +86,13 @@ public class MCEWrapper {
         }
 
         return null;
+    }
+
+    public Callable getMatchingCallable() {
+        return matchingCallable;
+    }
+
+    public void setMatchingCallable(Callable match) {
+        this.matchingCallable = match;
     }
 }

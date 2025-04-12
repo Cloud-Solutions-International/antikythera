@@ -937,13 +937,11 @@ public class SpringEvaluator extends Evaluator {
             branching.put(stmt.hashCode(), l);
             branchCount++;
         }
+        ScopeChain.Scope sc = chain.getChain().getFirst();
 
-        Expression first = chain.getChain().getFirst().getExpression();
-        if (first.isMethodCallExpr()) {
-            MethodCallExpr firstCall = first.asMethodCallExpr();
-            MCEWrapper wrapper = new MCEWrapper(firstCall);
-            Callable callable = AbstractCompiler.findMethodDeclaration(wrapper,
-                    methodCall.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow()).orElseThrow();
+        if (sc.getExpression().isMethodCallExpr()) {
+            MCEWrapper wrapper = sc.getMCEWrapper();
+            Callable callable = wrapper.getMatchingCallable();
 
             if (callable.isMethodDeclaration() &&
                     callable.asMethodDeclaration() instanceof MethodDeclaration method
@@ -956,9 +954,8 @@ public class SpringEvaluator extends Evaluator {
                     .findFirst()
                     .orElse(null);
 
-                if (isFirstTime || l.getPathTaken() == LineOfCode.FALSE_PATH) {
-                    // Take the non-empty path first
-                    l.setPathTaken(LineOfCode.TRUE_PATH);
+                if (isFirstTime || l.getPathTaken() == LineOfCode.TRUE_PATH) {
+                    l.setPathTaken(LineOfCode.FALSE_PATH);
                     if (!isFirstTime) {
                         l.setPathTaken(LineOfCode.BOTH_PATHS);
                     }
@@ -1007,9 +1004,11 @@ public class SpringEvaluator extends Evaluator {
                 }
                 yield null;
             }
-            case "ifPresent", "ifPresentOrElse" -> {
+            case "ifPresent" -> null;
+            case "ifPresentOrElse" -> {
                 if (emptyCondition == null) {
-                    evaluateExpression(methodCall.getArgument(0));
+                    Variable v = evaluateExpression(methodCall.getArgument(0));
+                    yield  executeLambda(v);
                 } else if (methodCall.getArguments().size() > 1) {
                     evaluateExpression(methodCall.getArgument(1));
                 }

@@ -38,6 +38,7 @@ import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
 
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -217,6 +218,8 @@ public class Evaluator {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {
             return evaluateClassExpression(expr);
+        } else if (expr.isLambdaExpr()) {
+            return FPEvaluator.create(expr.asLambdaExpr(), this);
         }
         return null;
     }
@@ -816,16 +819,23 @@ public class Evaluator {
             }
             else if (expr.isLambdaExpr()) {
                 Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
-                if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
-                    Object result =  supplier.get();
-                    if (result instanceof RuntimeException exception) {
-                        throw exception;
-                    }
-                    return new Variable(result);
-                }
+                return executeLambda(e);
             }
         }
 
+        return null;
+    }
+
+    protected static Variable executeLambda(Variable e) {
+        if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
+            Object result =  supplier.get();
+            if (result instanceof RuntimeException exception) {
+                throw exception;
+            }
+            return new Variable(result);
+        } else if (e.getValue() instanceof FunctionEvaluator<?, ?> function) {
+            return new Variable(function.apply());
+        }
         return null;
     }
 
@@ -1011,17 +1021,21 @@ public class Evaluator {
     public Variable executeMethod(ScopeChain.Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(sc.getMCEWrapper(), cdecl.orElseThrow().asClassOrInterfaceDeclaration());
+        MCEWrapper mceWrapper = sc.getMCEWrapper();
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
         if (n.isPresent()) {
-            if (n.get().isMethodDeclaration()) {
-                Variable v = executeMethod(n.get().asMethodDeclaration());
+            Callable callable = n.get();
+            mceWrapper.setMatchingCallable(callable);
+            if (callable.isMethodDeclaration()) {
+                MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
+                Variable v = executeMethod(methodDeclaration);
                 if (v != null && v.getValue() == null) {
-                    v.setType(n.get().asMethodDeclaration().getType());
+                    v.setType(methodDeclaration.getType());
                 }
                 return v;
             }
             else {
-               return executeMethod(n.get().getMethod());
+               return executeMethod(callable.getMethod());
             }
         }
 
