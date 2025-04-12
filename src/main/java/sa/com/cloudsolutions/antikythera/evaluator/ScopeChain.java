@@ -4,6 +4,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,6 +74,7 @@ public class ScopeChain {
         Callable callable;
         MethodCallExpr scopedMethodCall;
         Variable variable;
+        private MCEWrapper wrapper;
 
         private Scope(Expression expression) {
             this.expression = expression;
@@ -108,6 +110,14 @@ public class ScopeChain {
 
         public void setVariable(Variable variable) {
             this.variable = variable;
+        }
+
+        public void setMCEWrapper(MCEWrapper wrapper) {
+            this.wrapper = wrapper;
+        }
+
+        public MCEWrapper getMCEWrapper() {
+            return wrapper;
         }
     }
 }

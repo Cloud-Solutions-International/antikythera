@@ -938,12 +938,16 @@ public class Evaluator {
         if (v != null) {
             Object value = v.getValue();
             if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
+                MCEWrapper wrapper = wrapCallExpression(scope.getScopedMethodCall());
+                scope.setMCEWrapper(wrapper);
                 return eval.executeMethod(scope);
             }
 
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
+            MCEWrapper wrapper = wrapCallExpression(scope.getScopedMethodCall());
+            scope.setMCEWrapper(wrapper);
             return executeMethod(scope);
         }
     }
@@ -1006,10 +1010,8 @@ public class Evaluator {
 
     public Variable executeMethod(ScopeChain.Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
-        MCEWrapper wrapper = wrapCallExpression(sc.getScopedMethodCall());
-
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(sc.getMCEWrapper(), cdecl.orElseThrow().asClassOrInterfaceDeclaration());
         if (n.isPresent()) {
             if (n.get().isMethodDeclaration()) {
                 Variable v = executeMethod(n.get().asMethodDeclaration());
