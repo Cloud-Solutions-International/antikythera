@@ -938,15 +938,13 @@ public class Evaluator {
         if (v != null) {
             Object value = v.getValue();
             if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
-                MCEWrapper wrapper = wrapCallExpression(methodCall);
-                return eval.executeMethod(wrapper);
+                return eval.executeMethod(scope);
             }
 
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
-            MCEWrapper wrapper = wrapCallExpression(methodCall);
-            return executeMethod(wrapper);
+            return executeMethod(scope);
         }
     }
 
@@ -1006,15 +1004,9 @@ public class Evaluator {
         }
     }
 
-    /**
-     * Execute a method call.
-     * @param wrapper the method call expression wrapped so that the argument types are available
-     * @return the result of executing that code.
-     * @throws EvaluatorException if there is an error evaluating the method call or if the
-     *          feature is not yet implemented.
-     */
-    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+    public Variable executeMethod(ScopeChain.Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
+        MCEWrapper wrapper = wrapCallExpression(sc.getScopedMethodCall());
 
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
         Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());

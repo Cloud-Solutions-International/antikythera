@@ -923,6 +923,7 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
