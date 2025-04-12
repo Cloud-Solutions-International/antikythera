@@ -659,22 +659,26 @@ public class SpringEvaluator extends Evaluator {
     private void setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
+        if (v != null) {
+            Expression init = v.getInitializer();
+            if (init != null) {
+                MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
-        Expression init = v.getInitializer();
-        if (init != null) {
-            MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
-
-            String paramName = nameExpr.getNameAsString();
-            for (Parameter param : md.getParameters()) {
-                if (param.getNameAsString().equals(paramName)) {
-                    setupConditionThroughAssignment(stmt, state, entry, v);
-                    return;
+                String paramName = nameExpr.getNameAsString();
+                for (Parameter param : md.getParameters()) {
+                    if (param.getNameAsString().equals(paramName)) {
+                        setupConditionThroughAssignment(stmt, state, entry, v);
+                        return;
+                    }
                 }
-            }
 
-            LinkedList<Expression> chain = Evaluator.findScopeChain(init);
-            setupConditionThroughMethodCalls(stmt, state, entry, chain);
-            return;
+                LinkedList<Expression> chain = Evaluator.findScopeChain(init);
+                setupConditionThroughMethodCalls(stmt, state, entry, chain);
+                return;
+            }
+        }
+        else {
+            v = new Variable(null);
         }
 
         setupConditionThroughAssignment(stmt, state, entry, v);
@@ -928,7 +932,7 @@ public class SpringEvaluator extends Evaluator {
                 Callable callable = AbstractCompiler.findMethodDeclaration(wrapper,
                         methodCall.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow()).orElseThrow();
 
-                if (callable != null && callable.isMethodDeclaration() &&
+                if (callable.isMethodDeclaration() &&
                         callable.asMethodDeclaration() instanceof MethodDeclaration method
                         && method.getType().toString().startsWith("Optional")) {
 
@@ -956,9 +960,9 @@ public class SpringEvaluator extends Evaluator {
                                 Type type = param.getType();
                                 for (Map.Entry<Expression, Object> entry : value.entrySet()) {
                                     if (type.isPrimitiveType()) {
-          //                              setupIfConditionThroughAssignment(methodCall, true, entry);
+                                          setupConditionThroughAssignment(methodCall.findAncestor(Statement.class).orElseThrow(), true, entry);
                                     } else {
-            //                            setupIfConditionThroughMethodCalls(methodCall, true, entry);
+                                          setupConditionThroughMethodCalls(methodCall.findAncestor(Statement.class).orElseThrow(), true, entry);
                                     }
                                 }
                             }
