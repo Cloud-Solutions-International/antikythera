@@ -134,6 +134,18 @@ public class Conditional {
         }
     }
 
+    public String nested(int a) {
+        if (a >= 0) {
+            if (a == 0) {
+                return "Zero";
+            }
+            else {
+                return "Positive";
+            }
+        }
+        return "Negative";
+    }
+
 
     public static void main(String[] args) {
         Person p = new Person("Hello");
