@@ -836,21 +836,7 @@ public class Evaluator {
                  * When we get here the getValue should have returned to us a valid field. That means
                  * we will have an evaluator instance as the 'value' in the variable v
                  */
-                if (variable.getClazz() != null && variable.getClazz().equals(System.class)) {
-                    Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
-                    variable = new Variable(field.get(null));
-                }
-                else if (variable.getValue() instanceof Evaluator eval) {
-                    variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
-                }
-                else {
-                    if (variable.getValue() instanceof Evaluator eval) {
-                        variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
-                    }
-                    else {
-                        variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
-                    }
-                }
+                variable = evaluateScopedFieldAccess(variable, expr2);
             }
             else if(expr2.isMethodCallExpr()) {
                 variable = evaluateMethodCall(variable, expr2.asMethodCallExpr());
@@ -864,6 +850,25 @@ public class Evaluator {
             else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
                 variable = new Variable(findScopeType(s));
+            }
+        }
+        return variable;
+    }
+
+    private Variable evaluateScopedFieldAccess(Variable variable, Expression expr2) throws ReflectiveOperationException {
+        if (variable.getClazz() != null && variable.getClazz().equals(System.class)) {
+            Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
+            variable = new Variable(field.get(null));
+        }
+        else if (variable.getValue() instanceof Evaluator eval) {
+            variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
+        }
+        else {
+            if (variable.getValue() instanceof Evaluator eval) {
+                variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
+            }
+            else {
+                variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
             }
         }
         return variable;
