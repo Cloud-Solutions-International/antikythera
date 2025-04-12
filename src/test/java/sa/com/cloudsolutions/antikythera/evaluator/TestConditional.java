@@ -146,7 +146,7 @@ class TestConditionalWithOptional extends TestHelper {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("ifEmpty")).orElseThrow();
         evaluator.visit(method);
-        assertEquals("value", outContent.toString());
+        assertEquals("ID not found\nID: 1", outContent.toString().strip());
     }
 }
 

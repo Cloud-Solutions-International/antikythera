@@ -922,9 +922,18 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
+    @Override
     Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
         LinkedList<Expression> chain = findScopeChain(methodCall);
         if (!chain.isEmpty()) {
+            Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+
+            LineOfCode l = branching.get(stmt.hashCode());
+            if (l == null) {
+                branching.putIfAbsent(stmt.hashCode(), new LineOfCode(stmt));
+                branchCount++;
+            }
+
             Expression first = chain.getFirst();
             if (first.isMethodCallExpr()) {
                 MethodCallExpr firstCall = first.asMethodCallExpr();
@@ -960,43 +969,47 @@ public class SpringEvaluator extends Evaluator {
                                 Type type = param.getType();
                                 for (Map.Entry<Expression, Object> entry : value.entrySet()) {
                                     if (type.isPrimitiveType()) {
-                                          setupConditionThroughAssignment(methodCall.findAncestor(Statement.class).orElseThrow(), true, entry);
+                                          setupConditionThroughAssignment(stmt, true, entry);
                                     } else {
-                                          setupConditionThroughMethodCalls(methodCall.findAncestor(Statement.class).orElseThrow(), true, entry);
+                                          setupConditionThroughMethodCalls(stmt, true, entry);
                                     }
                                 }
                             }
                         }
                     }
 
-                    return switch (methodCall.getNameAsString()) {
-                        case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
-                        case "orElseThrow" -> {
-                            if (emptyCondition != null) {
-                                throw new NoSuchElementException("Optional is empty");
-                            }
-                            yield null;
-                        }
-                        case "ifPresent", "ifPresentOrElse" -> {
-                            if (emptyCondition == null) {
-                                evaluateExpression(methodCall.getArgument(0));
-                            } else if (methodCall.getArguments().size() > 1) {
-                                evaluateExpression(methodCall.getArgument(1));
-                            }
-                            yield null;
-                        }
-                        case "map", "flatMap", "filter" -> {
-                            if (emptyCondition == null) {
-                                yield evaluateExpression(methodCall.getArgument(0));
-                            }
-                            yield new Variable(Optional.empty());
-                        }
-                        default -> super.handleOptionalEmpties(methodCall);
-                    };
+                    return evaluateOptionalCall(methodCall, emptyCondition);
                 }
             }
         }
         return super.handleOptionalEmpties(methodCall);
+    }
+
+    private Variable evaluateOptionalCall(MethodCallExpr methodCall, Expression emptyCondition) throws ReflectiveOperationException {
+        return switch (methodCall.getNameAsString()) {
+            case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
+            case "orElseThrow" -> {
+                if (emptyCondition != null) {
+                    throw new NoSuchElementException("Optional is empty");
+                }
+                yield null;
+            }
+            case "ifPresent", "ifPresentOrElse" -> {
+                if (emptyCondition == null) {
+                    evaluateExpression(methodCall.getArgument(0));
+                } else if (methodCall.getArguments().size() > 1) {
+                    evaluateExpression(methodCall.getArgument(1));
+                }
+                yield null;
+            }
+            case "map", "flatMap", "filter" -> {
+                if (emptyCondition == null) {
+                    yield evaluateExpression(methodCall.getArgument(0));
+                }
+                yield new Variable(Optional.empty());
+            }
+            default -> super.handleOptionalEmpties(methodCall);
+        };
     }
 }
 
