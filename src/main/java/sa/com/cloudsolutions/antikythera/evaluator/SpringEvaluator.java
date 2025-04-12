@@ -927,10 +927,12 @@ public class SpringEvaluator extends Evaluator {
         LinkedList<Expression> chain = findScopeChain(methodCall);
         if (!chain.isEmpty()) {
             Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-
             LineOfCode l = branching.get(stmt.hashCode());
-            if (l == null) {
-                branching.putIfAbsent(stmt.hashCode(), new LineOfCode(stmt));
+            boolean isFirstTime = l == null;
+
+            if (isFirstTime) {
+                l = new LineOfCode(stmt);
+                branching.put(stmt.hashCode(), l);
                 branchCount++;
             }
 
@@ -952,33 +954,41 @@ public class SpringEvaluator extends Evaluator {
                         .findFirst()
                         .orElse(null);
 
-                    ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
-                    method.accept(visitor, null);
-                    Expression emptyCondition = visitor.getCombinedCondition();
+                    if (isFirstTime || l.getPathTaken() == LineOfCode.FALSE_PATH) {
+                        // Take the non-empty path first
+                        l.setPathTaken(LineOfCode.TRUE_PATH);
+                        if (!isFirstTime) {
+                            l.setPathTaken(LineOfCode.BOTH_PATHS);
+                        }
+                        return evaluateOptionalCall(methodCall, null);
+                    } else {
+                        // Take the empty path on subsequent visits
+                        ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
+                        method.accept(visitor, null);
+                        Expression emptyCondition = visitor.getCombinedCondition();
 
-                    if (emptyCondition != null) {
-                        // Build truth table for empty conditions
-                        TruthTable tt = new TruthTable(emptyCondition);
-                        tt.generateTruthTable();
-                        List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
+                        if (emptyCondition != null) {
+                            TruthTable tt = new TruthTable(emptyCondition);
+                            tt.generateTruthTable();
+                            List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
 
-                        // Apply conditions that lead to empty
-                        if (!emptyValues.isEmpty()) {
-                            Map<Expression, Object> value = emptyValues.getFirst();
-                            for (Parameter param : method.getParameters()) {
-                                Type type = param.getType();
-                                for (Map.Entry<Expression, Object> entry : value.entrySet()) {
-                                    if (type.isPrimitiveType()) {
-                                          setupConditionThroughAssignment(stmt, true, entry);
-                                    } else {
-                                          setupConditionThroughMethodCalls(stmt, true, entry);
+                            if (!emptyValues.isEmpty()) {
+                                Map<Expression, Object> value = emptyValues.getFirst();
+                                for (Parameter param : method.getParameters()) {
+                                    Type type = param.getType();
+                                    for (Map.Entry<Expression, Object> entry : value.entrySet()) {
+                                        if (type.isPrimitiveType()) {
+                                            setupConditionThroughAssignment(stmt, true, entry);
+                                        } else {
+                                            setupConditionThroughMethodCalls(stmt, true, entry);
+                                        }
                                     }
                                 }
                             }
+                            l.setPathTaken(LineOfCode.BOTH_PATHS);
+                            return evaluateOptionalCall(methodCall, emptyCondition);
                         }
                     }
-
-                    return evaluateOptionalCall(methodCall, emptyCondition);
                 }
             }
         }

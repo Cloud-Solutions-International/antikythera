@@ -778,6 +778,10 @@ public class Evaluator {
             return executeLocalMethod(wrapper);
         }
 
+        return evaluatedScopedMethodCall(methodCall, chain);
+    }
+
+    private Variable evaluatedScopedMethodCall(MethodCallExpr methodCall, LinkedList<Expression> chain) throws ReflectiveOperationException {
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(methodCall);
@@ -792,33 +796,27 @@ public class Evaluator {
         String methodName = methodCall.getNameAsString();
 
         if (methodName.equals("orElseThrow")) {
-            if (methodCall.getArguments().isEmpty()) {
+            Optional<Expression> args = methodCall.getArguments().getFirst();
+
+            if (args.isEmpty()) {
                 /*
                  * Simulation of throwing a no such element exception when the optional
                  * is empty.
                  */
                 throw new NoSuchElementException();
             }
-            else {
-                Expression expr = methodCall.getArguments().get(0);
-                if (expr.isMethodCallExpr()) {
-                    evaluateMethodCall(expr.asMethodCallExpr());
-                }
-                else if (expr.isLambdaExpr()) {
-                    Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
-                    if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
-                        Object result =  supplier.get();
-                        if (result instanceof RuntimeException exception) {
-                            throw exception;
-                        }
-                        return new Variable(result);
+            Expression expr = args.get();
+            if (expr.isMethodCallExpr()) {
+                return evaluateMethodCall(expr.asMethodCallExpr());
+            }
+            else if (expr.isLambdaExpr()) {
+                Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
+                if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
+                    Object result =  supplier.get();
+                    if (result instanceof RuntimeException exception) {
+                        throw exception;
                     }
-                }
-                else if (expr.isNameExpr()) {
-                    resolveExpression(expr.asNameExpr());
-                }
-                else {
-                    evaluateExpression(expr);
+                    return new Variable(result);
                 }
             }
         }
