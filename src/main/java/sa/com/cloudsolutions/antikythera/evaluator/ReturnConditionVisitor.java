@@ -9,11 +9,9 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 public class ReturnConditionVisitor extends VoidVisitorAdapter<Void> {
     private final List<Expression> conditions = new ArrayList<>();
@@ -22,37 +20,40 @@ public class ReturnConditionVisitor extends VoidVisitorAdapter<Void> {
     public ReturnConditionVisitor(ReturnStmt returnStmt) {
         this.targetReturn = returnStmt;
     }
+
+    @SuppressWarnings("java:S3655")
     @Override
     public void visit(ReturnStmt returnStmt, Void arg) {
-        if (returnStmt.equals(targetReturn)) {
-            Node current = returnStmt;
-            boolean hasHandledReturn = false;
+        if (!returnStmt.equals(targetReturn)) {
+            return;
+        }
 
-            while (!(current instanceof MethodDeclaration)) {
-                if (current instanceof BlockStmt block) {
-                    Node parent = block.getParentNode().orElse(null);
-                    if (parent instanceof IfStmt ifStmt) {
-                        hasHandledReturn = true;
-                        if (ifStmt.getElseStmt().isPresent() &&
-                            ifStmt.getElseStmt().get().equals(block)) {
-                            conditions.add(negateCondition(ifStmt.getCondition()));
-                        } else {
-                            conditions.add(ifStmt.getCondition());
-                        }
+        Node current = returnStmt;
+        boolean hasHandledReturn = false;
+
+        while (!(current instanceof MethodDeclaration) && current != null) {
+            if (current instanceof BlockStmt block) {
+                Node parent = block.getParentNode().orElse(null);
+                if (parent instanceof IfStmt ifStmt) {
+                    hasHandledReturn = true;
+                    if (ifStmt.getElseStmt().isPresent() &&
+                        ifStmt.getElseStmt().get().equals(block)) {
+                        conditions.add(negateCondition(ifStmt.getCondition()));
+                    } else {
+                        conditions.add(ifStmt.getCondition());
                     }
                 }
-                current = current.getParentNode().orElse(null);
-                if (current == null) break;
             }
-
-            if (!hasHandledReturn && current instanceof MethodDeclaration method) {
-                method.findFirst(IfStmt.class).ifPresent(ifStmt ->
-                    conditions.add(negateCondition(ifStmt.getCondition()))
-                );
-            }
+            current = current.getParentNode().orElse(null);
         }
-        super.visit(returnStmt, arg);
+
+        if (!hasHandledReturn && current instanceof MethodDeclaration method) {
+            method.findFirst(IfStmt.class).ifPresent(ifStmt ->
+                conditions.add(negateCondition(ifStmt.getCondition()))
+            );
+        }
     }
+
     private Expression negateCondition(Expression condition) {
         if (condition instanceof BinaryExpr binaryExpr) {
             BinaryExpr.Operator newOp = switch (binaryExpr.getOperator()) {
