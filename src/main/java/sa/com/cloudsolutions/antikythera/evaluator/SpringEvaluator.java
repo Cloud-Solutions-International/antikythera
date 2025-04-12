@@ -931,6 +931,7 @@ public class SpringEvaluator extends Evaluator {
                 if (callable != null && callable.isMethodDeclaration() &&
                         callable.asMethodDeclaration() instanceof MethodDeclaration method
                         && method.getType().toString().startsWith("Optional")) {
+
                     ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
                         .filter(r -> r.getExpression()
                             .map(e -> e.toString().contains("Optional.empty"))
@@ -942,7 +943,28 @@ public class SpringEvaluator extends Evaluator {
                     method.accept(visitor, null);
                     Expression emptyCondition = visitor.getCombinedCondition();
 
+                    // Build truth table for empty conditions
+                    TruthTable tt = new TruthTable(emptyCondition);
+                    tt.generateTruthTable();
+                    List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
+
+                    // Apply conditions that lead to empty
+                    if (!emptyValues.isEmpty()) {
+                        Map<Expression, Object> value = emptyValues.getFirst();
+                        for (var entry : value.entrySet()) {
+                            if (entry.getKey().isMethodCallExpr()) {
+                                //setupIfConditionThroughMethodCalls(methodCall, true, entry);
+                            } else if (entry.getKey().isNameExpr()) {
+                                Variable v = getValue(methodCall, entry.getKey().asNameExpr().getNameAsString());
+                                if (v != null) {
+                                 //   setupIfConditionThroughAssignment(methodCall, true, entry, v);
+                                }
+                            }
+                        }
+                    }
+
                     return switch (methodCall.getNameAsString()) {
+                        // Rest of the switch cases remain same
                         case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
                         case "orElseThrow" -> {
                             if (emptyCondition != null) {
