@@ -787,8 +787,8 @@ public class Evaluator {
     private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         Variable variable = evaluateScopeChain(chain);
-        if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
-            Variable o = handleOptionalEmpties(chain);
+        if (variable.getValue() instanceof Optional<?> optional) {
+            Variable o = handleOptionals(chain, optional);
             if (o != null) {
                 return o;
             }
@@ -797,6 +797,16 @@ public class Evaluator {
         scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
         return evaluateMethodCall(scope);
+    }
+
+    Variable handleOptionals(ScopeChain chain, Optional<?> optional) throws ReflectiveOperationException {
+        if (optional.isEmpty()) {
+            Variable o = handleOptionalEmpties(chain);
+            if (o != null) {
+                return o;
+            }
+        }
+        return null;
     }
 
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
@@ -834,7 +844,7 @@ public class Evaluator {
             }
             return new Variable(result);
         } else if (e.getValue() instanceof FunctionEvaluator<?, ?> function) {
-            return new Variable(function.apply());
+            return new Variable(function.apply(null));
         }
         return null;
     }
