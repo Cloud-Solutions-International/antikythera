@@ -57,6 +57,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -258,7 +259,7 @@ public class SpringEvaluator extends Evaluator {
                 elseStatement.accept(this, arg); // Visit else branch
             }
         }, null);
-        branchCount = s.size();
+        branchCount = Math.max(1, s.size());
     }
 
     /**
@@ -365,7 +366,7 @@ public class SpringEvaluator extends Evaluator {
         if (repository != null) {
             MCEWrapper methodCallWrapper = wrapCallExpression(methodCall);
 
-            Optional<Callable> callable = AbstractCompiler.findMethodDeclaration(
+            Optional<Callable> callable = AbstractCompiler.findCallableDeclaration(
                     methodCallWrapper, repository.getCompilationUnit().getType(0));
             if (callable.isPresent()) {
                 RepositoryQuery q = repository.get(callable.get());
@@ -922,7 +923,50 @@ public class SpringEvaluator extends Evaluator {
         if (!chain.isEmpty()) {
             Expression first = chain.getFirst();
             if (first.isMethodCallExpr()) {
+                MethodCallExpr firstCall = first.asMethodCallExpr();
+                MCEWrapper wrapper = new MCEWrapper(firstCall);
+                Callable callable = AbstractCompiler.findMethodDeclaration(wrapper,
+                        methodCall.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow()).orElseThrow();
 
+                if (callable != null && callable.isMethodDeclaration() &&
+                        callable.asMethodDeclaration() instanceof MethodDeclaration method
+                        && method.getType().toString().startsWith("Optional")) {
+                    ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
+                        .filter(r -> r.getExpression()
+                            .map(e -> e.toString().contains("Optional.empty"))
+                            .orElse(false))
+                        .findFirst()
+                        .orElse(null);
+
+                    ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
+                    method.accept(visitor, null);
+                    Expression emptyCondition = visitor.getCombinedCondition();
+
+                    return switch (methodCall.getNameAsString()) {
+                        case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
+                        case "orElseThrow" -> {
+                            if (emptyCondition != null) {
+                                throw new NoSuchElementException("Optional is empty");
+                            }
+                            yield null;
+                        }
+                        case "ifPresent", "ifPresentOrElse" -> {
+                            if (emptyCondition == null) {
+                                evaluateExpression(methodCall.getArgument(0));
+                            } else if (methodCall.getArguments().size() > 1) {
+                                evaluateExpression(methodCall.getArgument(1));
+                            }
+                            yield null;
+                        }
+                        case "map", "flatMap", "filter" -> {
+                            if (emptyCondition == null) {
+                                yield evaluateExpression(methodCall.getArgument(0));
+                            }
+                            yield new Variable(Optional.empty());
+                        }
+                        default -> super.handleOptionalEmpties(methodCall);
+                    };
+                }
             }
         }
         return super.handleOptionalEmpties(methodCall);
