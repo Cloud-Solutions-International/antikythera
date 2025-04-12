@@ -3,14 +3,13 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.util.LinkedList;
 import java.util.Optional;
 
 public class ScopeChain {
-    LinkedList<Scope> scopeChain = new LinkedList<>();
+    LinkedList<Scope> chain = new LinkedList<>();
 
     private ScopeChain(){}
 
@@ -27,7 +26,7 @@ public class ScopeChain {
     public static ScopeChain findScopeChain(Expression expr) {
         ScopeChain chain = new ScopeChain();
 
-        while (true) {
+        while (expr != null) {
             if (expr.isMethodCallExpr()) {
                 MethodCallExpr mce = expr.asMethodCallExpr();
                 Optional<Expression> scopeD = mce.getScope();
@@ -42,32 +41,27 @@ public class ScopeChain {
                 chain.addLast(mce.getScope());
                 expr = mce.getScope();
             }
-            else if (expr.isMethodReferenceExpr()) {
-                MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
-                chain.addLast(mexpr.getScope());
-                expr = mexpr.getScope();
-            }
             else {
-                break;
+                expr = null;
             }
         }
         return chain;
     }
 
     private void addLast(Expression expressions) {
-        scopeChain.addLast(new Scope(expressions));
+        chain.addLast(new Scope(expressions));
     }
 
     public boolean isEmpty() {
-        return scopeChain.isEmpty();
+        return chain.isEmpty();
     }
 
     public Scope pollLast() {
-        return scopeChain.pollLast();
+        return chain.pollLast();
     }
 
     public Scope getFirst() {
-        return scopeChain.getFirst();
+        return chain.getFirst();
     }
 
     public static class Scope {
