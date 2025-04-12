@@ -778,24 +778,26 @@ public class Evaluator {
             return executeLocalMethod(wrapper);
         }
 
-        return evaluatedScopedMethodCall(methodCall, chain);
+        return evaluateScopedMethodCall(chain);
     }
 
-    private Variable evaluatedScopedMethodCall(MethodCallExpr methodCall, ScopeChain chain) throws ReflectiveOperationException {
+    private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
-            Variable o = handleOptionalEmpties(methodCall);
+            Variable o = handleOptionalEmpties(chain);
             if (o != null) {
                 return o;
             }
         }
         ScopeChain.Scope scope = chain.getChain().getLast();
-        scope.setMethodCall(methodCall);
+        scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
         return evaluateMethodCall(scope);
     }
 
-    Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         String methodName = methodCall.getNameAsString();
 
         if (methodName.equals("orElseThrow")) {
@@ -843,7 +845,7 @@ public class Evaluator {
             }
             else if(expr2.isMethodCallExpr()) {
                 scope.setVariable(variable);
-                scope.setMethodCall(expr2.asMethodCallExpr());
+                scope.setScopedMethodCall(expr2.asMethodCallExpr());
                 variable = evaluateMethodCall(scope);
             }
             else if (expr2.isLiteralExpr()) {
@@ -932,7 +934,7 @@ public class Evaluator {
 
     public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
         Variable v = scope.getVariable();
-        MethodCallExpr methodCall = scope.getMethodCall();
+        MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (v != null) {
             Object value = v.getValue();
             if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {

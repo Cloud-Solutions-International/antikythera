@@ -54,7 +54,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -554,7 +553,7 @@ public class SpringEvaluator extends Evaluator {
     @Override
     public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
         Variable v = scope.getVariable();
-        MethodCallExpr methodCall = scope.getMethodCall();
+        MethodCallExpr methodCall = scope.getScopedMethodCall();
         try {
             Optional<Expression> expr = methodCall.getScope();
             if (expr.isPresent()) {
@@ -925,79 +924,80 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
-        ScopeChain chain = ScopeChain.findScopeChain(methodCall);
-        if (!chain.isEmpty()) {
-            Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-            LineOfCode l = branching.get(stmt.hashCode());
-            boolean isFirstTime = l == null;
+    Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
 
-            if (isFirstTime) {
-                l = new LineOfCode(stmt);
-                branching.put(stmt.hashCode(), l);
-                branchCount++;
-            }
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = branching.get(stmt.hashCode());
+        boolean isFirstTime = l == null;
 
-            Expression first = chain.getChain().getFirst().getExpression();
-            if (first.isMethodCallExpr()) {
-                MethodCallExpr firstCall = first.asMethodCallExpr();
-                MCEWrapper wrapper = new MCEWrapper(firstCall);
-                Callable callable = AbstractCompiler.findMethodDeclaration(wrapper,
-                        methodCall.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow()).orElseThrow();
+        if (isFirstTime) {
+            l = new LineOfCode(stmt);
+            branching.put(stmt.hashCode(), l);
+            branchCount++;
+        }
 
-                if (callable.isMethodDeclaration() &&
-                        callable.asMethodDeclaration() instanceof MethodDeclaration method
-                        && method.getType().toString().startsWith("Optional")) {
+        Expression first = chain.getChain().getFirst().getExpression();
+        if (first.isMethodCallExpr()) {
+            MethodCallExpr firstCall = first.asMethodCallExpr();
+            MCEWrapper wrapper = new MCEWrapper(firstCall);
+            Callable callable = AbstractCompiler.findMethodDeclaration(wrapper,
+                    methodCall.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow()).orElseThrow();
 
-                    ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
-                        .filter(r -> r.getExpression()
-                            .map(e -> e.toString().contains("Optional.empty"))
-                            .orElse(false))
-                        .findFirst()
-                        .orElse(null);
+            if (callable.isMethodDeclaration() &&
+                    callable.asMethodDeclaration() instanceof MethodDeclaration method
+                    && method.getType().toString().startsWith("Optional")) {
 
-                    if (isFirstTime || l.getPathTaken() == LineOfCode.FALSE_PATH) {
-                        // Take the non-empty path first
-                        l.setPathTaken(LineOfCode.TRUE_PATH);
-                        if (!isFirstTime) {
-                            l.setPathTaken(LineOfCode.BOTH_PATHS);
-                        }
-                        return evaluateOptionalCall(methodCall, null);
-                    } else {
-                        // Take the empty path on subsequent visits
-                        ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
-                        method.accept(visitor, null);
-                        Expression emptyCondition = visitor.getCombinedCondition();
+                ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
+                    .filter(r -> r.getExpression()
+                        .map(e -> e.toString().contains("Optional.empty"))
+                        .orElse(false))
+                    .findFirst()
+                    .orElse(null);
 
-                        if (emptyCondition != null) {
-                            TruthTable tt = new TruthTable(emptyCondition);
-                            tt.generateTruthTable();
-                            List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
+                if (isFirstTime || l.getPathTaken() == LineOfCode.FALSE_PATH) {
+                    // Take the non-empty path first
+                    l.setPathTaken(LineOfCode.TRUE_PATH);
+                    if (!isFirstTime) {
+                        l.setPathTaken(LineOfCode.BOTH_PATHS);
+                    }
+                    return evaluateOptionalCall(chain, null);
+                } else {
+                    // Take the empty path on subsequent visits
+                    ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
+                    method.accept(visitor, null);
+                    Expression emptyCondition = visitor.getCombinedCondition();
 
-                            if (!emptyValues.isEmpty()) {
-                                Map<Expression, Object> value = emptyValues.getFirst();
-                                for (Parameter param : method.getParameters()) {
-                                    Type type = param.getType();
-                                    for (Map.Entry<Expression, Object> entry : value.entrySet()) {
-                                        if (type.isPrimitiveType()) {
-                                            setupConditionThroughAssignment(stmt, true, entry);
-                                        } else {
-                                            setupConditionThroughMethodCalls(stmt, true, entry);
-                                        }
+                    if (emptyCondition != null) {
+                        TruthTable tt = new TruthTable(emptyCondition);
+                        tt.generateTruthTable();
+                        List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
+
+                        if (!emptyValues.isEmpty()) {
+                            Map<Expression, Object> value = emptyValues.getFirst();
+                            for (Parameter param : method.getParameters()) {
+                                Type type = param.getType();
+                                for (Map.Entry<Expression, Object> entry : value.entrySet()) {
+                                    if (type.isPrimitiveType()) {
+                                        setupConditionThroughAssignment(stmt, true, entry);
+                                    } else {
+                                        setupConditionThroughMethodCalls(stmt, true, entry);
                                     }
                                 }
                             }
-                            l.setPathTaken(LineOfCode.BOTH_PATHS);
-                            return evaluateOptionalCall(methodCall, emptyCondition);
                         }
+                        l.setPathTaken(LineOfCode.BOTH_PATHS);
+                        return evaluateOptionalCall(chain, emptyCondition);
                     }
                 }
             }
         }
-        return super.handleOptionalEmpties(methodCall);
+
+        return super.handleOptionalEmpties(chain);
     }
 
-    private Variable evaluateOptionalCall(MethodCallExpr methodCall, Expression emptyCondition) throws ReflectiveOperationException {
+    private Variable evaluateOptionalCall(ScopeChain chain, Expression emptyCondition) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         return switch (methodCall.getNameAsString()) {
             case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
             case "orElseThrow" -> {
@@ -1020,7 +1020,7 @@ public class SpringEvaluator extends Evaluator {
                 }
                 yield new Variable(Optional.empty());
             }
-            default -> super.handleOptionalEmpties(methodCall);
+            default -> super.handleOptionalEmpties(chain);
         };
     }
 }

@@ -11,8 +11,11 @@ import java.util.Optional;
 
 public class ScopeChain {
     List<Scope> chain = new ArrayList<>();
+    Expression expression;
 
-    private ScopeChain(){}
+    private ScopeChain(Expression expression) {
+        this.expression = expression;
+    }
 
     /**
      * <p>People have a nasty habit of chaining a sequence of method calls.</p>
@@ -25,7 +28,7 @@ public class ScopeChain {
      * @return the scope chain
      */
     public static ScopeChain findScopeChain(Expression expr) {
-        ScopeChain chain = new ScopeChain();
+        ScopeChain chain = new ScopeChain(expr);
 
         while (expr != null) {
             if (expr.isMethodCallExpr()) {
@@ -61,10 +64,14 @@ public class ScopeChain {
         return chain;
     }
 
+    public Expression getExpression() {
+        return expression;
+    }
+
     public static class Scope {
         Expression expression;
         Callable callable;
-        MethodCallExpr methodCall;
+        MethodCallExpr scopedMethodCall;
         Variable variable;
 
         private Scope(Expression expression) {
@@ -87,12 +94,12 @@ public class ScopeChain {
             this.callable = callable;
         }
 
-        public MethodCallExpr getMethodCall() {
-            return methodCall;
+        public MethodCallExpr getScopedMethodCall() {
+            return scopedMethodCall;
         }
 
-        public void setMethodCall(MethodCallExpr methodCall) {
-            this.methodCall = methodCall;
+        public void setScopedMethodCall(MethodCallExpr scopedMethodCall) {
+            this.scopedMethodCall = scopedMethodCall;
         }
 
         public Variable getVariable() {
