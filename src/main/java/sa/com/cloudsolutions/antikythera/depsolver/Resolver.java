@@ -27,6 +27,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
 import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
@@ -311,7 +312,7 @@ public class Resolver {
 
     static GraphNode chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
         if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce) {
-            LinkedList<Expression> chain = Evaluator.findScopeChain(mce);
+            ScopeChain chain = ScopeChain.findScopeChain(mce);
 
             if (chain.isEmpty()) {
                 copyMethod(mceWrapper, node);
@@ -330,10 +331,10 @@ public class Resolver {
         return null;
     }
 
-    static GraphNode evaluateScopeChain(GraphNode node, LinkedList<Expression> chain) throws AntikytheraException {
+    static GraphNode evaluateScopeChain(GraphNode node, ScopeChain chain) throws AntikytheraException {
         GraphNode gn = node;
         while (!chain.isEmpty() && gn != null) {
-            Expression expr = chain.pollLast();
+            Expression expr = chain.pollLast().getExpression();
             if (expr.isFieldAccessExpr()) {
                 FieldAccessExpr fieldAccessExpr = expr.asFieldAccessExpr();
                 gn = Resolver.resolveField(gn, fieldAccessExpr);

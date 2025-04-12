@@ -771,7 +771,7 @@ public class Evaluator {
             return null;
         }
 
-        LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
+        ScopeChain chain = ScopeChain.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
@@ -781,7 +781,7 @@ public class Evaluator {
         return evaluatedScopedMethodCall(methodCall, chain);
     }
 
-    private Variable evaluatedScopedMethodCall(MethodCallExpr methodCall, LinkedList<Expression> chain) throws ReflectiveOperationException {
+    private Variable evaluatedScopedMethodCall(MethodCallExpr methodCall, ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(methodCall);
@@ -824,10 +824,11 @@ public class Evaluator {
         return null;
     }
 
-    public Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
+    public Variable evaluateScopeChain(ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = null;
         while(!chain.isEmpty()) {
-            Expression expr2 = chain.pollLast();
+            ScopeChain.Scope scope = chain.pollLast();
+            Expression expr2 = scope.getExpression();
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());
             }
@@ -1769,42 +1770,5 @@ public class Evaluator {
         this.cu = compilationUnit;
     }
 
-    /**
-     * <p>People have a nasty habit of chaining a sequence of method calls.</p>
-     *
-     * If you are a D3.js programmer, this is probably the only way you do things. Even
-     * Byte Buddy seems to behave the same. But at the end of the day how so you handle this?
-     * You need to place them in a stack and pop them off one by one!
-     *
-     * @param expr the expression for which we need to determine the scope change
-     * @return the scope chain
-     */
-    public static LinkedList<Expression> findScopeChain(Expression expr) {
-        LinkedList<Expression> chain = new LinkedList<>();
-        while (true) {
-            if (expr.isMethodCallExpr()) {
-                MethodCallExpr mce = expr.asMethodCallExpr();
-                Optional<Expression> scopeD = mce.getScope();
-                if (scopeD.isEmpty()) {
-                    break;
-                }
-                chain.addLast(scopeD.get());
-                expr = scopeD.get();
-            }
-            else if (expr.isFieldAccessExpr()) {
-                FieldAccessExpr mce = expr.asFieldAccessExpr();
-                chain.addLast(mce.getScope());
-                expr = mce.getScope();
-            }
-            else if (expr.isMethodReferenceExpr()) {
-                MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
-                chain.addLast(mexpr.getScope());
-                expr = mexpr.getScope();
-            }
-            else {
-                break;
-            }
-        }
-        return chain;
-    }
+
 }

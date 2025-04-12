@@ -672,7 +672,7 @@ public class SpringEvaluator extends Evaluator {
                     }
                 }
 
-                LinkedList<Expression> chain = Evaluator.findScopeChain(init);
+                ScopeChain chain = ScopeChain.findScopeChain(init);
                 setupConditionThroughMethodCalls(stmt, state, entry, chain);
                 return;
             }
@@ -699,13 +699,13 @@ public class SpringEvaluator extends Evaluator {
     }
 
     private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
-        LinkedList<Expression> chain = Evaluator.findScopeChain(entry.getKey());
+        ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
         setupConditionThroughMethodCalls(stmt, state, entry, chain);
     }
 
-    private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, LinkedList<Expression> chain) {
+    private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, ScopeChain chain) {
         if (!chain.isEmpty()) {
-            Expression expr = chain.getFirst();
+            Expression expr = chain.getFirst().getExpression();
             Variable v = getValue(stmt, expr.toString());
             if (v == null && expr.isNameExpr()) {
                 /*
@@ -924,7 +924,7 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
-        LinkedList<Expression> chain = findScopeChain(methodCall);
+        ScopeChain chain = ScopeChain.findScopeChain(methodCall);
         if (!chain.isEmpty()) {
             Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
             LineOfCode l = branching.get(stmt.hashCode());
@@ -936,7 +936,7 @@ public class SpringEvaluator extends Evaluator {
                 branchCount++;
             }
 
-            Expression first = chain.getFirst();
+            Expression first = chain.getFirst().getExpression();
             if (first.isMethodCallExpr()) {
                 MethodCallExpr firstCall = first.asMethodCallExpr();
                 MCEWrapper wrapper = new MCEWrapper(firstCall);
