@@ -943,28 +943,29 @@ public class SpringEvaluator extends Evaluator {
                     method.accept(visitor, null);
                     Expression emptyCondition = visitor.getCombinedCondition();
 
-                    // Build truth table for empty conditions
-                    TruthTable tt = new TruthTable(emptyCondition);
-                    tt.generateTruthTable();
-                    List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
+                    if (emptyCondition != null) {
+                        // Build truth table for empty conditions
+                        TruthTable tt = new TruthTable(emptyCondition);
+                        tt.generateTruthTable();
+                        List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
 
-                    // Apply conditions that lead to empty
-                    if (!emptyValues.isEmpty()) {
-                        Map<Expression, Object> value = emptyValues.getFirst();
-                        for (var entry : value.entrySet()) {
-                            if (entry.getKey().isMethodCallExpr()) {
-                                //setupIfConditionThroughMethodCalls(methodCall, true, entry);
-                            } else if (entry.getKey().isNameExpr()) {
-                                Variable v = getValue(methodCall, entry.getKey().asNameExpr().getNameAsString());
-                                if (v != null) {
-                                 //   setupIfConditionThroughAssignment(methodCall, true, entry, v);
+                        // Apply conditions that lead to empty
+                        if (!emptyValues.isEmpty()) {
+                            Map<Expression, Object> value = emptyValues.getFirst();
+                            for (Parameter param : method.getParameters()) {
+                                Type type = param.getType();
+                                for (Map.Entry<Expression, Object> entry : value.entrySet()) {
+                                    if (type.isPrimitiveType()) {
+          //                              setupIfConditionThroughAssignment(methodCall, true, entry);
+                                    } else {
+            //                            setupIfConditionThroughMethodCalls(methodCall, true, entry);
+                                    }
                                 }
                             }
                         }
                     }
 
                     return switch (methodCall.getNameAsString()) {
-                        // Rest of the switch cases remain same
                         case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
                         case "orElseThrow" -> {
                             if (emptyCondition != null) {
