@@ -64,6 +64,8 @@ public class ScopeChain {
     public static class Scope {
         Expression expression;
         Callable callable;
+        MethodCallExpr methodCall;
+        Variable variable;
 
         private Scope(Expression expression) {
             this.expression = expression;
@@ -83,6 +85,22 @@ public class ScopeChain {
 
         public void setCallable(Callable callable) {
             this.callable = callable;
+        }
+
+        public MethodCallExpr getMethodCall() {
+            return methodCall;
+        }
+
+        public void setMethodCall(MethodCallExpr methodCall) {
+            this.methodCall = methodCall;
+        }
+
+        public Variable getVariable() {
+            return variable; 
+        }
+
+        public void setVariable(Variable variable) {
+            this.variable = variable;
         }
     }
 }

@@ -552,14 +552,16 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws EvaluatorException, ReflectiveOperationException {
+    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+        Variable v = scope.getVariable();
+        MethodCallExpr methodCall = scope.getMethodCall();
         try {
-            Optional<Expression> scope = methodCall.getScope();
-            if (scope.isPresent()) {
-                String fieldClass = getFieldClass(scope.get());
+            Optional<Expression> expr = methodCall.getScope();
+            if (expr.isPresent()) {
+                String fieldClass = getFieldClass(expr.get());
                 if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
                     boolean isMocked = false;
-                    String fieldName = getFieldName(scope.get());
+                    String fieldName = getFieldName(expr.get());
                     if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
                         isMocked = AntikytheraRunTime.isMocked(fieldClass);
                     }
@@ -569,7 +571,7 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
 
-            return super.evaluateMethodCall(v, methodCall);
+            return super.evaluateMethodCall(scope);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
                 testForInternalError(methodCall, eex);

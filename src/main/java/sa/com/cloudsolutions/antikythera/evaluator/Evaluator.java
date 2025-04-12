@@ -789,7 +789,10 @@ public class Evaluator {
                 return o;
             }
         }
-        return evaluateMethodCall(variable, methodCall);
+        ScopeChain.Scope scope = chain.getChain().getLast();
+        scope.setMethodCall(methodCall);
+        scope.setVariable(variable);
+        return evaluateMethodCall(scope);
     }
 
     Variable handleOptionalEmpties(MethodCallExpr methodCall) throws ReflectiveOperationException {
@@ -833,13 +836,15 @@ public class Evaluator {
             }
             else if(expr2.isFieldAccessExpr() && variable != null) {
                 /*
-                 * When we get here the getValue should have returned to us a valid field. That means
+                 * getValue should have returned to us a valid field. That means
                  * we will have an evaluator instance as the 'value' in the variable v
                  */
                 variable = evaluateScopedFieldAccess(variable, expr2);
             }
             else if(expr2.isMethodCallExpr()) {
-                variable = evaluateMethodCall(variable, expr2.asMethodCallExpr());
+                scope.setVariable(variable);
+                scope.setMethodCall(expr2.asMethodCallExpr());
+                variable = evaluateMethodCall(scope);
             }
             else if (expr2.isLiteralExpr()) {
                 variable = evaluateLiteral(expr2);
@@ -925,7 +930,9 @@ public class Evaluator {
         }
     }
 
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+        Variable v = scope.getVariable();
+        MethodCallExpr methodCall = scope.getMethodCall();
         if (v != null) {
             Object value = v.getValue();
             if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
