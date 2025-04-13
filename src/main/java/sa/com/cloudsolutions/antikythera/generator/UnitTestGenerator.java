@@ -20,6 +20,10 @@ import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.DTOBuddy;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.MethodInterceptor;
+import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -165,10 +169,25 @@ public class UnitTestGenerator extends TestGenerator {
             for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
                 identifyMockedTypes(t);
             }
+
+            baseTestClass.findFirst(MethodDeclaration.class,
+                    md -> md.getNameAsString().equals("setUpBase"))
+                    .ifPresent(md -> {
+                        TestSuiteEvaluator eval = new TestSuiteEvaluator(baseTestClass, baseClassName);
+                        try {
+                            eval.setupFields();
+                            eval.initializeFields();
+                            eval.executeMethod(md);
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    });
+
         } catch (FileNotFoundException e) {
             throw new AntikytheraException("Base class could not be loaded for tests.");
         }
     }
+
 
     /**
      * Attempt to identify which fields have already been mocked.
