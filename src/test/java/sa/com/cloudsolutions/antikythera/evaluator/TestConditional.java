@@ -17,9 +17,8 @@ import java.io.PrintStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
+
 
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.expr.Expression;
@@ -142,35 +141,19 @@ class TestConditionalWithOptional extends TestHelper {
         System.setOut(new PrintStream(outContent));
     }
 
-    @Test
-    void testIfEmpty() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({
+        "ifEmpty, ID not found\\nID: 1",
+        "ifPresent, ID: 1",
+        "optionalString, IBUPROFEN"
+    })
+    void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("ifEmpty")).orElseThrow();
+                md -> md.getNameAsString().equals(methodName)).orElseThrow();
         evaluator.visit(method);
-        assertEquals("ID not found\nID: 1", outContent.toString().strip());
+        assertEquals(expectedOutput.replace("\\n","\n"), outContent.toString().strip());
     }
-
-    @Test
-    void testIfPresent() throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
-
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("ifPresent")).orElseThrow();
-        evaluator.visit(method);
-        assertEquals("ID: 1", outContent.toString().strip());
-    }
-
-    @Test
-    void testHandleOptionalsHelper() throws AntikytheraException, ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
-
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("optionalString")).orElseThrow();
-        evaluator.visit(method);
-        assertEquals("IBUPROFEN", outContent.toString().strip());
-    }
-
 }
 
