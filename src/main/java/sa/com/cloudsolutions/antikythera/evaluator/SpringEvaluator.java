@@ -679,7 +679,7 @@ public class SpringEvaluator extends Evaluator {
             }
         }
         else {
-            v = new Variable(null);
+            v = new Variable(entry.getValue());
         }
 
         setupConditionThroughAssignment(stmt, state, entry, v);
@@ -958,7 +958,7 @@ public class SpringEvaluator extends Evaluator {
                                     .orElse(false))
                             .findFirst()
                             .orElse(null);
-                    setupConditionalsForOptional(nonEmptyReturn, method, stmt);
+                    setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
                 }
                 else {
                     l.setPathTaken(LineOfCode.FALSE_PATH);
@@ -968,7 +968,7 @@ public class SpringEvaluator extends Evaluator {
                                     .orElse(false))
                             .findFirst()
                             .orElse(null);
-                    setupConditionalsForOptional(emptyReturn, method, stmt);
+                    setupConditionalsForOptional(emptyReturn, method, stmt, false);
                 }
                 return v;
             }
@@ -978,11 +978,11 @@ public class SpringEvaluator extends Evaluator {
             List<Expression> expressions;
             if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
                 l.setPathTaken(LineOfCode.BOTH_PATHS);
-                expressions = l.getPrecondition(false);
+                expressions = l.getPrecondition(true);
             }
             else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
                 l.setPathTaken(LineOfCode.BOTH_PATHS);
-                expressions = l.getPrecondition(true);
+                expressions = l.getPrecondition(false);
             }
             else {
                 throw new IllegalStateException("Both paths should have been taken");
@@ -994,7 +994,7 @@ public class SpringEvaluator extends Evaluator {
         }
     }
 
-    private void setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt) {
+    private void setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt, boolean state) {
         ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
         method.accept(visitor, null);
         Expression emptyCondition = visitor.getCombinedCondition();
@@ -1005,7 +1005,7 @@ public class SpringEvaluator extends Evaluator {
 
         TruthTable tt = new TruthTable(emptyCondition);
         tt.generateTruthTable();
-        List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(true);
+        List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(state);
 
         if (!emptyValues.isEmpty()) {
             Map<Expression, Object> value = emptyValues.getFirst();
@@ -1013,9 +1013,9 @@ public class SpringEvaluator extends Evaluator {
                 Type type = param.getType();
                 for (Map.Entry<Expression, Object> entry : value.entrySet()) {
                     if (type.isPrimitiveType()) {
-                        setupConditionThroughAssignment(stmt, true, entry);
+                        setupConditionThroughAssignment(stmt, state, entry);
                     } else {
-                        setupConditionThroughMethodCalls(stmt, true, entry);
+                        setupConditionThroughMethodCalls(stmt, state, entry);
                     }
                 }
             }

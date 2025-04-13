@@ -787,7 +787,12 @@ public class Evaluator {
     private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         Variable variable = evaluateScopeChain(chain);
-
+        if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
+            Variable o = handleOptionalEmpties(chain);
+            if (o != null) {
+                return o;
+            }
+        }
         ScopeChain.Scope scope = chain.getChain().getLast();
         scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
