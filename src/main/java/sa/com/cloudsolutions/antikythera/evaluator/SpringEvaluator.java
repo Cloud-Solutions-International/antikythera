@@ -668,8 +668,8 @@ public class SpringEvaluator extends Evaluator {
                 String paramName = nameExpr.getNameAsString();
                 for (Parameter param : md.getParameters()) {
                     if (param.getNameAsString().equals(paramName)) {
-                        setupConditionThroughAssignment(stmt, state, entry, v);
-                        return;
+                        Expression expr = setupConditionThroughAssignment(entry, v);
+                        addPreCondition(stmt, state, expr);
                     }
                 }
 
@@ -682,21 +682,21 @@ public class SpringEvaluator extends Evaluator {
             v = new Variable(entry.getValue());
         }
 
-        setupConditionThroughAssignment(stmt, state, entry, v);
+        Expression expr = setupConditionThroughAssignment(entry, v);
+        addPreCondition(stmt, state, expr);
     }
 
-    private void setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, Variable v) {
+    private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Expression valueExpr = v.getType() instanceof PrimitiveType
                 ? Reflect.createLiteralExpression(entry.getValue())
                 : new StringLiteralExpr(entry.getValue().toString());
 
-        AssignExpr expr = new AssignExpr(
+        return new AssignExpr(
                 new NameExpr(nameExpr.getNameAsString()),
                 valueExpr,
                 AssignExpr.Operator.ASSIGN
         );
-        addPreCondition(stmt, state, expr);
     }
 
     private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
@@ -929,16 +929,16 @@ public class SpringEvaluator extends Evaluator {
             MCEWrapper wrapper = sc.getMCEWrapper();
             Callable callable = wrapper.getMatchingCallable();
 
-            if (callable.isMethodDeclaration() &&
-                    callable.asMethodDeclaration() instanceof MethodDeclaration method) {
-                return handleOptionalsHelper(sc, method);
+            if (callable.isMethodDeclaration()) {
+                return handleOptionalsHelper(sc);
             }
         }
         return null;
     }
 
     @SuppressWarnings("unchecked")
-    Variable handleOptionalsHelper(ScopeChain.Scope sc, MethodDeclaration method) throws ReflectiveOperationException {
+    Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
+        MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = branching.get(stmt.hashCode());
@@ -952,22 +952,11 @@ public class SpringEvaluator extends Evaluator {
             if (v.getValue() instanceof Optional<?> optional) {
                 if (optional.isPresent()) {
                     l.setPathTaken(LineOfCode.TRUE_PATH);
-                    ReturnStmt nonEmptyReturn = method.findAll(ReturnStmt.class).stream()
-                            .filter(r -> r.getExpression()
-                                    .map(e -> !e.toString().contains("Optional.empty"))
-                                    .orElse(false))
-                            .findFirst()
-                            .orElse(null);
+                    ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
                     setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
-                }
-                else {
+                } else {
                     l.setPathTaken(LineOfCode.FALSE_PATH);
-                    ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
-                            .filter(r -> r.getExpression()
-                                    .map(e -> e.toString().contains("Optional.empty"))
-                                    .orElse(false))
-                            .findFirst()
-                            .orElse(null);
+                    ReturnStmt emptyReturn = findReturnStatement(method, true);
                     setupConditionalsForOptional(emptyReturn, method, stmt, false);
                 }
                 return v;
@@ -992,6 +981,16 @@ public class SpringEvaluator extends Evaluator {
             }
             return super.handleOptionals(sc);
         }
+    }
+
+    private ReturnStmt findReturnStatement(MethodDeclaration method, boolean isEmpty) {
+        return method.findAll(ReturnStmt.class).stream()
+                .filter(r -> r.getExpression()
+                        .map(e -> isEmpty ? e.toString().contains("Optional.empty")
+                                        : !e.toString().contains("Optional.empty"))
+                        .orElse(false))
+                .findFirst()
+                .orElse(null);
     }
 
     private void setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt, boolean state) {
@@ -1020,12 +1019,6 @@ public class SpringEvaluator extends Evaluator {
                 }
             }
         }
-    }
-
-
-    Variable handleOptionalPresents(ScopeChain chain) throws ReflectiveOperationException {
-        Variable v = evaluateOptionalPresentCall(chain);
-        return (v == null) ?  super.handleOptionalEmpties(chain) : v;
     }
 
     @Override
