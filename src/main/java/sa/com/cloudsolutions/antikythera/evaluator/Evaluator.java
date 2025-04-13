@@ -787,26 +787,20 @@ public class Evaluator {
     private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         Variable variable = evaluateScopeChain(chain);
-        if (variable.getValue() instanceof Optional<?> optional) {
-            Variable o = handleOptionals(chain, optional);
-            if (o != null) {
-                return o;
-            }
-        }
+
         ScopeChain.Scope scope = chain.getChain().getLast();
         scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
         return evaluateMethodCall(scope);
     }
 
-    Variable handleOptionals(ScopeChain chain, Optional<?> optional) throws ReflectiveOperationException {
-        if (optional.isEmpty()) {
-            Variable o = handleOptionalEmpties(chain);
-            if (o != null) {
-                return o;
-            }
+    Variable handleOptionals(ScopeChain.Scope scope) throws ReflectiveOperationException {
+        MethodDeclaration md = scope.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
+        Variable v = executeMethod(md);
+        if (v != null && v.getValue() == null) {
+            v.setType(md.getType());
         }
-        return null;
+        return v;
     }
 
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
@@ -1028,6 +1022,13 @@ public class Evaluator {
         }
     }
 
+    /**
+     * Execute a method that is part of a chain of method
+     * @param sc the methods scope
+     * @return the result from executing the method or null if the method is void.
+     * @throws ReflectiveOperationException if the execution involves a class available only
+     *      in byte code format and an exception occurs in reflecting.
+     */
     public Variable executeMethod(ScopeChain.Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
@@ -1038,11 +1039,20 @@ public class Evaluator {
             mceWrapper.setMatchingCallable(callable);
             if (callable.isMethodDeclaration()) {
                 MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
-                Variable v = executeMethod(methodDeclaration);
-                if (v != null && v.getValue() == null) {
-                    v.setType(methodDeclaration.getType());
+                Type returnType = methodDeclaration.getType();
+
+                if (returnType.asString().startsWith("Optional") ||
+                        returnType.asString().startsWith("java.util.Optional")) {
+                    return handleOptionals(sc);
                 }
-                return v;
+                else {
+                    Variable v = executeMethod(methodDeclaration);
+                    if (v != null && v.getValue() == null) {
+
+                        v.setType(returnType);
+                    }
+                    return v;
+                }
             }
             else {
                return executeMethod(callable.getMethod());

@@ -924,25 +924,22 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @Override
-    Variable handleOptionals(ScopeChain chain, Optional<?> optional) throws ReflectiveOperationException {
-        ScopeChain.Scope sc = chain.getChain().getFirst();
-
+    Variable handleOptionals(ScopeChain.Scope sc) throws ReflectiveOperationException {
         if (sc.getExpression().isMethodCallExpr()) {
             MCEWrapper wrapper = sc.getMCEWrapper();
             Callable callable = wrapper.getMatchingCallable();
 
             if (callable.isMethodDeclaration() &&
-                    callable.asMethodDeclaration() instanceof MethodDeclaration method
-                    && method.getType().toString().startsWith("Optional")) {
-                return handleOptionalsHelper(chain, optional, method);
+                    callable.asMethodDeclaration() instanceof MethodDeclaration method) {
+                return handleOptionalsHelper(sc, method);
             }
         }
         return null;
     }
 
     @SuppressWarnings("unchecked")
-    Variable handleOptionalsHelper(ScopeChain chain, Optional<?> optional, MethodDeclaration method) throws ReflectiveOperationException {
-        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
+    Variable handleOptionalsHelper(ScopeChain.Scope sc, MethodDeclaration method) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = branching.get(stmt.hashCode());
 
@@ -950,39 +947,50 @@ public class SpringEvaluator extends Evaluator {
             l = new LineOfCode(stmt);
             branching.put(stmt.hashCode(), l);
             branchCount++;
-        }
 
-        if (optional.isEmpty()) {
-            if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
-                l.setPathTaken(LineOfCode.FALSE_PATH);
+            Variable v = super.handleOptionals(sc);
+            if (v.getValue() instanceof Optional<?> optional) {
+                if (optional.isPresent()) {
+                    l.setPathTaken(LineOfCode.TRUE_PATH);
+                    ReturnStmt nonEmptyReturn = method.findAll(ReturnStmt.class).stream()
+                            .filter(r -> r.getExpression()
+                                    .map(e -> !e.toString().contains("Optional.empty"))
+                                    .orElse(false))
+                            .findFirst()
+                            .orElse(null);
+                    setupConditionalsForOptional(nonEmptyReturn, method, stmt);
+                }
+                else {
+                    l.setPathTaken(LineOfCode.FALSE_PATH);
+                    ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
+                            .filter(r -> r.getExpression()
+                                    .map(e -> e.toString().contains("Optional.empty"))
+                                    .orElse(false))
+                            .findFirst()
+                            .orElse(null);
+                    setupConditionalsForOptional(emptyReturn, method, stmt);
+                }
+                return v;
             }
-            else {
-                ReturnStmt emptyReturn = method.findAll(ReturnStmt.class).stream()
-                        .filter(r -> r.getExpression()
-                                .map(e -> e.toString().contains("Optional.empty"))
-                                .orElse(false))
-                        .findFirst()
-                        .orElse(null);
-                l.setPathTaken(LineOfCode.BOTH_PATHS);
-                setupConditionalsForOptional(emptyReturn, method, stmt);
-            }
-            return handleOptionalEmpties(chain);
+            throw new IllegalStateException("This should be returning an optional");
         }
         else {
-            if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
-                l.setPathTaken(LineOfCode.TRUE_PATH);
-            } else {
-                ReturnStmt nonEmptyReturn = method.findAll(ReturnStmt.class).stream()
-                        .filter(r -> r.getExpression()
-                                .map(e -> !e.toString().contains("Optional.empty"))
-                                .orElse(false))
-                        .findFirst()
-                        .orElse(null);
-
+            List<Expression> expressions;
+            if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
                 l.setPathTaken(LineOfCode.BOTH_PATHS);
-                setupConditionalsForOptional(nonEmptyReturn, method, stmt);
+                expressions = l.getPrecondition(false);
             }
-            return handleOptionalPresents(chain);
+            else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
+                l.setPathTaken(LineOfCode.BOTH_PATHS);
+                expressions = l.getPrecondition(true);
+            }
+            else {
+                throw new IllegalStateException("Both paths should have been taken");
+            }
+            for (Expression expression : expressions) {
+                evaluateExpression(expression);
+            }
+            return super.handleOptionals(sc);
         }
     }
 
