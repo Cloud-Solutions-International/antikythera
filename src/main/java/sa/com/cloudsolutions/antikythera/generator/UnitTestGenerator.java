@@ -77,6 +77,13 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    /**
+     * Loads any existing test class that has been generated previously.
+     * This code is typically not available through the AntikythereRunTime class because we are
+     * processing only the src/main and mostly ignoring src/test
+     * @param file the file name
+     * @throws FileNotFoundException if the source code cannot be found.
+     */
     void loadExisting(File file) throws FileNotFoundException {
         gen = StaticJavaParser.parse(file);
         List<MethodDeclaration> remove = new ArrayList<>();
@@ -99,6 +106,11 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    /**
+     * Create a clas for the test suite
+     * @param className the name of the class
+     * @param packageDecl the package it should be placed in.
+     */
     private void createTestClass(String className, String packageDecl) {
         gen = new CompilationUnit();
         if (packageDecl != null && !packageDecl.isEmpty()) {
@@ -113,10 +125,12 @@ public class UnitTestGenerator extends TestGenerator {
      * <p>Loads a base class that is common to all generated test classes.</p>
      *
      * Provided that an entry called base_test_class exists in the settings file and the source for
-     * that class can be found.
+     * that class can be found it will be loaded. If such an entry does not exist and the test suite
+     * had previously been generated, we will check the extended types of the test class.
      *
      * @param testClass the declaration of the test suite being built
      */
+    @SuppressWarnings("unchecked")
     private void loadPredefinedBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
         String base = Settings.getProperty("base_test_class", String.class).orElse(null);
         if (base != null && testClass.getExtendedTypes().isEmpty()) {
@@ -138,6 +152,10 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    /**
+     * Loads the base class for the tests if such a file exists.
+     * @param baseClassName the name of the base class.
+     */
     private void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("main", "test") + File.separator +
@@ -152,6 +170,10 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    /**
+     * Attempt to identify which fields have already been mocked.
+     * @param t the type declaration which holds the fields being mocked.
+     */
     private static void identifyMockedTypes(TypeDeclaration<?> t) {
         for (FieldDeclaration fd : t.getFields()) {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
@@ -189,6 +211,9 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    /**
+     * Deals with adding Mockito.when().then() type expressions to the generated tests.
+     */
     private void addWhens() {
         for (Expression expr : whenThen) {
             if( expr instanceof MethodCallExpr mce) {
@@ -221,10 +246,11 @@ public class UnitTestGenerator extends TestGenerator {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     private void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
             if (c.getAnnotationByName("Service").isPresent()) {
-                autoWireClass(c);
+                injectMocks(c);
             }
             else {
                 instanceName = ClassProcessor.classToInstanceName(c.getNameAsString());
@@ -261,7 +287,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void autoWireClass(ClassOrInterfaceDeclaration classUnderTest) {
+    private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
         gen.addImport("org.mockito.InjectMocks");
 
