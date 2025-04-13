@@ -936,52 +936,62 @@ public class SpringEvaluator extends Evaluator {
 
     @SuppressWarnings("unchecked")
     Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
-        MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
+
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = branching.get(stmt.hashCode());
 
         if (l == null) {
-            l = new LineOfCode(stmt);
-            branching.put(stmt.hashCode(), l);
-            branchCount++;
-            List<Expression> expressions;
-            Variable v = super.handleOptionals(sc);
-            if (v.getValue() instanceof Optional<?> optional) {
-                if (optional.isPresent()) {
-                    l.setPathTaken(LineOfCode.TRUE_PATH);
-                    ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
-                    expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
-                } else {
-                    l.setPathTaken(LineOfCode.FALSE_PATH);
-                    ReturnStmt emptyReturn = findReturnStatement(method, true);
-                    expressions = setupConditionalsForOptional(emptyReturn, method, stmt, false);
-                }
-                for (Expression expr : expressions) {
-                    mapParameterToArguments(expr, method, methodCall);
-                }
-                return v;
-            }
-            throw new IllegalStateException("This should be returning an optional");
+            return straightPath(sc, stmt, methodCall);
         }
         else {
-            List<Expression> expressions;
-            if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
-                l.setPathTaken(LineOfCode.BOTH_PATHS);
-                expressions = l.getPrecondition(true);
-            }
-            else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
-                l.setPathTaken(LineOfCode.BOTH_PATHS);
-                expressions = l.getPrecondition(false);
-            }
-            else {
-                throw new IllegalStateException("Both paths should have been taken");
-            }
-            for (Expression expression : expressions) {
-                evaluateExpression(expression);
-            }
-            return super.handleOptionals(sc);
+            return riggedPath(sc, l);
         }
+    }
+
+    private Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
+        LineOfCode l =  new LineOfCode(stmt);
+        branching.put(stmt.hashCode(), l);
+        branchCount++;
+
+        List<Expression> expressions;
+        Variable v = super.handleOptionals(sc);
+        if (v.getValue() instanceof Optional<?> optional) {
+            if (optional.isPresent()) {
+                l.setPathTaken(LineOfCode.TRUE_PATH);
+                ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
+                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
+            } else {
+                l.setPathTaken(LineOfCode.FALSE_PATH);
+                ReturnStmt emptyReturn = findReturnStatement(method, true);
+                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, false);
+            }
+            for (Expression expr : expressions) {
+                mapParameterToArguments(expr, method, methodCall);
+            }
+            return v;
+        }
+        throw new IllegalStateException("This should be returning an optional");
+    }
+
+    private Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
+        List<Expression> expressions;
+        if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
+            l.setPathTaken(LineOfCode.BOTH_PATHS);
+            expressions = l.getPrecondition(true);
+        }
+        else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
+            l.setPathTaken(LineOfCode.BOTH_PATHS);
+            expressions = l.getPrecondition(false);
+        }
+        else {
+            throw new IllegalStateException("Both paths should have been taken");
+        }
+        for (Expression expression : expressions) {
+            evaluateExpression(expression);
+        }
+        return super.handleOptionals(sc);
     }
 
     private void mapParameterToArguments(Expression expr, MethodDeclaration method, MethodCallExpr methodCall) {
@@ -1049,19 +1059,6 @@ public class SpringEvaluator extends Evaluator {
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
         Variable v = evaluateOptionalEmptyCall(chain);
         return (v == null) ?  super.handleOptionalEmpties(chain) : v;
-    }
-
-    private Variable evaluateOptionalPresentCall(ScopeChain chain) throws ReflectiveOperationException {
-        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
-        return switch (methodCall.getNameAsString()) {
-            case "ifPresent", "ifPresentOrElse" -> {
-                Variable v = evaluateExpression(methodCall.getArgument(0));
-                yield  executeLambda(v);
-            }
-            case "map", "flatMap", "filter" -> evaluateExpression(methodCall.getArgument(0));
-
-            default -> super.handleOptionalEmpties(chain);
-        };
     }
 
     private Variable evaluateOptionalEmptyCall(ScopeChain chain) throws ReflectiveOperationException {
