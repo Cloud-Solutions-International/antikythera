@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -16,7 +17,9 @@ import java.io.PrintStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.expr.Expression;
@@ -140,7 +143,7 @@ class TestConditionalWithOptional extends TestHelper {
     }
 
     @Test
-    void testVisit() throws ReflectiveOperationException {
+    void testIfEmpty() throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
@@ -148,5 +151,26 @@ class TestConditionalWithOptional extends TestHelper {
         evaluator.visit(method);
         assertEquals("ID not found\nID: 1", outContent.toString().strip());
     }
+
+    @Test
+    void testIfPresent() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("ifPresent")).orElseThrow();
+        evaluator.visit(method);
+        assertEquals("ID: 1", outContent.toString().strip());
+    }
+
+    @Test
+    void testHandleOptionalsHelper() throws AntikytheraException, ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("optionalString")).orElseThrow();
+        evaluator.visit(method);
+        assertEquals("IBUPROFEN", outContent.toString().strip());
+    }
+
 }
 

@@ -77,6 +77,11 @@ public class Opt {
         return Optional.ofNullable(o);
     }
 
+    public void optionalString(String input) {
+        Optional<String> optionalInput = Optional.ofNullable(input);
+        System.out.println(optionalInput.map(String::toUpperCase).orElse("default"));
+    }
+
     public static void main(String[] args) {
         Opt opt = new Opt();
         System.out.println(opt.flatMapToString(1));
