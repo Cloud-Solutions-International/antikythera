@@ -1802,7 +1802,6 @@ public class Evaluator {
         locals.clear();
     }
 
-
     @Override
     public String toString() {
         return getClass().getName() + " : " + getClassName();
@@ -1815,6 +1814,4 @@ public class Evaluator {
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
     }
-
-
 }

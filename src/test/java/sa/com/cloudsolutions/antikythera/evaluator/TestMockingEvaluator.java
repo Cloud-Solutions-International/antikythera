@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -98,11 +99,11 @@ class TestMockingEvaluator {
     void mockReturnFromCompilationUnitHandlesDifferentTypes(String typeName, String expectedType) {
         // Setup
         MethodDeclaration methodDecl = new MethodDeclaration();
-        CompilationUnit cu = new CompilationUnit();
+        CompilationUnit compUnit = new CompilationUnit();
         if (expectedType.contains("util")) {
-            cu.addImport("java.util." + typeName);
+            compUnit.addImport("java.util." + typeName);
         }
-        methodDecl.setParentNode(cu);
+        methodDecl.setParentNode(compUnit);
 
         ClassOrInterfaceType returnType = new ClassOrInterfaceType()
                 .setName(typeName);
@@ -128,9 +129,9 @@ class TestMockingEvaluator {
     void mockReturnFromCompilationUnitHandlesGenericTypes(String genericType, String importName) {
         // Setup
         MethodDeclaration methodDecl = new MethodDeclaration();
-        CompilationUnit cu = new CompilationUnit();
-        cu.addImport(importName);
-        methodDecl.setParentNode(cu);
+        CompilationUnit compUnit = new CompilationUnit();
+        compUnit.addImport(importName);
+        methodDecl.setParentNode(compUnit);
 
         ClassOrInterfaceType returnType = parseGenericType(genericType);
         methodDecl.setType(returnType);
@@ -185,8 +186,26 @@ class TestMockingEvaluator {
 
         // Verify
         assertEquals(1, args.size());
-        MethodCallExpr matcher = (MethodCallExpr) args.get(0);
-        assertEquals("Mockito", matcher.getScope().get().toString());
+        MethodCallExpr matcher = (MethodCallExpr) args.getFirst().orElseThrow();
+        assertEquals("Mockito", matcher.getScope().orElseThrow().toString());
         assertEquals(expectedMatcher, matcher.getNameAsString());
     }
+
+    @Test
+    void executeMethodHandlesReflectiveMethod() throws NoSuchMethodException {
+        // Setup
+        class TestClass {
+            public String testMethod(int param1, String param2) {
+                return param1 + param2;
+            }
+        }
+        Method method = TestClass.class.getMethod("testMethod", int.class, String.class);
+
+        // Execute
+        Variable result = mockingEvaluator.executeMethod(method);
+
+        // Verify
+        assertNotNull(result);
+        assertEquals("Ibuprofen", result.getValue());
+      }
 }
