@@ -50,7 +50,7 @@ public class AKBuddy {
 
             ByteBuddy byteBuddy = new ByteBuddy();
             DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
-                    .method(ElementMatchers.any())
+                    .method(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
                     .intercept(MethodDelegation.to(interceptor));
 
             builder = addFields(fields, cu, builder);
@@ -64,7 +64,7 @@ public class AKBuddy {
             Class<?> wrappedClass = interceptor.getWrappedClass();
             ByteBuddy byteBuddy = new ByteBuddy();
             return byteBuddy.subclass(wrappedClass)
-                    .method(ElementMatchers.any())
+                    .method(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
                     .intercept(MethodDelegation.to(interceptor))
                     .make()
                     .load(wrappedClass.getClassLoader())
