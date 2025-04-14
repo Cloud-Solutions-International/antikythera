@@ -50,7 +50,11 @@ public class AKBuddy {
 
             ByteBuddy byteBuddy = new ByteBuddy();
             DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
-                    .method(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
+                    .method(ElementMatchers.not(
+                        ElementMatchers.isDeclaredBy(Object.class)
+                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                    ))
                     .intercept(MethodDelegation.to(interceptor));
 
             builder = addFields(fields, cu, builder);
@@ -64,7 +68,11 @@ public class AKBuddy {
             Class<?> wrappedClass = interceptor.getWrappedClass();
             ByteBuddy byteBuddy = new ByteBuddy();
             return byteBuddy.subclass(wrappedClass)
-                    .method(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
+                    .method(ElementMatchers.not(
+                        ElementMatchers.isDeclaredBy(Object.class)
+                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                    ))
                     .intercept(MethodDelegation.to(interceptor))
                     .make()
                     .load(wrappedClass.getClassLoader())

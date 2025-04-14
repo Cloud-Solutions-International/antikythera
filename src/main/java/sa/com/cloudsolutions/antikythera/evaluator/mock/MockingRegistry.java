@@ -4,9 +4,11 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AKBuddy;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.MethodInterceptor;
 import sa.com.cloudsolutions.antikythera.evaluator.MockReturnValueHandler;
 import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -39,17 +41,16 @@ public class MockingRegistry {
 
 
     public static Variable useMockito(String className) throws ClassNotFoundException {
-        Variable v;
         Class<?> cls = AbstractCompiler.loadClass(className);
-        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+        Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
         v.setClazz(cls);
         return v;
     }
 
     public static Variable useByteBuddy(String className) throws ClassNotFoundException {
-        Variable v;
         Class<?> cls = AbstractCompiler.loadClass(className);
-        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+        MethodInterceptor interceptor = new MethodInterceptor(cls);
+        Variable v = new Variable(AKBuddy.createDynamicClass(interceptor));
         v.setClazz(cls);
         return v;
     }
@@ -66,10 +67,10 @@ public class MockingRegistry {
         else {
             String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
             if (mocker.equals("Mockito")) {
-                v = MockingRegistry.useByteBuddy(fqn);
+                v = MockingRegistry.useMockito(fqn);
             }
             else {
-                v = MockingRegistry.useMockito(fqn);
+                v = MockingRegistry.useByteBuddy(fqn);
             }
         }
         v.setType(variable.getType());

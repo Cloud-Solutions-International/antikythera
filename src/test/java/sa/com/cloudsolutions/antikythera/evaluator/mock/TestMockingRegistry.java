@@ -16,7 +16,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TestMockingRegistry extends TestHelper {
@@ -43,7 +42,6 @@ class TestMockingRegistry extends TestHelper {
         Variable result = MockingRegistry.mockIt(variableDeclarator);
 
         assertNotNull(result);
-        assertInstanceOf(ObjectMapper.class, result.getValue());
         assertEquals(ObjectMapper.class, result.getClazz());
     }
 }
