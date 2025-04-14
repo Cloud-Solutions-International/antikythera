@@ -568,7 +568,7 @@ public class Evaluator {
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
         if (match != null) {
-            Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().get(), this);
+            Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
             annonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
@@ -1569,7 +1569,7 @@ public class Evaluator {
                 }
             }
             if (labels.isEmpty()) {
-                defaultStmt = entry.getStatements().get(0);
+                defaultStmt = entry.getStatements().getFirst().orElse(null);
             }
         }
 
