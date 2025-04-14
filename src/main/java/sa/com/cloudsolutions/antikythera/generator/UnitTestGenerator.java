@@ -19,7 +19,6 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -491,7 +490,7 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             for (FieldDeclaration fd : decl.getFields()) {
                 String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
-                if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMocked(fullyQualifiedTypeName)) {
+                if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
                     MockingRegistry.markAsMocked(fullyQualifiedTypeName);
                     FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                     field.addAnnotation("Mock");

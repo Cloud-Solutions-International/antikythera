@@ -511,7 +511,7 @@ public class SpringEvaluator extends Evaluator {
 
     private static Variable autoWireFromSourceCode(VariableDeclarator variable, String resolvedClass, FieldDeclaration fd) {
         Variable v;
-        Evaluator eval = MockingRegistry.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
+        Evaluator eval = MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -563,7 +563,7 @@ public class SpringEvaluator extends Evaluator {
                     boolean isMocked = false;
                     String fieldName = getFieldName(expr.get());
                     if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
-                        isMocked = MockingRegistry.isMocked(fieldClass);
+                        isMocked = MockingRegistry.isMockTarget(fieldClass);
                     }
                     if (!isMocked) {
                         return executeSource(methodCall);

@@ -34,9 +34,6 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
-import org.mockito.Mockito;
-import org.mockito.quality.Strictness;
-
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
@@ -72,8 +69,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
-
-import static org.mockito.Mockito.withSettings;
 
 /**
  * Expression evaluator engine.
@@ -1181,19 +1176,8 @@ public class Evaluator {
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        if (MockingRegistry.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
-            String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
-            Variable v;
-            if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
-                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
-                eval.setVariableName(variable.getNameAsString());
-                v = new Variable(eval);
-            }
-            else {
-                v = useMockito(fqn);
-            }
-            v.setType(variable.getType());
-            return v;
+        if (MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
+            return MockingRegistry.mockIt(variable);
         }
         else {
             if (variable.getType().isClassOrInterfaceType()) {
@@ -1204,17 +1188,10 @@ public class Evaluator {
         }
     }
 
-    void setVariableName(String variableName) {
+    public void setVariableName(String variableName) {
         this.variableName = variableName;
     }
 
-    private static Variable useMockito(String fqdn) throws ClassNotFoundException {
-        Variable v;
-        Class<?> cls = AbstractCompiler.loadClass(fqdn);
-        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
-        v.setClazz(cls);
-        return v;
-    }
 
     public Map<Integer, Map<String, Variable>> getLocals() {
         return locals;

@@ -16,7 +16,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import static org.mockito.Mockito.withSettings;
 
 
-class MockReturnValueHandler implements Answer<Object> {
+public class MockReturnValueHandler implements Answer<Object> {
     private static final Logger logger = LoggerFactory.getLogger(MockReturnValueHandler.class);
 
     @Override

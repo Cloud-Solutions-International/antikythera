@@ -131,7 +131,7 @@ class UnitTestGeneratorTest {
         assertNotNull(unitTestGenerator.gen);
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
 
-        assertTrue(MockingRegistry.isMocked("java.util.zip.Adler32"));
+        assertTrue(MockingRegistry.isMockTarget("java.util.zip.Adler32"));
 
     }
 }
