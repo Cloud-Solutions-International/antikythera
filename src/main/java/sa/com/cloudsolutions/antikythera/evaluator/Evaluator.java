@@ -40,6 +40,7 @@ import org.mockito.quality.Strictness;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -1180,7 +1181,7 @@ public class Evaluator {
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        if (AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
+        if (MockingRegistry.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
             String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {

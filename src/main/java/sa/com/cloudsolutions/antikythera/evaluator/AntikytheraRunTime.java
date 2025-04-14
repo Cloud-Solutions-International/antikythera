@@ -43,7 +43,6 @@ public class AntikytheraRunTime {
      */
     protected static final Map<String, Set<String>> extensions = new HashMap<>();
 
-    private static final Set<String> mockedFields = new HashSet<>();
 
     /**
      * Stores the fields that have been autowired.
@@ -92,7 +91,6 @@ public class AntikytheraRunTime {
     }
 
     public static void resetAutowires() {
-        mockedFields.clear();
         autowired.clear();
     }
 
@@ -111,14 +109,6 @@ public class AntikytheraRunTime {
     public static boolean isInterface(String name) {
         ClassInfo classInfo = resolved.get(name);
         return classInfo != null && classInfo.isInterface;
-    }
-
-    public static void markAsMocked(String className) {
-        mockedFields.add(className);
-    }
-
-    public static boolean isMocked(String className) {
-        return mockedFields.contains(className);
     }
 
     static class ClassInfo {

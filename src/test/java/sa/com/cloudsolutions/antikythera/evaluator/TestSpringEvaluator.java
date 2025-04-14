@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
@@ -170,7 +171,7 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(variable));
+        MockingRegistry.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(variable));
 
         SpringEvaluator evaluator = EvaluatorFactory.create(sample, SpringEvaluator.class);
         assertNotNull(evaluator.autoWire(variable, PERSON_REPO));

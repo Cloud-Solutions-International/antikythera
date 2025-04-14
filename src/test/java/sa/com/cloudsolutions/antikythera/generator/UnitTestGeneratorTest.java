@@ -17,6 +17,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -130,7 +131,7 @@ class UnitTestGeneratorTest {
         assertNotNull(unitTestGenerator.gen);
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
 
-        assertTrue(AntikytheraRunTime.isMocked("java.util.zip.Adler32"));
+        assertTrue(MockingRegistry.isMocked("java.util.zip.Adler32"));
 
     }
 }

@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -510,7 +511,7 @@ public class SpringEvaluator extends Evaluator {
 
     private static Variable autoWireFromSourceCode(VariableDeclarator variable, String resolvedClass, FieldDeclaration fd) {
         Variable v;
-        Evaluator eval = AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
+        Evaluator eval = MockingRegistry.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -562,7 +563,7 @@ public class SpringEvaluator extends Evaluator {
                     boolean isMocked = false;
                     String fieldName = getFieldName(expr.get());
                     if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
-                        isMocked = AntikytheraRunTime.isMocked(fieldClass);
+                        isMocked = MockingRegistry.isMocked(fieldClass);
                     }
                     if (!isMocked) {
                         return executeSource(methodCall);

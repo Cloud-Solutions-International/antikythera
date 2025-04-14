@@ -22,6 +22,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
@@ -194,7 +195,7 @@ public class UnitTestGenerator extends TestGenerator {
         for (FieldDeclaration fd : t.getFields()) {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
                     fd.getAnnotationByName("Mock").isPresent()) {
-                AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
+                MockingRegistry.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
             }
         }
     }
@@ -464,7 +465,7 @@ public class UnitTestGenerator extends TestGenerator {
         TypeDeclaration<?> t = gen.getType(0);
 
         for (FieldDeclaration fd : t.getFields()) {
-            AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
+            MockingRegistry.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
         }
 
         gen.addImport("org.mockito.MockitoAnnotations");
@@ -490,8 +491,8 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             for (FieldDeclaration fd : decl.getFields()) {
                 String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
-                if (fd.getAnnotationByName("Autowired").isPresent() && !AntikytheraRunTime.isMocked(fullyQualifiedTypeName)) {
-                    AntikytheraRunTime.markAsMocked(fullyQualifiedTypeName);
+                if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMocked(fullyQualifiedTypeName)) {
+                    MockingRegistry.markAsMocked(fullyQualifiedTypeName);
                     FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                     field.addAnnotation("Mock");
                     ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
