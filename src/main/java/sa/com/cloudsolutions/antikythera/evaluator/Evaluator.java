@@ -800,12 +800,19 @@ public class Evaluator {
     }
 
     Variable handleOptionals(ScopeChain.Scope scope) throws ReflectiveOperationException {
-        MethodDeclaration md = scope.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
-        Variable v = executeMethod(md);
-        if (v != null && v.getValue() == null) {
-            v.setType(md.getType());
+        Callable callable = scope.getMCEWrapper().getMatchingCallable();
+        if (callable.isCallableDeclaration()) {
+            MethodDeclaration md = callable.asMethodDeclaration();
+            Variable v = executeMethod(md);
+            if (v != null && v.getValue() == null) {
+                v.setType(md.getType());
+            }
+            return v;
         }
-        return v;
+        else {
+            Method m = callable.getMethod();
+            return executeMethod(m);
+        }
     }
 
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
@@ -1060,11 +1067,20 @@ public class Evaluator {
                 }
             }
             else {
-               return executeMethod(callable.getMethod());
+                Method method = getMethod(callable);
+                Class<?> clazz = method.getReturnType();
+                if (Optional.class.equals(clazz)) {
+                    handleOptionals(sc);
+                }
+                return executeMethod(method);
             }
         }
 
         return null;
+    }
+
+    private static Method getMethod(Callable callable) {
+        return callable.getMethod();
     }
 
     @SuppressWarnings("java:S1172")

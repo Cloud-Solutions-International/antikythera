@@ -29,7 +29,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         Type t = param.getType();
 
         if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
-            String fullClassName = AbstractCompiler.findFullyQualifiedName(param.findCompilationUnit().get(), t.asClassOrInterfaceType().getNameAsString());
+            String fullClassName = AbstractCompiler.findFullyQualifiedName(param.findCompilationUnit().orElseThrow(), t.asClassOrInterfaceType().getNameAsString());
             if (fullClassName.startsWith("java")) {
                 /*
                  * However you can't rule out the possibility that this is a Map or a List or even a

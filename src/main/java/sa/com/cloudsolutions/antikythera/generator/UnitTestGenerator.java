@@ -487,15 +487,16 @@ public class UnitTestGenerator extends TestGenerator {
      * @param cu the compilation unit that contains code to be tested.
      */
     private void mockFields(CompilationUnit cu) {
-        final TypeDeclaration<?> t = gen.getType(0);
+
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             decl.getAnnotationByName("Service")
-                    .ifPresent(b -> detectConstructorIndection(cu, decl, t));
-            detectAutowiring(cu, decl, t);
+                    .ifPresent(b -> detectConstructorInjection(cu, decl));
+            detectAutowiring(cu, decl);
         }
     }
 
-    private void detectAutowiring(CompilationUnit cu, TypeDeclaration<?> decl, TypeDeclaration<?> t) {
+    private void detectAutowiring(CompilationUnit cu, TypeDeclaration<?> decl) {
+        final TypeDeclaration<?> t = gen.getType(0);
         for (FieldDeclaration fd : decl.getFields()) {
             String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
             if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
@@ -510,7 +511,8 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void detectConstructorIndection(CompilationUnit cu, TypeDeclaration<?> decl, TypeDeclaration<?> t) {
+    private void detectConstructorInjection(CompilationUnit cu, TypeDeclaration<?> decl) {
+        final TypeDeclaration<?> t = gen.getType(0);
         for (ConstructorDeclaration constructor : decl.getConstructors()) {
             // Process constructor parameters as autowired fields
             for (Parameter param : constructor.getParameters()) {
