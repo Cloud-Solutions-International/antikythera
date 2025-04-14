@@ -68,13 +68,13 @@ public class UnitTestGenerator extends TestGenerator {
             createTestClass(className, packageDecl);
         }
 
-        if (Settings.getProperty("use_mockito", String.class).isPresent()) {
-            this.mocker = this::mockWithMockito;
-            this.applyPrecondition = this::applyPreconditionWithMockito;
-        }
-        else {
+        if ("Evaluator".equals(Settings.getProperty(Settings.MOCK_WITH, String.class).orElse(""))) {
             this.mocker = this::mockWithEvaluator;
             this.applyPrecondition = this::applyPreconditionWithEvaluator;
+        }
+        else {
+            this.mocker = this::mockWithMockito;
+            this.applyPrecondition = this::applyPreconditionWithMockito;
         }
     }
 

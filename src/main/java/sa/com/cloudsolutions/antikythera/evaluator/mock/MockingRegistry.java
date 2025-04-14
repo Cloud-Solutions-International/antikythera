@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator.mock;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import org.mockito.Mockito;
 import org.mockito.quality.Strictness;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
@@ -45,6 +46,14 @@ public class MockingRegistry {
         return v;
     }
 
+    public static Variable useByteBuddy(String className) throws ClassNotFoundException {
+        Variable v;
+        Class<?> cls = AbstractCompiler.loadClass(className);
+        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+        v.setClazz(cls);
+        return v;
+    }
+
 
     public static Variable mockIt(VariableDeclarator variable) throws ClassNotFoundException {
         String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
@@ -55,7 +64,13 @@ public class MockingRegistry {
             v = new Variable(eval);
         }
         else {
-            v = MockingRegistry.useMockito(fqn);
+            String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
+            if (mocker.equals("Mockito")) {
+                v = MockingRegistry.useByteBuddy(fqn);
+            }
+            else {
+                v = MockingRegistry.useMockito(fqn);
+            }
         }
         v.setType(variable.getType());
         return v;

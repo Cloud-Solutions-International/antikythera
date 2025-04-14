@@ -30,6 +30,16 @@ public class Settings {
     public static final String APPLICATION_HOST = "application.host";
     private static final String VARIABLES = "variables";
     /**
+     * In the generated tests, mocking will be through this framework.
+     */
+    public static final String MOCK_WITH = "mock_with";
+    /**
+     * While evaluating expressions, any mocking will be done through this framework.
+     */
+    public static final String MOCK_WITH_INTERNAL = "mock_with_internal";
+
+
+    /**
      * HashMap to store the configurations.
      */
     protected static HashMap<String, Object> props;

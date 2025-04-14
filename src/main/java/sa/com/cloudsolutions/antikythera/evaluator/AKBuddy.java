@@ -40,24 +40,36 @@ public class AKBuddy {
      */
     public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
         Evaluator eval = interceptor.getEvaluator();
-        CompilationUnit cu = eval.getCompilationUnit();
-        TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
-        String className = dtoType.getNameAsString();
+        if (eval != null) {
+            CompilationUnit cu = eval.getCompilationUnit();
+            TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
+            String className = dtoType.getNameAsString();
 
 
-        List<FieldDeclaration> fields = dtoType.getFields();
+            List<FieldDeclaration> fields = dtoType.getFields();
 
-        ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
-                .method(ElementMatchers.any())
-                .intercept(MethodDelegation.to(interceptor));
+            ByteBuddy byteBuddy = new ByteBuddy();
+            DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
+                    .method(ElementMatchers.any())
+                    .intercept(MethodDelegation.to(interceptor));
 
-        builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
+            builder = addFields(fields, cu, builder);
+            builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
-        return builder.make()
-                .load(Evaluator.class.getClassLoader())
-                .getLoaded();
+            return builder.make()
+                    .load(Evaluator.class.getClassLoader())
+                    .getLoaded();
+        }
+        else {
+            Class<?> wrappedClass = interceptor.getWrappedClass();
+            ByteBuddy byteBuddy = new ByteBuddy();
+            return byteBuddy.subclass(wrappedClass)
+                    .method(ElementMatchers.any())
+                    .intercept(MethodDelegation.to(interceptor))
+                    .make()
+                    .load(wrappedClass.getClassLoader())
+                    .getLoaded();
+        }
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,

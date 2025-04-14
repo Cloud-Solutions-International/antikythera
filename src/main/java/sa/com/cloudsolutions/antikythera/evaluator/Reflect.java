@@ -44,12 +44,12 @@ public class Reflect {
     public static final String FLOAT = "Float";
     /**
      * Keeps a map of wrapper types to their primitive counterpart
-     * for example : Integer.class -> int.class
+     * for example : `Integer.class -> int.class`
      */
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
     /**
      * The opposite of wrapperToPrimitive
-     * here int.class -> Integer.class
+     * here `int.class -> Integer.class`
      */
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
 
