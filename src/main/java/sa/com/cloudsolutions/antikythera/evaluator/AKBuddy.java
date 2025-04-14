@@ -20,11 +20,12 @@ import java.util.List;
 
 
 /**
- * Create fake objects using DTO Buddy for DTOs, Entities and possibly other types of classes
+ * Create fake objects using Byte Buddy for DTOs, Entities and possibly other types of classes.
+ * This will be primarily used in mocking.
  */
-public class DTOBuddy {
+public class AKBuddy {
 
-    protected DTOBuddy() {}
+    protected AKBuddy() {}
 
     /**
      * <p>Dynamically create a class matching given type declaration and then create an instance</p>

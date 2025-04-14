@@ -177,7 +177,7 @@ public class Reflect {
         } else if (args[i] instanceof Evaluator eval){
             MethodInterceptor interceptor = new MethodInterceptor(eval);
             try {
-                Class<?> c = DTOBuddy.createDynamicClass(interceptor);
+                Class<?> c = AKBuddy.createDynamicClass(interceptor);
                 args[i] = c.getDeclaredConstructor().newInstance();
                 argumentTypes[i] = c;
             } catch (ReflectiveOperationException e) {

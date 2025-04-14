@@ -242,7 +242,7 @@ public class Evaluator {
                 CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (sourceCU != null) {
                     Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
-                    Class<?> dynamicClass = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+                    Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
                     Variable v = new Variable(dynamicClass);
                     v.setClazz(Class.class);
