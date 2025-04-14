@@ -197,6 +197,7 @@ public class UnitTestGenerator extends TestGenerator {
                 MockingRegistry.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
             }
         }
+
     }
 
     @Override
@@ -488,13 +489,40 @@ public class UnitTestGenerator extends TestGenerator {
     private void mockFields(CompilationUnit cu) {
         final TypeDeclaration<?> t = gen.getType(0);
         for (TypeDeclaration<?> decl : cu.getTypes()) {
-            for (FieldDeclaration fd : decl.getFields()) {
-                String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
-                if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
-                    MockingRegistry.markAsMocked(fullyQualifiedTypeName);
-                    FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+            decl.getAnnotationByName("Service")
+                    .ifPresent(b -> detectConstructorIndection(cu, decl, t));
+            detectAutowiring(cu, decl, t);
+        }
+    }
+
+    private void detectAutowiring(CompilationUnit cu, TypeDeclaration<?> decl, TypeDeclaration<?> t) {
+        for (FieldDeclaration fd : decl.getFields()) {
+            String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+            if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
+                MockingRegistry.markAsMocked(fullyQualifiedTypeName);
+                FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                field.addAnnotation("Mock");
+                ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                if (wrapper != null) {
+                    gen.addImport(wrapper.getImport());
+                }
+            }
+        }
+    }
+
+    private void detectConstructorIndection(CompilationUnit cu, TypeDeclaration<?> decl, TypeDeclaration<?> t) {
+        for (ConstructorDeclaration constructor : decl.getConstructors()) {
+            // Process constructor parameters as autowired fields
+            for (Parameter param : constructor.getParameters()) {
+                String paramType = param.getTypeAsString();
+                String paramName = param.getNameAsString();
+                String fullyQualifiedType = AbstractCompiler.findFullyQualifiedName(cu, paramType);
+
+                if (!MockingRegistry.isMockTarget(fullyQualifiedType)) {
+                    MockingRegistry.markAsMocked(fullyQualifiedType);
+                    FieldDeclaration field = t.addField(param.getType(), paramName);
                     field.addAnnotation("Mock");
-                    ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                    ImportWrapper wrapper = AbstractCompiler.findImport(cu, paramType);
                     if (wrapper != null) {
                         gen.addImport(wrapper.getImport());
                     }
