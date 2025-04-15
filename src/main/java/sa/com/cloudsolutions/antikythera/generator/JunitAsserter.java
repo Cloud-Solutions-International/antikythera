@@ -22,10 +22,7 @@ public class JunitAsserter extends Asserter {
     @Override
     public void setupImports(CompilationUnit gen) {
         gen.addImport("org.junit.jupiter.api.Test");
-        gen.addImport("org.junit.jupiter.api.Assertions.assertNotNull", true, false);
-        gen.addImport("org.junit.jupiter.api.Assertions.assertNull", true, false);
-        gen.addImport("org.junit.jupiter.api.Assertions.assertThrows", true, false);
-        gen.addImport("org.junit.jupiter.api.Assertions.assertEquals", true, false);
+        gen.addImport("org.junit.jupiter.api.Assertions", true, true);
     }
 
     @Override
@@ -40,7 +37,7 @@ public class JunitAsserter extends Asserter {
     public Expression assertThrows(String invocation, MethodResponse response) {
         MethodCallExpr assertThrows = new MethodCallExpr("assertThrows");
         assertThrows.addArgument(response.getException().getCause().getClass().getName() + ".class");
-        assertThrows.addArgument(String.format("() -> { %s }", invocation));
+        assertThrows.addArgument(String.format("() -> %s ", invocation));
         return assertThrows;
     }
 }

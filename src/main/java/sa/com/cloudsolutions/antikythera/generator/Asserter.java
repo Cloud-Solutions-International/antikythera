@@ -48,7 +48,8 @@ public abstract class Asserter {
 
         if (value instanceof String) {
             return assertEquals("\"" + v.getValue() + "\"", "resp." + getter + "()");
-        } if (v.getClazz() != null) {
+        }
+        if (v.getClazz() != null) {
             try {
                 Method m = v.getClazz().getMethod("size");
                 Object result = m.invoke(value);

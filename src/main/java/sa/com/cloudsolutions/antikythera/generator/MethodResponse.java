@@ -69,7 +69,7 @@ public class MethodResponse {
         this.body = body;
     }
 
-    public void setExecption(EvaluatorException eex) {
+    public void setException(EvaluatorException eex) {
         this.eex = eex;
     }
 

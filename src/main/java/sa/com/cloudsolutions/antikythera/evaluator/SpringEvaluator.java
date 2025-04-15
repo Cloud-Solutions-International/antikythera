@@ -586,7 +586,7 @@ public class SpringEvaluator extends Evaluator {
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
             controllerResponse.setResponse(r);
-            controllerResponse.setExecption(eex);
+            controllerResponse.setException(eex);
             createTests(controllerResponse);
             returnFrom = methodCall;
         } else {
