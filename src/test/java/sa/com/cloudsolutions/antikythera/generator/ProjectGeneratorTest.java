@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,9 +74,9 @@ class ProjectGeneratorTest {
         generator.preProcess();
         generator.generateApiTests();
 
-        String outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+        String outputPath = Settings.getProperty(Settings.OUTPUT_PATH).toString();
 
-        String basePackage = Settings.getProperty(Constants.BASE_PACKAGE).toString().replace(".", File.separator);
+        String basePackage = Settings.getProperty(Settings.BASE_PACKAGE).toString().replace(".", File.separator);
         File mainJavaDir = new File(outputPath + File.separator + "src" + File.separator
                 + "main" + File.separator + "java" + File.separator + basePackage);
         File mainResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "resources");

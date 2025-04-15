@@ -18,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Branching;
@@ -53,13 +52,13 @@ public class RestControllerParser extends DepsolvingParser {
         super();
         this.cu = AntikytheraRunTime.getCompilationUnit(controller);
 
-        Path dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
+        Path dataPath = Paths.get(Settings.getProperty(Settings.OUTPUT_PATH).toString(), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
             Files.createDirectories(dataPath);
         }
-        Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
+        Files.createDirectories(Paths.get(Settings.getProperty(Settings.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
     }
 
     @Override

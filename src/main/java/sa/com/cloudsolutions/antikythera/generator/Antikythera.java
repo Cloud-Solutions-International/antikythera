@@ -8,7 +8,6 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -47,8 +46,8 @@ public class Antikythera {
     private Model pomModel;
 
     private Antikythera() {
-        controllers = Settings.getPropertyList(Constants.CONTROLLERS, String.class);
-        services = Settings.getPropertyList(Constants.SERVICES, String.class);
+        controllers = Settings.getPropertyList(Settings.CONTROLLERS, String.class);
+        services = Settings.getPropertyList(Settings.SERVICES, String.class);
     }
 
     public static Antikythera getInstance() {

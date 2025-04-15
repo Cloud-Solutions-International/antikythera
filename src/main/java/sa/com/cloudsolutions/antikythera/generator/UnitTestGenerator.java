@@ -19,7 +19,6 @@ import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
@@ -52,7 +51,7 @@ public class UnitTestGenerator extends TestGenerator {
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
-        String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
+        String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + TEST_NAME_SUFFIX;
 
         filePath = basePath.replace("main", "test") + File.separator +
@@ -173,7 +172,7 @@ public class UnitTestGenerator extends TestGenerator {
      * @param baseClassName the name of the base class.
      */
     private void loadPredefinedBaseClassForTest(String baseClassName) {
-        String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
+        String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("main", "test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
         try {

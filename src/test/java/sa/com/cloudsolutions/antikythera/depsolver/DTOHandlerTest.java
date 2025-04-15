@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
@@ -51,9 +50,9 @@ class DTOHandlerTest {
     @BeforeEach
     void loadConfigMapBeforeEach() throws IOException {
         Settings.loadConfigMap();
-        basePath = Settings.getProperty(Constants.BASE_PATH).toString();
-        controllers = Settings.getProperty(Constants.CONTROLLERS).toString();
-        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+        basePath = Settings.getProperty(Settings.BASE_PATH).toString();
+        controllers = Settings.getProperty(Settings.CONTROLLERS).toString();
+        outputPath = Settings.getProperty(Settings.OUTPUT_PATH).toString();
 
         classProcessor = new ClassProcessor();
         handler = new DTOHandler();
