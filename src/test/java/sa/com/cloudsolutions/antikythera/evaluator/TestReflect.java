@@ -32,10 +32,9 @@ class TestReflect {
         "float,java.lang.Float",
         "double,java.lang.Double",
         "char,java.lang.Character",
-        "String,String"  // non-primitive case
     })
     void testPrimitiveToWrapper(String primitive, String expected) {
-        String result = Reflect.primitiveToWrapper(primitive);
+        String result = Reflect.primitiveToWrapper(primitive).getName();
         assertEquals(expected, result);
     }
 

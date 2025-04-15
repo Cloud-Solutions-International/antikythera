@@ -40,6 +40,7 @@ public class Reflect {
     public static final String PRIMITIVE_FLOAT = "float";
     public static final String PRIMITIVE_DOUBLE = "double";
     public static final String INTEGER = "Integer";
+    public static final String BOOLEAN = "Boolean";
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
     /**
@@ -134,9 +135,8 @@ public class Reflect {
             } else {
                 try {
                     String className = arguments.get(0).calculateResolvedType().describe();
-                    className = primitiveToWrapper(className);
-                    argumentTypes[i] = Class.forName(className);
-                } catch (UnsolvedSymbolException|ReflectiveOperationException us) {
+                    argumentTypes[i] = primitiveToWrapper(className);
+                } catch (UnsolvedSymbolException us) {
                     argumentTypes[i] = Object.class;
                 }
             }
@@ -186,15 +186,17 @@ public class Reflect {
         }
     }
 
-    public static String primitiveToWrapper(String className) {
+    public static Class<?> primitiveToWrapper(String className) {
         return switch (className) {
-            case PRIMITIVE_BOOLEAN -> "java.lang.Boolean";
-            case "int" -> "java.lang.Integer";
-            case "long" -> Long.class.getName();
-            case PRIMITIVE_FLOAT -> "java.lang.Float";
-            case PRIMITIVE_DOUBLE -> "java.lang.Double";
-            case "char" -> "java.lang.Character";
-            default -> className;
+            case PRIMITIVE_BOOLEAN -> Boolean.class;
+            case "int" -> Integer.class;
+            case "long" -> Long.class;
+            case PRIMITIVE_FLOAT -> Float.class;
+            case PRIMITIVE_DOUBLE -> Double.class;
+            case "char" -> Character.class;
+            case "short" -> short.class;
+            case "byte" -> byte.class;
+            default -> Object.class;
         };
     }
 
@@ -205,7 +207,7 @@ public class Reflect {
             case PRIMITIVE_DOUBLE -> double.class;
             case DOUBLE -> Double.class;
             case PRIMITIVE_BOOLEAN -> boolean.class;
-            case "Boolean" -> Boolean.class;
+            case BOOLEAN -> Boolean.class;
             case "long" -> long.class;
             case "Long" -> Long.class;
             case PRIMITIVE_FLOAT -> float.class;
@@ -243,7 +245,7 @@ public class Reflect {
         return switch (value.getClass().getSimpleName()) {
             case INTEGER, "Long" -> new IntegerLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
-            case "Boolean" -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
+            case BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
             case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
             default -> new StringLiteralExpr(value.toString());
         };
