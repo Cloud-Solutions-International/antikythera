@@ -21,11 +21,11 @@ import java.util.Map;
 import static org.mockito.Mockito.withSettings;
 
 public class MockingRegistry {
+    private static final Map<String, Map<Callable, Object>> mockedFields = new HashMap<>();
+
     private MockingRegistry() {
 
     }
-
-    private static final Map<String, Map<Callable, Object>> mockedFields = new HashMap<>();
 
     public static void markAsMocked(String className) {
         mockedFields.put(className, new HashMap<>());
@@ -37,6 +37,11 @@ public class MockingRegistry {
 
     public static void reset() {
         mockedFields.clear();
+    }
+
+    public static void when(String className, Callable callable, Object then) {
+        Map<Callable, Object> map = mockedFields.computeIfAbsent(className, k -> new HashMap<>());
+        map.put(callable, then);
     }
 
 
