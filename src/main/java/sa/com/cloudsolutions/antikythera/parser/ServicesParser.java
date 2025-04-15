@@ -12,6 +12,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
@@ -88,7 +89,7 @@ public class ServicesParser {
         evaluator.setOnTest(true);
         evaluator.setArgumentGenerator(gen);
         evaluator.reset();
-        evaluator.resetColors();
+        Branching.clear();
         AntikytheraRunTime.reset();
         try {
             evaluator.visit(md);

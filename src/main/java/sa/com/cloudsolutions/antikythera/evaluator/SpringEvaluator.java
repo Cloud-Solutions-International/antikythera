@@ -71,7 +71,7 @@ public class SpringEvaluator extends Evaluator {
      * Maintains a list of repositories that we have already encountered.
      */
     private static final Map<String, RepositoryParser> repositories = new HashMap<>();
-    private static final HashMap<Integer, LineOfCode> branching = new HashMap<>();
+
     private static ArgumentGenerator argumentGenerator;
     /**
      * <p>List of test generators that we have.</p>
@@ -236,7 +236,7 @@ public class SpringEvaluator extends Evaluator {
             }
         });
 
-        branching.clear();
+        Branching.clear();
         preConditions.clear();
         preconditionsInProgress.clear();
         final List<Integer> s = new ArrayList<>();
@@ -244,7 +244,7 @@ public class SpringEvaluator extends Evaluator {
         md.accept(new VoidVisitorAdapter<Void>() {
            @Override
             public void visit(IfStmt stmt, Void arg) {
-                branching.putIfAbsent(stmt.hashCode(), new LineOfCode(stmt));
+                Branching.add(new LineOfCode(stmt));
                 s.add(1); // Count the main if branch
 
                 Optional<Statement> elseStmt = stmt.getElseStmt();
@@ -596,7 +596,7 @@ public class SpringEvaluator extends Evaluator {
 
     @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
-        LineOfCode l = branching.get(ifst.hashCode());
+        LineOfCode l = Branching.get(ifst.hashCode());
         if (l == null) {
             return super.ifThenElseBlock(ifst);
         }
@@ -764,13 +764,9 @@ public class SpringEvaluator extends Evaluator {
     }
 
     private void addPreCondition(Statement statement, boolean state, Expression expr) {
-        LineOfCode l = branching.get(statement.hashCode());
+        LineOfCode l = Branching.get(statement.hashCode());
         l.addPrecondition(expr, state);
         preconditionsInProgress.add(expr);
-    }
-
-    public void resetColors() {
-        branching.clear();
     }
 
     /**
@@ -946,7 +942,7 @@ public class SpringEvaluator extends Evaluator {
 
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-        LineOfCode l = branching.get(stmt.hashCode());
+        LineOfCode l = Branching.get(stmt.hashCode());
 
         if (l == null) {
             return straightPath(sc, stmt, methodCall);
@@ -959,7 +955,7 @@ public class SpringEvaluator extends Evaluator {
     private Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         LineOfCode l =  new LineOfCode(stmt);
-        branching.put(stmt.hashCode(), l);
+        Branching.add(l);
         branchCount++;
 
         List<Expression> expressions;

@@ -52,7 +52,7 @@ public class LineOfCode {
     /**
      * The statement that this line of code represents.
      */
-    private Statement statement;
+    private final Statement statement;
 
     /**
      * A non-null value if this statement represents a JPA Query

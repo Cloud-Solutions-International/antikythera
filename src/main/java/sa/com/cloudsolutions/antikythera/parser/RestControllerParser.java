@@ -21,6 +21,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
@@ -138,7 +139,7 @@ public class RestControllerParser extends DepsolvingParser {
         private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
             evaluator.setArgumentGenerator(gen);
             evaluator.reset();
-            evaluator.resetColors();
+            Branching.clear();
             AntikytheraRunTime.reset();
             try {
                 evaluator.visit(md);
