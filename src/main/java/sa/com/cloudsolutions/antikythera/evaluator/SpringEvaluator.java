@@ -636,14 +636,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param state the desired state.
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
-        boolean partOfElse = isElseIf(ifStmt);
-        TruthTable tt = new TruthTable(ifStmt.getCondition());
+        List<Expression> collectedConditions = collectConditionsUpToMethod(ifStmt);
+        collectedConditions.add(ifStmt.getCondition());
+
+        TruthTable tt = new TruthTable(BinaryOps.getCombinedCondition(collectedConditions));
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
+        System.err.println(BinaryOps.getCombinedCondition(collectedConditions));
         if (!values.isEmpty()) {
             Map<Expression, Object> value = values.getFirst();
+            System.err.println(value.toString());
             for (var entry : value.entrySet()) {
                 if (entry.getKey().isMethodCallExpr()) {
                     setupConditionThroughMethodCalls(ifStmt, state, entry);
@@ -652,15 +656,53 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         }
+
     }
 
-    public boolean isElseIf(IfStmt ifStmt) {
-        return ifStmt.getParentNode()
-                .filter(parent -> parent instanceof IfStmt)
-                .map(parent -> (IfStmt) parent)
-                .flatMap(parentIf -> parentIf.getElseStmt())
-                .filter(elseStmt -> elseStmt == ifStmt)
-                .isPresent();
+    List<Expression> collectConditionsUpToMethod(IfStmt stmt) {
+        List<Expression> conditions = new ArrayList<>();
+        Node current = stmt;
+
+        while (current != null && !(current instanceof MethodDeclaration)) {
+            Optional<Node> parentNode = current.getParentNode();
+            if (!parentNode.isPresent()) {
+                break;
+            }
+
+            Node parent = parentNode.get();
+            if (parent instanceof IfStmt parentIf) {
+                // Check if current node is in the else branch
+                if (parentIf.getElseStmt().isPresent() &&
+                    isNodeInStatement(current, parentIf.getElseStmt().get())) {
+                    // If in else branch, negate the condition
+                    conditions.add(BinaryOps.negateCondition(parentIf.getCondition()));
+                } else if (isNodeInStatement(current, parentIf.getThenStmt())) {
+                    // If in then branch, add condition as-is
+                    conditions.add(parentIf.getCondition());
+                }
+            }
+            current = parent;
+        }
+        return conditions;
+    }
+
+    private boolean isNodeInStatement(Node node, Statement stmt) {
+        if (stmt instanceof BlockStmt block) {
+            return block.getStatements().stream()
+                    .anyMatch(s -> s == node || isNodeDescendant(node, s));
+        }
+        return stmt == node || isNodeDescendant(node, stmt);
+    }
+
+    private boolean isNodeDescendant(Node target, Node potentialParent) {
+        Node current = target;
+        while (current != null) {
+            if (current == potentialParent) {
+                return true;
+            }
+            current = current.getParentNode().orElse(null);
+        }
+        return false;
     }
 
     /**

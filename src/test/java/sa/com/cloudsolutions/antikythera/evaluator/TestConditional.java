@@ -70,7 +70,7 @@ class TestConditional extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, ZERO!One!Two!Three!",
+    @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, One!Two!Three!ZERO!",
             "conditional6, One!Two!Three!ZERO!","conditional7, One!Two!Three!ZERO!",
             "conditional8, ZERO!Three!One!Two!", "smallDiff, One!Nearly 2!", "booleanWorks, True!False!"
     })
