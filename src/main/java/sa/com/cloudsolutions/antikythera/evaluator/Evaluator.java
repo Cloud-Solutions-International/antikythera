@@ -779,7 +779,7 @@ public class Evaluator {
         return evaluateScopedMethodCall(chain);
     }
 
-    private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
+    Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         if (methodCall.toString().startsWith("logger")) {
             return null;
@@ -985,7 +985,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    private void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+    void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = reflectionArguments.getMethod();
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
@@ -1000,7 +1000,7 @@ public class Evaluator {
         }
     }
 
-    private static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
+    static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
         if (method == null) {
             if (v.getValue() == null) {
                 throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
