@@ -45,38 +45,48 @@ public class AKBuddy {
             TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
             String className = dtoType.getNameAsString();
 
-
             List<FieldDeclaration> fields = dtoType.getFields();
 
             ByteBuddy byteBuddy = new ByteBuddy();
             DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
                     .method(ElementMatchers.not(
-                        ElementMatchers.isDeclaredBy(Object.class)
-                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
-                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                            ElementMatchers.isDeclaredBy(Object.class)
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                     ))
                     .intercept(MethodDelegation.to(interceptor));
 
             builder = addFields(fields, cu, builder);
             builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
+            ClassLoader targetLoader = findSafeLoader(Object.class.getClassLoader(), interceptor.getClass().getClassLoader());
             return builder.make()
-                    .load(Evaluator.class.getClassLoader())
+                    .load(targetLoader)
                     .getLoaded();
-        }
-        else {
+        } else {
             Class<?> wrappedClass = interceptor.getWrappedClass();
             ByteBuddy byteBuddy = new ByteBuddy();
+            ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
+
             return byteBuddy.subclass(wrappedClass)
                     .method(ElementMatchers.not(
-                        ElementMatchers.isDeclaredBy(Object.class)
-                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
-                        .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                            ElementMatchers.isDeclaredBy(Object.class)
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                     ))
                     .intercept(MethodDelegation.to(interceptor))
                     .make()
-                    .load(interceptor.getClass().getClassLoader())
+                    .load(targetLoader)
                     .getLoaded();
+        }
+    }
+
+    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
+        try {
+            Class.forName(MethodInterceptor.class.getName(), false, primary);
+            return primary;
+        } catch (ClassNotFoundException e) {
+            return fallback;
         }
     }
 

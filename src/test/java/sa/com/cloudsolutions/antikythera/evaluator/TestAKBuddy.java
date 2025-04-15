@@ -53,6 +53,7 @@ class TestAKBuddy extends TestHelper {
 
     @Test
     void mockWithAKBuddy() throws ReflectiveOperationException, SQLException {
+        AbstractCompiler.loadClass("sa.com.cloudsolutions.antikythera.evaluator.MethodInterceptor");
         Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(Statement.class));
         Statement instance = (Statement) clazz.getDeclaredConstructor().newInstance();
 
