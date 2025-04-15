@@ -40,6 +40,11 @@ public class MethodInterceptor {
         return Reflect.getDefault(clazz);
     }
 
+    @RuntimeType
+    public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+        return null;
+    }
+
     public Class<?> getWrappedClass() {
         return wrappedClass;
     }
