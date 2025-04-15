@@ -1069,7 +1069,7 @@ public class Evaluator {
                 Method method = getMethod(callable);
                 Class<?> clazz = method.getReturnType();
                 if (Optional.class.equals(clazz)) {
-                    handleOptionals(sc);
+                    return handleOptionals(sc);
                 }
                 return executeMethod(method);
             }

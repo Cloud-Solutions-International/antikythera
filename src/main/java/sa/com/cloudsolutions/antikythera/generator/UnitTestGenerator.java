@@ -22,7 +22,6 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -42,6 +41,7 @@ import java.util.function.Consumer;
 
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
+    public static final String TEST_NAME_SUFFIX = "AKTest";
     private final String filePath;
     private final BiConsumer<Parameter, Variable> mocker;
     private final Consumer<Expression> applyPrecondition;
@@ -53,7 +53,7 @@ public class UnitTestGenerator extends TestGenerator {
         super(cu);
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
-        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "AKTest";
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + TEST_NAME_SUFFIX;
 
         filePath = basePath.replace("main", "test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
@@ -332,26 +332,26 @@ public class UnitTestGenerator extends TestGenerator {
             String nameAsString = param.getNameAsString();
             if (paramType.isPrimitiveType() || paramType.asClassOrInterfaceType().isBoxedType()) {
                 VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
-                VariableDeclarator var = new VariableDeclarator();
-                var.setType(param.getType());
-                var.setName(nameAsString);
+                VariableDeclarator v = new VariableDeclarator();
+                v.setType(param.getType());
+                v.setName(nameAsString);
 
                 String typeName = paramType.asString();
 
                 switch (typeName) {
-                    case "Integer" -> var.setInitializer("0");
-                    case "Long" -> var.setInitializer("0L");
-                    case "Double" -> var.setInitializer("0.0");
-                    case "Float" -> var.setInitializer("0.0f");
-                    case "Boolean" -> var.setInitializer("false");
-                    case "Character" -> var.setInitializer("'\\0'");
-                    case "Byte" -> var.setInitializer("(byte)0");
-                    case "Short" -> var.setInitializer("(short)0");
-                    default -> var.setInitializer("null");
+                    case "Integer" -> v.setInitializer("0");
+                    case "Long" -> v.setInitializer("0L");
+                    case "Double" -> v.setInitializer("0.0");
+                    case "Float" -> v.setInitializer("0.0f");
+                    case "Boolean" -> v.setInitializer("false");
+                    case "Character" -> v.setInitializer("'\\0'");
+                    case "Byte" -> v.setInitializer("(byte)0");
+                    case "Short" -> v.setInitializer("(short)0");
+                    default -> v.setInitializer("null");
                 }
 
 
-                varDecl.addVariable(var);
+                varDecl.addVariable(v);
                 getBody(testMethod).addStatement(varDecl);
             } else {
                 addClassImports(paramType);
@@ -522,7 +522,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectAutowiring(CompilationUnit cu, TypeDeclaration<?> decl) {
-        gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + "AKTest"))
+        gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX))
                 .ifPresent(t -> {
                             for (FieldDeclaration fd : decl.getFields()) {
                                 String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
@@ -541,7 +541,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectConstructorInjection(CompilationUnit cu, TypeDeclaration<?> decl) {
-        gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + "AKTest"))
+        gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX))
                 .ifPresent(t -> {
                             for (ConstructorDeclaration constructor : decl.getConstructors()) {
                                 // Process constructor parameters as autowired fields

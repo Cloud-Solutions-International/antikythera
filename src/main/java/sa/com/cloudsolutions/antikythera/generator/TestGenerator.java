@@ -102,6 +102,7 @@ public abstract class TestGenerator {
      */
     public abstract void createTests(MethodDeclaration md, MethodResponse response);
 
+    @SuppressWarnings("unchecked")
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
         MethodDeclaration tm = new MethodDeclaration();
 

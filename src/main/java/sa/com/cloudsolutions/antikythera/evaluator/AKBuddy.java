@@ -81,15 +81,6 @@ public class AKBuddy {
         }
     }
 
-    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
-        try {
-            Class.forName(MethodInterceptor.class.getName(), false, primary);
-            return primary;
-        } catch (ClassNotFoundException e) {
-            return fallback;
-        }
-    }
-
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
             DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
 
@@ -170,4 +161,12 @@ public class AKBuddy {
         return builder;
     }
 
+    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
+        try {
+            Class.forName(MethodInterceptor.class.getName(), false, primary);
+            return primary;
+        } catch (ClassNotFoundException e) {
+            return fallback;
+        }
+    }
 }
