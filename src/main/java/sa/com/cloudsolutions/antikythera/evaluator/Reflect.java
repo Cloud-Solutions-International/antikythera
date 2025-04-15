@@ -307,6 +307,15 @@ public class Reflect {
         return v;
     }
 
+    /**
+     * Generate variables holding resonable values.
+     * All numerics will be 1.
+     * Strings will be Antikythera
+     * Booleans will be true
+     *
+     * @param qualifiedName
+     * @return
+     */
     public static Variable variableFactory(String qualifiedName) {
         if (qualifiedName == null) {
             return null;
@@ -328,15 +337,15 @@ public class Reflect {
 
             case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
 
-            case BOOLEAN, PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(false, BOOLEAN, "false");
+            case BOOLEAN, PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(true, BOOLEAN, "true");
 
-            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> createVariable(0.0, DOUBLE, "0.0");
+            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> createVariable(1.0, DOUBLE, "1.0");
 
-            case INTEGER, "int", "java.lang.Integer" -> createVariable(0, INTEGER, "0");
+            case INTEGER, "int", "java.lang.Integer" -> createVariable(1, INTEGER, "1");
 
-            case "Long", "long", "java.lang.Long" -> createVariable(-100L, "Long", "-100");
+            case "Long", "long", "java.lang.Long" -> createVariable(1L, "Long", "1");
 
-            case "String", "java.lang.String" -> createVariable("Ibuprofen", "String", "Ibuprofen");
+            case "String", "java.lang.String" -> createVariable("Antikythera", "String", "Antikythera");
 
             default -> new Variable(null);
         };

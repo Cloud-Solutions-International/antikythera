@@ -26,7 +26,7 @@ class TestDummyArgumentGenerator {
     }
 
     @ParameterizedTest
-    @CsvSource({"String, Ibuprofen", "int, 0", "Boolean, false", "Double, 0.0", "Float, 0.0", "Long, -100"})
+    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 1"})
     void testGenerateArgument(String type, Object value) throws ReflectiveOperationException {
         MethodDeclaration md = new MethodDeclaration();
         Parameter parameter = new Parameter();
@@ -34,7 +34,7 @@ class TestDummyArgumentGenerator {
     }
 
     @ParameterizedTest
-    @CsvSource({"String, Ibuprofen", "int, 0", "Boolean, false", "Double, 0.0", "Float, 0.0", "Long, -100," +
+    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 1," +
             "List, java.util.ArrayList", "Map, {}", "Set, []"})
     void testGenerateArgumentBody(String type, Object value) throws ReflectiveOperationException{
 
@@ -42,7 +42,7 @@ class TestDummyArgumentGenerator {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
         cu.addImport("java.util.Map");
         cu.addImport("java.util.Set");
-        MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).get();
+        MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).orElseThrow();
         Parameter parameter = new Parameter();
         md.addParameter(parameter);
         parameter.addAnnotation("RequestBody");

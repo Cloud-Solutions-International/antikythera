@@ -206,8 +206,6 @@ public class ControlFlowEvaluator extends Evaluator{
         };
     }
 
-
-
     @SuppressWarnings("unchecked")
     Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
         MethodCallExpr methodCall = sc.getScopedMethodCall();

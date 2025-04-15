@@ -14,7 +14,6 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -23,7 +22,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.Optional;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
@@ -241,5 +239,4 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
         return null;
     }
-
 }

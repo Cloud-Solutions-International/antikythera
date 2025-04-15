@@ -145,7 +145,7 @@ class TestConditionalWithOptional extends TestHelper {
     @CsvSource({
         "ifEmpty, ID not found\\nID: 1",
         "ifPresent, ID: 1",
-        "optionalString, IBUPROFEN"
+        "optionalString, ANTIKYTHERA"
     })
     void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
