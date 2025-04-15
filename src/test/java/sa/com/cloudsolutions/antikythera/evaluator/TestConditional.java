@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -32,6 +33,8 @@ class TestConditional extends TestHelper {
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
+        AntikytheraRunTime.reset();
+        MockingRegistry.reset();
     }
 
     @BeforeEach
@@ -68,21 +71,59 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, ZERO!One!Two!Three!",
-            "conditional6, ZERO!One!Two!Three!","conditional7, ZERO!One!Two!Three!",
-            "conditional8, ZERO!One!Two!Three!", "smallDiff, Nearly 2!One!", "booleanWorks, True!False!"
+            "conditional6, ZERO!One!Two!Three!","conditional7, One!Two!Three!ZERO!",
+            "conditional8, ZERO!Three!One!Two!", "smallDiff, One!Nearly 2!", "booleanWorks, True!False!"
     })
-    void testConditionals(String name, String value) throws ReflectiveOperationException {
+    void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals(value.length(), s.length());
-        String[] parts = value.split("!");
-        for (String part : parts) {
-            assertTrue(s.contains(part));
-        }
+        assertEquals(value,s);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"conditional5, One!","conditional6, One!","conditional7, One!",
+            "conditional8, ZERO!", "smallDiff, ''"
+    })
+    void testConditionals(String name, String value) throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(1));
+        evaluator.executeMethod(method);
+        String s = outContent.toString();
+        assertEquals(value,s);
+    }
+
+    @Test
+    void testConditional4() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("conditional4")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(new Person("AA")));
+        evaluator.executeMethod(method);
+        String s = outContent.toString();
+        assertEquals("ZERO!",s);
+    }
+
+    @Test
+    void testBooleanWorks() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("booleanWorks")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(true));
+        evaluator.executeMethod(method);
+        String s = outContent.toString();
+        assertEquals("True!",s);
     }
 
     @ParameterizedTest
