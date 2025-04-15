@@ -22,7 +22,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.lang.reflect.Method;
 import java.util.Optional;
 
-public class MockingEvaluator extends Evaluator {
+public class MockingEvaluator extends ControlFlowEvaluator {
 
     protected MockingEvaluator(EvaluatorFactory.Context context) {
         super(context);
