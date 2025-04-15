@@ -56,6 +56,17 @@ class UnitTestGeneratorTest {
     }
 
     @Test
+    void testInject() {
+        classUnderTest.addAnnotation("Service");
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        String sources = unitTestGenerator.getCompilationUnit().toString();
+        assertTrue(sources.contains("queries2Test"));
+        assertTrue(sources.contains("InjectMocks"));
+    }
+
+    @Test
     void testMockFields() {
 
         classUnderTest.addAnnotation("Service");
