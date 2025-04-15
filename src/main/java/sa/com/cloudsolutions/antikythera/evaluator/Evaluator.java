@@ -61,7 +61,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -69,7 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
+
 
 /**
  * Expression evaluator engine.
@@ -113,16 +112,6 @@ public class Evaluator {
 
     protected Deque<TryStmt> catching = new LinkedList<>();
 
-    /**
-     * The preconditions that need to be met before the test can be executed.
-     */
-    protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
-
-    /**
-     * The preconditions that we are building based on the current branches covered.
-     * These will be copied to the preConditions map
-     */
-    protected List<Expression> preconditionsInProgress = new ArrayList<>();
     protected String variableName;
 
     protected Evaluator() {

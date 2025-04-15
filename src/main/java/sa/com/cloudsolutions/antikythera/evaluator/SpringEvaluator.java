@@ -89,6 +89,17 @@ public class SpringEvaluator extends Evaluator {
     private boolean onTest;
     private int branchCount;
 
+    /**
+     * The preconditions that need to be met before the test can be executed.
+     */
+    protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
+
+    /**
+     * The preconditions that we are building based on the current branches covered.
+     * These will be copied to the preConditions map
+     */
+    protected List<Expression> preconditionsInProgress = new ArrayList<>();
+
     protected SpringEvaluator(EvaluatorFactory.Context context) {
         super(context);
     }
