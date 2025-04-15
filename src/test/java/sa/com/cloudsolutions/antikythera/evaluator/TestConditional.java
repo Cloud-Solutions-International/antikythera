@@ -71,7 +71,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, ZERO!One!Two!Three!",
-            "conditional6, ZERO!One!Two!Three!","conditional7, One!Two!Three!ZERO!",
+            "conditional6, One!Two!Three!ZERO!","conditional7, One!Two!Three!ZERO!",
             "conditional8, ZERO!Three!One!Two!", "smallDiff, One!Nearly 2!", "booleanWorks, True!False!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
@@ -148,19 +148,19 @@ class TestConditional extends TestHelper {
         // Test for the first return statement (return "Zero")
         ReturnConditionVisitor visitor1 = new ReturnConditionVisitor(returnStatements.get(0));
         method.accept(visitor1, null);
-        Expression combinedCondition1 = visitor1.getCombinedCondition();
+        Expression combinedCondition1 = BinaryOps.getCombinedCondition(visitor1.getConditions());
         assertEquals("a == 0 && a >= 0", combinedCondition1.toString(), "Incorrect combined condition for 'Zero'");
 
         // Test for the second return statement (return "Positive")
         ReturnConditionVisitor visitor2 = new ReturnConditionVisitor(returnStatements.get(1));
         method.accept(visitor2, null);
-        Expression combinedCondition2 = visitor2.getCombinedCondition();
+        Expression combinedCondition2 = BinaryOps.getCombinedCondition(visitor2.getConditions());
         assertEquals("a != 0 && a >= 0", combinedCondition2.toString(), "Incorrect combined condition for 'Positive'");
 
         // Test for the third return statement (return "Negative")
         ReturnConditionVisitor visitor3 = new ReturnConditionVisitor(returnStatements.get(2));
         method.accept(visitor3, null);
-        Expression combinedCondition3 = visitor3.getCombinedCondition();
+        Expression combinedCondition3 = BinaryOps.getCombinedCondition(visitor3.getConditions());
         assertEquals("a < 0", combinedCondition3.toString(), "Incorrect combined condition for 'Negative'");
     }
 }

@@ -159,7 +159,7 @@ public class ControlFlowEvaluator extends Evaluator{
         List<Expression> expressions = new ArrayList<>();
         ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
         method.accept(visitor, null);
-        Expression emptyCondition = visitor.getCombinedCondition();
+        Expression emptyCondition = BinaryOps.getCombinedCondition(visitor.getConditions());
 
         if (emptyCondition == null) {
             return expressions;

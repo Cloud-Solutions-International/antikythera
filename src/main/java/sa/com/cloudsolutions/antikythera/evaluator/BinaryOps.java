@@ -2,7 +2,10 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.UnaryExpr;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+
+import java.util.List;
 
 public class BinaryOps {
 
@@ -41,6 +44,43 @@ public class BinaryOps {
         }
 
         return new Variable(leftVal.equals(rightVal));
+    }
+
+    public static Expression negateCondition(Expression condition) {
+        if (condition instanceof BinaryExpr binaryExpr) {
+            BinaryExpr.Operator newOp = switch (binaryExpr.getOperator()) {
+                case EQUALS -> BinaryExpr.Operator.NOT_EQUALS;
+                case NOT_EQUALS -> BinaryExpr.Operator.EQUALS;
+                case GREATER -> BinaryExpr.Operator.LESS_EQUALS;
+                case GREATER_EQUALS -> BinaryExpr.Operator.LESS;
+                case LESS -> BinaryExpr.Operator.GREATER_EQUALS;
+                case LESS_EQUALS -> BinaryExpr.Operator.GREATER;
+                default -> null;
+            };
+
+            if (newOp != null) {
+                return new BinaryExpr(binaryExpr.getLeft(), binaryExpr.getRight(), newOp);
+            }
+        }
+
+        return new UnaryExpr(condition, UnaryExpr.Operator.LOGICAL_COMPLEMENT);
+    }
+
+
+    public static Expression getCombinedCondition(List<Expression> conditions) {
+        if (conditions.isEmpty()) {
+            return null;
+        }
+
+        Expression result = conditions.getFirst();
+        for (int i = 1; i < conditions.size(); i++) {
+            result = new BinaryExpr(
+                    result,
+                    conditions.get(i),
+                    BinaryExpr.Operator.AND
+            );
+        }
+        return result;
     }
 
     static Variable binaryOps(BinaryExpr.Operator operator, Expression leftExpression, Expression rightExpression, Variable left, Variable right) {

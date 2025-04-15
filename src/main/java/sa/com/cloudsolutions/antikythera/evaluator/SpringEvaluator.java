@@ -636,6 +636,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param state the desired state.
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
+        boolean partOfElse = isElseIf(ifStmt);
         TruthTable tt = new TruthTable(ifStmt.getCondition());
         tt.generateTruthTable();
 
@@ -651,6 +652,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         }
+    }
+
+    public boolean isElseIf(IfStmt ifStmt) {
+        return ifStmt.getParentNode()
+                .filter(parent -> parent instanceof IfStmt)
+                .map(parent -> (IfStmt) parent)
+                .flatMap(parentIf -> parentIf.getElseStmt())
+                .filter(elseStmt -> elseStmt == ifStmt)
+                .isPresent();
     }
 
     /**
