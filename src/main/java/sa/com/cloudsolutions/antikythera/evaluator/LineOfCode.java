@@ -17,13 +17,13 @@ public class LineOfCode {
      * The state of the variables required such that an if condition evaluates to true.
      * This will be applicable only for IF statement expressions.
      */
-    private final List<Expression> trueState = new ArrayList<>();
+    private final List<Precondition> trueState = new ArrayList<>();
 
     /**
      * The state of the variables required such that an if condition evaluates to false.
      * This will be applicable only for IF statement expressions.
      */
-    private final List<Expression> falseState = new ArrayList<>();
+    private final List<Precondition> falseState = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -84,7 +84,7 @@ public class LineOfCode {
         this.pathTaken = pathTaken;
     }
 
-    public void addPrecondition(Expression precondition, boolean state) {
+    public void addPrecondition(Precondition precondition, boolean state) {
         if(state) {
             trueState.add(precondition);
         }
@@ -93,7 +93,7 @@ public class LineOfCode {
         }
     }
 
-    public List<Expression> getPrecondition(boolean state) {
+    public List<Precondition> getPrecondition(boolean state) {
         return state ? trueState : falseState;
     }
 

@@ -78,7 +78,7 @@ public class RestControllerParser extends DepsolvingParser {
 
         TypeDeclaration<?> type = AbstractCompiler.getPublicType(cu);
 
-        evaluator = EvaluatorFactory.create(type.getFullyQualifiedName().get(), SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create(type.getFullyQualifiedName().orElseThrow(), SpringEvaluator.class);
         evaluator.setOnTest(true);
 
         SpringTestGenerator generator = new SpringTestGenerator(cu);

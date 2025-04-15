@@ -765,7 +765,7 @@ public class SpringEvaluator extends Evaluator {
 
     private void addPreCondition(Statement statement, boolean state, Expression expr) {
         LineOfCode l = Branching.get(statement.hashCode());
-        l.addPrecondition(expr, state);
+        l.addPrecondition(new Precondition(expr), state);
         preconditionsInProgress.add(expr);
     }
 
@@ -979,7 +979,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     private Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
-        List<Expression> expressions;
+        List<Precondition> expressions;
         if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
             l.setPathTaken(LineOfCode.BOTH_PATHS);
             expressions = l.getPrecondition(true);
@@ -991,8 +991,8 @@ public class SpringEvaluator extends Evaluator {
         else {
             throw new IllegalStateException("Both paths should have been taken");
         }
-        for (Expression expression : expressions) {
-            evaluateExpression(expression);
+        for (Precondition expression : expressions) {
+            evaluateExpression(expression.getExpression());
         }
         return super.handleOptionals(sc);
     }
