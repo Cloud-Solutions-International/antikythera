@@ -75,7 +75,7 @@ public class AKBuddy {
                     ))
                     .intercept(MethodDelegation.to(interceptor))
                     .make()
-                    .load(wrappedClass.getClassLoader())
+                    .load(interceptor.getClass().getClassLoader())
                     .getLoaded();
         }
     }

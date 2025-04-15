@@ -39,6 +39,7 @@ public class Reflect {
     public static final String PRIMITIVE_BOOLEAN = "boolean";
     public static final String PRIMITIVE_FLOAT = "float";
     public static final String PRIMITIVE_DOUBLE = "double";
+    public static final String PRIMITIVE_SHORT = "short";
     public static final String INTEGER = "Integer";
     public static final String BOOLEAN = "Boolean";
     public static final String DOUBLE = "Double";
@@ -194,7 +195,7 @@ public class Reflect {
             case PRIMITIVE_FLOAT -> Float.class;
             case PRIMITIVE_DOUBLE -> Double.class;
             case "char" -> Character.class;
-            case "short" -> short.class;
+            case PRIMITIVE_SHORT -> short.class;
             case "byte" -> byte.class;
             default -> Object.class;
         };
@@ -212,7 +213,7 @@ public class Reflect {
             case "Long" -> Long.class;
             case PRIMITIVE_FLOAT -> float.class;
             case FLOAT -> Float.class;
-            case "short" -> short.class;
+            case PRIMITIVE_SHORT -> short.class;
             case "Short" -> Short.class;
             case "byte" -> byte.class;
             case "Byte" -> Byte.class;
@@ -229,7 +230,7 @@ public class Reflect {
             case PRIMITIVE_BOOLEAN, "java.lang.Boolean" -> PrimitiveType.booleanType();
             case "long", "java.lang.Long", "java.lang.BigDecimal" -> PrimitiveType.longType();
             case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
-            case "short", "java.lang.Short" -> PrimitiveType.shortType();
+            case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
             case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
             case "char", "java.lang.Character" -> PrimitiveType.charType();
             case "java.lang.String" -> new ClassOrInterfaceType().setName("String");
@@ -258,35 +259,35 @@ public class Reflect {
             case PRIMITIVE_BOOLEAN -> false;
             case "long", "Long" -> 0L;
             case PRIMITIVE_FLOAT -> 0.0f;
-            case "short" -> Short.valueOf("0");
+            case PRIMITIVE_SHORT -> Short.valueOf("0");
             case "byte", "char" -> 0x0;
             default -> null;
         };
     }
 
     public static Object getDefault(Class<?> returnType) {
-        if (returnType.equals(String.class)) return "0";
-        if (returnType.equals(Integer.class) || returnType.equals(int.class)) return 0;
-        if (returnType.equals(Long.class) || returnType.equals(long.class)) return 0L;
-        if (returnType.equals(Boolean.class) || returnType.equals(boolean.class)) return false;
-        if (returnType.equals(Double.class) || returnType.equals(double.class)) return 0.0;
-        if (returnType.equals(Float.class) || returnType.equals(float.class)) return 0.0f;
-        if (returnType.equals(Byte.class) || returnType.equals(byte.class)) return (byte) 0;
-        if (returnType.equals(Short.class) || returnType.equals(short.class)) return (short) 0;
-        if (returnType.equals(Character.class) || returnType.equals(char.class)) return '\0';
-
-        // Handle common collections
-        if (returnType.equals(List.class)) return new ArrayList<>();
-        if (returnType.equals(Map.class)) return new HashMap<>();
-        if (returnType.equals(Set.class)) return new HashSet<>();
-        return null;
+        return switch (returnType) {
+            case Class<?> c when c.equals(String.class) -> "0";
+            case Class<?> c when c.equals(Integer.class) || c.equals(int.class) -> 0;
+            case Class<?> c when c.equals(Long.class) || c.equals(long.class) -> 0L;
+            case Class<?> c when c.equals(Boolean.class) || c.equals(boolean.class) -> false;
+            case Class<?> c when c.equals(Double.class) || c.equals(double.class) -> 0.0;
+            case Class<?> c when c.equals(Float.class) || c.equals(float.class) -> 0.0f;
+            case Class<?> c when c.equals(Byte.class) || c.equals(byte.class) -> (byte) 0;
+            case Class<?> c when c.equals(Short.class) || c.equals(short.class) -> (short) 0;
+            case Class<?> c when c.equals(Character.class) || c.equals(char.class) -> '\0';
+            case Class<?> c when c.equals(List.class) -> new ArrayList<>();
+            case Class<?> c when c.equals(Map.class) -> new HashMap<>();
+            case Class<?> c when c.equals(Set.class) -> new HashSet<>();
+            default -> null;
+        };
     }
 
     private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
         Variable v = new Variable(initialValue);
 
         switch (typeName) {
-            case "Long", DOUBLE, INTEGER, FLOAT, "Boolean" -> {
+            case "Long", DOUBLE, INTEGER, FLOAT, BOOLEAN -> {
                 Expression scope = new NameExpr(typeName);
                 Expression mce = new MethodCallExpr(scope, "valueOf")
                     .addArgument(new StringLiteralExpr(initialValue.toString()));
@@ -327,7 +328,7 @@ public class Reflect {
 
             case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
 
-            case "Boolean", PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(false, "Boolean", "false");
+            case BOOLEAN, PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(false, BOOLEAN, "false");
 
             case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> createVariable(0.0, DOUBLE, "0.0");
 

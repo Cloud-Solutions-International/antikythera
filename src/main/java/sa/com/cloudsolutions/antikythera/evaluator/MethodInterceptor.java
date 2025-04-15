@@ -32,17 +32,17 @@ public class MethodInterceptor {
             // Return the actual value from the Variable wrapper
             return result != null ? result.getValue() : null;
         }
+        return intercept(method, args);
+    }
+
+    @RuntimeType
+    public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
         Class<?> clazz = method.getReturnType();
         if (clazz.equals(void.class)) {
             return null;
         }
 
         return Reflect.getDefault(clazz);
-    }
-
-    @RuntimeType
-    public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
-        return null;
     }
 
     public Class<?> getWrappedClass() {
