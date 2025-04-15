@@ -9,9 +9,11 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
@@ -329,12 +331,28 @@ public class UnitTestGenerator extends TestGenerator {
             Type paramType = param.getType();
             String nameAsString = param.getNameAsString();
             if (paramType.isPrimitiveType() || paramType.asClassOrInterfaceType().isBoxedType()) {
-                String s = String.format("%s %s = %s;",
-                        param.getTypeAsString(),
-                        nameAsString,
-                        Reflect.getDefault(paramType.asString())
-                );
-                getBody(testMethod).addStatement(s);
+                VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
+                VariableDeclarator var = new VariableDeclarator();
+                var.setType(param.getType());
+                var.setName(nameAsString);
+
+                String typeName = paramType.asString();
+
+                switch (typeName) {
+                    case "Integer" -> var.setInitializer("0");
+                    case "Long" -> var.setInitializer("0L");
+                    case "Double" -> var.setInitializer("0.0");
+                    case "Float" -> var.setInitializer("0.0f");
+                    case "Boolean" -> var.setInitializer("false");
+                    case "Character" -> var.setInitializer("'\\0'");
+                    case "Byte" -> var.setInitializer("(byte)0");
+                    case "Short" -> var.setInitializer("(short)0");
+                    default -> var.setInitializer("null");
+                }
+
+
+                varDecl.addVariable(var);
+                getBody(testMethod).addStatement(varDecl);
             } else {
                 addClassImports(paramType);
                 Variable value = argumentGenerator.getArguments().get(nameAsString);
