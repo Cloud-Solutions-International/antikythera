@@ -60,7 +60,6 @@ public class MockingRegistry {
         return v;
     }
 
-
     public static Variable mockIt(VariableDeclarator variable) throws ClassNotFoundException {
         String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
         Variable v;
@@ -80,6 +79,14 @@ public class MockingRegistry {
         }
         v.setType(variable.getType());
         return v;
+    }
+
+    public static Object getThen(String className, Callable callable) {
+        Map<Callable, Object> map = mockedFields.get(className);
+        if (map != null) {
+            return map.get(callable);
+        }
+        return null;
     }
 
 }

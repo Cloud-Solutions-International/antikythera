@@ -171,7 +171,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param baseClassName the name of the base class.
      */
-    private void loadPredefinedBaseClassForTest(String baseClassName) {
+    void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("main", "test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
