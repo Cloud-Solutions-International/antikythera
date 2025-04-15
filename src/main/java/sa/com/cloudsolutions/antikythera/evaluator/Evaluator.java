@@ -769,11 +769,6 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
-        Optional<Expression> scoped = methodCall.getScope();
-        if (scoped.isPresent() && scoped.get().toString().equals("logger")) {
-            return null;
-        }
-
         ScopeChain chain = ScopeChain.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
@@ -786,6 +781,9 @@ public class Evaluator {
 
     private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
+        if (methodCall.toString().startsWith("logger")) {
+            return null;
+        }
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(chain);
@@ -1035,7 +1033,7 @@ public class Evaluator {
     }
 
     /**
-     * Execute a method that is part of a chain of method
+     * Execute a method that is part of a chain of method calls
      * @param sc the methods scope
      * @return the result from executing the method or null if the method is void.
      * @throws ReflectiveOperationException if the execution involves a class available only
