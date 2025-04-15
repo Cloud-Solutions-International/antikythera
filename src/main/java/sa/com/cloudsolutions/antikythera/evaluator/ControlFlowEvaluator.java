@@ -27,6 +27,7 @@ import java.util.Set;
 public class ControlFlowEvaluator extends Evaluator{
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
 
+    protected int branchCount;
     /**
      * The preconditions that need to be met before the test can be executed.
      */
@@ -41,7 +42,6 @@ public class ControlFlowEvaluator extends Evaluator{
     public ControlFlowEvaluator(EvaluatorFactory.Context context) {
         super(context);
     }
-
 
     @SuppressWarnings("unchecked")
     Optional<Expression> setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
@@ -204,5 +204,29 @@ public class ControlFlowEvaluator extends Evaluator{
             }
             default -> super.handleOptionalEmpties(chain);
         };
+    }
+
+
+
+    @SuppressWarnings("unchecked")
+    Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+
+        if (l == null) {
+            return straightPath(sc, stmt, methodCall);
+        }
+        else {
+            return riggedPath(sc, l);
+        }
+    }
+
+    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l)  throws ReflectiveOperationException  {
+        throw new IllegalStateException("rigged path Should be overridden");
+    }
+
+    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        throw new IllegalStateException("straight path Should be overridden");
     }
 }

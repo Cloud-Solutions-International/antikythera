@@ -16,7 +16,6 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -24,7 +23,6 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
@@ -57,7 +55,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -87,8 +84,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private MethodDeclaration currentMethod;
     private int visitNumber;
     private boolean onTest;
-    private int branchCount;
-
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -826,22 +821,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
-    Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
-
-        MethodCallExpr methodCall = sc.getScopedMethodCall();
-        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-        LineOfCode l = Branching.get(stmt.hashCode());
-
-        if (l == null) {
-            return straightPath(sc, stmt, methodCall);
-        }
-        else {
-            return riggedPath(sc, l);
-        }
-    }
-
-    private Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    @Override
+    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         LineOfCode l =  new LineOfCode(stmt);
         Branching.add(l);
@@ -867,7 +848,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         throw new IllegalStateException("This should be returning an optional");
     }
 
-    private Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
+    @Override
+    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
         List<Precondition> expressions;
         if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
             l.setPathTaken(LineOfCode.BOTH_PATHS);
