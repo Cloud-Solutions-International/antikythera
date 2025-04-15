@@ -37,7 +37,7 @@ public class JunitAsserter extends Asserter {
     public Expression assertThrows(String invocation, MethodResponse response) {
         MethodCallExpr assertThrows = new MethodCallExpr("assertThrows");
         assertThrows.addArgument(response.getException().getCause().getClass().getName() + ".class");
-        assertThrows.addArgument(String.format("() -> %s ", invocation));
+        assertThrows.addArgument(String.format("() -> %s ", invocation.replace(';', ' ')));
         return assertThrows;
     }
 }

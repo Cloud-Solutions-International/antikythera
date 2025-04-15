@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -330,11 +331,22 @@ public class UnitTestGenerator extends TestGenerator {
 
     void mockArguments() {
         for(var param : methodUnderTest.getParameters()) {
-            addClassImports(param.getType());
+            Type paramType = param.getType();
             String nameAsString = param.getNameAsString();
-            Variable value = argumentGenerator.getArguments().get(nameAsString);
-            if (value != null ) {
-                mocker.accept(param, value);
+            if (paramType.isPrimitiveType() || paramType.asClassOrInterfaceType().isBoxedType()) {
+                String s = String.format("%s %s = %s;",
+                        param.getTypeAsString(),
+                        nameAsString,
+                        Reflect.getDefault(paramType.asString())
+                );
+                getBody(testMethod).addStatement(s);
+            }
+            else {
+                addClassImports(paramType);
+                Variable value = argumentGenerator.getArguments().get(nameAsString);
+                if (value != null) {
+                    mocker.accept(param, value);
+                }
             }
         }
         applyPreconditions();
