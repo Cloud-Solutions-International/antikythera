@@ -35,9 +35,6 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import net.bytebuddy.ByteBuddy;
-import net.bytebuddy.dynamic.DynamicType;
-import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
@@ -1785,8 +1782,8 @@ public class Evaluator {
         } catch (UnsolvedSymbolException e) {
             logger.debug("ignore {}", variableDeclarator);
         } catch (IOException e) {
-            String action = Settings.getProperty("dependencies.on_error").toString();
-            if(action == null || action.equals("exit")) {
+            String action = Settings.getProperty("dependencies.on_error", String.class).orElse("exit");
+            if(action.equals("exit")) {
                 throw new GeneratorException("Exception while processing fields", e);
             }
 
