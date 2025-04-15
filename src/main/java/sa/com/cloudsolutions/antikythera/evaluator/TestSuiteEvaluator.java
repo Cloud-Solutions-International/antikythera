@@ -10,7 +10,6 @@ import java.lang.reflect.Method;
 
 public class TestSuiteEvaluator extends Evaluator {
     private boolean when;
-    private boolean then;
     private Callable callable;
 
     public TestSuiteEvaluator(CompilationUnit cu, String className) {
@@ -28,11 +27,9 @@ public class TestSuiteEvaluator extends Evaluator {
             return evaluateMethodCall((MethodCallExpr) arg);
         }
         if (methodCall.getNameAsString().equals("thenReturn")) {
-            then = true;
             Expression arg = methodCall.getArgument(0);
             Variable v = evaluateExpression(arg);
             when = false;
-            then = false;
             MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), callable, v.getValue());
             return v;
         }

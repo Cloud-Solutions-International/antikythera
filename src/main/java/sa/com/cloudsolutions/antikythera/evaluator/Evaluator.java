@@ -34,6 +34,10 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
@@ -1598,8 +1602,11 @@ public class Evaluator {
             Variable v = createObject(stmt, null, oce);
             if (v.getValue() instanceof Exception ex) {
                 throw ex;
-            } else {
-                logger.error("Should have an exception");
+            } else  {
+                throw new ByteBuddy().subclass(Exception.class)
+                        .name(className)
+                        .make()
+                        .load(getClass().getClassLoader()).getLoaded().getDeclaredConstructor().newInstance();
             }
         }
     }
