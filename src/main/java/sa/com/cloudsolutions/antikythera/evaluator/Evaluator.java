@@ -1604,7 +1604,7 @@ public class Evaluator {
                 throw ex;
             } else  {
                 throw new ByteBuddy().subclass(Exception.class)
-                        .name(className)
+                        .name(AbstractCompiler.findFullyQualifiedName(cu,v.getType().asString()))
                         .make()
                         .load(getClass().getClassLoader()).getLoaded().getDeclaredConstructor().newInstance();
             }

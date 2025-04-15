@@ -12,6 +12,8 @@ public class Factory {
     private static final Map<String, TestGenerator> integration = new HashMap<>();
     private static final Map<String, TestGenerator> api = new HashMap<>();
 
+    private Factory() {}
+
     public static TestGenerator create(String type, CompilationUnit cu) {
         String className = AbstractCompiler.getPublicType(cu).getFullyQualifiedName().orElse(null);
         TestGenerator gen = null;
