@@ -658,7 +658,7 @@ public class SpringEvaluator extends Evaluator {
     }
 
     @SuppressWarnings("unchecked")
-    private Expression setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
+    private Optional<Expression> setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
@@ -666,14 +666,20 @@ public class SpringEvaluator extends Evaluator {
             if (init != null) {
                 MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
-                String paramName = nameExpr.getNameAsString();
+                String targetParamName = nameExpr.getNameAsString();
                 for (Parameter param : md.getParameters()) {
-                    if (param.getNameAsString().equals(paramName)) {
+                    if (param.getNameAsString().equals(targetParamName)) {
                         Expression expr = setupConditionThroughAssignment(entry, v);
                         addPreCondition(stmt, state, expr);
-                        return expr;
+                        return Optional.of(expr);
                     }
                 }
+                /*
+                 * We tried to match the name of the variable with the name of the parameter but
+                 * a match could not be found. So it is not possible to force branching by
+                 * assigning values to a parameter in a conditional
+                 */
+                return Optional.empty();
             }
         }
         else {
@@ -682,7 +688,7 @@ public class SpringEvaluator extends Evaluator {
 
         Expression expr = setupConditionThroughAssignment(entry, v);
         addPreCondition(stmt, state, expr);
-        return expr;
+        return Optional.of(expr);
     }
 
     private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
@@ -1045,7 +1051,7 @@ public class SpringEvaluator extends Evaluator {
                 Type type = param.getType();
                 for (Map.Entry<Expression, Object> entry : value.entrySet()) {
                     if (type.isPrimitiveType()) {
-                        expressions.add(setupConditionThroughAssignment(stmt, state, entry));
+                        setupConditionThroughAssignment(stmt, state, entry).ifPresent(expressions::add);
                     } else {
                         setupConditionThroughMethodCalls(stmt, state, entry);
                     }
