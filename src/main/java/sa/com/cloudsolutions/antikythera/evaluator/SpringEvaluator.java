@@ -606,28 +606,28 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
             if (result) {
-                l.setPathTaken(LineOfCode.TRUE_PATH);
                 /* we have not been this way before. In this first execution of the code, we
                  * are taking the true path. We need to leave a flag behind so that in the
                  * next execution we will know to take the false path.
                  */
                 setupIfCondition(ifst, false);
                 super.executeStatement(ifst.getThenStmt());
+                l.setPathTaken(LineOfCode.TRUE_PATH);
             } else {
-                l.setPathTaken(LineOfCode.FALSE_PATH);
                 setupIfCondition(ifst, true);
                 super.executeStatement(elseStmt);
+                l.setPathTaken(LineOfCode.FALSE_PATH);
             }
         } else {
             /*
              * We have been this way before so lets take the path not taken.
              */
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
             if (result) {
                 super.executeStatement(ifst.getThenStmt());
             } else {
                 super.executeStatement(elseStmt);
             }
+            l.setPathTaken(LineOfCode.BOTH_PATHS);
         }
         return v;
     }
