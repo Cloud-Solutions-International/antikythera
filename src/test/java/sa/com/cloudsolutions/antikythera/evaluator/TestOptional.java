@@ -28,15 +28,14 @@ class TestOptional extends TestHelper {
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
-        AntikytheraRunTime.reset();
-        MockingRegistry.reset();
         AbstractCompiler.preProcess();
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Opt", Evaluator.class);
+
     }
 
     @BeforeEach
     void each() throws AntikytheraException {
         System.setOut(new PrintStream(outContent));
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Opt", Evaluator.class);
     }
 
     @ParameterizedTest

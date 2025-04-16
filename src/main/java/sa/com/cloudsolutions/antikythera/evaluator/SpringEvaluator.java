@@ -236,6 +236,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Branching.clear();
         preConditions.clear();
         preconditionsInProgress.clear();
+        AntikytheraRunTime.reset();
+
         final List<Integer> s = new ArrayList<>();
 
         md.accept(new VoidVisitorAdapter<Void>() {
@@ -887,11 +889,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (optional.isPresent()) {
                 l.setPathTaken(LineOfCode.TRUE_PATH);
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
-                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
+                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
             } else {
                 l.setPathTaken(LineOfCode.FALSE_PATH);
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
-                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, false);
+                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
             }
             for (Expression expr : expressions) {
                 mapParameterToArguments(expr, method, methodCall);

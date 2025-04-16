@@ -18,8 +18,6 @@ import java.io.PrintStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.expr.Expression;
@@ -184,7 +182,7 @@ class TestConditionalWithOptional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({
-        "ifEmpty, ID not found\\nID: 1",
+        "ifEmpty, ID: 1\\nID not found",
         "ifPresent, ID: 1",
         "optionalString, ANTIKYTHERA"
     })
