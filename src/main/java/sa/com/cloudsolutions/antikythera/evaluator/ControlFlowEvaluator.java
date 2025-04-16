@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -31,7 +32,7 @@ public class ControlFlowEvaluator extends Evaluator{
     /**
      * The preconditions that need to be met before the test can be executed.
      */
-    protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
+    protected Map<MethodDeclaration, LinkedHashSet<Expression>> preConditions = new HashMap<>();
 
     /**
      * The preconditions that we are building based on the current branches covered.

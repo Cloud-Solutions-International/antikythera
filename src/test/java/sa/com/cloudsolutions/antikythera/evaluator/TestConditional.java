@@ -72,7 +72,7 @@ class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, One!Two!Three!ZERO!",
             "conditional6, One!Two!Three!ZERO!","conditional7, One!Two!Three!ZERO!",
-            "conditional8, ZERO!Three!One!Two!", "smallDiff, One!Nearly 2!", "booleanWorks, True!False!"
+            "conditional8, ZERO!One!Two!Three!", "smallDiff, Nearly 2!One!", "booleanWorks, True!False!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

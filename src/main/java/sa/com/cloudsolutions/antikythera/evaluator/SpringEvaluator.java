@@ -53,6 +53,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -217,7 +218,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 mockMethodArguments(md);
                 executeMethod(md);
 
-                Set<Expression> conditions = preConditions.computeIfAbsent(md, k -> new HashSet<>());
+                LinkedHashSet<Expression> conditions = preConditions.computeIfAbsent(md, k -> new LinkedHashSet<>());
                 conditions.addAll(preconditionsInProgress);
             }
         } catch (AUTException aex) {
@@ -271,7 +272,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
         int count = 0;
-        for (Expression cond : preConditions.getOrDefault(md, Collections.emptySet())) {
+        for (Expression cond : preConditions.getOrDefault(md, new LinkedHashSet<>())) {
             if (count++ == visitNumber) {
                 break;
             }
@@ -462,7 +463,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(preConditions.getOrDefault(currentMethod, Collections.emptySet()));
+                generator.setPreConditions(preConditions.getOrDefault(currentMethod, new LinkedHashSet<>()));
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);
@@ -601,6 +602,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         boolean result = (boolean) v.getValue();
         Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
 
+        System.err.println(getValue(ifst, "a") + " : " + ifst.getCondition() + " : " + v);
         if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
             if (result) {
                 l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -644,10 +646,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
-        System.err.println(BinaryOps.getCombinedCondition(collectedConditions));
+        System.err.println("\t" + BinaryOps.getCombinedCondition(collectedConditions) + " " + values);
         if (!values.isEmpty()) {
             Map<Expression, Object> value = values.getFirst();
-            System.err.println(value.toString());
             for (var entry : value.entrySet()) {
                 if (entry.getKey().isMethodCallExpr()) {
                     setupConditionThroughMethodCalls(ifStmt, state, entry);

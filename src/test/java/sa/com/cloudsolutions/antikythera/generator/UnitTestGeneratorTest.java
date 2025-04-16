@@ -25,8 +25,10 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 
@@ -54,7 +56,7 @@ class UnitTestGeneratorTest {
         unitTestGenerator = new UnitTestGenerator(cu);
         argumentGenerator = Mockito.mock(NullArgumentGenerator.class);
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
-        unitTestGenerator.setPreConditions(new HashSet<>());
+        unitTestGenerator.setPreConditions(new LinkedHashSet<>());
         unitTestGenerator.setAsserter(new JunitAsserter());
     }
 
