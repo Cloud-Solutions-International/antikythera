@@ -604,7 +604,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         boolean result = (boolean) v.getValue();
         Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
 
-        System.err.println(getValue(ifst, "a") + " : " + ifst.getCondition() + " : " + v);
         if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
             if (result) {
                 l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -648,7 +647,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
-        System.err.println("\t" + BinaryOps.getCombinedCondition(collectedConditions) + " " + values);
         if (!values.isEmpty()) {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
@@ -662,52 +660,59 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     }
 
-    List<Expression> collectConditionsUpToMethod(IfStmt stmt) {
+    /**
+     * Given a statement find all the conditions that are required to be met to reach that line
+     * @param stmt a statement to search upwards from
+     * @return the list of conditions that need to be met to reach this line
+     */
+    List<Expression> collectConditionsUpToMethod(Statement stmt) {
         List<Expression> conditions = new ArrayList<>();
         Node current = stmt;
 
         while (current != null && !(current instanceof MethodDeclaration)) {
             Optional<Node> parentNode = current.getParentNode();
-            if (!parentNode.isPresent()) {
-                break;
-            }
+            if (parentNode.isEmpty()) break;
 
             Node parent = parentNode.get();
-            if (parent instanceof IfStmt parentIf) {
-                // Check if current node is in the else branch
-                if (parentIf.getElseStmt().isPresent() &&
-                    isNodeInStatement(current, parentIf.getElseStmt().get())) {
-                    // If in else branch, negate the condition
-                    conditions.add(BinaryOps.negateCondition(parentIf.getCondition()));
-                } else if (isNodeInStatement(current, parentIf.getThenStmt())) {
-                    // If in then branch, add condition as-is
-                    conditions.add(parentIf.getCondition());
+            if (parent instanceof IfStmt ifStmt) {
+                Statement thenStmt = ifStmt.getThenStmt();
+                Optional<Statement> elseStmt = ifStmt.getElseStmt();
+
+                if (isNodeInStatement(current, thenStmt)) {
+                    conditions.add(ifStmt.getCondition());
+                } else if (elseStmt.isPresent() && isNodeInStatement(current, elseStmt.get())) {
+                    conditions.add(BinaryOps.negateCondition(ifStmt.getCondition()));
                 }
             }
+
             current = parent;
         }
+
+        Collections.reverse(conditions);
         return conditions;
     }
 
     private boolean isNodeInStatement(Node node, Statement stmt) {
-        if (stmt instanceof BlockStmt block) {
-            return block.getStatements().stream()
-                    .anyMatch(s -> s == node || isNodeDescendant(node, s));
-        }
-        return stmt == node || isNodeDescendant(node, stmt);
-    }
+        if (stmt == null) return false;
+        if (stmt.equals(node)) return true;
 
-    private boolean isNodeDescendant(Node target, Node potentialParent) {
-        Node current = target;
-        while (current != null) {
-            if (current == potentialParent) {
+        for (Node child : stmt.getChildNodes()) {
+            if (child.equals(node) || isNodeDescendant(node, child)) {
                 return true;
             }
-            current = current.getParentNode().orElse(null);
         }
         return false;
     }
 
+    private boolean isNodeDescendant(Node target, Node potentialParent) {
+        if (potentialParent.equals(target)) return true;
+        for (Node child : potentialParent.getChildNodes()) {
+            if (isNodeDescendant(target, child)) {
+                return true;
+            }
+        }
+        return false;
+    }
     /**
      * Execute a method that's only available to us in source code format.
      *

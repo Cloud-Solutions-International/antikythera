@@ -53,7 +53,6 @@ class TestConditional extends TestHelper {
         assertEquals("Hello", outContent.toString());
     }
 
-
     @ParameterizedTest
     @CsvSource({"conditional1, The name is nullT", "conditional2, The name is nullT",
             "conditional3, ZERO!1",
@@ -161,6 +160,19 @@ class TestConditional extends TestHelper {
         Expression combinedCondition3 = BinaryOps.getCombinedCondition(visitor3.getConditions());
         assertEquals("a < 0", combinedCondition3.toString(), "Incorrect combined condition for 'Negative'");
     }
+
+    @Test
+    void testMultivariate() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("multiVariate")).orElseThrow();
+
+        evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals("Antikythera!Bee!Zero!",s.replaceAll("\\n",""));
+    }
+
 }
 
 class TestConditionalWithOptional extends TestHelper {

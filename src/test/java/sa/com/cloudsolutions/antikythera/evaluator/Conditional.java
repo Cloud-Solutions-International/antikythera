@@ -146,6 +146,23 @@ public class Conditional {
         return "Negative";
     }
 
+    public void multiVariate(int a, int b) {
+        if (a == 0) {
+            if (b == 0) {
+                System.out.println("Zero!");
+            } else {
+                System.out.println("Bee!");
+            }
+        } else {
+            if (b == 0) {
+                System.out.println("Aargh!");
+            }
+            else {
+                System.out.println("Antikythera!");
+            }
+        }
+    }
+
 
     public static void main(String[] args) {
         Person p = new Person("Hello");

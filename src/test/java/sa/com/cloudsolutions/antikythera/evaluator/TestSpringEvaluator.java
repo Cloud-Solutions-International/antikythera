@@ -1,11 +1,15 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +27,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -206,6 +211,29 @@ class TestSpringEvaluatorAgain {
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
+    }
+
+    @Test
+    void testCollectConditionsUpToMethod() {
+        String cls = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("multiVariate")).get();
+        SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);
+
+        md.accept(new VoidVisitorAdapter<Void>() {
+                      @Override
+                      public void visit(IfStmt n, Void arg) {
+                          super.visit(n, arg);
+                          List<Expression> conditions =  eval.collectConditionsUpToMethod(n);
+                          if (n.getCondition().toString().equals("a == 0")) {
+                              assertEquals(conditions.size(), 0);
+                          }
+                          else {
+                              assertEquals(conditions.size(), 1);
+                          }
+                      }
+                  }, null
+        );
     }
 
     @Test
