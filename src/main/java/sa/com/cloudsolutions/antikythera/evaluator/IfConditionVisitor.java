@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -13,19 +12,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-public class IfConditionVisitor extends VoidVisitorAdapter<Void> {
-    @Override
-    public void visit(IfStmt stmt, Void arg) {
-        Branching.add(new LineOfCode(stmt));
+public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
-        Optional<Statement> elseStmt = stmt.getElseStmt();
-        if (elseStmt.isEmpty()) {
-            return;
-        }
-        Statement elseStatement = elseStmt.get();
-        if (elseStatement instanceof BlockStmt) {
-        }
-        elseStatement.accept(this, arg); // Visit else branch
+    @Override
+    public void visit(IfStmt stmt, LineOfCode parent) {
+        LineOfCode lineOfCode = new LineOfCode(stmt);
+        lineOfCode.setParent(parent);
+        Branching.add(lineOfCode);
+
+        // Visit the "then" branch
+        stmt.getThenStmt().accept(this, lineOfCode);
+
+        // Visit the "else" branch if it exists
+        stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
     }
 
 

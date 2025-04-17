@@ -20,7 +20,7 @@ class GraphTest {
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap();
-
+        AbstractCompiler.reset();
     }
 
     @Test

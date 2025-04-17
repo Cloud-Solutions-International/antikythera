@@ -88,7 +88,19 @@ public class LineOfCode {
     }
 
     public void setPathTaken(int pathTaken) {
+        if (parent != null) {
+            parent.updatePaths();
+        }
         this.pathTaken = pathTaken;
+    }
+
+    private void updatePaths() {
+        if (children.stream().allMatch(child -> child.getPathTaken() == BOTH_PATHS)) {
+            this.pathTaken = BOTH_PATHS;
+            if (parent != null) {
+                parent.updatePaths();
+            }
+        }
     }
 
     public void addPrecondition(Precondition precondition, boolean state) {
@@ -130,10 +142,26 @@ public class LineOfCode {
     }
 
     public void setParent(LineOfCode parent) {
-        this.parent = parent;
+        if (parent != null) {
+            this.parent = parent;
+            parent.addChild(this);
+        }
     }
 
     public LineOfCode getParent() {
         return parent;
+    }
+
+    public boolean isUntravelled() {
+        return pathTaken == UNTRAVELLED;
+    }
+    public boolean isFalsePath() {
+        return pathTaken == FALSE_PATH;
+    }
+    public boolean isTruePath() {
+        return pathTaken == TRUE_PATH;
+    }
+    public boolean isBothPaths() {
+        return pathTaken == BOTH_PATHS;
     }
 }

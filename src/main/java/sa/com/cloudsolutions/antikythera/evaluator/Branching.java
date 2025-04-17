@@ -51,7 +51,6 @@ public class Branching {
      * @return true if both branches in if statements have been covered.
      */
     public static boolean isCovered(MethodDeclaration md) {
-
         List<LineOfCode> lines = conditionals.get(md);
         if (lines != null) {
             for (LineOfCode l : lines) {
