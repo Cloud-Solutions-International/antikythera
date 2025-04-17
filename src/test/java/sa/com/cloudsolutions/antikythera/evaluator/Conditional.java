@@ -163,6 +163,29 @@ public class Conditional {
         }
     }
 
+    public void multiVariateDeep(int a, int b) {
+        if (a == 0) {
+            System.out.println("A0!");
+            if (b == 0) {
+                System.out.println("B0!");
+            } else {
+                if (b == 1) {
+                    System.out.println("Bee!");
+                }
+                else {
+                    System.out.println("Queen Bee!");
+                }
+            }
+        } else {
+            if (b == 0) {
+                System.out.println("Aargh!");
+            }
+            else {
+                System.out.println("Antikythera!");
+            }
+        }
+    }
+
 
     public static void main(String[] args) {
         Person p = new Person("Hello");

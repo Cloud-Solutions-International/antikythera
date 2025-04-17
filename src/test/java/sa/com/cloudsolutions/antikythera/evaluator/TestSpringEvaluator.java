@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
@@ -226,10 +225,36 @@ class TestSpringEvaluatorAgain {
                           super.visit(n, arg);
                           List<Expression> conditions =  eval.collectConditionsUpToMethod(n);
                           if (n.getCondition().toString().equals("a == 0")) {
-                              assertEquals(conditions.size(), 0);
+                              assertEquals(0, conditions.size());
                           }
                           else {
-                              assertEquals(conditions.size(), 1);
+                              assertEquals(1, conditions.size());
+                          }
+                      }
+                  }, null
+        );
+    }
+
+    @Test
+    void testCollectConditionsUpToMethodAgain() {
+        String cls = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("multiVariateDeep")).get();
+        SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);
+
+        md.accept(new VoidVisitorAdapter<Void>() {
+                      @Override
+                      public void visit(IfStmt n, Void arg) {
+                          super.visit(n, arg);
+                          List<Expression> conditions =  eval.collectConditionsUpToMethod(n);
+                          if (n.getCondition().toString().equals("a == 0")) {
+                              assertEquals(0, conditions.size());
+                          }
+                          else if (n.getCondition().toString().equals("b == 1")) {
+                              assertEquals(2, conditions.size());
+                          }
+                          else {
+                              assertEquals(1, conditions.size());
                           }
                       }
                   }, null
