@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -33,7 +34,7 @@ public class Branching {
 
     public static List<Precondition> getApplicableConditions(MethodDeclaration methodDeclaration) {
         List<Precondition> applicableConditions = new ArrayList<>();
-        List<LineOfCode> lines = conditionals.get(methodDeclaration);
+        List<LineOfCode> lines = conditionals.getOrDefault(methodDeclaration, Collections.emptyList());
         for (LineOfCode lineOfCode : lines) {
             if (lineOfCode.getPathTaken() == LineOfCode.TRUE_PATH) {
                 applicableConditions.addAll(lineOfCode.getPrecondition(false));
