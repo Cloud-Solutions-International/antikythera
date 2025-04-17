@@ -88,10 +88,10 @@ public class LineOfCode {
     }
 
     public void setPathTaken(int pathTaken) {
+        this.pathTaken = pathTaken;
         if (parent != null) {
             parent.updatePaths();
         }
-        this.pathTaken = pathTaken;
     }
 
     private void updatePaths() {

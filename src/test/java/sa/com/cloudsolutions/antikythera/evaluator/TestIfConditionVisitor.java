@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestIfConditionVisitor {
 
@@ -79,5 +81,15 @@ class TestIfConditionVisitor {
         List<LineOfCode> lines = Branching.get(md);
         assertEquals(4, lines.size());
 
+        for (LineOfCode line : lines) {
+            assertTrue(line.isUntravelled());
+        }
+        assertFalse(Branching.isCovered(md));
+        lines.get(3).setPathTaken(LineOfCode.BOTH_PATHS);
+        assertFalse(Branching.isCovered(md));
+        lines.get(1).setPathTaken(LineOfCode.BOTH_PATHS);
+        assertFalse(Branching.isCovered(md));
+        lines.get(2).setPathTaken(LineOfCode.BOTH_PATHS);
+        assertTrue(Branching.isCovered(md));
     }
 }
