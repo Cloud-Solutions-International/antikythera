@@ -266,12 +266,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
-        int count = 0;
 
         for (Precondition cond : Branching.getApplicableConditions(currentMethod)) {
-            if (count++ == visitNumber) {
-                break;
-            }
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().get() instanceof NameExpr ne
                         && ne.getNameAsString().equals(p.getNameAsString())
@@ -604,13 +600,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                  * are taking the true path. We need to leave a flag behind so that in the
                  * next execution we will know to take the false path.
                  */
-                setupIfCondition(ifst, false);
                 super.executeStatement(ifst.getThenStmt());
                 l.setPathTaken(LineOfCode.TRUE_PATH);
+                setupIfCondition(ifst, false);
             } else {
-                setupIfCondition(ifst, true);
                 super.executeStatement(elseStmt);
                 l.setPathTaken(LineOfCode.FALSE_PATH);
+                setupIfCondition(ifst, true);
             }
         } else {
             /*
