@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
@@ -88,17 +89,29 @@ public class LineOfCode {
     }
 
     public void setPathTaken(int pathTaken) {
-        this.pathTaken = pathTaken;
-        if (parent != null) {
-            parent.updatePaths();
+        if (children.isEmpty() || children.stream().allMatch(LineOfCode::isBothPaths)) {
+            this.pathTaken = pathTaken;
+            if (parent != null) {
+                parent.updatePaths(this);
+            }
         }
     }
 
-    private void updatePaths() {
+    private void updatePaths(LineOfCode eventSource) {
         if (children.stream().allMatch(child -> child.getPathTaken() == BOTH_PATHS)) {
-            this.pathTaken = BOTH_PATHS;
-            if (parent != null) {
-                parent.updatePaths();
+            if (isTruePath() || isFalsePath()) {
+                this.pathTaken = BOTH_PATHS;
+                if (parent != null) {
+                    parent.updatePaths(this);
+                }
+            }
+            else if (statement instanceof IfStmt ifStmt) {
+                if(IfConditionVisitor.isNodeInStatement(eventSource.getStatement(), ifStmt.getThenStmt())) {
+                    this.pathTaken = TRUE_PATH;
+                }
+                else {
+                    this.pathTaken = FALSE_PATH;
+                }
             }
         }
     }

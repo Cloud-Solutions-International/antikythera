@@ -60,7 +60,7 @@ public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
         return conditions;
     }
 
-    private static boolean isNodeInStatement(Node node, Statement stmt) {
+    public static boolean isNodeInStatement(Node node, Statement stmt) {
         if (stmt == null) return false;
         if (stmt.equals(node)) return true;
 

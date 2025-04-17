@@ -164,12 +164,12 @@ public class Conditional {
     }
 
     public void multiVariateDeep(int a, int b) {
-        if (a == 0) {
+        if (a == 0) { // o
             System.out.println("A0!");
-            if (b == 0) {
+            if (b == 0) { // 1
                 System.out.println("B0!");
             } else {
-                if (b == 1) {
+                if (b == 1) { // 2
                     System.out.println("Bee!");
                 }
                 else {
@@ -177,7 +177,7 @@ public class Conditional {
                 }
             }
         } else {
-            if (b == 0) {
+            if (b == 0) { // 3
                 System.out.println("Aargh!");
             }
             else {
