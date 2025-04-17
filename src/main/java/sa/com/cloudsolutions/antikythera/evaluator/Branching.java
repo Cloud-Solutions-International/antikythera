@@ -51,9 +51,13 @@ public class Branching {
      * @return true if both branches in if statements have been covered.
      */
     public static boolean isCovered(MethodDeclaration md) {
-        for (LineOfCode l : conditionals.get(md)) {
-            if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
-                return false;
+
+        List<LineOfCode> lines = conditionals.get(md);
+        if (lines != null) {
+            for (LineOfCode l : lines) {
+                if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
+                    return false;
+                }
             }
         }
         return true;
