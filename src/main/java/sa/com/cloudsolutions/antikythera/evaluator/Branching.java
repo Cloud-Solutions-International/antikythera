@@ -45,4 +45,17 @@ public class Branching {
         }
         return applicableConditions;
     }
+
+    /**
+     * Returns true if all the branches have been covered
+     * @return true if both branches in if statements have been covered.
+     */
+    public static boolean isCovered(MethodDeclaration md) {
+        for (LineOfCode l : conditionals.get(md)) {
+            if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

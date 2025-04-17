@@ -56,6 +56,9 @@ public class LineOfCode {
 
     private final MethodDeclaration methodDeclaration;
 
+    private LineOfCode parent;
+    private List<LineOfCode> children = new ArrayList<>();
+
     /**
      * A non-null value if this statement represents a JPA Query
      */
@@ -120,5 +123,17 @@ public class LineOfCode {
 
     public MethodDeclaration getMethodDeclaration() {
         return methodDeclaration;
+    }
+
+    public void addChild(LineOfCode child) {
+        children.add(child);
+    }
+
+    public void setParent(LineOfCode parent) {
+        this.parent = parent;
+    }
+
+    public LineOfCode getParent() {
+        return parent;
     }
 }

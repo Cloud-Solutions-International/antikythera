@@ -223,7 +223,7 @@ class TestSpringEvaluatorAgain {
                       @Override
                       public void visit(IfStmt n, Void arg) {
                           super.visit(n, arg);
-                          List<Expression> conditions =  eval.collectConditionsUpToMethod(n);
+                          List<Expression> conditions =  IfConditionVisitor.collectConditionsUpToMethod(n);
                           if (n.getCondition().toString().equals("a == 0")) {
                               assertEquals(0, conditions.size());
                           }
@@ -246,7 +246,7 @@ class TestSpringEvaluatorAgain {
                       @Override
                       public void visit(IfStmt n, Void arg) {
                           super.visit(n, arg);
-                          List<Expression> conditions =  eval.collectConditionsUpToMethod(n);
+                          List<Expression> conditions =  IfConditionVisitor.collectConditionsUpToMethod(n);
                           if (n.getCondition().toString().equals("a == 0")) {
                               assertEquals(0, conditions.size());
                           }

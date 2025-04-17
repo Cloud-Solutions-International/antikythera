@@ -24,6 +24,7 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.visitor.VoidVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,7 +82,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * The method currently being analyzed
      */
     private MethodDeclaration currentMethod;
-    private int visitNumber;
     private boolean onTest;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
@@ -210,7 +210,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         beforeVisit(md);
         try {
-            for (visitNumber = 0; visitNumber < branchCount; visitNumber++) {
+            while (! Branching.isCovered(md)) {
                 getLocals().clear();
                 setupFields();
                 mockMethodArguments(md);
@@ -233,24 +233,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         final List<Integer> s = new ArrayList<>();
 
-        md.accept(new VoidVisitorAdapter<Void>() {
-           @Override
-            public void visit(IfStmt stmt, Void arg) {
-                Branching.add(new LineOfCode(stmt));
-                s.add(1); // Count the main if branch
-
-                Optional<Statement> elseStmt = stmt.getElseStmt();
-                if (elseStmt.isEmpty()) {
-                    s.add(1); // Count empty else branch
-                    return;
-                }
-                Statement elseStatement = elseStmt.get();
-                if (elseStatement instanceof BlockStmt) {
-                    s.add(1); // Count block else branch
-                }
-                elseStatement.accept(this, arg); // Visit else branch
-            }
-        }, null);
+        md.accept(new IfConditionVisitor(), null);
         branchCount = Math.max(1, s.size());
     }
 
@@ -629,7 +612,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param state the desired state.
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
-        List<Expression> collectedConditions = collectConditionsUpToMethod(ifStmt);
+        List<Expression> collectedConditions = IfConditionVisitor.collectConditionsUpToMethod(ifStmt);
         collectedConditions.add(ifStmt.getCondition());
 
         TruthTable tt = new TruthTable(BinaryOps.getCombinedCondition(collectedConditions));
@@ -651,59 +634,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     /**
-     * Given a statement find all the conditions that are required to be met to reach that line
-     * @param stmt a statement to search upwards from
-     * @return the list of conditions that need to be met to reach this line
-     */
-    List<Expression> collectConditionsUpToMethod(Statement stmt) {
-        List<Expression> conditions = new ArrayList<>();
-        Node current = stmt;
-
-        while (current != null && !(current instanceof MethodDeclaration)) {
-            Optional<Node> parentNode = current.getParentNode();
-            if (parentNode.isEmpty()) break;
-
-            Node parent = parentNode.get();
-            if (parent instanceof IfStmt ifStmt) {
-                Statement thenStmt = ifStmt.getThenStmt();
-                Optional<Statement> elseStmt = ifStmt.getElseStmt();
-
-                if (isNodeInStatement(current, thenStmt)) {
-                    conditions.add(ifStmt.getCondition());
-                } else if (elseStmt.isPresent() && isNodeInStatement(current, elseStmt.get())) {
-                    conditions.add(BinaryOps.negateCondition(ifStmt.getCondition()));
-                }
-            }
-
-            current = parent;
-        }
-
-        Collections.reverse(conditions);
-        return conditions;
-    }
-
-    private boolean isNodeInStatement(Node node, Statement stmt) {
-        if (stmt == null) return false;
-        if (stmt.equals(node)) return true;
-
-        for (Node child : stmt.getChildNodes()) {
-            if (child.equals(node) || isNodeDescendant(node, child)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isNodeDescendant(Node target, Node potentialParent) {
-        if (potentialParent.equals(target)) return true;
-        for (Node child : potentialParent.getChildNodes()) {
-            if (isNodeDescendant(target, child)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    /**
      * Execute a method that's only available to us in source code format.
      *
      * @param methodCall the method call whose execution is to be simulated.
@@ -722,7 +652,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     if (q.isWriteOps()) {
                         return evaluateExpression(methodCall.getArgument(0));
                     } else {
-                        return processResult(findExpressionStatement(methodCall), q.getResultSet());
+                        return processResult(
+                                AbstractCompiler.findExpressionStatement(methodCall).orElseThrow(), q.getResultSet());
                     }
                 }
             }
@@ -811,19 +742,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    private ExpressionStmt findExpressionStatement(MethodCallExpr methodCall) {
-        Node n = methodCall;
-        while (n != null && !(n instanceof MethodDeclaration)) {
-            if (n instanceof ExpressionStmt stmt) {
-                /*
-                 * We have found the expression statement corresponding to this query
-                 */
-                return stmt;
-            }
-            n = n.getParentNode().orElse(null);
-        }
-        return null;
-    }
+
 
     public void setOnTest(boolean b) {
         onTest = b;
