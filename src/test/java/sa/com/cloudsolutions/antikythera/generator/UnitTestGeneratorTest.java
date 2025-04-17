@@ -56,7 +56,7 @@ class UnitTestGeneratorTest {
         unitTestGenerator = new UnitTestGenerator(cu);
         argumentGenerator = Mockito.mock(NullArgumentGenerator.class);
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
-        unitTestGenerator.setPreConditions(new LinkedHashSet<>());
+        unitTestGenerator.setPreConditions(new ArrayList<>());
         unitTestGenerator.setAsserter(new JunitAsserter());
     }
 

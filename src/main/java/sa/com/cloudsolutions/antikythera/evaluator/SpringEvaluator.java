@@ -52,12 +52,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
@@ -217,9 +215,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 setupFields();
                 mockMethodArguments(md);
                 executeMethod(md);
-
-                LinkedHashSet<Expression> conditions = preConditions.computeIfAbsent(md, k -> new LinkedHashSet<>());
-                conditions.addAll(preconditionsInProgress);
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
@@ -234,8 +229,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         });
 
         Branching.clear();
-        preConditions.clear();
-        preconditionsInProgress.clear();
         AntikytheraRunTime.reset();
 
         final List<Integer> s = new ArrayList<>();
@@ -274,18 +267,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
         int count = 0;
-        for (Expression cond : preConditions.getOrDefault(md, new LinkedHashSet<>())) {
+
+        for (Precondition cond : Branching.getApplicableConditions(currentMethod)) {
             if (count++ == visitNumber) {
                 break;
             }
-            if (cond instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().get() instanceof NameExpr ne
                         && ne.getNameAsString().equals(p.getNameAsString())
                         && va.getValue() instanceof Evaluator eval) {
                     MCEWrapper wrapper = eval.wrapCallExpression(mce);
                     eval.executeLocalMethod(wrapper);
                 }
-            } else if (cond instanceof AssignExpr assignExpr) {
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
                 parameterAssignment(p, assignExpr, va);
             }
         }
@@ -465,7 +459,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(preConditions.getOrDefault(currentMethod, new LinkedHashSet<>()));
+                generator.setPreConditions(Branching.getApplicableConditions(currentMethod));
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);

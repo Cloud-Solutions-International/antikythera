@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -15,7 +16,6 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -379,8 +379,8 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
     private void applyPreconditions(BlockStmt body) {
-        for (Expression expr : preConditions) {
-            if (expr.isMethodCallExpr()) {
+        for (Precondition expr : preConditions) {
+            if (expr.getExpression().isMethodCallExpr()) {
                 String s = expr.toString();
                 if (s.contains("set")) {
                     body.addStatement(s.replaceFirst("^[^.]+\\.", "req.") + ";");

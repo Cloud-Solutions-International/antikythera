@@ -29,16 +29,7 @@ public class ControlFlowEvaluator extends Evaluator{
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
 
     protected int branchCount;
-    /**
-     * The preconditions that need to be met before the test can be executed.
-     */
-    protected Map<MethodDeclaration, LinkedHashSet<Expression>> preConditions = new HashMap<>();
 
-    /**
-     * The preconditions that we are building based on the current branches covered.
-     * These will be copied to the preConditions map
-     */
-    protected List<Expression> preconditionsInProgress = new ArrayList<>();
 
     public ControlFlowEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -153,7 +144,6 @@ public class ControlFlowEvaluator extends Evaluator{
     private void addPreCondition(Statement statement, boolean state, Expression expr) {
         LineOfCode l = Branching.get(statement.hashCode());
         l.addPrecondition(new Precondition(expr), state);
-        preconditionsInProgress.add(expr);
     }
 
     protected List<Expression> setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt, boolean state) {

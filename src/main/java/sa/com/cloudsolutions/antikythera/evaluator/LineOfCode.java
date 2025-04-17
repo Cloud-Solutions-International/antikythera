@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
@@ -54,12 +54,16 @@ public class LineOfCode {
      */
     private final Statement statement;
 
+    private final MethodDeclaration methodDeclaration;
+
     /**
      * A non-null value if this statement represents a JPA Query
      */
     private RepositoryQuery repositoryQuery;
 
+    @SuppressWarnings("unchecked")
     public LineOfCode(Statement statement) {
+        this.methodDeclaration = statement.findAncestor(MethodDeclaration.class).orElseThrow();
         this.statement = statement;
     }
 
@@ -112,5 +116,9 @@ public class LineOfCode {
     @Override
     public String toString() {
         return statement.toString();
+    }
+
+    public MethodDeclaration getMethodDeclaration() {
+        return methodDeclaration;
     }
 }

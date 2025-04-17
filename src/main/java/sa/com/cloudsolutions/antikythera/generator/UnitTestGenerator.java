@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -396,8 +397,8 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void applyPreconditions() {
-        for (Expression expr : preConditions) {
-            applyPrecondition.accept(expr);
+        for (Precondition expr : preConditions) {
+            applyPrecondition.accept(expr.getExpression());
         }
     }
 
