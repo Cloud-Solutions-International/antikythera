@@ -13,6 +13,7 @@ public class Bunches {
         bunches.printMap();
         bunches.methodCall();
         bunches.withDTO();
+        bunches.withDTOConstructor();
     }
 
 

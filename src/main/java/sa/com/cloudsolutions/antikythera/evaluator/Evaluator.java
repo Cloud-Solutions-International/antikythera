@@ -35,11 +35,11 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
-import org.mockito.stubbing.Answer;
 
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -62,11 +62,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -83,17 +85,17 @@ public class Evaluator {
      * <p>These are specific to a block statement. A block statement may also be an
      * entire method. The primary key will be the hashcode of the block statement.</p>
      */
-    private Map<Integer, Map<String, Variable>> locals ;
+    private final Map<Integer, Map<String, Variable>> locals ;
 
     /**
      * The fields that were encountered in the current class.
      */
-    protected Map<String, Variable> fields;
+    protected final Map<String, Variable> fields;
 
     /**
      * The fully qualified name of the class for which we created this evaluator.
      */
-    private String className;
+    protected String className;
 
     /**
      * The compilation unit that is being processed by the expression engine
@@ -113,16 +115,28 @@ public class Evaluator {
     protected LinkedList<Boolean> loops = new LinkedList<>();
 
     protected Deque<TryStmt> catching = new LinkedList<>();
+
     /**
      * The preconditions that need to be met before the test can be executed.
      */
     protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
 
-    protected Evaluator(EvaluatorFactory.Context context) {
-        this.className = context.getClassName();
-        cu = AntikytheraRunTime.getCompilationUnit(className);
+    /**
+     * The preconditions that we are building based on the current branches covered.
+     * These will be copied to the preConditions map
+     */
+    protected List<Expression> preconditionsInProgress = new ArrayList<>();
+    protected String variableName;
+
+    protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
+    }
+
+    protected Evaluator(EvaluatorFactory.Context context) {
+        this();
+        this.className = context.getClassName();
+        cu = AntikytheraRunTime.getCompilationUnit(className);
         Finch.loadFinches();
     }
 
@@ -206,6 +220,35 @@ public class Evaluator {
             return evaluateExpression(expr.asCastExpr().getExpression());
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
+        } else if (expr.isClassExpr()) {
+            return evaluateClassExpression(expr);
+        } else if (expr.isLambdaExpr()) {
+            return FPEvaluator.create(expr.asLambdaExpr(), this);
+        }
+        return null;
+    }
+
+    private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
+        ClassExpr classExpr = expr.asClassExpr();
+        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
+
+        if (fullyQualifiedName != null) {
+            try {
+                // Try to load the class as a compiled binary
+                Class<?> loadedClass = AbstractCompiler.loadClass(fullyQualifiedName);
+                return new Variable(loadedClass);
+            } catch (ClassNotFoundException e) {
+                // Class not found as binary, check if available as source
+                CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+                if (sourceCU != null) {
+                    Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
+                    Class<?> dynamicClass = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+
+                    Variable v = new Variable(dynamicClass);
+                    v.setClazz(Class.class);
+                    return v;
+                }
+            }
         }
         return null;
     }
@@ -405,17 +448,20 @@ public class Evaluator {
                     : getValue(expr, fae.getScope().toString());
 
             Object obj = variable.getValue();
-            try {
-                Field field = obj.getClass().getDeclaredField(fieldName);
-                field.setAccessible(true);
-                field.set(obj, v.getValue());
-            } catch (ReflectiveOperationException|NullPointerException e) {
-                /*
-                 * This is not something that was created with class.forName or byte buddy.
-                 */
-                this.fields.put(fieldName,v);
+            if (obj instanceof Evaluator eval) {
+                eval.getFields().put(fae.getNameAsString(), v);
+            } else {
+                try {
+                    Field field = obj.getClass().getDeclaredField(fieldName);
+                    field.setAccessible(true);
+                    field.set(obj, v.getValue());
+                } catch (ReflectiveOperationException | NullPointerException e) {
+                    /*
+                     * This is not something that was created with class.forName or byte buddy.
+                     */
+                    this.fields.put(fieldName, v);
+                }
             }
-
         }
         else if(target.isNameExpr()) {
             String name = target.asNameExpr().getNameAsString();
@@ -456,7 +502,7 @@ public class Evaluator {
                 if (decl.getType().isPrimitiveType()) {
                     Object obj = Reflect.getDefault(decl.getType().asString());
                     v = new Variable(decl.getType(), obj);
-                    v.setPrimitive(true);
+
                 }
                 else {
                     v = new Variable(decl.getType(),null);
@@ -506,37 +552,12 @@ public class Evaluator {
 
         if (vx == null) {
             vx = createUsingReflection(type, oce);
-            if(vx == null) {
-                vx = createUsingByteBuddy(oce, type);
-            }
         }
         if (decl != null) {
             setLocal(instructionPointer, decl.getNameAsString(), vx);
         }
 
         return vx;
-    }
-
-    private Variable createUsingByteBuddy(ObjectCreationExpr oce, ClassOrInterfaceType type) {
-        if (Settings.getProperty("bytebuddy") != null) {
-
-            try {
-                List<Expression> arguments = oce.getArguments();
-                Object[] constructorArgs = new Object[arguments.size()];
-
-                for (int i = 0; i < arguments.size(); i++) {
-                    Variable arg = evaluateExpression(arguments.get(i));
-                    constructorArgs[i] = arg.getValue();
-                }
-
-                // Create the dynamic DTO with the extracted arguments
-                Object instance = DTOBuddy.createDynamicDTO(type, constructorArgs);
-                return new Variable(type, instance);
-            } catch (Exception e) {
-                logger.error("An error occurred in creating a variable with bytebuddy", e);
-            }
-        }
-        return null;
     }
 
     /**
@@ -647,13 +668,7 @@ public class Evaluator {
      */
     private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
         try {
-            String resolvedClass = null;
-            ImportWrapper importDeclaration = AbstractCompiler.findImport(cu, type.getNameAsString());
-            if (importDeclaration != null) {
-                resolvedClass = importDeclaration.getImport().isAsterisk()
-                        ? importDeclaration.getSimplified().getNameAsString()
-                        : importDeclaration.getNameAsString();
-            }
+            String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, type.getNameAsString());
 
             Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
             ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
@@ -763,48 +778,98 @@ public class Evaluator {
             return null;
         }
 
-        LinkedList<Expression> chain = Evaluator.findScopeChain(methodCall);
+        ScopeChain chain = ScopeChain.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             return executeLocalMethod(wrapper);
         }
 
-        Variable variable = evaluateScopeChain(chain);
-
-        return evaluateMethodCall(variable, methodCall);
+        return evaluateScopedMethodCall(chain);
     }
 
-    public Variable evaluateScopeChain(LinkedList<Expression> chain) throws ReflectiveOperationException {
+    private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
+        Variable variable = evaluateScopeChain(chain);
+        if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
+            Variable o = handleOptionalEmpties(chain);
+            if (o != null) {
+                return o;
+            }
+        }
+        ScopeChain.Scope scope = chain.getChain().getLast();
+        scope.setScopedMethodCall(methodCall);
+        scope.setVariable(variable);
+        return evaluateMethodCall(scope);
+    }
+
+    Variable handleOptionals(ScopeChain.Scope scope) throws ReflectiveOperationException {
+        MethodDeclaration md = scope.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
+        Variable v = executeMethod(md);
+        if (v != null && v.getValue() == null) {
+            v.setType(md.getType());
+        }
+        return v;
+    }
+
+    Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
+        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
+        String methodName = methodCall.getNameAsString();
+
+        if (methodName.equals("orElseThrow")) {
+            Optional<Expression> args = methodCall.getArguments().getFirst();
+
+            if (args.isEmpty()) {
+                /*
+                 * Simulation of throwing a no such element exception when the optional
+                 * is empty.
+                 */
+                throw new NoSuchElementException();
+            }
+            Expression expr = args.get();
+            if (expr.isMethodCallExpr()) {
+                return evaluateMethodCall(expr.asMethodCallExpr());
+            }
+            else if (expr.isLambdaExpr()) {
+                Variable e = FPEvaluator.create(expr.asLambdaExpr(), this);
+                return executeLambda(e);
+            }
+        }
+
+        return null;
+    }
+
+    protected static Variable executeLambda(Variable e) {
+        if (e.getValue() instanceof SupplierEvaluator<?> supplier) {
+            Object result =  supplier.get();
+            if (result instanceof RuntimeException exception) {
+                throw exception;
+            }
+            return new Variable(result);
+        } else if (e.getValue() instanceof FunctionEvaluator<?, ?> function) {
+            return new Variable(function.apply(null));
+        }
+        return null;
+    }
+
+    public Variable evaluateScopeChain(ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = null;
-        while(!chain.isEmpty()) {
-            Expression expr2 = chain.pollLast();
+        for (ScopeChain.Scope scope : chain.getChain().reversed()) {
+            Expression expr2 = scope.getExpression();
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());
             }
             else if(expr2.isFieldAccessExpr() && variable != null) {
                 /*
-                 * When we get here the getValue should have returned to us a valid field. That means
+                 * getValue should have returned to us a valid field. That means
                  * we will have an evaluator instance as the 'value' in the variable v
                  */
-                if (variable.getClazz() != null && variable.getClazz().equals(System.class)) {
-                    Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
-                    variable = new Variable(field.get(null));
-                }
-                else if (variable.getValue() instanceof Evaluator eval) {
-                    variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
-                }
-                else {
-                    if (variable.getValue() instanceof Evaluator eval) {
-                        variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
-                    }
-                    else {
-                        variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
-                    }
-                }
+                variable = evaluateScopedFieldAccess(variable, expr2);
             }
             else if(expr2.isMethodCallExpr()) {
-                variable = evaluateMethodCall(variable, expr2.asMethodCallExpr());
+                scope.setVariable(variable);
+                scope.setScopedMethodCall(expr2.asMethodCallExpr());
+                variable = evaluateMethodCall(scope);
             }
             else if (expr2.isLiteralExpr()) {
                 variable = evaluateLiteral(expr2);
@@ -815,6 +880,25 @@ public class Evaluator {
             else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
                 variable = new Variable(findScopeType(s));
+            }
+        }
+        return variable;
+    }
+
+    private Variable evaluateScopedFieldAccess(Variable variable, Expression expr2) throws ReflectiveOperationException {
+        if (variable.getClazz() != null && variable.getClazz().equals(System.class)) {
+            Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
+            variable = new Variable(field.get(null));
+        }
+        else if (variable.getValue() instanceof Evaluator eval) {
+            variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
+        }
+        else {
+            if (variable.getValue() instanceof Evaluator eval) {
+                variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
+            }
+            else {
+                variable = evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
             }
         }
         return variable;
@@ -871,35 +955,48 @@ public class Evaluator {
         }
     }
 
-    public Variable evaluateMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+        Variable v = scope.getVariable();
+        MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (v != null) {
-            if (v.getValue() instanceof Evaluator eval && eval.getCompilationUnit() != null) {
-                MCEWrapper wrapper = wrapCallExpression(methodCall);
-                return eval.executeMethod(wrapper);
+            Object value = v.getValue();
+            if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
+                MCEWrapper wrapper = wrapCallExpression(scope.getScopedMethodCall());
+                scope.setMCEWrapper(wrapper);
+                return eval.executeMethod(scope);
             }
+
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
-            MCEWrapper wrapper = wrapCallExpression(methodCall);
-            return executeMethod(wrapper);
+            MCEWrapper wrapper = wrapCallExpression(scope.getScopedMethodCall());
+            scope.setMCEWrapper(wrapper);
+            return executeMethod(scope);
         }
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
         validateReflectiveMethod(v, reflectionArguments, method);
-        Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
+        reflectionArguments.setMethod(method);
+        reflectionArguments.finalizeArguments();
+        invokeReflectively(v, reflectionArguments);
+        return returnValue;
+    }
 
-       try {
-           returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
-           if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-               returnValue.setClazz(method.getReturnType());
-           }
+    private void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+        Method method = reflectionArguments.getMethod();
+        Object[] finalArgs = reflectionArguments.getFinalArgs();
+        try {
 
-       } catch (IllegalAccessException e) {
-           invokeinAccessibleMethod(v, reflectionArguments, method);
-       }
-       return returnValue;
+            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                returnValue.setClazz(method.getReturnType());
+            }
+
+        } catch (IllegalAccessException e) {
+            invokeinAccessibleMethod(v, reflectionArguments);
+        }
     }
 
     private static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
@@ -912,8 +1009,9 @@ public class Evaluator {
     }
 
     @SuppressWarnings("java:S3011")
-    private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments, Method method) throws ReflectiveOperationException {
-        Object[] finalArgs = Reflect.buildObjects(reflectionArguments, method);
+    private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+        Method method = reflectionArguments.getMethod();
+        Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
 
@@ -934,26 +1032,49 @@ public class Evaluator {
     }
 
     /**
-     * Execute a method call.
-     * @param wrapper the method call expression wrapped so that the argument types are available
-     * @return the result of executing that code.
-     * @throws EvaluatorException if there is an error evaluating the method call or if the
-     *          feature is not yet implemented.
+     * Execute a method that is part of a chain of method
+     * @param sc the methods scope
+     * @return the result from executing the method or null if the method is void.
+     * @throws ReflectiveOperationException if the execution involves a class available only
+     *      in byte code format and an exception occurs in reflecting.
      */
-    public Variable executeMethod(MCEWrapper wrapper) throws ReflectiveOperationException {
+    public Variable executeMethod(ScopeChain.Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
-
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(wrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
-        if (n.isPresent() && n.get().isMethodDeclaration()) {
-            Variable v = executeMethod(n.get().asMethodDeclaration());
-            if (v != null && v.getValue() == null) {
-                v.setType(n.get().asMethodDeclaration().getType());
+        MCEWrapper mceWrapper = sc.getMCEWrapper();
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
+        if (n.isPresent()) {
+            Callable callable = n.get();
+            mceWrapper.setMatchingCallable(callable);
+            if (callable.isMethodDeclaration()) {
+                MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
+                Type returnType = methodDeclaration.getType();
+
+                if (returnType.asString().startsWith("Optional") ||
+                        returnType.asString().startsWith("java.util.Optional")) {
+                    return handleOptionals(sc);
+                }
+                else {
+                    Variable v = executeMethod(methodDeclaration);
+                    if (v != null && v.getValue() == null) {
+
+                        v.setType(returnType);
+                    }
+                    return v;
+                }
             }
-            return v;
+            else {
+               return executeMethod(callable.getMethod());
+            }
         }
 
         return null;
+    }
+
+    @SuppressWarnings("java:S1172")
+    Variable executeMethod(Method m) {
+        logger.error("NOt implemented yet");
+        throw new AntikytheraException("Not yet implemented"); // but see MockingEvaluator
     }
 
     /**
@@ -1049,28 +1170,26 @@ public class Evaluator {
     Variable evaluateBinaryExpression(BinaryExpr.Operator operator,
                                       Expression leftExpression, Expression rightExpression) throws ReflectiveOperationException {
         Variable left = evaluateExpression(leftExpression);
-        left.setInitializer(leftExpression);
-
         if(operator.equals(BinaryExpr.Operator.OR) && (boolean)left.getValue()) {
              return new Variable(Boolean.TRUE);
         }
 
         Variable right = evaluateExpression(rightExpression);
-        right.setInitializer(rightExpression);
-
         return BinaryOps.binaryOps(operator, leftExpression, rightExpression, left, right);
     }
 
-    @SuppressWarnings("java:S3776")
+    @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        if (AntikytheraRunTime.isMocked(variable.getType())) {
-            String fqdn = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        if (AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
+            String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
             Variable v;
-            if (AntikytheraRunTime.getCompilationUnit(fqdn) != null) {
-                v = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
+            if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
+                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
+                eval.setVariableName(variable.getNameAsString());
+                v = new Variable(eval);
             }
             else {
-                v = useMockito(fqdn);
+                v = useMockito(fqn);
             }
             v.setType(variable.getType());
             return v;
@@ -1082,6 +1201,10 @@ public class Evaluator {
                 return resolvePrimitiveFields(variable);
             }
         }
+    }
+
+    void setVariableName(String variableName) {
+        this.variableName = variableName;
     }
 
     private static Variable useMockito(String fqdn) throws ClassNotFoundException {
@@ -1116,25 +1239,6 @@ public class Evaluator {
         }
     }
 
-    private static class MockReturnValueHandler implements Answer<Object> {
-        @Override
-        public Object answer(InvocationOnMock invocation) throws Throwable {
-            Class<?> returnType = invocation.getMethod().getReturnType();
-            String clsName = returnType.getName();
-            if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
-                return EvaluatorFactory.create(clsName, Evaluator.class);
-            }
-            else {
-                Object obj = Reflect.getDefault(returnType);
-                if (obj == null) {
-                    Class<?> cls = AbstractCompiler.loadClass(clsName);
-                    return Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT));
-                }
-                return obj;
-            }
-        }
-    }
-
     Variable resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
@@ -1163,12 +1267,13 @@ public class Evaluator {
             Variable v = new Variable(t);
             v.setValue(f);
             return v;
-        } else if (resolvedClass != null && resolvedClass.startsWith("java")) {
-            return setupPrimitiveOrBoxedField(variable, t);
-        } else {
+        } else if (resolvedClass != null) {
             CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
             if (compilationUnit != null) {
                 return resolveFieldRepresentedByCode(variable, resolvedClass);
+            }
+            else {
+                return setupPrimitiveOrBoxedField(variable, t);
             }
         }
         return null;
@@ -1197,6 +1302,7 @@ public class Evaluator {
                         break;
                     }
                     else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
+                        /* todo : change this to use abstractcompiler methods */
                         int last = importedName.toString().lastIndexOf(".");
                         String cname = importedName.toString().substring(0, last);
                         Evaluator eval = EvaluatorFactory.create(cname, this);
@@ -1254,7 +1360,6 @@ public class Evaluator {
         else {
             v = new Variable(variable.getType(), Reflect.getDefault(variable.getType().toString()));
         }
-        v.setPrimitive(true);
         return v;
     }
 
@@ -1424,7 +1529,7 @@ public class Evaluator {
 
         } else if(stmt.isWhileStmt()) {
             /*
-             * Old fashioned while statement
+             * Old-fashioned while statement
              */
             executeWhile(stmt.asWhileStmt());
 
@@ -1643,6 +1748,7 @@ public class Evaluator {
     }
 
     private class FieldVisitor extends VoidVisitorAdapter<Void> {
+        @SuppressWarnings("unchecked")
         @Override
         public void visit(InitializerDeclaration init, Void arg) {
             super.visit(init, arg);
@@ -1710,42 +1816,5 @@ public class Evaluator {
         this.cu = compilationUnit;
     }
 
-    /**
-     * People have a nasty habit of chaining a sequence of method calls.
-     *
-     * If you are a D3.js programmer, this is probably the only way you do things. Even
-     * Byte Buddy seems to behave the same. But at the end of the day how so you handle this?
-     * You need to place them in a stack and pop them off one by one!
-     *
-     * @param expr
-     * @return
-     */
-    public static LinkedList<Expression> findScopeChain(Expression expr) {
-        LinkedList<Expression> chain = new LinkedList<>();
-        while (true) {
-            if (expr.isMethodCallExpr()) {
-                MethodCallExpr mce = expr.asMethodCallExpr();
-                Optional<Expression> scopeD = mce.getScope();
-                if (scopeD.isEmpty()) {
-                    break;
-                }
-                chain.addLast(scopeD.get());
-                expr = scopeD.get();
-            }
-            else if (expr.isFieldAccessExpr()) {
-                FieldAccessExpr mce = expr.asFieldAccessExpr();
-                chain.addLast(mce.getScope());
-                expr = mce.getScope();
-            }
-            else if (expr.isMethodReferenceExpr()) {
-                MethodReferenceExpr mexpr = expr.asMethodReferenceExpr();
-                chain.addLast(mexpr.getScope());
-                expr = mexpr.getScope();
-            }
-            else {
-                break;
-            }
-        }
-        return chain;
-    }
+
 }

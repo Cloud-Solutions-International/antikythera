@@ -4,12 +4,15 @@ import com.github.javaparser.ast.expr.BinaryExpr;
 
 public class Arithmetics {
 
+    private Arithmetics() {
+
+    }
     /**
      * Simple arithmetic operations.
-     * String can be added to anything but numbers are tricker.
+     * String can be added to anything but numbers are trickier.
      * @param left the left operand
      * @param right the right operand
-     * @return the result of the add operation which may be arithmatic or string concatenation
+     * @return the result of the add operation which may be arithmetic or string concatenation
      */
     static Variable operate(Variable left, Variable right, BinaryExpr.Operator operator) {
         if (left.getValue() instanceof String || right.getValue() instanceof String) {

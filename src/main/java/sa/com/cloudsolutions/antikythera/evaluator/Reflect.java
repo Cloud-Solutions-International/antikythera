@@ -7,6 +7,7 @@ import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -173,6 +174,15 @@ public class Reflect {
                 args[i] = proxy;
                 argumentTypes[i] = functional;
             }
+        } else if (args[i] instanceof Evaluator eval){
+            MethodInterceptor interceptor = new MethodInterceptor(eval);
+            try {
+                Class<?> c = DTOBuddy.createDynamicClass(interceptor);
+                args[i] = c.getDeclaredConstructor().newInstance();
+                argumentTypes[i] = c;
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
+            }
         }
     }
 
@@ -180,7 +190,7 @@ public class Reflect {
         return switch (className) {
             case PRIMITIVE_BOOLEAN -> "java.lang.Boolean";
             case "int" -> "java.lang.Integer";
-            case "long" -> "java.lang.Long";
+            case "long" -> Long.class.getName();
             case PRIMITIVE_FLOAT -> "java.lang.Float";
             case PRIMITIVE_DOUBLE -> "java.lang.Double";
             case "char" -> "java.lang.Character";
@@ -272,16 +282,25 @@ public class Reflect {
 
     private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
         Variable v = new Variable(initialValue);
-        ObjectCreationExpr expr = new ObjectCreationExpr()
-                .setType(new ClassOrInterfaceType().setName(typeName));
 
-        if (stringValue != null) {
-            expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
-        } else {
-            expr.setArguments(NodeList.nodeList());
+        switch (typeName) {
+            case "Long", DOUBLE, INTEGER, FLOAT, "Boolean" -> {
+                Expression scope = new NameExpr(typeName);
+                Expression mce = new MethodCallExpr(scope, "valueOf")
+                    .addArgument(new StringLiteralExpr(initialValue.toString()));
+                v.setInitializer(mce);
+            }
+            default -> {
+                ObjectCreationExpr expr = new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName(typeName));
+                if (stringValue != null) {
+                    expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
+                } else {
+                    expr.setArguments(NodeList.nodeList());
+                }
+                v.setInitializer(expr);
+            }
         }
-
-        v.setInitializer(expr);
         return v;
     }
 
@@ -306,11 +325,11 @@ public class Reflect {
 
             case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
 
-            case "Boolean", PRIMITIVE_BOOLEAN -> createVariable(false, "Boolean", "false");
+            case "Boolean", PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(false, "Boolean", "false");
 
-            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE -> createVariable(0.0, DOUBLE, "0.0");
+            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> createVariable(0.0, DOUBLE, "0.0");
 
-            case INTEGER, "int" -> createVariable(0, INTEGER, "0");
+            case INTEGER, "int", "java.lang.Integer" -> createVariable(0, INTEGER, "0");
 
             case "Long", "long", "java.lang.Long" -> createVariable(-100L, "Long", "-100");
 
@@ -462,13 +481,6 @@ public class Reflect {
             return cls;
         }
         return null;
-    }
-
-    public static Object[] buildObjects(ReflectionArguments reflectionArguments, Method method) {
-        return method.getParameterTypes().length == 1 &&
-                method.getParameterTypes()[0].equals(Object[].class) ?
-                new Object[]{reflectionArguments.getArguments()} :
-                reflectionArguments.getArguments();
     }
 
     public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {

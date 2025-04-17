@@ -4,13 +4,24 @@ import com.github.javaparser.ast.CompilationUnit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 
 import java.io.IOException;
+import java.util.zip.Adler32;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Not a real test suite.
+ * The purpose for existence is to facilitate others
+ */
 class FactoryTest {
+    /**
+     * Just something i picked out of the blue
+     */
+    @Mock
+    Adler32 adler32;
 
     private CompilationUnit cu;
 

@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.Type;
 
 import java.util.Deque;
 import java.util.HashMap;
@@ -44,7 +43,7 @@ public class AntikytheraRunTime {
      */
     protected static final Map<String, Set<String>> extensions = new HashMap<>();
 
-    private static final Set<Type> mockedFields = new HashSet<>();
+    private static final Set<String> mockedFields = new HashSet<>();
 
     /**
      * Stores the fields that have been autowired.
@@ -90,6 +89,9 @@ public class AntikytheraRunTime {
 
     public static void reset() {
         stack.clear();
+    }
+
+    public static void resetAutowires() {
         mockedFields.clear();
         autowired.clear();
     }
@@ -111,12 +113,12 @@ public class AntikytheraRunTime {
         return classInfo != null && classInfo.isInterface;
     }
 
-    public static void markAsMocked(Type elementType) {
-        mockedFields.add(elementType);
+    public static void markAsMocked(String className) {
+        mockedFields.add(className);
     }
 
-    public static boolean isMocked(Type elementType) {
-        return mockedFields.contains(elementType);
+    public static boolean isMocked(String className) {
+        return mockedFields.contains(className);
     }
 
     static class ClassInfo {

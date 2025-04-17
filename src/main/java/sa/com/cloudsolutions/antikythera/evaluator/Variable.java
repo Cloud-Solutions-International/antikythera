@@ -24,10 +24,6 @@ public class Variable {
 
     private Expression initializer;
 
-    /**
-     * True if this represents a primitive type as the value
-     */
-    private boolean primitive;
     private boolean stat;
 
     /**
@@ -95,16 +91,16 @@ public class Variable {
         return stat;
     }
 
-    public void setPrimitive(boolean primitive) {
-        this.primitive = primitive;
-    }
-
+    @Override
     public String toString() {
-        try {
-             return value == null ? "null" : value instanceof Evaluator ? "Evaluator" : value.toString();
-        } catch (Exception e) {
-             return "not evaluated";
+        if (value == null) {
+            return "null";
         }
+
+        if (value instanceof Evaluator eval) {
+            return "Evaluator for " + eval.getClassName();
+        }
+        return value.toString();
     }
 
     public Class<?> getClazz() {

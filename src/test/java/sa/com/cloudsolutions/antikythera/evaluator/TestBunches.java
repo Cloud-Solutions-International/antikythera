@@ -33,6 +33,7 @@ public class TestBunches  {
 
     @BeforeAll
     static void setup() throws IOException {
+        AntikytheraRunTime.reset();
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
@@ -63,7 +64,7 @@ public class TestBunches  {
     void testWithDTO() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTO")).orElseThrow();
         evaluator.executeMethod(withDTO);
-        assertTrue(outContent.toString().contains("Bunches.DTO]"));
+        assertTrue(outContent.toString().startsWith("[Biggles 10]"));
     }
 
 
@@ -71,6 +72,6 @@ public class TestBunches  {
     void testDTOConstructor() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration withDTO = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("withDTOConstructor")).orElseThrow();
         evaluator.executeMethod(withDTO);
-        assertTrue(outContent.toString().contains("Person]"));
+        assertTrue(outContent.toString().startsWith("[Bertie 10]"));
     }
 }

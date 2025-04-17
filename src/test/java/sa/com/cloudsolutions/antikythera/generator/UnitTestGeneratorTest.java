@@ -9,13 +9,21 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mockito;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,71 +31,92 @@ import static org.junit.jupiter.api.Assertions.*;
 class UnitTestGeneratorTest {
 
     private UnitTestGenerator unitTestGenerator;
-    private CompilationUnit cu;
     private ClassOrInterfaceDeclaration classUnderTest;
-    private MethodDeclaration methodUnderTest;
+    private ArgumentGenerator argumentGenerator;
 
     @BeforeAll
     static void beforeClass() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
-
 
     @BeforeEach
     void setUp() {
-        cu = new CompilationUnit();
-        cu.setPackageDeclaration("sa.com.cloudsolutions.antikythera.generator");
-        classUnderTest = cu.addClass("DummyService");
-        classUnderTest.addField("DummyRepository", "dummyRepository").addAnnotation("Autowired");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        assertNotNull(cu);
+        classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
 
         unitTestGenerator = new UnitTestGenerator(cu);
-
-        methodUnderTest = new MethodDeclaration();
-        methodUnderTest.setName("dummyMethod");
-        classUnderTest.addMember(methodUnderTest);
-        unitTestGenerator.setArgumentGenerator(new NullArgumentGenerator());
+        argumentGenerator = Mockito.mock(NullArgumentGenerator.class);
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setPreConditions(new HashSet<>());
         unitTestGenerator.setAsserter(new JunitAsserter());
     }
 
     @Test
     void testMockFields() {
+
         classUnderTest.addAnnotation("Service");
         unitTestGenerator.mockFields();
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
         TypeDeclaration<?> testClass = testCu.getType(0);
 
-        Optional<FieldDeclaration> mockedField = testClass.getFieldByName("dummyRepository");
-        assertTrue(mockedField.isPresent(), "The field 'dummyRepository' should be present in the test class.");
-        assertTrue(mockedField.get().getAnnotationByName("MockBean").isPresent(), "The field 'dummyRepository' should be annotated with @MockBean.");
+        Optional<FieldDeclaration> mockedField = testClass.getFieldByName("personRepository");
+        assertTrue(mockedField.isPresent());
+        assertTrue(mockedField.get().getAnnotationByName("Mock").isPresent(), "The field 'dummyRepository' should be annotated with @Mock.");
 
-        assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.springframework.boot.test.mock.mockito.MockBean")),
-                "The import for @MockBean should be present.");
+        assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mock")),
+                "The import for @Mock should be present.");
         assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mockito")),
                 "The import for Mockito should be present.");
     }
 
     @Test
     void testCreateInstanceA() {
-        classUnderTest.addAnnotation("Service");
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
+        Mockito.verify(argumentGenerator, Mockito.never()).getArguments();
     }
 
     @Test
     void testCreateInstanceB() {
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries3")).orElseThrow();
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries3Test"));
+        Mockito.verify(argumentGenerator, Mockito.times(1)).getArguments();
+
     }
 
     @Test
     void testCreateInstanceC() {
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
         ConstructorDeclaration constructor = classUnderTest.addConstructor();
         constructor.addParameter("String", "param");
 
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
-        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("dummyMethodTest"));
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains("queries2Test"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"queries4, long", "queries5, int"})
+    void testCreateInstanceD(String name, String type) {
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+        Map<String, Variable> map = new HashMap<>();
+        if (type.equals("long")) {
+            map.put("id", new Variable(100L));
+        }
+        else {
+            map.put("id", new Variable(100));
+        }
+        Mockito.when(argumentGenerator.getArguments()).thenReturn(map);
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        assertTrue(unitTestGenerator.getCompilationUnit().toString().contains(name + "Test"));
     }
 
     @Test
@@ -101,5 +130,41 @@ class UnitTestGeneratorTest {
         assertNotNull(unitTestGenerator.gen);
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
 
+        assertTrue(AntikytheraRunTime.isMocked("java.util.zip.Adler32"));
+
+    }
+}
+
+class UnitTestGeneratorMoreTest {
+
+    @BeforeAll
+    static void beforeClass() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
+    }
+
+    /**
+     * The base class should be added to the class under test.
+     */
+    @Test
+    void testAddingBaseClassToTestClass() {
+        CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.generator.DummyBase");
+        assertNotNull(base);
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
+        assertNotNull(cu);
+
+        ClassOrInterfaceDeclaration classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
+        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
+
+        assertTrue(classUnderTest.getExtendedTypes().isEmpty());
+        CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
+        assertNotNull(testCu);
+        TypeDeclaration<?> publicType = AbstractCompiler.getPublicType(testCu);
+        assertNotNull(publicType);
+        assertEquals("OverlordAKTest", publicType.getNameAsString());
+        assertTrue(publicType.asClassOrInterfaceDeclaration().getExtendedTypes()
+                .stream()
+                .anyMatch(t -> t.asString().equals("sa.com.cloudsolutions.antikythera.generator.DummyBase")));
     }
 }

@@ -8,17 +8,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestConditional extends TestHelper {
 
+import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.ast.expr.Expression;
+
+class TestConditional extends TestHelper {
 
     public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
     CompilationUnit cu;
@@ -90,4 +95,65 @@ public class TestConditional extends TestHelper {
         evaluator.executeMethod(method);
         assertEquals(value, outContent.toString());
     }
+
+    @Test
+    void testCombinedConditionForNestedMethod() {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("nested")).orElseThrow();
+
+        List<ReturnStmt> returnStatements = method.findAll(ReturnStmt.class);
+        assertEquals(3, returnStatements.size(), "Expected 3 return statements in the nested method");
+
+        // Test for the first return statement (return "Zero")
+        ReturnConditionVisitor visitor1 = new ReturnConditionVisitor(returnStatements.get(0));
+        method.accept(visitor1, null);
+        Expression combinedCondition1 = visitor1.getCombinedCondition();
+        assertEquals("a == 0 && a >= 0", combinedCondition1.toString(), "Incorrect combined condition for 'Zero'");
+
+        // Test for the second return statement (return "Positive")
+        ReturnConditionVisitor visitor2 = new ReturnConditionVisitor(returnStatements.get(1));
+        method.accept(visitor2, null);
+        Expression combinedCondition2 = visitor2.getCombinedCondition();
+        assertEquals("a != 0 && a >= 0", combinedCondition2.toString(), "Incorrect combined condition for 'Positive'");
+
+        // Test for the third return statement (return "Negative")
+        ReturnConditionVisitor visitor3 = new ReturnConditionVisitor(returnStatements.get(2));
+        method.accept(visitor3, null);
+        Expression combinedCondition3 = visitor3.getCombinedCondition();
+        assertEquals("a < 0", combinedCondition3.toString(), "Incorrect combined condition for 'Negative'");
+    }
 }
+
+class TestConditionalWithOptional extends TestHelper {
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Opt";
+    CompilationUnit cu;
+
+    @BeforeAll
+    static void setup() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
+    }
+
+    @BeforeEach
+    void each() {
+        cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
+        System.setOut(new PrintStream(outContent));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "ifEmpty, ID not found\\nID: 1",
+        "ifPresent, ID: 1",
+        "optionalString, IBUPROFEN"
+    })
+    void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(methodName)).orElseThrow();
+        evaluator.visit(method);
+        assertEquals(expectedOutput.replace("\\n","\n"), outContent.toString().strip());
+    }
+}
+

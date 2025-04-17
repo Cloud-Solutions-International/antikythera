@@ -24,11 +24,7 @@ public class EvaluatorFactory {
         if (enclosure instanceof SpringEvaluator) {
             return EvaluatorFactory.create(c, InnerClassEvaluator.class);
         }
-        return EvaluatorFactory.create(c, Evaluator.class);
-    }
-
-    public static Evaluator create(String className) {
-        return create(className, Evaluator.class);
+        return EvaluatorFactory.create(c, enclosure.getClass());
     }
 
     public static <T extends Evaluator> T create(String className, Class<T> evaluatorType) {

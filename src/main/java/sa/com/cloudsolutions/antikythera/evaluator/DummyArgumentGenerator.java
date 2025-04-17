@@ -2,8 +2,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {

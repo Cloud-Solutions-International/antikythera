@@ -13,9 +13,17 @@ public class JunitAsserter extends Asserter {
     }
 
     @Override
+    public Expression assertNull(String variable) {
+        MethodCallExpr aNotNull = new MethodCallExpr("assertNull");
+        aNotNull.addArgument(variable);
+        return aNotNull;
+    }
+
+    @Override
     public void setupImports(CompilationUnit gen) {
         gen.addImport("org.junit.jupiter.api.Test");
         gen.addImport("org.junit.jupiter.api.Assertions.assertNotNull", true, false);
+        gen.addImport("org.junit.jupiter.api.Assertions.assertNull", true, false);
         gen.addImport("org.junit.jupiter.api.Assertions.assertThrows", true, false);
         gen.addImport("org.junit.jupiter.api.Assertions.assertEquals", true, false);
     }

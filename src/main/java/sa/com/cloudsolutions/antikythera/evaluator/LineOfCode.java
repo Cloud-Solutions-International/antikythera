@@ -55,17 +55,12 @@ public class LineOfCode {
     private Statement statement;
 
     /**
-     * A non null value if this statement represents a JPA Query
+     * A non-null value if this statement represents a JPA Query
      */
     private RepositoryQuery repositoryQuery;
 
     public LineOfCode(Statement statement) {
         this.statement = statement;
-    }
-
-    public LineOfCode(Statement st, int color) {
-        this.statement = st;
-        this.pathTaken = color;
     }
 
     @Override

@@ -10,7 +10,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
@@ -20,6 +20,10 @@ import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.DTOBuddy;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.MethodInterceptor;
+import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -31,6 +35,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -46,26 +51,23 @@ public class UnitTestGenerator extends TestGenerator {
 
     private final BiConsumer<Parameter, Variable> mocker;
     private final Consumer<Expression> applyPrecondition;
+    private CompilationUnit baseTestClass;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
         String packageDecl = cu.getPackageDeclaration().map(PackageDeclaration::getNameAsString).orElse("");
         String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
-        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "Test";
+        String className = AbstractCompiler.getPublicType(cu).getNameAsString() + "AKTest";
 
         filePath = basePath.replace("main","test") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
 
         File file = new File(filePath);
-        if (file.exists()) {
-            try {
-                loadExisting(file);
-            } catch (FileNotFoundException e) {
-                logger.warn("Could not find file: {}" , filePath);
-                createTestClass(className, packageDecl);
-            }
-        }
-        else {
+
+        try {
+            loadExisting(file);
+        } catch (FileNotFoundException e) {
+            logger.warn("Could not find file: {}" , filePath);
             createTestClass(className, packageDecl);
         }
 
@@ -79,7 +81,13 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-
+    /**
+     * Loads any existing test class that has been generated previously.
+     * This code is typically not available through the AntikythereRunTime class because we are
+     * processing only the src/main and mostly ignoring src/test
+     * @param file the file name
+     * @throws FileNotFoundException if the source code cannot be found.
+     */
     void loadExisting(File file) throws FileNotFoundException {
         gen = StaticJavaParser.parse(file);
         List<MethodDeclaration> remove = new ArrayList<>();
@@ -96,11 +104,17 @@ public class UnitTestGenerator extends TestGenerator {
 
         for (TypeDeclaration<?> t : gen.getTypes()) {
             if (t.isClassOrInterfaceDeclaration()) {
-                loadBaseClassForTest(t.asClassOrInterfaceDeclaration());
+                loadPredefinedBaseClassForTest(t.asClassOrInterfaceDeclaration());
             }
+            identifyMockedTypes(t);
         }
     }
 
+    /**
+     * Create a clas for the test suite
+     * @param className the name of the class
+     * @param packageDecl the package it should be placed in.
+     */
     private void createTestClass(String className, String packageDecl) {
         gen = new CompilationUnit();
         if (packageDecl != null && !packageDecl.isEmpty()) {
@@ -108,29 +122,82 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         ClassOrInterfaceDeclaration testClass = gen.addClass(className);
-        loadBaseClassForTest(testClass);
+        loadPredefinedBaseClassForTest(testClass);
     }
 
-    private void loadBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
-        String base = Settings.getProperty("base_class", String.class).orElse(null);
-        if (base != null) {
-            if (!testClass.getExtendedTypes().stream().map(Type::asString).filter(s -> s.equals(base)).findFirst().isPresent()) {
-                testClass.addExtendedType(base);
+    /**
+     * <p>Loads a base class that is common to all generated test classes.</p>
+     *
+     * Provided that an entry called base_test_class exists in the settings file and the source for
+     * that class can be found it will be loaded. If such an entry does not exist and the test suite
+     * had previously been generated, we will check the extended types of the test class.
+     *
+     * @param testClass the declaration of the test suite being built
+     */
+    @SuppressWarnings("unchecked")
+    private void loadPredefinedBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
+        String base = Settings.getProperty("base_test_class", String.class).orElse(null);
+        if (base != null && testClass.getExtendedTypes().isEmpty()) {
+            testClass.addExtendedType(base);
+            loadPredefinedBaseClassForTest(base);
+        }
+        else if (!testClass.getExtendedTypes().isEmpty()) {
+            SimpleName n = testClass.getExtendedTypes().get(0).getName();
+            String baseClassName = n.toString();
+            String fqn = AbstractCompiler.findFullyQualifiedName(testClass.findAncestor(CompilationUnit.class).orElseThrow(),
+                    baseClassName);
+            if (fqn != null) {
+                loadPredefinedBaseClassForTest(testClass);
+            } else {
+                n.getParentNode().ifPresent(p ->
+                    loadPredefinedBaseClassForTest(p.toString())
+                );
             }
-            String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElse(null);
-            String helperPath = basePath.replace("main","test") + File.separator +
-                    AbstractCompiler.classToPath(base);
-            try {
-                CompilationUnit cu = StaticJavaParser.parse(new File(helperPath));
-                TypeDeclaration<?> t = AbstractCompiler.getPublicType(cu);
-                for (FieldDeclaration fd : t.getFields()) {
-                    if (fd.getAnnotationByName("MockBean").isPresent() ||
-                            fd.getAnnotationByName("Mock").isPresent()) {
-                        AntikytheraRunTime.markAsMocked(fd.getElementType());
-                    }
-                }
-            } catch (FileNotFoundException e) {
-                throw new AntikytheraException("Base class could not be loaded for tests.");
+        }
+    }
+
+    /**
+     * Loads the base class for the tests if such a file exists.
+     * @param baseClassName the name of the base class.
+     */
+    private void loadPredefinedBaseClassForTest(String baseClassName) {
+        String basePath = Settings.getProperty(Constants.BASE_PATH, String.class).orElseThrow();
+        String helperPath = basePath.replace("main", "test") + File.separator +
+                AbstractCompiler.classToPath(baseClassName);
+        try {
+            baseTestClass = StaticJavaParser.parse(new File(helperPath));
+            for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
+                identifyMockedTypes(t);
+            }
+
+            baseTestClass.findFirst(MethodDeclaration.class,
+                    md -> md.getNameAsString().equals("setUpBase"))
+                    .ifPresent(md -> {
+                        TestSuiteEvaluator eval = new TestSuiteEvaluator(baseTestClass, baseClassName);
+                        try {
+                            eval.setupFields();
+                            eval.initializeFields();
+                            eval.executeMethod(md);
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    });
+
+        } catch (FileNotFoundException e) {
+            throw new AntikytheraException("Base class could not be loaded for tests.");
+        }
+    }
+
+
+    /**
+     * Attempt to identify which fields have already been mocked.
+     * @param t the type declaration which holds the fields being mocked.
+     */
+    private static void identifyMockedTypes(TypeDeclaration<?> t) {
+        for (FieldDeclaration fd : t.getFields()) {
+            if (fd.getAnnotationByName("MockBean").isPresent() ||
+                    fd.getAnnotationByName("Mock").isPresent()) {
+                AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
             }
         }
     }
@@ -143,6 +210,8 @@ public class UnitTestGenerator extends TestGenerator {
 
         createInstance();
         mockArguments();
+        addWhens();
+        addDependencies();
         String invocation = invokeMethod();
 
         if (response.getException() == null) {
@@ -155,10 +224,52 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    private void addDependencies() {
+        for (String s : TestGenerator.getDependencies()) {
+            gen.addImport(s);
+        }
+    }
+
+    /**
+     * Deals with adding Mockito.when().then() type expressions to the generated tests.
+     */
+    private void addWhens() {
+        for (Expression expr : whenThen) {
+            if( expr instanceof MethodCallExpr mce) {
+                Optional<Expression> scope = mce.getScope();
+                if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped){
+
+                    Optional<Expression> arg = scoped.getArguments().getFirst();
+                    if (arg.isPresent() && baseTestClass != null
+                            && arg.get() instanceof MethodCallExpr argMethod
+                            && mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
+                        continue;
+                    }
+                }
+            }
+            getBody(testMethod).addStatement(expr);
+        }
+        whenThen.clear();
+    }
+
+    private boolean mockedByBaseTestClass(Expression arg) {
+        for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
+            for (FieldDeclaration fd : t.getFields()) {
+                if ( (fd.getAnnotationByName("MockBean").isPresent() ||
+                        fd.getAnnotationByName("Mock").isPresent()) &&
+                            fd.getVariable(0).getNameAsString().equals(arg.toString())) {
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
     private void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
             if (c.getAnnotationByName("Service").isPresent()) {
-                autoWireClass(c);
+                injectMocks(c);
             }
             else {
                 instanceName = ClassProcessor.classToInstanceName(c.getNameAsString());
@@ -195,12 +306,11 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void autoWireClass(ClassOrInterfaceDeclaration classUnderTest) {
+    private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        gen.addImport("org.mockito.InjectMocks");
 
         if (!autoWired) {
-            gen.addImport("org.springframework.beans.factory.annotation.Autowired");
-
             for (FieldDeclaration fd : testClass.getFields()) {
                 if (fd.getElementType().asString().equals(classUnderTest.getNameAsString())) {
                     autoWired = true;
@@ -210,27 +320,11 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (!autoWired) {
-            if (testClass.getAnnotationByName("ContextConfiguration").isEmpty()) {
-                gen.addImport("org.springframework.test.context.ContextConfiguration");
-                NormalAnnotationExpr contextConfig = new NormalAnnotationExpr();
-                contextConfig.setName("ContextConfiguration");
-                contextConfig.addPair("classes", String.format("{%s.class}", classUnderTest.getNameAsString()));
-                testClass.addAnnotation(contextConfig);
-            }
-            if (testClass.getAnnotationByName("ExtendWith").isEmpty()) {
-                gen.addImport("org.junit.jupiter.api.extension.ExtendWith");
-                gen.addImport("org.springframework.test.context.junit.jupiter.SpringExtension");
-                NormalAnnotationExpr extendsWith = new NormalAnnotationExpr();
-                extendsWith.setName("ExtendWith");
-                extendsWith.addPair("value", "SpringExtension.class");
-                testClass.addAnnotation(extendsWith);
-            }
-
             instanceName =  ClassProcessor.classToInstanceName( classUnderTest.getNameAsString());
 
             if (testClass.getFieldByName(classUnderTest.getNameAsString()).isEmpty()) {
                 FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);
-                fd.addAnnotation("Autowired");
+                fd.addAnnotation("InjectMocks");
             }
             autoWired = true;
         }
@@ -257,11 +351,10 @@ public class UnitTestGenerator extends TestGenerator {
         String fullName = AbstractCompiler.findFullyQualifiedName(compilationUnitUnderTest, t.asString());
         if (fullName != null) {
             CompilationUnit cu = Graph.getDependencies().get(fullName);
-            ClassOrInterfaceDeclaration cdecl = AbstractCompiler.getPublicType(cu).asClassOrInterfaceDeclaration();
-            if (cdecl != null) {
-                instantiateClass(cdecl, nameAsString);
-            } else {
-                throw new AntikytheraException("Could not find class for " + t.asString());
+            if (cu != null) {
+                AbstractCompiler.getMatchingType(cu, t.asString()).ifPresentOrElse(type ->
+                    instantiateClass(type.asClassOrInterfaceDeclaration(), nameAsString)
+                , () -> {throw new AntikytheraException("Could not find matching type " + fullName);});
             }
         }
     }
@@ -319,8 +412,8 @@ public class UnitTestGenerator extends TestGenerator {
         StringBuilder b = new StringBuilder();
 
         Type t = methodUnderTest.getType();
-        if (t != null) {
-            b.append(t.asString() + " resp = ");
+        if (t != null && !t.toString().equals("void")) {
+            b.append(t.asString()).append(" resp = ");
         }
         b.append(instanceName + "." + methodUnderTest.getNameAsString() + "(");
         for (int i = 0 ; i < methodUnderTest.getParameters().size(); i++) {
@@ -338,8 +431,13 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         if (t != null) {
             addClassImports(t);
-            body.addStatement(asserter.assertNotNull("resp"));
-            asserter.addFieldAsserts(response, body);
+            if (response.getBody() != null && response.getBody().getValue() != null) {
+                body.addStatement(asserter.assertNotNull("resp"));
+                asserter.addFieldAsserts(response, body);
+            }
+            else {
+                body.addStatement(asserter.assertNull("resp"));
+            }
         }
     }
 
@@ -351,6 +449,17 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void addBeforeClass() {
         mockFields();
+
+        MethodDeclaration before = new MethodDeclaration();
+        before.setType(void.class);
+        before.addAnnotation("BeforeEach");
+        before.setName("setUp");
+        BlockStmt beforeBody = new BlockStmt();
+        before.setBody(beforeBody);
+        beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
+        before.setJavadocComment("Author : Antikythera");
+        gen.getType(0).addMember(before);
+
     }
 
     @Override
@@ -358,10 +467,12 @@ public class UnitTestGenerator extends TestGenerator {
         TypeDeclaration<?> t = gen.getType(0);
 
         for (FieldDeclaration fd : t.getFields()) {
-            AntikytheraRunTime.markAsMocked(fd.getElementType());
+            AntikytheraRunTime.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)));
         }
 
-        gen.addImport("org.springframework.boot.test.mock.mockito.MockBean");
+        gen.addImport("org.mockito.MockitoAnnotations");
+        gen.addImport("org.junit.jupiter.api.BeforeEach");
+        gen.addImport("org.mockito.Mock");
         gen.addImport("org.mockito.Mockito");
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
@@ -381,10 +492,11 @@ public class UnitTestGenerator extends TestGenerator {
         final TypeDeclaration<?> t = gen.getType(0);
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             for (FieldDeclaration fd : decl.getFields()) {
-                if (fd.getAnnotationByName("Autowired").isPresent() && ! AntikytheraRunTime.isMocked(fd.getElementType())) {
-                    AntikytheraRunTime.markAsMocked(fd.getElementType());
+                String fullyQualifiedTypeName = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+                if (fd.getAnnotationByName("Autowired").isPresent() && !AntikytheraRunTime.isMocked(fullyQualifiedTypeName)) {
+                    AntikytheraRunTime.markAsMocked(fullyQualifiedTypeName);
                     FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                    field.addAnnotation("MockBean");
+                    field.addAnnotation("Mock");
                     ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
                     if (wrapper != null) {
                         gen.addImport(wrapper.getImport());

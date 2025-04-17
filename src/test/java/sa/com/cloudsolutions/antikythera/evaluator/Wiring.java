@@ -1,10 +1,16 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.fasterxml.jackson.databind.json.JsonMapper;
+
 import java.lang.reflect.Field;
 
 public class Wiring {
     @Autowired
+    JsonMapper jsonMapper;
+
+    @Autowired
     First f;
+
     @Autowired
     Second s;
 

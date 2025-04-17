@@ -181,6 +181,7 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+
     public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
         Optional<CompilationUnit> cu = variable.findCompilationUnit();
         if (cu.isPresent()) {
@@ -421,6 +422,21 @@ public class AbstractCompiler {
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
         /*
+         * If the compilation unit is null, this may be part of the java.lang package.
+         */
+        if (cu == null) {
+            try {
+                Class.forName("java.lang." + className);
+                return "java.lang." + className;
+            } catch (ClassNotFoundException e) {
+                /*
+                 * dirty hack to handle an extreme edge case
+                 */
+                return className.equals("Optional") ? "java.util.Optional" : null;
+            }
+        }
+
+        /*
          * First check if the compilation unit directly contains it.
          * Then check if there exists an import that ends with the short class name as it's last component.
          * Check if the package folder contains a java source file with the same name
@@ -463,7 +479,6 @@ public class AbstractCompiler {
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package
-             * but it can probably still be found in the same package as the current CU
              */
         }
 
@@ -472,9 +487,14 @@ public class AbstractCompiler {
             return packageName + className;
         } catch (ClassNotFoundException ex) {
             /*
-             * Once again ignore the exception. We don't have the class in the lang package
-             * but it can probably still be found in the same package as the current CU
+             * Once again ignore the exception. We don't have the class in the lang package.
+             * But there's one last thing that we can do, check if the given name is actually a
+             * fully qualified name!
              */
+            if (className.contains(".")) {
+                return className;
+            }
+
             return null;
         }
     }

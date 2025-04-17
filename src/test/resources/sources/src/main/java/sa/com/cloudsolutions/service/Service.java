@@ -39,5 +39,17 @@ public class Service {
     public void queries2() {
         List<EmployeeDepartmentDTO> employeeDepartmentDTO = departmentRepository.findEmployeeDepartmentDTOByDepartmentId(1L);
     }
+
+    public void queries3(Map<String, Object> map) {
+        List<EmployeeDepartmentDTO> employeeDepartmentDTO = departmentRepository.findEmployeeDepartmentDTOByDepartmentId(1L);
+    }
+
+    public void queries4(Long id) {
+        Optional<Person> p = personRepository.findById(id);
+    }
+
+    public void queries5(int id) {
+        Optional<Person> p = personRepository.findById(id);
+    }
 }
 

@@ -93,7 +93,8 @@ class TestEvaluator extends TestHelper {
         Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));
-        MethodCallExpr methodCall = new MethodCallExpr(new FieldAccessExpr(new NameExpr("System"), "out"), "println", NodeList.nodeList(new StringLiteralExpr("Hello World")));
+        MethodCallExpr methodCall = new MethodCallExpr(new FieldAccessExpr(new NameExpr("System"), "out"),
+                "println", NodeList.nodeList(new StringLiteralExpr("Hello World")));
         evaluator.evaluateMethodCall(methodCall);
         assertTrue(outContent.toString().contains("Hello World"));
         System.setOut(System.out);
