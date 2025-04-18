@@ -206,11 +206,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         beforeVisit(md);
         try {
+            int safetyCheck = 0;
             while (! Branching.isCovered(md)) {
                 getLocals().clear();
                 setupFields();
                 mockMethodArguments(md);
                 executeMethod(md);
+                safetyCheck++;
+                if (safetyCheck == 16) {
+                    break;
+                }
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());

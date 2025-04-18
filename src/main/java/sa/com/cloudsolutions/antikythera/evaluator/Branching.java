@@ -10,12 +10,15 @@ import java.util.List;
 public class Branching {
     private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();
     private static final HashMap<MethodDeclaration, List<LineOfCode>> conditionals = new HashMap<>();
+    private static int loopCount = 0;
+
     private Branching() {
 
     }
 
     public static void clear() {
         branches.clear();
+        loopCount = 0;
     }
 
     public static void add(LineOfCode lineOfCode) {
@@ -58,6 +61,10 @@ public class Branching {
                     return false;
                 }
             }
+        }
+        else {
+            loopCount++;
+            return loopCount < 2;
         }
         return true;
     }
