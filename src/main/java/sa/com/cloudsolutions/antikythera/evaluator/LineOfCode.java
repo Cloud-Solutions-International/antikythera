@@ -70,6 +70,7 @@ public class LineOfCode {
      * A non-null value if this statement represents a JPA query.
      */
     private RepositoryQuery repositoryQuery;
+    private boolean result;
 
     /**
      * Constructs a `LineOfCode` instance for the given statement.
@@ -264,5 +265,13 @@ public class LineOfCode {
             return true;
         }
         return children.stream().allMatch(LineOfCode::isFullyTravelled);
+    }
+
+    public void setResult(boolean b) {
+        this.result = b;
+    }
+
+    public boolean getResult() {
+        return result;
     }
 }

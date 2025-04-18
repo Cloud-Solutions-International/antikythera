@@ -604,6 +604,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 super.executeStatement(elseStmt);
             }
             l.setPathTaken(LineOfCode.BOTH_PATHS);
+            LineOfCode parent = l.getParent();
+            if (parent != null && parent.isLeaf()) {
+                if (parent.getResult() && parent.getStatement() instanceof  IfStmt ifStmt) {
+                    setupIfCondition(ifStmt, !parent.getResult());
+                }
+                parent.setPathTaken(parent.getResult() ? LineOfCode.TRUE_PATH : LineOfCode.FALSE_PATH);
+            }
         }
         return v;
     }
