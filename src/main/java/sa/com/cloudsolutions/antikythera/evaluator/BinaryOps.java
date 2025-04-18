@@ -72,7 +72,7 @@ public class BinaryOps {
             return null;
         }
 
-        Expression result = conditions.getFirst();
+        Expression result = conditions.getFirst().clone();
         for (int i = 1; i < conditions.size(); i++) {
             result = new BinaryExpr(
                     result,

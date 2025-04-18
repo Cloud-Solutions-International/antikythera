@@ -108,7 +108,7 @@ public class LineOfCode {
      */
     @Override
     public int hashCode() {
-        return statement.hashCode();
+        return statement.hashCode() +109 * (methodDeclaration == null ? 11 : methodDeclaration.hashCode());
     }
 
     /**
@@ -219,7 +219,7 @@ public class LineOfCode {
                 if (this.pathTaken == UNTRAVELLED) {
                     // If untravelled, transition based on the result
                     this.pathTaken = result ? TRUE_PATH : FALSE_PATH;
-                    eval.setupIfCondition(ifStmt, !result);
+                    //eval.setupIfCondition(ifStmt, !result);
                 } else {
                     // If already travelled one path, transition to BOTH_PATHS
                     this.pathTaken = BOTH_PATHS;
