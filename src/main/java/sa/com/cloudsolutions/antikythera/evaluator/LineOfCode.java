@@ -71,6 +71,8 @@ public class LineOfCode {
      */
     private RepositoryQuery repositoryQuery;
 
+    private boolean result;
+
     /**
      * Constructs a `LineOfCode` instance for the given statement.
      *
@@ -138,16 +140,53 @@ public class LineOfCode {
      * @param eventSource The child node that triggered the update.
      */
     private void updatePaths(LineOfCode eventSource) {
-        if (children.stream().allMatch(child -> child.getPathTaken() == BOTH_PATHS)) {
-            if (isTruePath() || isFalsePath()) {
+        if (statement instanceof IfStmt ifStmt) {
+            // Check if all children are in BOTH_PATHS state
+            boolean allChildrenBothPaths = true;
+            for (LineOfCode child : children) {
+                if (child.getPathTaken() != BOTH_PATHS) {
+                    allChildrenBothPaths = false;
+                    break;
+                }
+            }
+
+            if (allChildrenBothPaths) {
                 this.pathTaken = BOTH_PATHS;
                 if (parent != null) {
                     parent.updatePaths(this);
                 }
-            } else if (statement instanceof IfStmt ifStmt) {
-                if (IfConditionVisitor.isNodeInStatement(eventSource.getStatement(), ifStmt.getThenStmt())) {
-                    this.pathTaken = TRUE_PATH;
-                } else {
+                return;
+            }
+
+            // Check Then block
+            boolean allThenChildrenBothPaths = true;
+            for (LineOfCode child : children) {
+                if (IfConditionVisitor.isNodeInStatement(ifStmt.getThenStmt(), child.getStatement())) {
+                    if (child.getPathTaken() != BOTH_PATHS) {
+                        allThenChildrenBothPaths = false;
+                        break;
+                    }
+                }
+            }
+
+            if (allThenChildrenBothPaths) {
+                this.pathTaken = TRUE_PATH;
+                return;
+            }
+
+            // Check Else block if present
+            if (ifStmt.getElseStmt().isPresent()) {
+                boolean allElseChildrenBothPaths = true;
+                for (LineOfCode child : children) {
+                    if (IfConditionVisitor.isNodeInStatement(ifStmt.getElseStmt().get(), child.getStatement())) {
+                        if (child.getPathTaken() != BOTH_PATHS) {
+                            allElseChildrenBothPaths = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allElseChildrenBothPaths) {
                     this.pathTaken = FALSE_PATH;
                 }
             }
@@ -284,5 +323,14 @@ public class LineOfCode {
     @Override
     public String toString() {
         return statement.toString();
+    }
+
+    /**
+     * Sets the result of the line of code.
+     *
+     * @param result The result to set.
+     */
+    public void setResult(boolean result) {
+        this.result = result;
     }
 }
