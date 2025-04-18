@@ -137,6 +137,16 @@ public class LineOfCode {
         }
 
         if (statement instanceof IfStmt ifStmt) {
+
+            // Original logic for other cases
+            if (children.stream().allMatch(LineOfCode::isFullyTravelled)) {
+                this.pathTaken = pathTaken;
+                if (parent != null) {
+                    parent.updatePaths(eval);
+                }
+                return;
+            }
+
             // Handle TRUE_PATH transition
             if (pathTaken == TRUE_PATH) {
                 boolean allThenChildrenValid = true;
@@ -190,13 +200,6 @@ public class LineOfCode {
                 }
             }
 
-            // Original logic for other cases
-            if (children.stream().allMatch(LineOfCode::isFullyTravelled)) {
-                this.pathTaken = pathTaken;
-                if (parent != null) {
-                    parent.updatePaths(eval);
-                }
-            }
         }
     }
 
