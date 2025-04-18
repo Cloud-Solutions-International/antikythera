@@ -40,6 +40,7 @@ class TestConditional extends TestHelper {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
+        Branching.clear();
     }
 
     @Test
@@ -69,7 +70,7 @@ class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, One!Two!Three!ZERO!",
             "conditional6, One!Two!Three!ZERO!","conditional7, One!Two!Three!ZERO!",
-            "conditional8, ZERO!One!Two!Three!", "smallDiff, Nearly 2!One!", "booleanWorks, True!False!"
+            "conditional8, ZERO!One!Two!Three!", "smallDiff, One!Nearly 2!", "booleanWorks, True!False!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

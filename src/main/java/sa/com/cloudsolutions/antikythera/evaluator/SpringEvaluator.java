@@ -578,29 +578,28 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         l.setResult(result);
         Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
 
-        if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
+        // Track which path we're taking
+        if (l.isUntravelled()) {
+            // First time through - execute current path and set up opposite path for next time
             if (result) {
-                /* we have not been this way before. In this first execution of the code, we
-                 * are taking the true path. We need to leave a flag behind so that in the
-                 * next execution we will know to take the false path.
-                 */
                 super.executeStatement(ifst.getThenStmt());
                 l.setPathTaken(LineOfCode.TRUE_PATH);
+                // Store preconditions for false path
                 setupIfCondition(ifst, false);
             } else {
                 super.executeStatement(elseStmt);
                 l.setPathTaken(LineOfCode.FALSE_PATH);
+                // Store preconditions for true path
                 setupIfCondition(ifst, true);
             }
-        } else {
-            /*
-             * We have been this way before so lets take the path not taken.
-             */
+        } else if (!l.isFullyTravelled()) {
+            // Second time through - take the opposite path
             if (result) {
                 super.executeStatement(ifst.getThenStmt());
             } else {
                 super.executeStatement(elseStmt);
             }
+            l.setResult(!result);
             l.setPathTaken(LineOfCode.BOTH_PATHS);
         }
         return v;

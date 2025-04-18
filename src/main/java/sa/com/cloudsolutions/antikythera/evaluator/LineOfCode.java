@@ -6,8 +6,11 @@ import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
+
+import javax.swing.text.html.Option;
 
 /**
  * Represents a line of code within a method, including its associated conditions and execution paths.
@@ -125,13 +128,15 @@ public class LineOfCode {
      *
      * @param pathTaken The new path state.
      */
-    public void setPathTaken(int pathTaken) {
+    public boolean setPathTaken(int pathTaken) {
         if (children.isEmpty() || children.stream().allMatch(LineOfCode::isFullyTravelled)) {
             this.pathTaken = pathTaken;
             if (parent != null) {
                 parent.updatePaths();
             }
+            return true;
         }
+        return false;
     }
 
     /**
@@ -164,26 +169,30 @@ private void updatePaths() {
         }
 
         // Check Then block
-        boolean allThenChildrenBothPaths = true;
+        // First find children that are in the Then block
+        boolean allThenChildrenBothPaths = false;
+        boolean hasThenChildren = false;
         for (LineOfCode child : children) {
             if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getThenStmt())) {
+                hasThenChildren = true;
                 if (child.getPathTaken() != BOTH_PATHS) {
                     allThenChildrenBothPaths = false;
                     break;
                 }
+                allThenChildrenBothPaths = true;
             }
         }
 
-        if (allThenChildrenBothPaths && isUntravelled()) {
+        if (hasThenChildren && allThenChildrenBothPaths && isUntravelled()) {
             this.pathTaken = TRUE_PATH;
             return;
         }
 
-        // Check Else block if present
-        if (ifStmt.getElseStmt().isPresent()) {
+        Optional<Statement> el = ifStmt.getElseStmt();
+        if (el.isPresent()) {
             boolean allElseChildrenBothPaths = true;
             for (LineOfCode child : children) {
-                if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getElseStmt().get())) {
+                if (IfConditionVisitor.isNodeInStatement(child.getStatement(), el.get())) {
                     if (child.getPathTaken() != BOTH_PATHS) {
                         allElseChildrenBothPaths = false;
                         break;
