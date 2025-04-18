@@ -137,6 +137,7 @@ public class LineOfCode {
         }
 
         if (statement instanceof IfStmt ifStmt) {
+            // Handle TRUE_PATH transition
             if (pathTaken == TRUE_PATH) {
                 boolean allThenChildrenValid = true;
                 boolean hasThenChildren = false;
@@ -157,6 +158,34 @@ public class LineOfCode {
                     if (parent != null) {
                         parent.updatePaths(eval);
                     }
+                    return;
+                }
+            }
+
+            // Handle FALSE_PATH transition
+            if (pathTaken == FALSE_PATH) {
+                Optional<Statement> elseStmt = ifStmt.getElseStmt();
+                if (elseStmt.isEmpty()) {
+                    this.pathTaken = FALSE_PATH;
+                    return;
+                }
+
+                boolean allElseChildrenValid = true;
+                boolean hasElseChildren = false;
+
+                for (LineOfCode child : children) {
+                    if (IfConditionVisitor.isNodeInStatement(child.getStatement(), elseStmt.get())) {
+                        hasElseChildren = true;
+                        int childState = child.getPathTaken();
+                        if (childState != FALSE_PATH && childState != BOTH_PATHS) {
+                            allElseChildrenValid = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (!hasElseChildren || allElseChildrenValid) {
+                    this.pathTaken = FALSE_PATH;
                     return;
                 }
             }
