@@ -10,7 +10,6 @@ import java.util.Optional;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
-import javax.swing.text.html.Option;
 
 /**
  * Represents a line of code within a method, including its associated conditions and execution paths.
@@ -128,84 +127,82 @@ public class LineOfCode {
      *
      * @param pathTaken The new path state.
      */
-    public boolean setPathTaken(int pathTaken) {
+    public void setPathTaken(int pathTaken, SpringEvaluator eval) {
         if (children.isEmpty() || children.stream().allMatch(LineOfCode::isFullyTravelled)) {
             this.pathTaken = pathTaken;
             if (parent != null) {
                 parent.updatePaths();
             }
-            return true;
         }
-        return false;
     }
 
     /**
      * Update this path because a child node has changed.
      *
      */
-private void updatePaths() {
-    if (statement instanceof IfStmt ifStmt) {
-        // Check if all children are in BOTH_PATHS state
-        boolean allChildrenBothPaths = true;
-        for (LineOfCode child : children) {
-            if (child.getPathTaken() != BOTH_PATHS) {
-                allChildrenBothPaths = false;
-                break;
-            }
-        }
-
-        if (allChildrenBothPaths) {
-            if (this.pathTaken == UNTRAVELLED) {
-                // If untravelled, transition based on the result
-                this.pathTaken = result ? TRUE_PATH : FALSE_PATH;
-            } else {
-                // If already travelled one path, transition to BOTH_PATHS
-                this.pathTaken = BOTH_PATHS;
-            }
-            if (parent != null) {
-                parent.updatePaths();
-            }
-            return;
-        }
-
-        // Check Then block
-        // First find children that are in the Then block
-        boolean allThenChildrenBothPaths = false;
-        boolean hasThenChildren = false;
-        for (LineOfCode child : children) {
-            if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getThenStmt())) {
-                hasThenChildren = true;
+    private void updatePaths() {
+        if (statement instanceof IfStmt ifStmt) {
+            // Check if all children are in BOTH_PATHS state
+            boolean allChildrenBothPaths = true;
+            for (LineOfCode child : children) {
                 if (child.getPathTaken() != BOTH_PATHS) {
-                    allThenChildrenBothPaths = false;
+                    allChildrenBothPaths = false;
                     break;
                 }
-                allThenChildrenBothPaths = true;
             }
-        }
 
-        if (hasThenChildren && allThenChildrenBothPaths && isUntravelled()) {
-            this.pathTaken = TRUE_PATH;
-            return;
-        }
+            if (allChildrenBothPaths) {
+                if (this.pathTaken == UNTRAVELLED) {
+                    // If untravelled, transition based on the result
+                    this.pathTaken = result ? TRUE_PATH : FALSE_PATH;
+                } else {
+                    // If already travelled one path, transition to BOTH_PATHS
+                    this.pathTaken = BOTH_PATHS;
+                }
+                if (parent != null) {
+                    parent.updatePaths();
+                }
+                return;
+            }
 
-        Optional<Statement> el = ifStmt.getElseStmt();
-        if (el.isPresent()) {
-            boolean allElseChildrenBothPaths = true;
+            // Check Then block
+            // First find children that are in the Then block
+            boolean allThenChildrenBothPaths = false;
+            boolean hasThenChildren = false;
             for (LineOfCode child : children) {
-                if (IfConditionVisitor.isNodeInStatement(child.getStatement(), el.get())) {
+                if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getThenStmt())) {
+                    hasThenChildren = true;
                     if (child.getPathTaken() != BOTH_PATHS) {
-                        allElseChildrenBothPaths = false;
+                        allThenChildrenBothPaths = false;
                         break;
                     }
+                    allThenChildrenBothPaths = true;
                 }
             }
 
-            if (allElseChildrenBothPaths && isUntravelled()) {
-                this.pathTaken = FALSE_PATH;
+            if (hasThenChildren && allThenChildrenBothPaths && isUntravelled()) {
+                this.pathTaken = TRUE_PATH;
+                return;
+            }
+
+            Optional<Statement> el = ifStmt.getElseStmt();
+            if (el.isPresent()) {
+                boolean allElseChildrenBothPaths = true;
+                for (LineOfCode child : children) {
+                    if (IfConditionVisitor.isNodeInStatement(child.getStatement(), el.get())) {
+                        if (child.getPathTaken() != BOTH_PATHS) {
+                            allElseChildrenBothPaths = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allElseChildrenBothPaths && isUntravelled()) {
+                    this.pathTaken = FALSE_PATH;
+                }
             }
         }
     }
-}
     /**
      * Adds a precondition to this line of code which will determine which path will be taken
      *

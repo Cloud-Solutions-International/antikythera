@@ -583,12 +583,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             // First time through - execute current path and set up opposite path for next time
             if (result) {
                 super.executeStatement(ifst.getThenStmt());
-                l.setPathTaken(LineOfCode.TRUE_PATH);
+                l.setPathTaken(LineOfCode.TRUE_PATH, this);
                 // Store preconditions for false path
                 setupIfCondition(ifst, false);
             } else {
                 super.executeStatement(elseStmt);
-                l.setPathTaken(LineOfCode.FALSE_PATH);
+                l.setPathTaken(LineOfCode.FALSE_PATH, this);
                 // Store preconditions for true path
                 setupIfCondition(ifst, true);
             }
@@ -600,7 +600,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 super.executeStatement(elseStmt);
             }
             l.setResult(!result);
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
+            l.setPathTaken(LineOfCode.BOTH_PATHS, this);
         }
         return v;
     }
@@ -800,11 +800,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Variable v = super.handleOptionals(sc);
         if (v.getValue() instanceof Optional<?> optional) {
             if (optional.isPresent()) {
-                l.setPathTaken(LineOfCode.TRUE_PATH);
+                l.setPathTaken(LineOfCode.TRUE_PATH, this);
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
                 expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
             } else {
-                l.setPathTaken(LineOfCode.FALSE_PATH);
+                l.setPathTaken(LineOfCode.FALSE_PATH, this);
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
                 expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
             }
