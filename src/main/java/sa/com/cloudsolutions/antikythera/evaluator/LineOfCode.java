@@ -131,7 +131,7 @@ public class LineOfCode {
         if (children.isEmpty() || children.stream().allMatch(LineOfCode::isFullyTravelled)) {
             this.pathTaken = pathTaken;
             if (parent != null) {
-                parent.updatePaths();
+                parent.updatePaths(eval);
             }
         }
     }
@@ -140,7 +140,7 @@ public class LineOfCode {
      * Update this path because a child node has changed.
      *
      */
-    private void updatePaths() {
+    private void updatePaths(SpringEvaluator eval) {
         if (statement instanceof IfStmt ifStmt) {
             // Check if all children are in BOTH_PATHS state
             boolean allChildrenBothPaths = true;
@@ -155,12 +155,13 @@ public class LineOfCode {
                 if (this.pathTaken == UNTRAVELLED) {
                     // If untravelled, transition based on the result
                     this.pathTaken = result ? TRUE_PATH : FALSE_PATH;
+                    eval.setupIfCondition(ifStmt, !result);
                 } else {
                     // If already travelled one path, transition to BOTH_PATHS
                     this.pathTaken = BOTH_PATHS;
                 }
                 if (parent != null) {
-                    parent.updatePaths();
+                    parent.updatePaths(eval);
                 }
                 return;
             }
