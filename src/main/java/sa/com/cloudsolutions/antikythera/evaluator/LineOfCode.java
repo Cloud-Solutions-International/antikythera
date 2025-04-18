@@ -129,7 +129,7 @@ public class LineOfCode {
         if (children.isEmpty() || children.stream().allMatch(LineOfCode::isFullyTravelled)) {
             this.pathTaken = pathTaken;
             if (parent != null) {
-                parent.updatePaths(this);
+                parent.updatePaths();
             }
         }
     }
@@ -137,62 +137,66 @@ public class LineOfCode {
     /**
      * Update this path because a child node has changed.
      *
-     * @param eventSource The child node that triggered the update.
      */
-    private void updatePaths(LineOfCode eventSource) {
-        if (statement instanceof IfStmt ifStmt) {
-            // Check if all children are in BOTH_PATHS state
-            boolean allChildrenBothPaths = true;
-            for (LineOfCode child : children) {
+private void updatePaths() {
+    if (statement instanceof IfStmt ifStmt) {
+        // Check if all children are in BOTH_PATHS state
+        boolean allChildrenBothPaths = true;
+        for (LineOfCode child : children) {
+            if (child.getPathTaken() != BOTH_PATHS) {
+                allChildrenBothPaths = false;
+                break;
+            }
+        }
+
+        if (allChildrenBothPaths) {
+            if (this.pathTaken == UNTRAVELLED) {
+                // If untravelled, transition based on the result
+                this.pathTaken = result ? TRUE_PATH : FALSE_PATH;
+            } else {
+                // If already travelled one path, transition to BOTH_PATHS
+                this.pathTaken = BOTH_PATHS;
+            }
+            if (parent != null) {
+                parent.updatePaths();
+            }
+            return;
+        }
+
+        // Check Then block
+        boolean allThenChildrenBothPaths = true;
+        for (LineOfCode child : children) {
+            if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getThenStmt())) {
                 if (child.getPathTaken() != BOTH_PATHS) {
-                    allChildrenBothPaths = false;
+                    allThenChildrenBothPaths = false;
                     break;
                 }
             }
+        }
 
-            if (allChildrenBothPaths) {
-                this.pathTaken = BOTH_PATHS;
-                if (parent != null) {
-                    parent.updatePaths(this);
-                }
-                return;
-            }
+        if (allThenChildrenBothPaths && isUntravelled()) {
+            this.pathTaken = TRUE_PATH;
+            return;
+        }
 
-            // Check Then block
-            boolean allThenChildrenBothPaths = true;
+        // Check Else block if present
+        if (ifStmt.getElseStmt().isPresent()) {
+            boolean allElseChildrenBothPaths = true;
             for (LineOfCode child : children) {
-                if (IfConditionVisitor.isNodeInStatement(ifStmt.getThenStmt(), child.getStatement())) {
+                if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getElseStmt().get())) {
                     if (child.getPathTaken() != BOTH_PATHS) {
-                        allThenChildrenBothPaths = false;
+                        allElseChildrenBothPaths = false;
                         break;
                     }
                 }
             }
 
-            if (allThenChildrenBothPaths) {
-                this.pathTaken = TRUE_PATH;
-                return;
-            }
-
-            // Check Else block if present
-            if (ifStmt.getElseStmt().isPresent()) {
-                boolean allElseChildrenBothPaths = true;
-                for (LineOfCode child : children) {
-                    if (IfConditionVisitor.isNodeInStatement(ifStmt.getElseStmt().get(), child.getStatement())) {
-                        if (child.getPathTaken() != BOTH_PATHS) {
-                            allElseChildrenBothPaths = false;
-                            break;
-                        }
-                    }
-                }
-
-                if (allElseChildrenBothPaths) {
-                    this.pathTaken = FALSE_PATH;
-                }
+            if (allElseChildrenBothPaths && isUntravelled()) {
+                this.pathTaken = FALSE_PATH;
             }
         }
     }
-
+}
     /**
      * Adds a precondition to this line of code which will determine which path will be taken
      *

@@ -575,6 +575,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         Variable v = evaluateExpression(ifst.getCondition());
         boolean result = (boolean) v.getValue();
+        l.setResult(result);
         Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
 
         if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {

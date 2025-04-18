@@ -86,16 +86,19 @@ class TestIfConditionVisitor {
         }
         assertFalse(Branching.isCovered(md));
 
+        lines.get(0).setResult(true);
         lines.get(2).setPathTaken(LineOfCode.BOTH_PATHS);
+        assertTrue(lines.get(0).isUntravelled());
+        assertTrue(lines.get(1).isFalsePath());
         assertFalse(Branching.isCovered(md));
 
+        lines.get(1).setResult(true);
         lines.get(1).setPathTaken(LineOfCode.BOTH_PATHS);
+        assertTrue(lines.get(1).isFullyTravelled());
         assertFalse(Branching.isCovered(md));
 
         lines.get(3).setPathTaken(LineOfCode.BOTH_PATHS);
-        assertFalse(Branching.isCovered(md));
-
-        lines.get(0).setPathTaken(LineOfCode.BOTH_PATHS);
         assertTrue(Branching.isCovered(md));
+
     }
 }
