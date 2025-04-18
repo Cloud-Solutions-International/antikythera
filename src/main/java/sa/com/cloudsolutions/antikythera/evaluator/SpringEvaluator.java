@@ -235,7 +235,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         final List<Integer> s = new ArrayList<>();
 
         md.accept(new IfConditionVisitor(), null);
-        branchCount = Math.max(1, s.size());
     }
 
     /**
@@ -796,7 +795,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         LineOfCode l =  new LineOfCode(stmt);
         Branching.add(l);
-        branchCount++;
 
         List<Expression> expressions;
         Variable v = super.handleOptionals(sc);

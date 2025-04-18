@@ -23,13 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
+
 
 public class ControlFlowEvaluator extends Evaluator{
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
-
-    protected int branchCount;
-
 
     public ControlFlowEvaluator(EvaluatorFactory.Context context) {
         super(context);
