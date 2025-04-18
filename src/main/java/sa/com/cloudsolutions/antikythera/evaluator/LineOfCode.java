@@ -123,15 +123,50 @@ public class LineOfCode {
     /**
      * Sets the path state of this line of code and updates the parent if necessary.
      * The state will change only if the current node does not have any child nodes or if all the
-     * child nodes are in the both paths visited state.
+     * child nodes are in the BOTH_PATHS state.
      *
      * @param pathTaken The new path state.
      */
     public void setPathTaken(int pathTaken, SpringEvaluator eval) {
-        if (children.isEmpty() || children.stream().allMatch(LineOfCode::isFullyTravelled)) {
+        if (children.isEmpty()) {
             this.pathTaken = pathTaken;
             if (parent != null) {
                 parent.updatePaths(eval);
+            }
+            return;
+        }
+
+        if (statement instanceof IfStmt ifStmt) {
+            if (pathTaken == TRUE_PATH) {
+                boolean allThenChildrenValid = true;
+                boolean hasThenChildren = false;
+
+                for (LineOfCode child : children) {
+                    if (IfConditionVisitor.isNodeInStatement(child.getStatement(), ifStmt.getThenStmt())) {
+                        hasThenChildren = true;
+                        int childState = child.getPathTaken();
+                        if (childState != TRUE_PATH && childState != BOTH_PATHS) {
+                            allThenChildrenValid = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (!hasThenChildren || allThenChildrenValid) {
+                    this.pathTaken = TRUE_PATH;
+                    if (parent != null) {
+                        parent.updatePaths(eval);
+                    }
+                    return;
+                }
+            }
+
+            // Original logic for other cases
+            if (children.stream().allMatch(LineOfCode::isFullyTravelled)) {
+                this.pathTaken = pathTaken;
+                if (parent != null) {
+                    parent.updatePaths(eval);
+                }
             }
         }
     }
