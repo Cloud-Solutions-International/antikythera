@@ -819,19 +819,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
         List<Precondition> expressions;
-        if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            expressions = l.getPrecondition(true);
-        }
-        else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            expressions = l.getPrecondition(false);
-        }
-        else {
-            throw new IllegalStateException("Both paths should have been taken");
-        }
-        for (Precondition expression : expressions) {
-            evaluateExpression(expression.getExpression());
+        if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
+            expressions = l.getPreconditions();
+
+            for (Precondition expression : expressions) {
+                evaluateExpression(expression.getExpression());
+            }
         }
         return super.handleOptionals(sc);
     }

@@ -39,11 +39,8 @@ public class Branching {
         List<Precondition> applicableConditions = new ArrayList<>();
         List<LineOfCode> lines = conditionals.getOrDefault(methodDeclaration, Collections.emptyList());
         for (LineOfCode lineOfCode : lines) {
-            if (lineOfCode.getPathTaken() == LineOfCode.TRUE_PATH) {
-                applicableConditions.addAll(lineOfCode.getPrecondition(false));
-            }
-            else if (lineOfCode.getPathTaken() == LineOfCode.FALSE_PATH) {
-                applicableConditions.addAll(lineOfCode.getPrecondition(true));
+            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS) {
+                applicableConditions.addAll(lineOfCode.getPreconditions());
             }
         }
         return applicableConditions;

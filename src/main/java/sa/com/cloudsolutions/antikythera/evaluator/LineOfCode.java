@@ -16,14 +16,9 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 public class LineOfCode {
 
     /**
-     * The state of the variables required for an `if` condition to evaluate to true.
+     * The list of preconditions to be applied before executing this line.
      */
-    private final List<Precondition> trueState = new ArrayList<>();
-
-    /**
-     * The state of the variables required for an `if` condition to evaluate to false.
-     */
-    private final List<Precondition> falseState = new ArrayList<>();
+    private final List<Precondition> preconditions = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -163,26 +158,20 @@ public class LineOfCode {
      * Adds a precondition to this line of code which will determine which path will be taken
      *
      * @param precondition The precondition to add.
-     * @param state `true` if the precondition applies to the true path, `false` for the false path.
      */
-    public void addPrecondition(Precondition precondition, boolean state) {
-        if (state) {
-            trueState.add(precondition);
-        } else {
-            falseState.add(precondition);
-        }
+    public void addPrecondition(Precondition precondition) {
+        preconditions.add(precondition);
     }
 
     /**
-     * Gets the preconditions for the specified path state.
-     * Applying the returned pre-conditions before the start of the method execution will result in
-     * the given conditional statement evaluating to true or false (matching the value of the state
-     * parameter)
-     * @param state `true` for the true path, `false` for the false path.
+     * Gets the preconditions to be applied before executing this line of code.
+     * Applying these preconditions at the start of method execution will result in the conditional
+     * statement taking the branch different from the one taken before.
+     *
      * @return The list of preconditions.
      */
-    public List<Precondition> getPrecondition(boolean state) {
-        return state ? trueState : falseState;
+    public List<Precondition> getPreconditions() {
+        return preconditions;
     }
 
     /**

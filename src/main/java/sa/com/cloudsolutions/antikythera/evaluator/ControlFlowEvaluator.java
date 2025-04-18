@@ -17,8 +17,6 @@ import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -45,7 +43,7 @@ public class ControlFlowEvaluator extends Evaluator{
                 for (Parameter param : md.getParameters()) {
                     if (param.getNameAsString().equals(targetParamName)) {
                         Expression expr = setupConditionThroughAssignment(entry, v);
-                        addPreCondition(stmt, state, expr);
+                        addPreCondition(stmt, expr);
                         return Optional.of(expr);
                     }
                 }
@@ -62,7 +60,7 @@ public class ControlFlowEvaluator extends Evaluator{
         }
 
         Expression expr = setupConditionThroughAssignment(entry, v);
-        addPreCondition(stmt, state, expr);
+        addPreCondition(stmt, expr);
         return Optional.of(expr);
     }
 
@@ -110,12 +108,12 @@ public class ControlFlowEvaluator extends Evaluator{
             }
 
             if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariable(stmt, state, entry, expr);
+                setupConditionalVariable(stmt, entry, expr);
             }
         }
     }
 
-    private void setupConditionalVariable(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
+    private void setupConditionalVariable(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
@@ -135,12 +133,12 @@ public class ControlFlowEvaluator extends Evaluator{
                 setter.addArgument(entry.getValue().toString());
             }
         }
-        addPreCondition(stmt, state, setter);
+        addPreCondition(stmt, setter);
     }
 
-    private void addPreCondition(Statement statement, boolean state, Expression expr) {
+    private void addPreCondition(Statement statement, Expression expr) {
         LineOfCode l = Branching.get(statement.hashCode());
-        l.addPrecondition(new Precondition(expr), state);
+        l.addPrecondition(new Precondition(expr));
     }
 
     protected List<Expression> setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt, boolean state) {
