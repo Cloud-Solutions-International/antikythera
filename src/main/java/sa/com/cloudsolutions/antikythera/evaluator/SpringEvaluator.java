@@ -575,7 +575,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         Variable v = evaluateExpression(ifst.getCondition());
         boolean result = (boolean) v.getValue();
-        l.setResult(result);
+
         Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
 
         // Track which path we're taking
@@ -583,14 +583,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             // First time through - execute current path and set up opposite path for next time
             if (result) {
                 super.executeStatement(ifst.getThenStmt());
-                l.setPathTaken(LineOfCode.TRUE_PATH, this);
-                // Store preconditions for false path
-                setupIfCondition(ifst, false);
+                if (l.isLeaf()) {
+                    l.setPathTaken(LineOfCode.TRUE_PATH);
+                    // Store preconditions for false path
+                    setupIfCondition(ifst, false);
+                }
             } else {
                 super.executeStatement(elseStmt);
-                l.setPathTaken(LineOfCode.FALSE_PATH, this);
-                // Store preconditions for true path
-                setupIfCondition(ifst, true);
+                if (l.isLeaf()) {
+                    l.setPathTaken(LineOfCode.FALSE_PATH);
+                    // Store preconditions for true path
+                    setupIfCondition(ifst, true);
+                }
             }
         } else if (!l.isFullyTravelled()) {
             // Second time through - take the opposite path
@@ -599,8 +603,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             } else {
                 super.executeStatement(elseStmt);
             }
-            l.setResult(!result);
-            l.setPathTaken(LineOfCode.BOTH_PATHS, this);
+            l.setPathTaken(LineOfCode.BOTH_PATHS);
         }
         return v;
     }
@@ -800,11 +803,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Variable v = super.handleOptionals(sc);
         if (v.getValue() instanceof Optional<?> optional) {
             if (optional.isPresent()) {
-                l.setPathTaken(LineOfCode.TRUE_PATH, this);
+                l.setPathTaken(LineOfCode.TRUE_PATH);
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
                 expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
             } else {
-                l.setPathTaken(LineOfCode.FALSE_PATH, this);
+                l.setPathTaken(LineOfCode.FALSE_PATH);
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
                 expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
             }
