@@ -103,8 +103,9 @@ class TestIfConditionVisitor {
 
     @Test
     void testEmptyElseBlock() {
-        MethodDeclaration method = findMethod("smallDiff");
+        MethodDeclaration method = findMethod("missingElse");
         IfStmt ifStmt = method.findFirst(IfStmt.class).orElseThrow();
+
         visitor.visit(ifStmt, null);
 
         LineOfCode ifNode = Branching.get(ifStmt);
@@ -113,9 +114,10 @@ class TestIfConditionVisitor {
         List<LineOfCode> children = getChildren(ifNode);
         assertEquals(2, children.size());
 
-        // Verify empty else block was created
-        assertTrue(children.get(1).getStatement() instanceof BlockStmt);
-        assertTrue(((BlockStmt)children.get(1).getStatement()).isEmpty());
+        assertInstanceOf(BlockStmt.class, children.get(1).getStatement());
+
+        BlockStmt elseBlock = (BlockStmt)children.get(1).getStatement();
+        assertTrue(elseBlock.isEmpty());
     }
 
     private MethodDeclaration findMethod(String methodName) {

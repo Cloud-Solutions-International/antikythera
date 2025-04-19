@@ -109,6 +109,13 @@ public class Conditional {
         }
     }
 
+    public void missingElse(Double a) {
+        if (a > 1.0) {
+            System.out.print("Greater than 1!");
+        }
+        // No else branch
+    }
+
     public void booleanWorks(Boolean b) {
         if(b) {
             System.out.print("True!");

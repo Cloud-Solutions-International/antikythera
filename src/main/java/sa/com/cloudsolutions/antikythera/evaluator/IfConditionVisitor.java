@@ -28,7 +28,11 @@ public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
         // Handle else branch
         LineOfCode elseNode = stmt.getElseStmt()
             .map(LineOfCode::new)
-            .orElseGet(() -> new LineOfCode(new BlockStmt())); // Empty block for missing else
+            .orElseGet(() -> {
+                // Create an explicitly empty BlockStmt for missing else
+                BlockStmt emptyBlock = new BlockStmt();
+                return new LineOfCode(emptyBlock);
+            });
         elseNode.setParent(ifNode);
         Branching.add(elseNode);
 
