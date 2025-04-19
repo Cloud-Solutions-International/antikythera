@@ -4,9 +4,11 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,9 +21,15 @@ class TestIfConditionVisitor {
     private CompilationUnit cu;
     private IfConditionVisitor visitor;
 
-    @BeforeEach
-    void setup() throws IOException {
+    @BeforeAll
+    static void setupAll() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AntikytheraRunTime.reset();
+        AbstractCompiler.preProcess();
+    }
+
+    @BeforeEach
+    void setup() {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         visitor = new IfConditionVisitor();
         Branching.clear();

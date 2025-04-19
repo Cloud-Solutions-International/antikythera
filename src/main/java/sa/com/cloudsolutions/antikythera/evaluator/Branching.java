@@ -24,7 +24,7 @@ public class Branching {
     }
 
     public static void add(LineOfCode lineOfCode) {
-        hashes.put(lineOfCode.hashCode(), lineOfCode);
+        hashes.put(lineOfCode.getStatement().hashCode(), lineOfCode);
         if (size >= heap.size()) {
             heap.add(lineOfCode);
         } else {

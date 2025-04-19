@@ -239,7 +239,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     /**
      * Set up the parameters required for the method call.
-     * If there are any preconditions that need to be applied to get branch coverage the parameters
+     * If there are any preconditions that need to be applied to get branch coverage, the parameters
      * will be updated to reflect those preconditions.
      *
      * @param md the method declaration into whose variable space this parameter will be copied
