@@ -15,9 +15,16 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 public class LineOfCode {
 
     /**
-     * The list of preconditions to be applied before executing this line.
+     * The list of preconditions to be applied before executing this line to make it evaluate to true.
      */
-    private final List<Precondition> preconditions = new ArrayList<>();
+    private final List<Precondition> truePreconditions = new ArrayList<>();
+
+    /**
+     * The list of preconditions to be applied before executing this line to make it evaluate to false.
+     */
+    private final List<Precondition> falsePreconditions = new ArrayList<>();
+
+
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -115,24 +122,42 @@ public class LineOfCode {
         this.pathTaken = pathTaken;
     }
 
+
     /**
-     * Adds a precondition to this line of code which will determine which path will be taken
+     * Adds a precondition to this line of code which will make the condition evaluate to true
      *
      * @param precondition The precondition to add.
      */
-    public void addPrecondition(Precondition precondition) {
-        preconditions.add(precondition);
+    public void addTruePrecondition(Precondition precondition) {
+        truePreconditions.add(precondition);
     }
 
     /**
-     * Gets the preconditions to be applied before executing this line of code.
-     * Applying these preconditions at the start of method execution will result in the conditional
-     * statement taking the branch different from the one taken before.
+     * Adds a precondition to this line of code which will make the condition evaluate to false
      *
-     * @return The list of preconditions.
+     * @param precondition The precondition to add.
      */
-    public List<Precondition> getPreconditions() {
-        return preconditions;
+    public void addFalsePrecondition(Precondition precondition) {
+        falsePreconditions.add(precondition);
+    }
+
+
+    /**
+     * Gets the preconditions to be applied before executing this line of code to make it evaluate to true.
+     *
+     * @return The list of true preconditions.
+     */
+    public List<Precondition> getTruePreconditions() {
+        return truePreconditions;
+    }
+
+    /**
+     * Gets the preconditions to be applied before executing this line of code to make it evaluate to false.
+     *
+     * @return The list of false preconditions.
+     */
+    public List<Precondition> getFalsePreconditions() {
+        return falsePreconditions;
     }
 
     /**

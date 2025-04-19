@@ -104,12 +104,32 @@ public class Branching {
         return Integer.compare(a.getPathTaken(), b.getPathTaken());
     }
 
-    public static List<Precondition> getApplicableConditions() {
+
+    /**
+     * Gets all applicable true preconditions from nodes that are not fully traversed.
+     * @return The list of applicable true preconditions.
+     */
+    public static List<Precondition> getApplicableTrueConditions() {
         List<Precondition> applicableConditions = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             LineOfCode lineOfCode = heap.get(i);
             if (!lineOfCode.isFullyTravelled()) {
-                applicableConditions.addAll(lineOfCode.getPreconditions());
+                applicableConditions.addAll(lineOfCode.getTruePreconditions());
+            }
+        }
+        return applicableConditions;
+    }
+
+    /**
+     * Gets all applicable false preconditions from nodes that are not fully traversed.
+     * @return The list of applicable false preconditions.
+     */
+    public static List<Precondition> getApplicableFalseConditions() {
+        List<Precondition> applicableConditions = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            LineOfCode lineOfCode = heap.get(i);
+            if (!lineOfCode.isFullyTravelled()) {
+                applicableConditions.addAll(lineOfCode.getFalsePreconditions());
             }
         }
         return applicableConditions;

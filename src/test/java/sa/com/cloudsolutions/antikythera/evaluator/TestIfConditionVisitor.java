@@ -120,6 +120,28 @@ class TestIfConditionVisitor {
         assertTrue(elseBlock.isEmpty());
     }
 
+    @Test
+    void testPreconditionGeneration() {
+        MethodDeclaration method = findMethod("conditional1");
+        IfStmt ifStmt = method.findFirst(IfStmt.class).orElseThrow();
+
+        visitor.visit(ifStmt, null);
+
+        LineOfCode ifNode = Branching.get(ifStmt);
+        assertNotNull(ifNode);
+
+        List<LineOfCode> children = getChildren(ifNode);
+        assertEquals(2, children.size());
+
+        // Verify then branch has true preconditions
+        LineOfCode thenNode = children.get(0);
+        assertFalse(thenNode.getTruePreconditions().isEmpty(), "Then branch should have true preconditions");
+
+        // Verify else branch has false preconditions
+        LineOfCode elseNode = children.get(1);
+        assertFalse(elseNode.getFalsePreconditions().isEmpty(), "Else branch should have false preconditions");
+    }
+
     private MethodDeclaration findMethod(String methodName) {
         return cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(methodName)).orElseThrow();

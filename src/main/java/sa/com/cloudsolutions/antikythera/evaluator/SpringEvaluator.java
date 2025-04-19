@@ -250,7 +250,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
 
-        for (Precondition cond : Branching.getApplicableConditions()) {
+        List<Precondition> allConditions = new ArrayList<>();
+        allConditions.addAll(Branching.getApplicableTrueConditions());
+        allConditions.addAll(Branching.getApplicableFalseConditions());
+        for (Precondition cond : allConditions) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().get() instanceof NameExpr ne
                         && ne.getNameAsString().equals(p.getNameAsString())
@@ -438,7 +441,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(Branching.getApplicableConditions());
+                List<Precondition> allConditions = new ArrayList<>();
+                allConditions.addAll(Branching.getApplicableTrueConditions());
+                allConditions.addAll(Branching.getApplicableFalseConditions());
+                generator.setPreConditions(allConditions);
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);
@@ -819,9 +825,21 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     @Override
     Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
-        List<Precondition> expressions;
+        List<Precondition> expressions = new ArrayList<>();
         if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
-            expressions = l.getPreconditions();
+            // If the path is TRUE_PATH, use false preconditions to make it evaluate to false
+            if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
+                expressions = l.getFalsePreconditions();
+            } 
+            // If the path is FALSE_PATH, use true preconditions to make it evaluate to true
+            else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
+                expressions = l.getTruePreconditions();
+            }
+            // If the path is UNTRAVELLED, use both true and false preconditions
+            else {
+                expressions.addAll(l.getTruePreconditions());
+                expressions.addAll(l.getFalsePreconditions());
+            }
 
             for (Precondition expression : expressions) {
                 evaluateExpression(expression.getExpression());
@@ -860,4 +878,3 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 .orElse(null);
     }
 }
-

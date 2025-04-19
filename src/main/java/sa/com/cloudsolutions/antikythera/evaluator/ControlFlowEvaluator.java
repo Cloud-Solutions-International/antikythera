@@ -43,7 +43,7 @@ public class ControlFlowEvaluator extends Evaluator{
                 for (Parameter param : md.getParameters()) {
                     if (param.getNameAsString().equals(targetParamName)) {
                         Expression expr = setupConditionThroughAssignment(entry, v);
-                        addPreCondition(stmt, expr);
+                        addPreCondition(stmt, expr, state);
                         return Optional.of(expr);
                     }
                 }
@@ -60,7 +60,7 @@ public class ControlFlowEvaluator extends Evaluator{
         }
 
         Expression expr = setupConditionThroughAssignment(entry, v);
-        addPreCondition(stmt, expr);
+        addPreCondition(stmt, expr, state);
         return Optional.of(expr);
     }
 
@@ -108,12 +108,12 @@ public class ControlFlowEvaluator extends Evaluator{
             }
 
             if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariable(stmt, entry, expr);
+                setupConditionalVariable(stmt, entry, expr, state);
             }
         }
     }
 
-    private void setupConditionalVariable(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
+    private void setupConditionalVariable(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope, boolean state) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
@@ -133,12 +133,16 @@ public class ControlFlowEvaluator extends Evaluator{
                 setter.addArgument(entry.getValue().toString());
             }
         }
-        addPreCondition(stmt, setter);
+        addPreCondition(stmt, setter, state);
     }
 
-    private void addPreCondition(Statement statement, Expression expr) {
+    private void addPreCondition(Statement statement, Expression expr, boolean state) {
         LineOfCode l = Branching.get(statement);
-        l.addPrecondition(new Precondition(expr));
+        if (state) {
+            l.addTruePrecondition(new Precondition(expr));
+        } else {
+            l.addFalsePrecondition(new Precondition(expr));
+        }
     }
 
     protected List<Expression> setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt, boolean state) {
