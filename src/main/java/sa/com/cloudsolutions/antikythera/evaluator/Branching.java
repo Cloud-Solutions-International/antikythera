@@ -1,68 +1,122 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.body.MethodDeclaration;
+    import com.github.javaparser.ast.stmt.Statement;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
+    import java.util.ArrayList;
+    import java.util.HashMap;
+    import java.util.List;
+    import java.util.Map;
 
 public class Branching {
-    private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();
-    private static final HashMap<MethodDeclaration, List<LineOfCode>> conditionals = new HashMap<>();
-    private static int loopCount = 0;
+        private static final List<LineOfCode> heap = new ArrayList<>();
+        private static final Map<Integer, LineOfCode> hashes = new HashMap<>();
 
-    private Branching() {
+        private static int size = 0;
 
-    }
+        private Branching() {}
 
-    public static void clear() {
-        branches.clear();
-        loopCount = 0;
-    }
+        public static void clear() {
+            heap.clear();
+            size = 0;
+        }
 
-    public static void add(LineOfCode lineOfCode) {
-        List<LineOfCode> lines = conditionals.computeIfAbsent(lineOfCode.getMethodDeclaration(), k -> new ArrayList<>());
-        lines.add(lineOfCode);
-        branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
-    }
+        public static void add(LineOfCode lineOfCode) {
+            hashes.put(lineOfCode.hashCode(), lineOfCode);
+            if (size >= heap.size()) {
+                heap.add(lineOfCode);
+            } else {
+                heap.set(size, lineOfCode);
+            }
+            bubbleUp(size++);
+        }
 
-    public static LineOfCode get(int hashCode) {
-        return branches.get(hashCode);
-    }
+        public static LineOfCode getNextUnvisited() {
+            if (size == 0) return null;
 
-    public static List<LineOfCode> get(MethodDeclaration methodDeclaration) {
-        return conditionals.getOrDefault(methodDeclaration, new ArrayList<>());
-    }
+            // Root will always have the lowest path state
+            LineOfCode root = heap.get(0);
+            return root.isUntravelled() ? root : null;
+        }
 
-    public static List<Precondition> getApplicableConditions(MethodDeclaration methodDeclaration) {
-        List<Precondition> applicableConditions = new ArrayList<>();
-        List<LineOfCode> lines = conditionals.getOrDefault(methodDeclaration, Collections.emptyList());
-        for (LineOfCode lineOfCode : lines) {
-            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS) {
-                applicableConditions.addAll(lineOfCode.getPreconditions());
+        private static void bubbleUp(int index) {
+            while (index > 0) {
+                int parentIdx = (index - 1) / 2;
+                if (compare(heap.get(index), heap.get(parentIdx)) >= 0) {
+                    break;
+                }
+                swap(index, parentIdx);
+                index = parentIdx;
             }
         }
-        return applicableConditions;
-    }
 
-    /**
-     * Returns true if all the branches have been covered
-     * @return true if both branches in if statements have been covered.
-     */
-    public static boolean isCovered(MethodDeclaration md) {
-        List<LineOfCode> lines = conditionals.get(md);
-        if (lines != null) {
-            for (LineOfCode l : lines) {
-                if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
-                    return false;
+        public static void updateNode(LineOfCode node) {
+            int index = heap.indexOf(node);
+            if (index != -1) {
+                bubbleDown(index);
+                bubbleUp(index);
+            }
+        }
+
+        private static void bubbleDown(int index) {
+            while (true) {
+                int smallest = index;
+                int leftChild = 2 * index + 1;
+                int rightChild = 2 * index + 2;
+
+                if (leftChild < size && compare(heap.get(leftChild), heap.get(smallest)) < 0) {
+                    smallest = leftChild;
+                }
+                if (rightChild < size && compare(heap.get(rightChild), heap.get(smallest)) < 0) {
+                    smallest = rightChild;
+                }
+
+                if (smallest == index) break;
+                swap(index, smallest);
+                index = smallest;
+            }
+        }
+
+        private static void swap(int i, int j) {
+            LineOfCode temp = heap.get(i);
+            heap.set(i, heap.get(j));
+            heap.set(j, temp);
+            updateRelationships(i);
+            updateRelationships(j);
+        }
+
+        private static void updateRelationships(int index) {
+            LineOfCode node = heap.get(index);
+            int leftChild = 2 * index + 1;
+            int rightChild = 2 * index + 2;
+
+            if (leftChild < size) {
+                heap.get(leftChild).setParent(node);
+            }
+            if (rightChild < size) {
+                heap.get(rightChild).setParent(node);
+            }
+        }
+
+        private static int compare(LineOfCode a, LineOfCode b) {
+            return Integer.compare(a.getPathTaken(), b.getPathTaken());
+        }
+
+        public static List<Precondition> getApplicableConditions() {
+            List<Precondition> applicableConditions = new ArrayList<>();
+            for (int i = 0; i < size; i++) {
+                LineOfCode lineOfCode = heap.get(i);
+                if (!lineOfCode.isFullyTravelled()) {
+                    applicableConditions.addAll(lineOfCode.getPreconditions());
                 }
             }
+            return applicableConditions;
         }
-        else {
-            loopCount++;
-            return loopCount < 2;
+
+        public static LineOfCode getRoot() {
+            return size > 0 ? heap.get(0) : null;
         }
-        return true;
+
+        public static LineOfCode get(Statement statement) {
+            return hashes.get(statement.hashCode());
+        }
     }
-}

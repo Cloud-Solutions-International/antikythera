@@ -207,7 +207,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         beforeVisit(md);
         try {
             int safetyCheck = 0;
-            while (! Branching.isCovered(md)) {
+            while (Branching.getNextUnvisited() != null) {
                 getLocals().clear();
                 setupFields();
                 mockMethodArguments(md);
@@ -250,7 +250,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
 
-        for (Precondition cond : Branching.getApplicableConditions(currentMethod)) {
+        for (Precondition cond : Branching.getApplicableConditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().get() instanceof NameExpr ne
                         && ne.getNameAsString().equals(p.getNameAsString())
@@ -438,7 +438,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(Branching.getApplicableConditions(currentMethod));
+                generator.setPreConditions(Branching.getApplicableConditions());
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);
@@ -568,7 +568,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
-        LineOfCode l = Branching.get(ifst.hashCode());
+        LineOfCode l = Branching.get(ifst);
         if (l == null) {
             return super.ifThenElseBlock(ifst);
         }

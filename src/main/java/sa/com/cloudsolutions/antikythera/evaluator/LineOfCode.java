@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
@@ -52,19 +51,9 @@ public class LineOfCode {
     private final Statement statement;
 
     /**
-     * The method declaration that this line of code belongs to.
-     */
-    private final MethodDeclaration methodDeclaration;
-
-    /**
      * The parent conditional statement
      */
     private LineOfCode parent;
-
-    /**
-     * The if conditions that are direct descendents of the current statement
-     */
-    private final List<LineOfCode> children = new ArrayList<>();
 
     /**
      * A non-null value if this statement represents a JPA query.
@@ -78,9 +67,7 @@ public class LineOfCode {
      * @param statement The statement this line of code represents.
      * @throws IllegalStateException if the statement does not belong to a method.
      */
-    @SuppressWarnings("unchecked")
     public LineOfCode(Statement statement) {
-        this.methodDeclaration = statement.findAncestor(MethodDeclaration.class).orElseThrow();
         this.statement = statement;
     }
 
@@ -105,7 +92,7 @@ public class LineOfCode {
      */
     @Override
     public int hashCode() {
-        return statement.hashCode() +109 * (methodDeclaration == null ? 11 : methodDeclaration.hashCode());
+        return statement.hashCode() + 109;
     }
 
     /**
@@ -176,33 +163,12 @@ public class LineOfCode {
     }
 
     /**
-     * Gets the method declaration that this line of code belongs to.
-     *
-     * @return The method declaration.
-     */
-    public MethodDeclaration getMethodDeclaration() {
-        return methodDeclaration;
-    }
-
-    /**
-     * Adds a child `LineOfCode` node to this node.
-     *
-     * @param child The child node to add.
-     */
-    public void addChild(LineOfCode child) {
-        children.add(child);
-    }
-
-    /**
      * Sets the parent `LineOfCode` node for this node.
      *
      * @param parent The parent node to set.
      */
     public void setParent(LineOfCode parent) {
-        if (parent != null) {
-            this.parent = parent;
-            parent.addChild(this);
-        }
+        this.parent = parent;
     }
 
     /**
@@ -260,11 +226,13 @@ public class LineOfCode {
         return statement.toString();
     }
 
+    /**
+     * Checks if this node is a leaf node.
+     *
+     * @return `true` since all nodes are leaves in heap implementation.
+     */
     public boolean isLeaf() {
-        if (children.isEmpty()) {
-            return true;
-        }
-        return children.stream().allMatch(LineOfCode::isFullyTravelled);
+        return true;
     }
 
     public void setResult(boolean b) {
