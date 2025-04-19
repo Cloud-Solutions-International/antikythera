@@ -566,52 +566,42 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    @Override
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
-        LineOfCode l = Branching.get(ifst);
-        if (l == null) {
+        LineOfCode node = Branching.get(ifst);
+        if (node == null) {
             return super.ifThenElseBlock(ifst);
         }
 
         Variable v = evaluateExpression(ifst.getCondition());
         boolean result = (boolean) v.getValue();
+        node.setResult(result);
 
         Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
 
-        // Track which path we're taking
-        if (l.isUntravelled()) {
-            // First time through - execute current path and set up opposite path for next time
+        if (node.isUntravelled()) {
+            // First time through this node
             if (result) {
                 super.executeStatement(ifst.getThenStmt());
-                if (l.isLeaf()) {
-                    l.setPathTaken(LineOfCode.TRUE_PATH);
-                    // Store preconditions for false path
-                    setupIfCondition(ifst, false);
-                }
+                node.setPathTaken(LineOfCode.TRUE_PATH);
+                // Set up conditions for false path next time
+                setupIfCondition(ifst, false);
             } else {
                 super.executeStatement(elseStmt);
-                if (l.isLeaf()) {
-                    l.setPathTaken(LineOfCode.FALSE_PATH);
-                    // Store preconditions for true path
-                    setupIfCondition(ifst, true);
-                }
+                node.setPathTaken(LineOfCode.FALSE_PATH);
+                // Set up conditions for true path next time
+                setupIfCondition(ifst, true);
             }
-        } else if (!l.isFullyTravelled()) {
-            // Second time through - take the opposite path
-            if (result) {
-                super.executeStatement(ifst.getThenStmt());
-            } else {
-                super.executeStatement(elseStmt);
-            }
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            LineOfCode parent = l.getParent();
-            if (parent != null && parent.isLeaf()) {
-                if (parent.getResult() && parent.getStatement() instanceof  IfStmt ifStmt) {
-                    setupIfCondition(ifStmt, !parent.getResult());
-                }
-                parent.setPathTaken(parent.getResult() ? LineOfCode.TRUE_PATH : LineOfCode.FALSE_PATH);
-            }
+        } else if (node.isTruePath()) {
+            // Already took true path, now take false
+            super.executeStatement(elseStmt);
+            node.setPathTaken(LineOfCode.BOTH_PATHS);
+        } else if (node.isFalsePath()) {
+            // Already took false path, now take true
+            super.executeStatement(ifst.getThenStmt());
+            node.setPathTaken(LineOfCode.BOTH_PATHS);
         }
+        // Both paths taken - no action needed
+
         return v;
     }
 
@@ -622,12 +612,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param state the desired state.
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
-        List<Expression> collectedConditions = IfConditionVisitor.collectConditionsUpToMethod(ifStmt);
-        collectedConditions.add(ifStmt.getCondition());
+        // Get condition for this if statement
+        Expression condition = ifStmt.getCondition();
 
-        TruthTable tt = new TruthTable(BinaryOps.getCombinedCondition(collectedConditions));
+        // Create truth table for the condition
+        TruthTable tt = new TruthTable(condition);
         tt.generateTruthTable();
 
+        // Find values that make condition evaluate to desired state
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
         if (!values.isEmpty()) {
@@ -640,7 +632,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         }
-
     }
 
     /**

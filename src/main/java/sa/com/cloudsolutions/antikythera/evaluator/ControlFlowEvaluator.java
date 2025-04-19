@@ -137,7 +137,7 @@ public class ControlFlowEvaluator extends Evaluator{
     }
 
     private void addPreCondition(Statement statement, Expression expr) {
-        LineOfCode l = Branching.get(statement.hashCode());
+        LineOfCode l = Branching.get(statement);
         l.addPrecondition(new Precondition(expr));
     }
 
@@ -196,7 +196,7 @@ public class ControlFlowEvaluator extends Evaluator{
     Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-        LineOfCode l = Branching.get(stmt.hashCode());
+        LineOfCode l = Branching.get(stmt);
 
         if (l == null) {
             return straightPath(sc, stmt, methodCall);
