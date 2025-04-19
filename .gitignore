@@ -14,6 +14,7 @@ target/
 *.iws
 *.iml
 *.ipr
+*.class
 
 ### generator files ###
 src/main/resources/generator.yml
