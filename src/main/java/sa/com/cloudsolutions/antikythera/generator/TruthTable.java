@@ -41,7 +41,7 @@ public class TruthTable {
     /**
      * The condition that this truth table is for
      */
-    private final Expression condition;
+    private Expression condition;
     /**
      * Collection of variables involved in the condition.
      * the key will be the expression representing the variable and the value will be a Pair
@@ -63,6 +63,11 @@ public class TruthTable {
      */
     private List<Map<Expression, Object>> table;
 
+    public TruthTable() {
+        this.variables = new HashMap<>();
+        this.conditions = new HashSet<>();
+        this.constraints = new HashMap<>();
+    }
     /**
      * Create a new truth table for the given condition represented as a string
      * @param conditionCode the condition as string
@@ -76,10 +81,8 @@ public class TruthTable {
      * @param condition Expression
      */
     public TruthTable(Expression condition) {
+        this();
         this.condition = condition;
-        this.variables = new HashMap<>();
-        this.conditions = new HashSet<>();
-        this.constraints = new HashMap<>();
     }
 
     private static boolean isInequality(BinaryExpr binaryExpr) {
@@ -157,8 +160,16 @@ public class TruthTable {
     }
 
     private boolean satisfiesConstraints(Map<Expression, Object> truthValues) {
+        if (truthValues == null || truthValues.isEmpty()) {
+            return false;
+        }
+
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
+            if (!truthValues.containsKey(variable)) {
+                return false;
+            }
+
             for (Expression constraintExpr : constraint.getValue()) {
                 if (constraintExpr instanceof BinaryExpr binaryExpr) {
                     if (!satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
@@ -618,6 +629,9 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         constraints.computeIfAbsent(name, k -> new ArrayList<>()).add(constraint);
     }
 
+    public void setCondition(Expression condition) {
+        this.condition = condition;
+    }
 
     /**
      * Collects variable names from the condition expression.

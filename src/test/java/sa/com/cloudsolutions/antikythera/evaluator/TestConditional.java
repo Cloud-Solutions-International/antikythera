@@ -147,13 +147,13 @@ class TestConditional extends TestHelper {
         ReturnConditionVisitor visitor1 = new ReturnConditionVisitor(returnStatements.get(0));
         method.accept(visitor1, null);
         Expression combinedCondition1 = BinaryOps.getCombinedCondition(visitor1.getConditions());
-        assertEquals("a == 0 && a >= 0", combinedCondition1.toString(), "Incorrect combined condition for 'Zero'");
+        assertEquals("(a == 0) && (a >= 0)", combinedCondition1.toString(), "Incorrect combined condition for 'Zero'");
 
         // Test for the second return statement (return "Positive")
         ReturnConditionVisitor visitor2 = new ReturnConditionVisitor(returnStatements.get(1));
         method.accept(visitor2, null);
         Expression combinedCondition2 = BinaryOps.getCombinedCondition(visitor2.getConditions());
-        assertEquals("a != 0 && a >= 0", combinedCondition2.toString(), "Incorrect combined condition for 'Positive'");
+        assertEquals("(a != 0) && (a >= 0)", combinedCondition2.toString(), "Incorrect combined condition for 'Positive'");
 
         // Test for the third return statement (return "Negative")
         ReturnConditionVisitor visitor3 = new ReturnConditionVisitor(returnStatements.get(2));

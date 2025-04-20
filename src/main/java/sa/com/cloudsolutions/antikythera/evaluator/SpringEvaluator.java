@@ -10,6 +10,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -608,9 +609,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
         List<Expression> collectedConditions = IfConditionVisitor.collectConditionsUpToMethod(ifStmt);
-        collectedConditions.add(ifStmt.getCondition());
+        TruthTable tt = new TruthTable();
 
-        TruthTable tt = new TruthTable(BinaryOps.getCombinedCondition(collectedConditions));
+        for(Expression cond : collectedConditions) {
+            if (cond.isBinaryExpr()) {
+                BinaryExpr bin = cond.asBinaryExpr();
+                if (bin.getLeft().isNameExpr()) {
+                    tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
+                }
+            }
+        }
+
+        collectedConditions.add(ifStmt.getCondition());
+        tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);

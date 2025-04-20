@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.EnclosedExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -72,17 +73,19 @@ public class BinaryOps {
             return null;
         }
 
-        Expression result = conditions.getFirst().clone();
-        for (int i = 1; i < conditions.size(); i++) {
-            result = new BinaryExpr(
-                    result,
-                    conditions.get(i),
-                    BinaryExpr.Operator.AND
-            );
+        if (conditions.size() == 1) {
+            return conditions.getFirst().clone();
         }
-        return result;
-    }
 
+        Expression combined = new EnclosedExpr(conditions.get(0));
+        for (int i = 1; i < conditions.size(); i++) {
+            BinaryExpr.Operator operator = BinaryExpr.Operator.AND;
+            Expression right = new EnclosedExpr(conditions.get(i));
+            combined = new BinaryExpr(combined, right, operator);
+        }
+
+        return combined;
+    }
     static Variable binaryOps(BinaryExpr.Operator operator, Expression leftExpression, Expression rightExpression, Variable left, Variable right) {
         return switch (operator) {
             case EQUALS -> BinaryOps.checkEquality(left, right);
