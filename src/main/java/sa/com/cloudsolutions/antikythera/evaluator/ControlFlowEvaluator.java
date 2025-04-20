@@ -6,6 +6,7 @@ import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -66,9 +67,11 @@ public class ControlFlowEvaluator extends Evaluator{
 
     private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
-        Expression valueExpr = v.getType() instanceof PrimitiveType
-                ? Reflect.createLiteralExpression(entry.getValue())
-                : new StringLiteralExpr(entry.getValue().toString());
+        Expression valueExpr = switch (v.getType()) {
+            case PrimitiveType p -> Reflect.createLiteralExpression(entry.getValue());
+            default -> entry.getValue() == null ? new NullLiteralExpr()
+                    : new StringLiteralExpr(entry.getValue().toString());
+        };
 
         return new AssignExpr(
                 new NameExpr(nameExpr.getNameAsString()),
