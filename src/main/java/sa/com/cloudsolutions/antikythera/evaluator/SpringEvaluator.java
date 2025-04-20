@@ -18,7 +18,6 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -216,7 +215,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
             else {
                 int safetyCheck = 0;
-                while (true) {
+                while (safetyCheck < 16) {
                     getLocals().clear();
                     setupFields();
                     mockMethodArguments(md);
@@ -228,9 +227,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
                     executeMethod(md);
                     safetyCheck++;
-                    if (safetyCheck == 16) {
-                        break;
-                    }
                     Branching.add(currentConditional);
                 }
             }
@@ -645,7 +641,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 if (entry.getKey().isMethodCallExpr()) {
                     setupConditionThroughMethodCalls(ifStmt, entry);
                 } else if (entry.getKey().isNameExpr()) {
-                    setupConditionThroughAssignment(ifStmt, state, entry);
+                    setupConditionThroughAssignment(ifStmt, entry);
                 }
             }
         }

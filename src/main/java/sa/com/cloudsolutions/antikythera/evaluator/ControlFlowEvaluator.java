@@ -32,7 +32,7 @@ public class ControlFlowEvaluator extends Evaluator{
     }
 
     @SuppressWarnings("unchecked")
-    Optional<Expression> setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
+    Optional<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
@@ -164,7 +164,7 @@ public class ControlFlowEvaluator extends Evaluator{
                 Type type = param.getType();
                 for (Map.Entry<Expression, Object> entry : value.entrySet()) {
                     if (type.isPrimitiveType()) {
-                        setupConditionThroughAssignment(stmt, state, entry).ifPresent(expressions::add);
+                        setupConditionThroughAssignment(stmt, entry).ifPresent(expressions::add);
                     } else {
                         setupConditionThroughMethodCalls(stmt, entry);
                     }
