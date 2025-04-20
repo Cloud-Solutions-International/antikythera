@@ -67,13 +67,29 @@ public class Branching {
     static class LineOfCodeComparator implements Comparator<LineOfCode> {
         @Override
         public int compare(LineOfCode a, LineOfCode b) {
-            // Compare path states first (lower ordinal = higher priority)
-            int pathComparison = Integer.compare(a.getPathTaken(), b.getPathTaken());
-            if (pathComparison != 0) {
-                return pathComparison;
+            // BOTH_PATHS gets lowest priority
+            if (a.getPathTaken() == LineOfCode.BOTH_PATHS && b.getPathTaken() != LineOfCode.BOTH_PATHS) return 1;
+            if (b.getPathTaken() == LineOfCode.BOTH_PATHS && a.getPathTaken() != LineOfCode.BOTH_PATHS) return -1;
+
+            // Compare by children count (fewer = higher priority)
+            int childrenComparison = Integer.compare(a.getChildren().size(), b.getChildren().size());
+            if (childrenComparison != 0) {
+                return childrenComparison;
             }
-            // If path states are equal, compare by children count (fewer = higher priority)
-            return Integer.compare(a.getChildren().size(), b.getChildren().size());
+
+            // Break ties by path state priority: FALSE > TRUE > UNTRAVELLED
+            int aValue = getPathPriority(a.getPathTaken());
+            int bValue = getPathPriority(b.getPathTaken());
+            return Integer.compare(aValue, bValue);
+        }
+
+        private int getPathPriority(int pathTaken) {
+            return switch (pathTaken) {
+                case LineOfCode.FALSE_PATH -> 0;   // Highest
+                case LineOfCode.TRUE_PATH -> 1;    // Second
+                case LineOfCode.UNTRAVELLED -> 2;  // Third
+                default -> 3;                      // BOTH_PATHS and others lowest
+            };
         }
     }
 }

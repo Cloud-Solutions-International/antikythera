@@ -79,6 +79,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     private MethodDeclaration currentMethod;
     private boolean onTest;
+    private LineOfCode currentConditional;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -207,21 +208,29 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         beforeVisit(md);
         try {
             if (Branching.size(md) == 0) {
-                iterate(md);
+                getLocals().clear();
+                setupFields();
+                mockMethodArguments(md);
+                executeMethod(md);
             }
             else {
                 int safetyCheck = 0;
                 while (true) {
-                    LineOfCode line = Branching.getHighestPriority(md);
-                    if (line == null || line.isFullyTravelled()) {
+                    getLocals().clear();
+                    setupFields();
+                    mockMethodArguments(md);
+
+                    currentConditional = Branching.getHighestPriority(md);
+                    if (currentConditional == null || currentConditional.isFullyTravelled()) {
                         break;
                     }
-                    iterate(md);
+
+                    executeMethod(md);
                     safetyCheck++;
                     if (safetyCheck == 16) {
                         break;
                     }
-                    Branching.add(line);
+                    Branching.add(currentConditional);
                 }
             }
         } catch (AUTException aex) {
@@ -229,12 +238,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private void iterate(MethodDeclaration md) throws ReflectiveOperationException {
-        getLocals().clear();
-        setupFields();
-        mockMethodArguments(md);
-        executeMethod(md);
-    }
 
     private void beforeVisit(MethodDeclaration md) {
         md.getParentNode().ifPresent(p -> {
@@ -263,17 +266,30 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
+        md.getBody().ifPresent(body ->
+                setLocal(body, p.getNameAsString(), va)
+        );
 
-        for (Precondition cond : Branching.getApplicableConditions(currentMethod)) {
-            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne
-                        && ne.getNameAsString().equals(p.getNameAsString())
-                        && va.getValue() instanceof Evaluator eval) {
-                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
-                    eval.executeLocalMethod(wrapper);
+        if (currentConditional != null && currentConditional.getStatement() instanceof IfStmt ifStmt) {
+            boolean nextState = currentConditional.isFalsePath();
+            currentConditional.getPreconditions().clear();
+            setupIfCondition(ifStmt, nextState);
+            currentConditional.setPathTaken(currentConditional.getPathTaken() + 1);
+            if (currentConditional.isTruePath()) {
+                currentConditional.setPathTaken(LineOfCode.BOTH_PATHS);
+            }
+
+            for (Precondition cond : currentConditional.getPreconditions()) {
+                if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                    if (mce.getScope().get() instanceof NameExpr ne
+                            && ne.getNameAsString().equals(p.getNameAsString())
+                            && va.getValue() instanceof Evaluator eval) {
+                        MCEWrapper wrapper = eval.wrapCallExpression(mce);
+                        eval.executeLocalMethod(wrapper);
+                    }
+                } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
+                    parameterAssignment(p, assignExpr, va);
                 }
-            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
-                parameterAssignment(p, assignExpr, va);
             }
         }
 
@@ -580,55 +596,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    @Override
-    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
-        LineOfCode l = Branching.get(ifst.hashCode());
-        if (l == null) {
-            return super.ifThenElseBlock(ifst);
-        }
-
-        Variable v = evaluateExpression(ifst.getCondition());
-        boolean result = (boolean) v.getValue();
-
-        Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
-
-        // Track which path we're taking
-        if (l.isUntravelled()) {
-            // First time through - execute current path and set up opposite path for next time
-            if (result) {
-                super.executeStatement(ifst.getThenStmt());
-                if (l.isLeaf()) {
-                    l.setPathTaken(LineOfCode.TRUE_PATH);
-                    // Store preconditions for false path
-                    setupIfCondition(ifst, false);
-                }
-            } else {
-                super.executeStatement(elseStmt);
-                if (l.isLeaf()) {
-                    l.setPathTaken(LineOfCode.FALSE_PATH);
-                    // Store preconditions for true path
-                    setupIfCondition(ifst, true);
-                }
-            }
-        } else if (!l.isFullyTravelled()) {
-            // Second time through - take the opposite path
-            if (result) {
-                super.executeStatement(ifst.getThenStmt());
-            } else {
-                super.executeStatement(elseStmt);
-            }
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            LineOfCode parent = l.getParent();
-            if (parent != null && parent.isLeaf()) {
-                if (parent.getResult() && parent.getStatement() instanceof  IfStmt ifStmt) {
-                    setupIfCondition(ifStmt, !parent.getResult());
-                }
-                parent.setPathTaken(parent.getResult() ? LineOfCode.TRUE_PATH : LineOfCode.FALSE_PATH);
-            }
-        }
-        return v;
-    }
-
     /**
      * Set up an if condition so that it will evaluate to true or false in future executions.
      *
@@ -648,7 +615,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if (entry.getKey().isMethodCallExpr()) {
-                    setupConditionThroughMethodCalls(ifStmt, state, entry);
+                    setupConditionThroughMethodCalls(ifStmt, entry);
                 } else if (entry.getKey().isNameExpr()) {
                     setupConditionThroughAssignment(ifStmt, state, entry);
                 }

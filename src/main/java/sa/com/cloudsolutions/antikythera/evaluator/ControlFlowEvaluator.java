@@ -77,12 +77,12 @@ public class ControlFlowEvaluator extends Evaluator{
         );
     }
 
-    void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
+    void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
         ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
-        setupConditionThroughMethodCalls(stmt, state, entry, chain);
+        setupConditionThroughMethodCalls(stmt, entry, chain);
     }
 
-    private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, ScopeChain chain) {
+    private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, ScopeChain chain) {
         if (!chain.isEmpty()) {
             Expression expr = chain.getChain().getFirst().getExpression();
             Variable v = getValue(stmt, expr.toString());
@@ -163,7 +163,7 @@ public class ControlFlowEvaluator extends Evaluator{
                     if (type.isPrimitiveType()) {
                         setupConditionThroughAssignment(stmt, state, entry).ifPresent(expressions::add);
                     } else {
-                        setupConditionThroughMethodCalls(stmt, state, entry);
+                        setupConditionThroughMethodCalls(stmt, entry);
                     }
                 }
             }
