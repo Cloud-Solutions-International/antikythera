@@ -13,6 +13,8 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -80,7 +82,7 @@ class TestIfConditionVisitor {
     void testGraph() {
         md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("multiVariateDeep")).get();
         md.accept(new IfConditionVisitor(), null);
-        List<LineOfCode> lines = Branching.get(md);
+        List<LineOfCode> lines = new ArrayList<>(Branching.get(md));
         assertEquals(4, lines.size());
 
         for (LineOfCode line : lines) {
@@ -92,7 +94,10 @@ class TestIfConditionVisitor {
             assertNotNull(l);
             assertTrue(l.isUntravelled());
             l.setPathTaken(LineOfCode.FALSE_PATH);
-            Branching.add(l);
+        }
+
+        for (LineOfCode line : lines) {
+            Branching.add(line);
         }
 
         for (int i = 0 ; i < lines.size() ; i++) {
@@ -100,7 +105,10 @@ class TestIfConditionVisitor {
             assertNotNull(l);
             assertTrue(l.isFalsePath());
             l.setPathTaken(LineOfCode.TRUE_PATH);
-            Branching.add(l);
+        }
+
+        for (LineOfCode line : lines) {
+            Branching.add(line);
         }
 
         for (int i = 0 ; i < lines.size() ; i++) {
