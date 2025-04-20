@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.VoidType;
 
 public class Variable {
     /**
@@ -41,7 +43,12 @@ public class Variable {
      * @param type the identified java parser type.
      */
     public Variable(Type type) {
-        this.type = type;
+        if (type == null) {
+            this.type = new VoidType();
+        }
+        else {
+            this.type = type;
+        }
     }
 
     /**
