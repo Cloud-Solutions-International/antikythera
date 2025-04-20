@@ -274,4 +274,8 @@ public class LineOfCode {
     public boolean getResult() {
         return result;
     }
+
+    public List<LineOfCode> getChildren() {
+        return children;
+    }
 }

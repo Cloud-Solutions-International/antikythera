@@ -206,20 +206,34 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         beforeVisit(md);
         try {
-            int safetyCheck = 0;
-            while (! Branching.isCovered(md)) {
-                getLocals().clear();
-                setupFields();
-                mockMethodArguments(md);
-                executeMethod(md);
-                safetyCheck++;
-                if (safetyCheck == 16) {
-                    break;
+            if (Branching.size(md) == 0) {
+                iterate(md);
+            }
+            else {
+                int safetyCheck = 0;
+                while (true) {
+                    LineOfCode line = Branching.getHighestPriority(md);
+                    if (line == null || line.isFullyTravelled()) {
+                        break;
+                    }
+                    iterate(md);
+                    safetyCheck++;
+                    if (safetyCheck == 16) {
+                        break;
+                    }
+                    Branching.add(line);
                 }
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
         }
+    }
+
+    private void iterate(MethodDeclaration md) throws ReflectiveOperationException {
+        getLocals().clear();
+        setupFields();
+        mockMethodArguments(md);
+        executeMethod(md);
     }
 
     private void beforeVisit(MethodDeclaration md) {
