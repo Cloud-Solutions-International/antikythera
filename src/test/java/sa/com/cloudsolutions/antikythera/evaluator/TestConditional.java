@@ -55,8 +55,8 @@ class TestConditional extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional1, The name is nullT", "conditional2, The name is nullT",
-            "conditional3, ZERO!1",
+    @CsvSource({"conditional1, The name is nullT", "conditional2, TThe name is null",
+            "conditional3, 1ZERO!",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -70,7 +70,7 @@ class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Positive!Negative!", "conditional5, One!Two!Three!ZERO!",
             "conditional6, One!Two!Three!ZERO!","conditional7, One!Two!Three!ZERO!",
-            "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!", "booleanWorks, True!False!"
+            "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!", "booleanWorks, False!True!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
