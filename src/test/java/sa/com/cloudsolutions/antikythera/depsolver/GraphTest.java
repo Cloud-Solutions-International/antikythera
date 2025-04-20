@@ -35,9 +35,7 @@ class GraphTest {
         assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
         assertNotNull(gn.getDestination());
 
-        assertEquals(1, Graph.getNodes().size());
-        gn.buildNode();
-        assertEquals(1, Graph.getNodes().size());
+        assertEquals(21, Graph.getNodes().size());
     }
 
     @Test

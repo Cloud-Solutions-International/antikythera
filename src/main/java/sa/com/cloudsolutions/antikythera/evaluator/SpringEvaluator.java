@@ -271,26 +271,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         );
 
         if (currentConditional != null && currentConditional.getStatement() instanceof IfStmt ifStmt) {
-            boolean nextState = currentConditional.isFalsePath();
-            currentConditional.getPreconditions().clear();
-            setupIfCondition(ifStmt, nextState);
-            currentConditional.setPathTaken(currentConditional.getPathTaken() + 1);
-            if (currentConditional.isTruePath()) {
-                currentConditional.setPathTaken(LineOfCode.BOTH_PATHS);
-            }
-
-            for (Precondition cond : currentConditional.getPreconditions()) {
-                if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                    if (mce.getScope().get() instanceof NameExpr ne
-                            && ne.getNameAsString().equals(p.getNameAsString())
-                            && va.getValue() instanceof Evaluator eval) {
-                        MCEWrapper wrapper = eval.wrapCallExpression(mce);
-                        eval.executeLocalMethod(wrapper);
-                    }
-                } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
-                    parameterAssignment(p, assignExpr, va);
-                }
-            }
+            applyPreconditions(p, ifStmt, va);
         }
 
         md.getBody().ifPresent(body -> {
@@ -298,6 +279,29 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
         });
 
+    }
+
+    private void applyPreconditions(Parameter p, IfStmt ifStmt, Variable va) throws ReflectiveOperationException {
+        boolean nextState = currentConditional.isFalsePath();
+        currentConditional.getPreconditions().clear();
+        setupIfCondition(ifStmt, nextState);
+        currentConditional.setPathTaken(currentConditional.getPathTaken() + 1);
+        if (currentConditional.isTruePath()) {
+            currentConditional.setPathTaken(LineOfCode.BOTH_PATHS);
+        }
+
+        for (Precondition cond : currentConditional.getPreconditions()) {
+            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                if (mce.getScope().get() instanceof NameExpr ne
+                        && ne.getNameAsString().equals(p.getNameAsString())
+                        && va.getValue() instanceof Evaluator eval) {
+                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
+                    eval.executeLocalMethod(wrapper);
+                }
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
+                parameterAssignment(p, assignExpr, va);
+            }
+        }
     }
 
     /**
