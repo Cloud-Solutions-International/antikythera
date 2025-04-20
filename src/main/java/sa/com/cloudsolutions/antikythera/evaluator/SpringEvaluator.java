@@ -250,14 +250,28 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Branching.clear();
         AntikytheraRunTime.reset();
 
-        final List<Integer> s = new ArrayList<>();
-
         md.accept(new IfConditionVisitor(), null);
+    }
+
+    @Override
+    protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
+        NodeList<Parameter> parameters = md.getParameters();
+        if (currentConditional != null && currentConditional.getPreconditions() != null) {
+            currentConditional.getPreconditions().clear();
+        }
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            setupParameter(md, parameters.get(i));
+        }
+        if (currentConditional != null) {
+            currentConditional.setPathTaken(
+                    currentConditional.getPathTaken() == LineOfCode.FALSE_PATH
+                            ? LineOfCode.BOTH_PATHS : currentConditional.getPathTaken() + 1 );
+        }
     }
 
     /**
      * Set up the parameters required for the method call.
-     * If there are any preconditions that need to be applied to get branch coverage the parameters
+     * When there are preconditions that need to be applied to get branch coverage, the parameters
      * will be updated to reflect those preconditions.
      *
      * @param md the method declaration into whose variable space this parameter will be copied
@@ -284,9 +298,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void applyPreconditions(Parameter p, IfStmt ifStmt, Variable va) throws ReflectiveOperationException {
         boolean nextState = currentConditional.isFalsePath();
-        currentConditional.getPreconditions().clear();
         setupIfCondition(ifStmt, nextState);
-        currentConditional.setPathTaken(currentConditional.getPathTaken() + 1);
+
         if (currentConditional.isTruePath()) {
             currentConditional.setPathTaken(LineOfCode.BOTH_PATHS);
         }

@@ -171,7 +171,7 @@ class TestConditional extends TestHelper {
 
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals("Antikythera!Aargh!Bee!Zero!",s.replaceAll("\\n",""));
+        assertEquals("Bee!Zero!Zero!Aargh!Antikythera!Bee!",s.replaceAll("\\n",""));
     }
 
 }
