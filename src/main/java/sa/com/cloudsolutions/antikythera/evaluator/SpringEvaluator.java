@@ -207,27 +207,32 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         beforeVisit(md);
         try {
-            if (Branching.size(md) == 0) {
+            int oldSize = Branching.size(md);
+
+            int safetyCheck = 0;
+            while (safetyCheck < 16) {
                 getLocals().clear();
                 setupFields();
                 mockMethodArguments(md);
-                executeMethod(md);
-            }
-            else {
-                int safetyCheck = 0;
-                while (safetyCheck < 16) {
-                    getLocals().clear();
-                    setupFields();
-                    mockMethodArguments(md);
 
-                    currentConditional = Branching.getHighestPriority(md);
-                    if (currentConditional == null || currentConditional.isFullyTravelled()) {
+                currentConditional = Branching.getHighestPriority(md);
+                if (currentConditional == null || currentConditional.isFullyTravelled()) {
+                    if (oldSize != 0) {
                         break;
                     }
+                }
 
-                    executeMethod(md);
-                    safetyCheck++;
+                executeMethod(md);
+                safetyCheck++;
+                if (currentConditional != null) {
+                    currentConditional.transition();
                     Branching.add(currentConditional);
+                }
+                if (Branching.size(md) == 0) {
+                    break;
+                }
+                else {
+                    oldSize = Branching.size(md);
                 }
             }
         } catch (AUTException aex) {
@@ -258,11 +263,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
         }
-        if (currentConditional != null) {
-            currentConditional.setPathTaken(
-                    currentConditional.getPathTaken() == LineOfCode.FALSE_PATH
-                            ? LineOfCode.BOTH_PATHS : currentConditional.getPathTaken() + 1 );
-        }
+
     }
 
     /**
@@ -295,10 +296,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private void applyPreconditions(Parameter p, IfStmt ifStmt, Variable va) throws ReflectiveOperationException {
         boolean nextState = currentConditional.isFalsePath();
         setupIfCondition(ifStmt, nextState);
-
-        if (currentConditional.isTruePath()) {
-            currentConditional.setPathTaken(LineOfCode.BOTH_PATHS);
-        }
 
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
@@ -815,11 +812,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Variable v = super.handleOptionals(sc);
         if (v.getValue() instanceof Optional<?> optional) {
             if (optional.isPresent()) {
-                l.setPathTaken(LineOfCode.TRUE_PATH);
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
                 expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
             } else {
-                l.setPathTaken(LineOfCode.FALSE_PATH);
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
                 expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
             }

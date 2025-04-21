@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
@@ -11,61 +12,51 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
 /**
  * Represents a line of code within a method, including its associated conditions and execution paths.
- *
  */
 public class LineOfCode {
-
-    /**
-     * The list of preconditions to be applied before executing this line.
-     */
-    private final List<Precondition> preconditions = new ArrayList<>();
 
     /**
      * Represents the state where the node has not been visited at all.
      * This is the default value for the path state of all nodes.
      */
     public static final int UNTRAVELLED = 0;
-
     /**
      * Represents the state where the false path of the node has been traversed.
      */
     public static final int FALSE_PATH = 1;
-
     /**
      * Represents the state where the true path of the node has been traversed.
      */
     public static final int TRUE_PATH = 2;
-
     /**
      * Represents the state where both the true and false paths of the node have been traversed.
      */
     public static final int BOTH_PATHS = 3;
-
+    /**
+     * The list of preconditions to be applied before executing this line.
+     */
+    private final List<Precondition> preconditions = new ArrayList<>();
+    /**
+     * The statement that this line of code represents.
+     */
+    private final Statement statement;
+    /**
+     * The method declaration that this line of code belongs to.
+     */
+    private final MethodDeclaration methodDeclaration;
+    /**
+     * The if conditions that are direct descendents of the current statement
+     */
+    private final List<LineOfCode> children = new ArrayList<>();
     /**
      * The current path state of this line of code.
      */
     private int pathTaken;
 
     /**
-     * The statement that this line of code represents.
-     */
-    private final Statement statement;
-
-    /**
-     * The method declaration that this line of code belongs to.
-     */
-    private final MethodDeclaration methodDeclaration;
-
-    /**
      * The parent conditional statement
      */
     private LineOfCode parent;
-
-    /**
-     * The if conditions that are direct descendents of the current statement
-     */
-    private final List<LineOfCode> children = new ArrayList<>();
-
     /**
      * A non-null value if this statement represents a JPA query.
      */
@@ -105,7 +96,7 @@ public class LineOfCode {
      */
     @Override
     public int hashCode() {
-        return statement.hashCode() +109 * (methodDeclaration == null ? 11 : methodDeclaration.hashCode());
+        return statement.hashCode() + 109 * (methodDeclaration == null ? 11 : methodDeclaration.hashCode());
     }
 
     /**
@@ -125,7 +116,25 @@ public class LineOfCode {
      * @param pathTaken The new path state.
      */
     public void setPathTaken(int pathTaken) {
-        this.pathTaken = pathTaken;
+        if (statement instanceof IfStmt) {
+            this.pathTaken = pathTaken;
+        } else {
+            if ( (this.pathTaken == TRUE_PATH || this.pathTaken == FALSE_PATH)
+                    && (pathTaken == TRUE_PATH || pathTaken == FALSE_PATH)) {
+                this.pathTaken = BOTH_PATHS;
+            }
+            else {
+                this.pathTaken = pathTaken;
+            }
+        }
+    }
+
+    public void transition() {
+        if (isFalsePath()) {
+            pathTaken = LineOfCode.BOTH_PATHS;
+        } else {
+            pathTaken++;
+        }
     }
 
     /**
@@ -194,6 +203,15 @@ public class LineOfCode {
     }
 
     /**
+     * Gets the parent `LineOfCode` node of this node.
+     *
+     * @return The parent node, or `null` if none exists.
+     */
+    public LineOfCode getParent() {
+        return parent;
+    }
+
+    /**
      * Sets the parent `LineOfCode` node for this node.
      *
      * @param parent The parent node to set.
@@ -203,15 +221,6 @@ public class LineOfCode {
             this.parent = parent;
             parent.addChild(this);
         }
-    }
-
-    /**
-     * Gets the parent `LineOfCode` node of this node.
-     *
-     * @return The parent node, or `null` if none exists.
-     */
-    public LineOfCode getParent() {
-        return parent;
     }
 
     /**
@@ -260,19 +269,13 @@ public class LineOfCode {
         return statement.toString();
     }
 
-    public boolean isLeaf() {
-        if (children.isEmpty()) {
-            return true;
-        }
-        return children.stream().allMatch(LineOfCode::isFullyTravelled);
+
+    public boolean getResult() {
+        return result;
     }
 
     public void setResult(boolean b) {
         this.result = b;
-    }
-
-    public boolean getResult() {
-        return result;
     }
 
     public List<LineOfCode> getChildren() {
