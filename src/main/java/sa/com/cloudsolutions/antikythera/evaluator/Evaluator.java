@@ -287,51 +287,47 @@ public class Evaluator {
     }
 
     private Variable evaluateUnaryExpression(Expression expr) throws ReflectiveOperationException {
-        Expression unaryExpr = expr.asUnaryExpr().getExpression();
-        UnaryExpr.Operator operator = expr.asUnaryExpr().getOperator();
-        if (operator.equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
-            Variable v = evaluateExpression(unaryExpr);
-            v.setValue(!(Boolean)v.getValue());
-            return v;
-        }
-        else if(operator.equals(UnaryExpr.Operator.POSTFIX_INCREMENT)
-                || operator.equals(UnaryExpr.Operator.PREFIX_INCREMENT)) {
-            Variable v = evaluateExpression(unaryExpr);
-            if (v.getValue() instanceof Integer n) {
-                v.setValue(n + 1);
-            } else if (v.getValue() instanceof Double d) {
-                v.setValue(d + 1);
-            } else if (v.getValue() instanceof Long l) {
-                v.setValue(l + 1);
-            }
-            return v;
-        }
-        else if(operator.equals(UnaryExpr.Operator.POSTFIX_DECREMENT)
-                || operator.equals(UnaryExpr.Operator.PREFIX_DECREMENT)) {
-            Variable v = evaluateExpression(unaryExpr);
-            if (v.getValue() instanceof Integer n) {
-                v.setValue(n - 1);
-            } else if (v.getValue() instanceof Double d) {
-                v.setValue(d - 1);
-            } else if (v.getValue() instanceof Long l) {
-                v.setValue(l - 1);
-            }
-            return v;
-        }
-        else if(operator.equals(UnaryExpr.Operator.MINUS)) {
-            Variable v = evaluateExpression(unaryExpr);
-            if (v.getValue() instanceof Integer n) {
-                v.setValue(-1 * n);
-            } else if (v.getValue() instanceof Double d) {
-                v.setValue(-1 * d);
-            } else if (v.getValue() instanceof Long l) {
-                v.setValue(-1 * l);
-            }
-            return v;
-        }
+        UnaryExpr unaryExpr = expr.asUnaryExpr();
+        Expression expression = unaryExpr.getExpression();
+        Variable v = evaluateExpression(expression);
 
-        logger.warn("Negation is the only unary operation supported at the moment");
-        return null;
+        switch (unaryExpr.getOperator()) {
+            case LOGICAL_COMPLEMENT -> {
+                v.setValue(!(Boolean) v.getValue());
+                return v;
+            }
+            case POSTFIX_INCREMENT, PREFIX_INCREMENT -> {
+                v.setValue(switch (v.getValue()) {
+                    case Integer n -> n + 1;
+                    case Double d -> d + 1;
+                    case Long l -> l + 1;
+                    default -> v.getValue();
+                });
+                return v;
+            }
+            case POSTFIX_DECREMENT, PREFIX_DECREMENT -> {
+                v.setValue(switch (v.getValue()) {
+                    case Integer n -> n - 1;
+                    case Double d -> d - 1;
+                    case Long l -> l - 1;
+                    default -> v.getValue();
+                });
+                return v;
+            }
+            case MINUS -> {
+                v.setValue(switch (v.getValue()) {
+                    case Integer n -> -n;
+                    case Double d -> -d;
+                    case Long l -> -l;
+                    default -> v.getValue();
+                });
+                return v;
+            }
+            default -> {
+                logger.warn("Unsupported unary operation: {}", unaryExpr.getOperator());
+                return null;
+            }
+        }
     }
 
     @SuppressWarnings("java:S3011")
