@@ -817,9 +817,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (optional.isPresent()) {
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
                 expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
+                l.setPathTaken(LineOfCode.TRUE_PATH);
             } else {
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
                 expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
+                l.setPathTaken(LineOfCode.FALSE_PATH);
             }
             for (Expression expr : expressions) {
                 mapParameterToArguments(expr, method, methodCall);
