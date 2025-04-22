@@ -257,13 +257,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
-        if (currentConditional != null && currentConditional.getPreconditions() != null) {
-            currentConditional.getPreconditions().clear();
-        }
+
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
         }
 
+        if (currentConditional != null && currentConditional.getPreconditions() != null) {
+            currentConditional.getPreconditions().clear();
+        }
     }
 
     /**
@@ -282,8 +283,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 setLocal(body, p.getNameAsString(), va)
         );
 
-        if (currentConditional != null && currentConditional.getStatement() instanceof IfStmt ifStmt) {
-            applyPreconditions(p, ifStmt, va);
+        if (currentConditional != null ) {
+            if (currentConditional.getStatement() instanceof IfStmt ifStmt) {
+                boolean nextState = currentConditional.isFalsePath();
+                setupIfCondition(ifStmt, nextState);
+            }
+            applyPreconditions(p, va);
         }
 
         md.getBody().ifPresent(body -> {
@@ -293,9 +298,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     }
 
-    private void applyPreconditions(Parameter p, IfStmt ifStmt, Variable va) throws ReflectiveOperationException {
-        boolean nextState = currentConditional.isFalsePath();
-        setupIfCondition(ifStmt, nextState);
+    private void applyPreconditions(Parameter p, Variable va) throws ReflectiveOperationException {
 
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
