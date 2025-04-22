@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 
@@ -54,7 +53,7 @@ public class Variable {
     /**
      * Create an instance with the given value.
      *
-     * if the value is not null, it's class will be detected and saved in the class field.
+     * if the value is not null, its class will be detected and saved in the class field.
      * @param value the initial value for the Variable
      */
     public Variable(Object value) {

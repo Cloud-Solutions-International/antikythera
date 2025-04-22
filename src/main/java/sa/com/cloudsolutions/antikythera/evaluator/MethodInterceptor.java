@@ -36,7 +36,7 @@ public class MethodInterceptor {
     }
 
     @RuntimeType
-    public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+    public Object intercept(@Origin Method method, @AllArguments Object[] args)  {
         Class<?> clazz = method.getReturnType();
         if (clazz.equals(void.class)) {
             return null;

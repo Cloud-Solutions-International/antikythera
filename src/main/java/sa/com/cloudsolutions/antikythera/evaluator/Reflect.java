@@ -308,13 +308,13 @@ public class Reflect {
     }
 
     /**
-     * Generate variables holding resonable values.
+     * Generate variables holding reasonable values.
      * All numerics will be 1.
      * Strings will be Antikythera
      * Booleans will be true
      *
-     * @param qualifiedName
-     * @return
+     * @param qualifiedName a fully qualified name of a type
+     * @return a variable representing a suitable default for that type
      */
     public static Variable variableFactory(String qualifiedName) {
         if (qualifiedName == null) {

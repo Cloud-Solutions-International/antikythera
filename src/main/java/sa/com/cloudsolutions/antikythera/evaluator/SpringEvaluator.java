@@ -69,7 +69,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * <p>List of test generators that we have.</p>
      * <p>
-     * Generators ought to be seperated from the parsers/evaluators because different kinds of
+     * Generators ought to be separated from the parsers/evaluators because different kinds of
      * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
      * tests.
      */
@@ -121,7 +121,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                         /*
                          * We have found a repository. Now we need to process it. Afterward
-                         * it will be added to the repositories map, to be identified by the
+                         * it will be added to the repository map, to be identified by the
                          * field name.
                          */
                         RepositoryParser parser = new RepositoryParser();
@@ -216,10 +216,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 mockMethodArguments(md);
 
                 currentConditional = Branching.getHighestPriority(md);
-                if (currentConditional == null || currentConditional.isFullyTravelled()) {
-                    if (oldSize != 0) {
-                        break;
-                    }
+                if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
+                    break;
                 }
 
                 executeMethod(md);
@@ -317,7 +315,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * <p>Execute a block of statements.</p>
      * <p>
-     * When generating tests; we may end up executing the same block of statements repeatedly until
+     * When generating tests, we may end up executing the same block of statements repeatedly until
      * all the branches have been covered.
      *
      * @param statements the collection of statements that make up the block

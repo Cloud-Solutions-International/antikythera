@@ -9,7 +9,7 @@ public class Arithmetics {
     }
     /**
      * Simple arithmetic operations.
-     * String can be added to anything but numbers are trickier.
+     * String can be added to anything, but numbers are trickier.
      * @param left the left operand
      * @param right the right operand
      * @return the result of the add operation which may be arithmetic or string concatenation

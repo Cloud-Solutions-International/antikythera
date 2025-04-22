@@ -701,21 +701,21 @@ public class Evaluator {
                 }
                 break;
             }
-            else {
-                Map<String, Variable> localsVars = this.locals.get(hash);
 
-                if (localsVars != null) {
-                    Variable v = localsVars.get(name);
-                    if (v != null)
-                        return v;
-                }
-                if (n instanceof MethodDeclaration) {
-                    localsVars = this.locals.get(hash);
-                    return localsVars == null ? null : localsVars.get(name);
-                }
+            Map<String, Variable> localsVars = this.locals.get(hash);
 
-                n = block.getParentNode().orElse(null);
+            if (localsVars != null) {
+                Variable v = localsVars.get(name);
+                if (v != null)
+                    return v;
             }
+            if (n instanceof MethodDeclaration) {
+                localsVars = this.locals.get(hash);
+                return localsVars == null ? null : localsVars.get(name);
+            }
+
+            n = block.getParentNode().orElse(null);
+
         }
         return null;
     }
@@ -1719,6 +1719,7 @@ public class Evaluator {
          * @param field the field to inspect
          * @param arg   not used
          */
+        @SuppressWarnings("unchecked")
         @Override
         public void visit(FieldDeclaration field, Void arg) {
             super.visit(field, arg);
