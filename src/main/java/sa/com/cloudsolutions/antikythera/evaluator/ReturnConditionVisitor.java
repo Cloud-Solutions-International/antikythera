@@ -2,9 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -38,7 +36,7 @@ public class ReturnConditionVisitor extends VoidVisitorAdapter<Void> {
                     hasHandledReturn = true;
                     if (ifStmt.getElseStmt().isPresent() &&
                         ifStmt.getElseStmt().get().equals(block)) {
-                        conditions.add(negateCondition(ifStmt.getCondition()));
+                        conditions.add(BinaryOps.negateCondition(ifStmt.getCondition()));
                     } else {
                         conditions.add(ifStmt.getCondition());
                     }
@@ -49,44 +47,12 @@ public class ReturnConditionVisitor extends VoidVisitorAdapter<Void> {
 
         if (!hasHandledReturn && current instanceof MethodDeclaration method) {
             method.findFirst(IfStmt.class).ifPresent(ifStmt ->
-                conditions.add(negateCondition(ifStmt.getCondition()))
+                conditions.add(BinaryOps.negateCondition(ifStmt.getCondition()))
             );
         }
     }
 
-    private Expression negateCondition(Expression condition) {
-        if (condition instanceof BinaryExpr binaryExpr) {
-            BinaryExpr.Operator newOp = switch (binaryExpr.getOperator()) {
-                case EQUALS -> BinaryExpr.Operator.NOT_EQUALS;
-                case NOT_EQUALS -> BinaryExpr.Operator.EQUALS;
-                case GREATER -> BinaryExpr.Operator.LESS_EQUALS;
-                case GREATER_EQUALS -> BinaryExpr.Operator.LESS;
-                case LESS -> BinaryExpr.Operator.GREATER_EQUALS;
-                case LESS_EQUALS -> BinaryExpr.Operator.GREATER;
-                default -> null;
-            };
-
-            if (newOp != null) {
-                return new BinaryExpr(binaryExpr.getLeft(), binaryExpr.getRight(), newOp);
-            }
-        }
-
-        return new UnaryExpr(condition, UnaryExpr.Operator.LOGICAL_COMPLEMENT);
-    }
-
-    public Expression getCombinedCondition() {
-        if (conditions.isEmpty()) {
-            return null;
-        }
-
-        Expression result = conditions.getFirst();
-        for (int i = 1; i < conditions.size(); i++) {
-            result = new BinaryExpr(
-                    result,
-                    conditions.get(i),
-                    BinaryExpr.Operator.AND
-            );
-        }
-        return result;
+    public List<Expression> getConditions() {
+        return conditions;
     }
 }

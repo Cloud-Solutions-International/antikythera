@@ -10,28 +10,26 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
@@ -51,31 +49,27 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
  */
-public class SpringEvaluator extends Evaluator {
+public class SpringEvaluator extends ControlFlowEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(SpringEvaluator.class);
 
     /**
      * Maintains a list of repositories that we have already encountered.
      */
     private static final Map<String, RepositoryParser> repositories = new HashMap<>();
-    private static final HashMap<Integer, LineOfCode> branching = new HashMap<>();
+
     private static ArgumentGenerator argumentGenerator;
     /**
      * <p>List of test generators that we have.</p>
      * <p>
-     * Generators ought to be seperated from the parsers/evaluators because different kinds of
+     * Generators ought to be separated from the parsers/evaluators because different kinds of
      * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
      * tests.
      */
@@ -84,9 +78,8 @@ public class SpringEvaluator extends Evaluator {
      * The method currently being analyzed
      */
     private MethodDeclaration currentMethod;
-    private int visitNumber;
     private boolean onTest;
-    private int branchCount;
+    private LineOfCode currentConditional;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -128,7 +121,7 @@ public class SpringEvaluator extends Evaluator {
                     if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
                         /*
                          * We have found a repository. Now we need to process it. Afterward
-                         * it will be added to the repositories map, to be identified by the
+                         * it will be added to the repository map, to be identified by the
                          * field name.
                          */
                         RepositoryParser parser = new RepositoryParser();
@@ -214,19 +207,37 @@ public class SpringEvaluator extends Evaluator {
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
         beforeVisit(md);
         try {
-            for (visitNumber = 0; visitNumber < branchCount; visitNumber++) {
+            int oldSize = Branching.size(md);
+
+            int safetyCheck = 0;
+            while (safetyCheck < 16) {
                 getLocals().clear();
                 setupFields();
                 mockMethodArguments(md);
-                executeMethod(md);
 
-                Set<Expression> conditions = preConditions.computeIfAbsent(md, k -> new HashSet<>());
-                conditions.addAll(preconditionsInProgress);
+                currentConditional = Branching.getHighestPriority(md);
+                if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
+                    break;
+                }
+
+                executeMethod(md);
+                safetyCheck++;
+                if (currentConditional != null) {
+                    currentConditional.transition();
+                    Branching.add(currentConditional);
+                }
+                if (Branching.size(md) == 0) {
+                    break;
+                }
+                else {
+                    oldSize = Branching.size(md);
+                }
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
         }
     }
+
 
     private void beforeVisit(MethodDeclaration md) {
         md.getParentNode().ifPresent(p -> {
@@ -235,35 +246,28 @@ public class SpringEvaluator extends Evaluator {
             }
         });
 
-        branching.clear();
-        preConditions.clear();
-        preconditionsInProgress.clear();
-        final List<Integer> s = new ArrayList<>();
+        Branching.clear();
+        AntikytheraRunTime.reset();
 
-        md.accept(new VoidVisitorAdapter<Void>() {
-           @Override
-            public void visit(IfStmt stmt, Void arg) {
-                branching.putIfAbsent(stmt.hashCode(), new LineOfCode(stmt));
-                s.add(1); // Count the main if branch
+        md.accept(new IfConditionVisitor(), null);
+    }
 
-                Optional<Statement> elseStmt = stmt.getElseStmt();
-                if (elseStmt.isEmpty()) {
-                    s.add(1); // Count empty else branch
-                    return;
-                }
-                Statement elseStatement = elseStmt.get();
-                if (elseStatement instanceof BlockStmt) {
-                    s.add(1); // Count block else branch
-                }
-                elseStatement.accept(this, arg); // Visit else branch
-            }
-        }, null);
-        branchCount = Math.max(1, s.size());
+    @Override
+    protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
+        NodeList<Parameter> parameters = md.getParameters();
+
+        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+            setupParameter(md, parameters.get(i));
+        }
+
+        if (currentConditional != null && currentConditional.getPreconditions() != null) {
+            currentConditional.getPreconditions().clear();
+        }
     }
 
     /**
      * Set up the parameters required for the method call.
-     * If there are any preconditions that need to be applied to get branch coverage the parameters
+     * When there are preconditions that need to be applied to get branch coverage, the parameters
      * will be updated to reflect those preconditions.
      *
      * @param md the method declaration into whose variable space this parameter will be copied
@@ -273,21 +277,16 @@ public class SpringEvaluator extends Evaluator {
     @Override
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = AntikytheraRunTime.pop();
-        int count = 0;
-        for (Expression cond : preConditions.getOrDefault(md, Collections.emptySet())) {
-            if (count++ == visitNumber) {
-                break;
+        md.getBody().ifPresent(body ->
+                setLocal(body, p.getNameAsString(), va)
+        );
+
+        if (currentConditional != null ) {
+            if (currentConditional.getStatement() instanceof IfStmt ifStmt) {
+                boolean nextState = currentConditional.isFalsePath();
+                setupIfCondition(ifStmt, nextState);
             }
-            if (cond instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne
-                        && ne.getNameAsString().equals(p.getNameAsString())
-                        && va.getValue() instanceof Evaluator eval) {
-                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
-                    eval.executeLocalMethod(wrapper);
-                }
-            } else if (cond instanceof AssignExpr assignExpr) {
-                parameterAssignment(p, assignExpr, va);
-            }
+            applyPreconditions(p, va);
         }
 
         md.getBody().ifPresent(body -> {
@@ -297,10 +296,26 @@ public class SpringEvaluator extends Evaluator {
 
     }
 
+    private void applyPreconditions(Parameter p, Variable va) throws ReflectiveOperationException {
+
+        for (Precondition cond : currentConditional.getPreconditions()) {
+            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                if (mce.getScope().get() instanceof NameExpr ne
+                        && ne.getNameAsString().equals(p.getNameAsString())
+                        && va.getValue() instanceof Evaluator eval) {
+                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
+                    eval.executeLocalMethod(wrapper);
+                }
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
+                parameterAssignment(p, assignExpr, va);
+            }
+        }
+    }
+
     /**
      * <p>Execute a block of statements.</p>
      * <p>
-     * When generating tests; we may end up executing the same block of statements repeatedly until
+     * When generating tests, we may end up executing the same block of statements repeatedly until
      * all the branches have been covered.
      *
      * @param statements the collection of statements that make up the block
@@ -465,7 +480,7 @@ public class SpringEvaluator extends Evaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(preConditions.getOrDefault(currentMethod, Collections.emptySet()));
+                generator.setPreConditions(Branching.getApplicableConditions(currentMethod));
                 generator.createTests(currentMethod, response);
             }
             return new Variable(response);
@@ -510,7 +525,7 @@ public class SpringEvaluator extends Evaluator {
 
     private static Variable autoWireFromSourceCode(VariableDeclarator variable, String resolvedClass, FieldDeclaration fd) {
         Variable v;
-        Evaluator eval = AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
+        Evaluator eval = MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -562,7 +577,7 @@ public class SpringEvaluator extends Evaluator {
                     boolean isMocked = false;
                     String fieldName = getFieldName(expr.get());
                     if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
-                        isMocked = AntikytheraRunTime.isMocked(fieldClass);
+                        isMocked = MockingRegistry.isMockTarget(fieldClass);
                     }
                     if (!isMocked) {
                         return executeSource(methodCall);
@@ -585,51 +600,12 @@ public class SpringEvaluator extends Evaluator {
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
             controllerResponse.setResponse(r);
-            controllerResponse.setExecption(eex);
+            controllerResponse.setException(eex);
             createTests(controllerResponse);
             returnFrom = methodCall;
         } else {
             throw eex;
         }
-    }
-
-    @Override
-    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
-        LineOfCode l = branching.get(ifst.hashCode());
-        if (l == null) {
-            return super.ifThenElseBlock(ifst);
-        }
-
-        Variable v = evaluateExpression(ifst.getCondition());
-        boolean result = (boolean) v.getValue();
-        Statement elseStmt = ifst.getElseStmt().orElse(new BlockStmt());
-
-        if (l.getPathTaken() == LineOfCode.UNTRAVELLED) {
-            if (result) {
-                l.setPathTaken(LineOfCode.TRUE_PATH);
-                /* we have not been this way before. In this first execution of the code, we
-                 * are taking the true path. We need to leave a flag behind so that in the
-                 * next execution we will know to take the false path.
-                 */
-                setupIfCondition(ifst, false);
-                super.executeStatement(ifst.getThenStmt());
-            } else {
-                l.setPathTaken(LineOfCode.FALSE_PATH);
-                setupIfCondition(ifst, true);
-                super.executeStatement(elseStmt);
-            }
-        } else {
-            /*
-             * We have been this way before so lets take the path not taken.
-             */
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            if (result) {
-                super.executeStatement(ifst.getThenStmt());
-            } else {
-                super.executeStatement(elseStmt);
-            }
-        }
-        return v;
     }
 
     /**
@@ -639,7 +615,20 @@ public class SpringEvaluator extends Evaluator {
      * @param state the desired state.
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
-        TruthTable tt = new TruthTable(ifStmt.getCondition());
+        List<Expression> collectedConditions = IfConditionVisitor.collectConditionsUpToMethod(ifStmt);
+        TruthTable tt = new TruthTable();
+
+        for(Expression cond : collectedConditions) {
+            if (cond.isBinaryExpr()) {
+                BinaryExpr bin = cond.asBinaryExpr();
+                if (bin.getLeft().isNameExpr()) {
+                    tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
+                }
+            }
+        }
+
+        collectedConditions.add(ifStmt.getCondition());
+        tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
@@ -648,122 +637,13 @@ public class SpringEvaluator extends Evaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if (entry.getKey().isMethodCallExpr()) {
-                    setupConditionThroughMethodCalls(ifStmt, state, entry);
+                    setupConditionThroughMethodCalls(ifStmt, entry);
                 } else if (entry.getKey().isNameExpr()) {
-                    setupConditionThroughAssignment(ifStmt, state, entry);
+                    setupConditionThroughAssignment(ifStmt, entry);
                 }
             }
         }
-    }
 
-    @SuppressWarnings("unchecked")
-    private Expression setupConditionThroughAssignment(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
-        Variable v = getValue(stmt, nameExpr.getNameAsString());
-        if (v != null) {
-            Expression init = v.getInitializer();
-            if (init != null) {
-                MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
-
-                String paramName = nameExpr.getNameAsString();
-                for (Parameter param : md.getParameters()) {
-                    if (param.getNameAsString().equals(paramName)) {
-                        Expression expr = setupConditionThroughAssignment(entry, v);
-                        addPreCondition(stmt, state, expr);
-                        return expr;
-                    }
-                }
-            }
-        }
-        else {
-            v = new Variable(entry.getValue());
-        }
-
-        Expression expr = setupConditionThroughAssignment(entry, v);
-        addPreCondition(stmt, state, expr);
-        return expr;
-    }
-
-    private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
-        Expression valueExpr = v.getType() instanceof PrimitiveType
-                ? Reflect.createLiteralExpression(entry.getValue())
-                : new StringLiteralExpr(entry.getValue().toString());
-
-        return new AssignExpr(
-                new NameExpr(nameExpr.getNameAsString()),
-                valueExpr,
-                AssignExpr.Operator.ASSIGN
-        );
-    }
-
-    private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry) {
-        ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
-        setupConditionThroughMethodCalls(stmt, state, entry, chain);
-    }
-
-    private void setupConditionThroughMethodCalls(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, ScopeChain chain) {
-        if (!chain.isEmpty()) {
-            Expression expr = chain.getChain().getFirst().getExpression();
-            Variable v = getValue(stmt, expr.toString());
-            if (v == null && expr.isNameExpr()) {
-                /*
-                 * This is likely to be a static method.
-                 */
-                String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
-                if (fullname != null) {
-                    /*
-                     * The only other possibility is static access on a class
-                     */
-                    try {
-                        Class.forName(fullname);
-
-                    } catch (ReflectiveOperationException e) {
-                        /*
-                         * Can probably be ignored
-                         */
-                        logger.info("Could not create class for {}", fullname);
-                    }
-                }
-            }
-
-            if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariable(stmt, state, entry, expr);
-            }
-        }
-    }
-
-    private void setupConditionalVariable(Statement stmt, boolean state, Map.Entry<Expression, Object> entry, Expression scope) {
-        MethodCallExpr setter = new MethodCallExpr();
-        String name = entry.getKey().asMethodCallExpr().getNameAsString();
-        if (name.startsWith("is")) {
-            setter.setName("set" + name.substring(2));
-        }
-        else {
-            setter.setName("set" + name.substring(3));
-        }
-        setter.setScope(scope);
-
-        if (entry.getValue() == null) {
-            setter.addArgument("null");
-        } else {
-            if (entry.getValue().equals("T")) {
-                setter.addArgument("\"T\"");
-            } else {
-                setter.addArgument(entry.getValue().toString());
-            }
-        }
-        addPreCondition(stmt, state, setter);
-    }
-
-    private void addPreCondition(Statement statement, boolean state, Expression expr) {
-        LineOfCode l = branching.get(statement.hashCode());
-        l.addPrecondition(expr, state);
-        preconditionsInProgress.add(expr);
-    }
-
-    public void resetColors() {
-        branching.clear();
     }
 
     /**
@@ -785,7 +665,8 @@ public class SpringEvaluator extends Evaluator {
                     if (q.isWriteOps()) {
                         return evaluateExpression(methodCall.getArgument(0));
                     } else {
-                        return processResult(findExpressionStatement(methodCall), q.getResultSet());
+                        return processResult(
+                                AbstractCompiler.findExpressionStatement(methodCall).orElseThrow(), q.getResultSet());
                     }
                 }
             }
@@ -874,19 +755,7 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
-    private ExpressionStmt findExpressionStatement(MethodCallExpr methodCall) {
-        Node n = methodCall;
-        while (n != null && !(n instanceof MethodDeclaration)) {
-            if (n instanceof ExpressionStmt stmt) {
-                /*
-                 * We have found the expression statement corresponding to this query
-                 */
-                return stmt;
-            }
-            n = n.getParentNode().orElse(null);
-        }
-        return null;
-    }
+
 
     public void setOnTest(boolean b) {
         onTest = b;
@@ -934,38 +803,23 @@ public class SpringEvaluator extends Evaluator {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
-    Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
-
-        MethodCallExpr methodCall = sc.getScopedMethodCall();
-        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-        LineOfCode l = branching.get(stmt.hashCode());
-
-        if (l == null) {
-            return straightPath(sc, stmt, methodCall);
-        }
-        else {
-            return riggedPath(sc, l);
-        }
-    }
-
-    private Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    @Override
+    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         LineOfCode l =  new LineOfCode(stmt);
-        branching.put(stmt.hashCode(), l);
-        branchCount++;
+        Branching.add(l);
 
         List<Expression> expressions;
         Variable v = super.handleOptionals(sc);
         if (v.getValue() instanceof Optional<?> optional) {
             if (optional.isPresent()) {
-                l.setPathTaken(LineOfCode.TRUE_PATH);
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
-                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
+                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
+                l.setPathTaken(LineOfCode.TRUE_PATH);
             } else {
-                l.setPathTaken(LineOfCode.FALSE_PATH);
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
-                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, false);
+                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
+                l.setPathTaken(LineOfCode.FALSE_PATH);
             }
             for (Expression expr : expressions) {
                 mapParameterToArguments(expr, method, methodCall);
@@ -975,21 +829,15 @@ public class SpringEvaluator extends Evaluator {
         throw new IllegalStateException("This should be returning an optional");
     }
 
-    private Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
-        List<Expression> expressions;
-        if (l.getPathTaken() == LineOfCode.TRUE_PATH) {
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            expressions = l.getPrecondition(true);
-        }
-        else if (l.getPathTaken() == LineOfCode.FALSE_PATH) {
-            l.setPathTaken(LineOfCode.BOTH_PATHS);
-            expressions = l.getPrecondition(false);
-        }
-        else {
-            throw new IllegalStateException("Both paths should have been taken");
-        }
-        for (Expression expression : expressions) {
-            evaluateExpression(expression);
+    @Override
+    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
+        List<Precondition> expressions;
+        if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
+            expressions = l.getPreconditions();
+
+            for (Precondition expression : expressions) {
+                evaluateExpression(expression.getExpression());
+            }
         }
         return super.handleOptionals(sc);
     }
@@ -1022,57 +870,6 @@ public class SpringEvaluator extends Evaluator {
                         .orElse(false))
                 .findFirst()
                 .orElse(null);
-    }
-
-    private List<Expression> setupConditionalsForOptional(ReturnStmt emptyReturn, MethodDeclaration method, Statement stmt, boolean state) {
-        List<Expression> expressions = new ArrayList<>();
-        ReturnConditionVisitor visitor = new ReturnConditionVisitor(emptyReturn);
-        method.accept(visitor, null);
-        Expression emptyCondition = visitor.getCombinedCondition();
-
-        if (emptyCondition == null) {
-            return expressions;
-        }
-
-        TruthTable tt = new TruthTable(emptyCondition);
-        tt.generateTruthTable();
-        List<Map<Expression, Object>> emptyValues = tt.findValuesForCondition(state);
-
-        if (!emptyValues.isEmpty()) {
-            Map<Expression, Object> value = emptyValues.getFirst();
-            for (Parameter param : method.getParameters()) {
-                Type type = param.getType();
-                for (Map.Entry<Expression, Object> entry : value.entrySet()) {
-                    if (type.isPrimitiveType()) {
-                        expressions.add(setupConditionThroughAssignment(stmt, state, entry));
-                    } else {
-                        setupConditionThroughMethodCalls(stmt, state, entry);
-                    }
-                }
-            }
-        }
-
-        return expressions;
-    }
-
-    @Override
-    Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
-        Variable v = evaluateOptionalEmptyCall(chain);
-        return (v == null) ?  super.handleOptionalEmpties(chain) : v;
-    }
-
-    private Variable evaluateOptionalEmptyCall(ScopeChain chain) throws ReflectiveOperationException {
-        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
-        return switch (methodCall.getNameAsString()) {
-            case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
-            case "orElseThrow" -> throw new NoSuchElementException("Optional is empty");
-            case "ifPresent" -> null;
-            case "ifPresentOrElse" -> {
-                Variable v = evaluateExpression(methodCall.getArgument(1));
-                yield executeLambda(v);
-            }
-            default -> super.handleOptionalEmpties(chain);
-        };
     }
 }
 

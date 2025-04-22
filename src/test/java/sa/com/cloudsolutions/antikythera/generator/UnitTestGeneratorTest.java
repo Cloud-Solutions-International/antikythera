@@ -17,12 +17,18 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 
@@ -50,8 +56,44 @@ class UnitTestGeneratorTest {
         unitTestGenerator = new UnitTestGenerator(cu);
         argumentGenerator = Mockito.mock(NullArgumentGenerator.class);
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
-        unitTestGenerator.setPreConditions(new HashSet<>());
+        unitTestGenerator.setPreConditions(new ArrayList<>());
         unitTestGenerator.setAsserter(new JunitAsserter());
+    }
+
+    /**
+     * THis is an integration test.
+     * It covers parts of TestSuiteEvaluator, UnitTestGenerator and MockingRegistry
+     * @throws NoSuchMethodException
+     */
+    @Test
+    void testSetUpBase() throws NoSuchMethodException {
+        Settings.setProperty(Settings.BASE_PATH,
+                Settings.getProperty(Settings.BASE_PATH, String.class)
+                        .orElse("").replace("src/test/resources/sources",""));
+        unitTestGenerator.loadPredefinedBaseClassForTest("sa.com.cloudsolutions.antikythera.evaluator.mock.Hello");
+
+        Method m = Statement.class.getDeclaredMethod("execute", String.class);
+        assertNotNull(m);
+        Callable callable = new Callable(m);
+        Object result = MockingRegistry.getThen("java.sql.Statement", callable);
+        assertNotNull(result);
+        assertInstanceOf(Boolean.class, result);
+        assertEquals(true, result);
+
+        m = Statement.class.getDeclaredMethod("getMaxFieldSize");
+        callable = new Callable(m);
+        assertNull(MockingRegistry.getThen("java.sql.Statement", callable));
+    }
+
+    @Test
+    void testInject() {
+        classUnderTest.addAnnotation("Service");
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
+        unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
+        String sources = unitTestGenerator.getCompilationUnit().toString();
+        assertTrue(sources.contains("queries2Test"));
+        assertTrue(sources.contains("InjectMocks"));
     }
 
     @Test
@@ -130,7 +172,7 @@ class UnitTestGeneratorTest {
         assertNotNull(unitTestGenerator.gen);
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
 
-        assertTrue(AntikytheraRunTime.isMocked("java.util.zip.Adler32"));
+        assertTrue(MockingRegistry.isMockTarget("java.util.zip.Adler32"));
 
     }
 }

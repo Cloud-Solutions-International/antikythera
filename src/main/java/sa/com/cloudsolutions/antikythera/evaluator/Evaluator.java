@@ -34,12 +34,11 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 
-import org.mockito.Mockito;
-import org.mockito.quality.Strictness;
-
+import net.bytebuddy.ByteBuddy;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -62,7 +61,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -70,9 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
 
-import static org.mockito.Mockito.withSettings;
 
 /**
  * Expression evaluator engine.
@@ -116,16 +112,6 @@ public class Evaluator {
 
     protected Deque<TryStmt> catching = new LinkedList<>();
 
-    /**
-     * The preconditions that need to be met before the test can be executed.
-     */
-    protected Map<MethodDeclaration, Set<Expression>> preConditions = new HashMap<>();
-
-    /**
-     * The preconditions that we are building based on the current branches covered.
-     * These will be copied to the preConditions map
-     */
-    protected List<Expression> preconditionsInProgress = new ArrayList<>();
     protected String variableName;
 
     protected Evaluator() {
@@ -242,7 +228,7 @@ public class Evaluator {
                 CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (sourceCU != null) {
                     Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
-                    Class<?> dynamicClass = DTOBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+                    Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
                     Variable v = new Variable(dynamicClass);
                     v.setClazz(Class.class);
@@ -301,51 +287,47 @@ public class Evaluator {
     }
 
     private Variable evaluateUnaryExpression(Expression expr) throws ReflectiveOperationException {
-        Expression unaryExpr = expr.asUnaryExpr().getExpression();
-        UnaryExpr.Operator operator = expr.asUnaryExpr().getOperator();
-        if (operator.equals(UnaryExpr.Operator.LOGICAL_COMPLEMENT)) {
-            Variable v = evaluateExpression(unaryExpr);
-            v.setValue(!(Boolean)v.getValue());
-            return v;
-        }
-        else if(operator.equals(UnaryExpr.Operator.POSTFIX_INCREMENT)
-                || operator.equals(UnaryExpr.Operator.PREFIX_INCREMENT)) {
-            Variable v = evaluateExpression(unaryExpr);
-            if (v.getValue() instanceof Integer n) {
-                v.setValue(n + 1);
-            } else if (v.getValue() instanceof Double d) {
-                v.setValue(d + 1);
-            } else if (v.getValue() instanceof Long l) {
-                v.setValue(l + 1);
-            }
-            return v;
-        }
-        else if(operator.equals(UnaryExpr.Operator.POSTFIX_DECREMENT)
-                || operator.equals(UnaryExpr.Operator.PREFIX_DECREMENT)) {
-            Variable v = evaluateExpression(unaryExpr);
-            if (v.getValue() instanceof Integer n) {
-                v.setValue(n - 1);
-            } else if (v.getValue() instanceof Double d) {
-                v.setValue(d - 1);
-            } else if (v.getValue() instanceof Long l) {
-                v.setValue(l - 1);
-            }
-            return v;
-        }
-        else if(operator.equals(UnaryExpr.Operator.MINUS)) {
-            Variable v = evaluateExpression(unaryExpr);
-            if (v.getValue() instanceof Integer n) {
-                v.setValue(-1 * n);
-            } else if (v.getValue() instanceof Double d) {
-                v.setValue(-1 * d);
-            } else if (v.getValue() instanceof Long l) {
-                v.setValue(-1 * l);
-            }
-            return v;
-        }
+        UnaryExpr unaryExpr = expr.asUnaryExpr();
+        Expression expression = unaryExpr.getExpression();
+        Variable v = evaluateExpression(expression);
 
-        logger.warn("Negation is the only unary operation supported at the moment");
-        return null;
+        switch (unaryExpr.getOperator()) {
+            case LOGICAL_COMPLEMENT -> {
+                v.setValue(!(Boolean) v.getValue());
+                return v;
+            }
+            case POSTFIX_INCREMENT, PREFIX_INCREMENT -> {
+                v.setValue(switch (v.getValue()) {
+                    case Integer n -> n + 1;
+                    case Double d -> d + 1;
+                    case Long l -> l + 1;
+                    default -> v.getValue();
+                });
+                return v;
+            }
+            case POSTFIX_DECREMENT, PREFIX_DECREMENT -> {
+                v.setValue(switch (v.getValue()) {
+                    case Integer n -> n - 1;
+                    case Double d -> d - 1;
+                    case Long l -> l - 1;
+                    default -> v.getValue();
+                });
+                return v;
+            }
+            case MINUS -> {
+                v.setValue(switch (v.getValue()) {
+                    case Integer n -> -n;
+                    case Double d -> -d;
+                    case Long l -> -l;
+                    default -> v.getValue();
+                });
+                return v;
+            }
+            default -> {
+                logger.warn("Unsupported unary operation: {}", unaryExpr.getOperator());
+                return null;
+            }
+        }
     }
 
     @SuppressWarnings("java:S3011")
@@ -568,7 +550,7 @@ public class Evaluator {
     private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
         if (match != null) {
-            Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().get(), this);
+            Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
             annonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
@@ -715,21 +697,21 @@ public class Evaluator {
                 }
                 break;
             }
-            else {
-                Map<String, Variable> localsVars = this.locals.get(hash);
 
-                if (localsVars != null) {
-                    Variable v = localsVars.get(name);
-                    if (v != null)
-                        return v;
-                }
-                if (n instanceof MethodDeclaration) {
-                    localsVars = this.locals.get(hash);
-                    return localsVars == null ? null : localsVars.get(name);
-                }
+            Map<String, Variable> localsVars = this.locals.get(hash);
 
-                n = block.getParentNode().orElse(null);
+            if (localsVars != null) {
+                Variable v = localsVars.get(name);
+                if (v != null)
+                    return v;
             }
+            if (n instanceof MethodDeclaration) {
+                localsVars = this.locals.get(hash);
+                return localsVars == null ? null : localsVars.get(name);
+            }
+
+            n = block.getParentNode().orElse(null);
+
         }
         return null;
     }
@@ -773,11 +755,6 @@ public class Evaluator {
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
-        Optional<Expression> scoped = methodCall.getScope();
-        if (scoped.isPresent() && scoped.get().toString().equals("logger")) {
-            return null;
-        }
-
         ScopeChain chain = ScopeChain.findScopeChain(methodCall);
 
         if (chain.isEmpty()) {
@@ -788,8 +765,11 @@ public class Evaluator {
         return evaluateScopedMethodCall(chain);
     }
 
-    private Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
+    Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
+        if (methodCall.toString().startsWith("logger")) {
+            return null;
+        }
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(chain);
@@ -804,12 +784,19 @@ public class Evaluator {
     }
 
     Variable handleOptionals(ScopeChain.Scope scope) throws ReflectiveOperationException {
-        MethodDeclaration md = scope.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
-        Variable v = executeMethod(md);
-        if (v != null && v.getValue() == null) {
-            v.setType(md.getType());
+        Callable callable = scope.getMCEWrapper().getMatchingCallable();
+        if (callable.isCallableDeclaration()) {
+            MethodDeclaration md = callable.asMethodDeclaration();
+            Variable v = executeMethod(md);
+            if (v != null && v.getValue() == null) {
+                v.setType(md.getType());
+            }
+            return v;
         }
-        return v;
+        else {
+            Method m = callable.getMethod();
+            return executeMethod(m);
+        }
     }
 
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
@@ -984,7 +971,7 @@ public class Evaluator {
         return returnValue;
     }
 
-    private void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+    void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = reflectionArguments.getMethod();
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
@@ -999,7 +986,7 @@ public class Evaluator {
         }
     }
 
-    private static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
+    static void validateReflectiveMethod(Variable v, ReflectionArguments reflectionArguments, Method method) {
         if (method == null) {
             if (v.getValue() == null) {
                 throw new EvaluatorException("Application NPE: " + reflectionArguments.getMethodName(), EvaluatorException.NPE);
@@ -1032,7 +1019,7 @@ public class Evaluator {
     }
 
     /**
-     * Execute a method that is part of a chain of method
+     * Execute a method that is part of a chain of method calls
      * @param sc the methods scope
      * @return the result from executing the method or null if the method is void.
      * @throws ReflectiveOperationException if the execution involves a class available only
@@ -1064,11 +1051,20 @@ public class Evaluator {
                 }
             }
             else {
-               return executeMethod(callable.getMethod());
+                Method method = getMethod(callable);
+                Class<?> clazz = method.getReturnType();
+                if (Optional.class.equals(clazz)) {
+                    return handleOptionals(sc);
+                }
+                return executeMethod(method);
             }
         }
 
         return null;
+    }
+
+    private static Method getMethod(Callable callable) {
+        return callable.getMethod();
     }
 
     @SuppressWarnings("java:S1172")
@@ -1180,19 +1176,8 @@ public class Evaluator {
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        if (AntikytheraRunTime.isMocked(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
-            String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
-            Variable v;
-            if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
-                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
-                eval.setVariableName(variable.getNameAsString());
-                v = new Variable(eval);
-            }
-            else {
-                v = useMockito(fqn);
-            }
-            v.setType(variable.getType());
-            return v;
+        if (MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
+            return MockingRegistry.mockIt(variable);
         }
         else {
             if (variable.getType().isClassOrInterfaceType()) {
@@ -1203,17 +1188,10 @@ public class Evaluator {
         }
     }
 
-    void setVariableName(String variableName) {
+    public void setVariableName(String variableName) {
         this.variableName = variableName;
     }
 
-    private static Variable useMockito(String fqdn) throws ClassNotFoundException {
-        Variable v;
-        Class<?> cls = AbstractCompiler.loadClass(fqdn);
-        v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
-        v.setClazz(cls);
-        return v;
-    }
 
     public Map<Integer, Map<String, Variable>> getLocals() {
         return locals;
@@ -1569,7 +1547,7 @@ public class Evaluator {
                 }
             }
             if (labels.isEmpty()) {
-                defaultStmt = entry.getStatements().get(0);
+                defaultStmt = entry.getStatements().getFirst().orElse(null);
             }
         }
 
@@ -1606,8 +1584,11 @@ public class Evaluator {
             Variable v = createObject(stmt, null, oce);
             if (v.getValue() instanceof Exception ex) {
                 throw ex;
-            } else {
-                logger.error("Should have an exception");
+            } else  {
+                throw new ByteBuddy().subclass(Exception.class)
+                        .name(AbstractCompiler.findFullyQualifiedName(cu,v.getType().asString()))
+                        .make()
+                        .load(getClass().getClassLoader()).getLoaded().getDeclaredConstructor().newInstance();
             }
         }
     }
@@ -1734,6 +1715,7 @@ public class Evaluator {
          * @param field the field to inspect
          * @param arg   not used
          */
+        @SuppressWarnings("unchecked")
         @Override
         public void visit(FieldDeclaration field, Void arg) {
             super.visit(field, arg);
@@ -1786,8 +1768,8 @@ public class Evaluator {
         } catch (UnsolvedSymbolException e) {
             logger.debug("ignore {}", variableDeclarator);
         } catch (IOException e) {
-            String action = Settings.getProperty("dependencies.on_error").toString();
-            if(action == null || action.equals("exit")) {
+            String action = Settings.getProperty("dependencies.on_error", String.class).orElse("exit");
+            if(action.equals("exit")) {
                 throw new GeneratorException("Exception while processing fields", e);
             }
 
@@ -1802,7 +1784,6 @@ public class Evaluator {
         locals.clear();
     }
 
-
     @Override
     public String toString() {
         return getClass().getName() + " : " + getClassName();
@@ -1815,6 +1796,4 @@ public class Evaluator {
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
     }
-
-
 }

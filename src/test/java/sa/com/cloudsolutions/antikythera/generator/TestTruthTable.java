@@ -51,6 +51,29 @@ class TestTruthTable {
         assertNull(values.getFirst().get(new NameExpr("a")));
     }
 
+    @Test
+    void testNegative() {
+        String condition = "a < 0";
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
+
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertEquals(1, values.size());
+        assertEquals(-1, values.getFirst().get(new NameExpr("a")));
+    }
+
+    @Test
+    void testNegativeMethod() {
+        String condition = "person.getId() < 0";
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
+
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertEquals(1, values.size());
+
+    }
+
+
     @SuppressWarnings("java:S125")
     @Test
     void testGenerateTruthTableNumbers() {

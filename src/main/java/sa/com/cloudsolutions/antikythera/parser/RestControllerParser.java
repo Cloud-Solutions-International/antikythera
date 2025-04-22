@@ -18,9 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
@@ -52,13 +52,13 @@ public class RestControllerParser extends DepsolvingParser {
         super();
         this.cu = AntikytheraRunTime.getCompilationUnit(controller);
 
-        Path dataPath = Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/data");
+        Path dataPath = Paths.get(Settings.getProperty(Settings.OUTPUT_PATH).toString(), "src/test/resources/data");
 
         // Check if the dataPath directory exists, if not, create it
         if (!Files.exists(dataPath)) {
             Files.createDirectories(dataPath);
         }
-        Files.createDirectories(Paths.get(Settings.getProperty(Constants.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
+        Files.createDirectories(Paths.get(Settings.getProperty(Settings.OUTPUT_PATH).toString(), "src/test/resources/uploads"));
     }
 
     @Override
@@ -77,7 +77,7 @@ public class RestControllerParser extends DepsolvingParser {
 
         TypeDeclaration<?> type = AbstractCompiler.getPublicType(cu);
 
-        evaluator = EvaluatorFactory.create(type.getFullyQualifiedName().get(), SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create(type.getFullyQualifiedName().orElseThrow(), SpringEvaluator.class);
         evaluator.setOnTest(true);
 
         SpringTestGenerator generator = new SpringTestGenerator(cu);
@@ -138,7 +138,7 @@ public class RestControllerParser extends DepsolvingParser {
         private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
             evaluator.setArgumentGenerator(gen);
             evaluator.reset();
-            evaluator.resetColors();
+            Branching.clear();
             AntikytheraRunTime.reset();
             try {
                 evaluator.visit(md);

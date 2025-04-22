@@ -7,6 +7,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public abstract class TestGenerator {
     MethodDeclaration testMethod;
     protected CompilationUnit compilationUnitUnderTest;
 
-    protected Set<Expression> preConditions;
+    protected List<Precondition> preConditions;
 
     static List<Expression> whenThen = new ArrayList<>();
     static Set<String> dependencies = new HashSet<>();
@@ -102,6 +103,7 @@ public abstract class TestGenerator {
      */
     public abstract void createTests(MethodDeclaration md, MethodResponse response);
 
+    @SuppressWarnings("unchecked")
     MethodDeclaration buildTestMethod(MethodDeclaration md) {
         MethodDeclaration tm = new MethodDeclaration();
 
@@ -168,7 +170,7 @@ public abstract class TestGenerator {
         asserter.setupImports(gen);
     }
 
-    public void setPreConditions(Set<Expression> preConditions) {
+    public void setPreConditions(List<Precondition> preConditions) {
         this.preConditions = preConditions;
     }
 

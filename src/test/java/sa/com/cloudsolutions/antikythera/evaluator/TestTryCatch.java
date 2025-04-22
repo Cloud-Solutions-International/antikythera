@@ -89,4 +89,13 @@ class TestTryCatch extends TestHelper {
         assertTrue(outContent.toString().contains("No tantrum thrown\n"));
     }
 
+    @Test
+    void testJustThrow()  {
+        MethodDeclaration doStuff = cu
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("justThrow")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(2));
+        assertThrows(Exception.class, () -> evaluator.executeMethod(doStuff));
+    }
+
 }

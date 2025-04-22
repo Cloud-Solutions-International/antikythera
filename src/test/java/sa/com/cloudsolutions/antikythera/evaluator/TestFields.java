@@ -25,7 +25,6 @@ class TestFields extends TestHelper {
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
-        AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
 
@@ -45,7 +44,7 @@ class TestFields extends TestHelper {
 
     @Test
     void testAccessor() throws  AntikytheraException, ReflectiveOperationException {
-        MethodDeclaration ts = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("simpleAccess")).orElseThrow();
+        MethodDeclaration ts = cu.getType(0).getMethodsByName("simpleAccess").getFirst();
         evaluator.executeMethod(ts);
         assertEquals("Hornblower\nnull\nColombo\n", outContent.toString() );
     }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -17,8 +18,6 @@ import java.io.PrintStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.expr.Expression;
@@ -32,6 +31,8 @@ class TestConditional extends TestHelper {
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
+        AntikytheraRunTime.reset();
+        MockingRegistry.reset();
     }
 
     @BeforeEach
@@ -39,6 +40,7 @@ class TestConditional extends TestHelper {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
+        Branching.clear();
     }
 
     @Test
@@ -52,10 +54,9 @@ class TestConditional extends TestHelper {
         assertEquals("Hello", outContent.toString());
     }
 
-
     @ParameterizedTest
-    @CsvSource({"conditional1, The name is nullT", "conditional2, The name is nullT",
-            "conditional3, ZERO!1",
+    @CsvSource({"conditional1, The name is nullT", "conditional2, TThe name is null",
+            "conditional3, 1ZERO!",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -67,22 +68,60 @@ class TestConditional extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional4, ZERO!Negative!Positive!", "conditional5, ZERO!One!Two!Three!",
-            "conditional6, ZERO!One!Two!Three!","conditional7, ZERO!One!Two!Three!",
-            "conditional8, ZERO!One!Two!Three!", "smallDiff, Nearly 2!One!", "booleanWorks, True!False!"
+    @CsvSource({"conditional4, ZERO!Positive!ZERO!Negative!", "conditional5, ZERO!Three!Three!Two!Two!One!",
+            "conditional6, ZERO!Three!Three!Two!Two!One!","conditional7, ZERO!Three!Three!Two!Two!One!",
+            "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!", "booleanWorks, False!True!"
     })
-    void testConditionals(String name, String value) throws ReflectiveOperationException {
+    void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals(value.length(), s.length());
-        String[] parts = value.split("!");
-        for (String part : parts) {
-            assertTrue(s.contains(part));
-        }
+        assertEquals(value,s);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"conditional5, One!","conditional6, One!","conditional7, One!",
+            "conditional8, ZERO!", "smallDiff, ''"
+    })
+    void testConditionals(String name, String value) throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(1));
+        evaluator.executeMethod(method);
+        String s = outContent.toString();
+        assertEquals(value,s);
+    }
+
+    @Test
+    void testConditional4() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("conditional4")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(new Person("AA")));
+        evaluator.executeMethod(method);
+        String s = outContent.toString();
+        assertEquals("ZERO!",s);
+    }
+
+    @Test
+    void testBooleanWorks() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("booleanWorks")).orElseThrow();
+
+        AntikytheraRunTime.push(new Variable(true));
+        evaluator.executeMethod(method);
+        String s = outContent.toString();
+        assertEquals("True!",s);
     }
 
     @ParameterizedTest
@@ -107,21 +146,34 @@ class TestConditional extends TestHelper {
         // Test for the first return statement (return "Zero")
         ReturnConditionVisitor visitor1 = new ReturnConditionVisitor(returnStatements.get(0));
         method.accept(visitor1, null);
-        Expression combinedCondition1 = visitor1.getCombinedCondition();
-        assertEquals("a == 0 && a >= 0", combinedCondition1.toString(), "Incorrect combined condition for 'Zero'");
+        Expression combinedCondition1 = BinaryOps.getCombinedCondition(visitor1.getConditions());
+        assertEquals("(a == 0) && (a >= 0)", combinedCondition1.toString(), "Incorrect combined condition for 'Zero'");
 
         // Test for the second return statement (return "Positive")
         ReturnConditionVisitor visitor2 = new ReturnConditionVisitor(returnStatements.get(1));
         method.accept(visitor2, null);
-        Expression combinedCondition2 = visitor2.getCombinedCondition();
-        assertEquals("a != 0 && a >= 0", combinedCondition2.toString(), "Incorrect combined condition for 'Positive'");
+        Expression combinedCondition2 = BinaryOps.getCombinedCondition(visitor2.getConditions());
+        assertEquals("(a != 0) && (a >= 0)", combinedCondition2.toString(), "Incorrect combined condition for 'Positive'");
 
         // Test for the third return statement (return "Negative")
         ReturnConditionVisitor visitor3 = new ReturnConditionVisitor(returnStatements.get(2));
         method.accept(visitor3, null);
-        Expression combinedCondition3 = visitor3.getCombinedCondition();
+        Expression combinedCondition3 = BinaryOps.getCombinedCondition(visitor3.getConditions());
         assertEquals("a < 0", combinedCondition3.toString(), "Incorrect combined condition for 'Negative'");
     }
+
+    @Test
+    void testMultivariate() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("multiVariate")).orElseThrow();
+
+        evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals("Bee!Zero!Zero!Aargh!Antikythera!Bee!",s.replaceAll("\\n",""));
+    }
+
 }
 
 class TestConditionalWithOptional extends TestHelper {
@@ -143,9 +195,9 @@ class TestConditionalWithOptional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({
-        "ifEmpty, ID not found\\nID: 1",
+        "ifEmpty, ID: 1\\nID not found",
         "ifPresent, ID: 1",
-        "optionalString, IBUPROFEN"
+        "optionalString, ANTIKYTHERA"
     })
     void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

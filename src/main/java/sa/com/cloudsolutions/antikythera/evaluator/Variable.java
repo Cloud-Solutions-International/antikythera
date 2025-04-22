@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.VoidType;
 
 public class Variable {
     /**
@@ -41,13 +42,18 @@ public class Variable {
      * @param type the identified java parser type.
      */
     public Variable(Type type) {
-        this.type = type;
+        if (type == null) {
+            this.type = new VoidType();
+        }
+        else {
+            this.type = type;
+        }
     }
 
     /**
      * Create an instance with the given value.
      *
-     * if the value is not null, it's class will be detected and saved in the class field.
+     * if the value is not null, its class will be detected and saved in the class field.
      * @param value the initial value for the Variable
      */
     public Variable(Object value) {

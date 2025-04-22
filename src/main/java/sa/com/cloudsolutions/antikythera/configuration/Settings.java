@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.configuration;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -29,6 +28,22 @@ import java.util.Scanner;
 public class Settings {
     public static final String APPLICATION_HOST = "application.host";
     private static final String VARIABLES = "variables";
+    /**
+     * In the generated tests, mocking will be through this framework.
+     */
+    public static final String MOCK_WITH = "mock_with";
+    /**
+     * While evaluating expressions, any mocking will be done through this framework.
+     */
+    public static final String MOCK_WITH_INTERNAL = "mock_with_internal";
+
+    public static final String BASE_PACKAGE = "base_package";
+    public static final String BASE_PATH = "base_path";
+    public static final String OUTPUT_PATH = "output_path";
+    public static final String CONTROLLERS = "controllers";
+    public static final String DEPENDENCIES = "dependencies";
+    public static final String SERVICES = "services";
+
     /**
      * HashMap to store the configurations.
      */
@@ -261,7 +276,7 @@ public class Settings {
      * try to compile or not.
      */
     public static String getBasePackage() {
-        return (String) props.get(Constants.BASE_PACKAGE);
+        return (String) props.get(Settings.BASE_PACKAGE);
     }
 
 
@@ -270,11 +285,11 @@ public class Settings {
      * If there is a java class without a package it should be in this folder.
      */
     public static String getBasePath() {
-        return (String) props.get(Constants.BASE_PATH);
+        return (String) props.get(Settings.BASE_PATH);
     }
 
     public static String getOutputPath() {
-        return (String) props.get(Constants.OUTPUT_PATH);
+        return (String) props.get(Settings.OUTPUT_PATH);
     }
 
     public static String[] getArtifacts() {
@@ -282,7 +297,7 @@ public class Settings {
     }
 
     private static String[] getDependencies(String artifactIds) {
-        Object deps = props.getOrDefault(Constants.DEPENDENCIES, new HashMap<>());
+        Object deps = props.getOrDefault(Settings.DEPENDENCIES, new HashMap<>());
         if (deps instanceof String s) {
             return s.split(",");
         }
@@ -316,7 +331,7 @@ public class Settings {
      * @param key the key to replace or create
      * @param value the new value to assign.
      */
-    public void setProperty(String key, Object value) {
+    public static void setProperty(String key, Object value) {
         props.put(key, value);
     }
 

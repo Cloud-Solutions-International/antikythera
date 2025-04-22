@@ -20,11 +20,12 @@ import java.util.List;
 
 
 /**
- * Create fake objects using DTO Buddy for DTOs, Entities and possibly other types of classes
+ * Create fake objects using Byte Buddy for DTOs, Entities and possibly other types of classes.
+ * This will be primarily used in mocking.
  */
-public class DTOBuddy {
+public class AKBuddy {
 
-    protected DTOBuddy() {}
+    protected AKBuddy() {}
 
     /**
      * <p>Dynamically create a class matching given type declaration and then create an instance</p>
@@ -39,24 +40,45 @@ public class DTOBuddy {
      */
     public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
         Evaluator eval = interceptor.getEvaluator();
-        CompilationUnit cu = eval.getCompilationUnit();
-        TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
-        String className = dtoType.getNameAsString();
+        if (eval != null) {
+            CompilationUnit cu = eval.getCompilationUnit();
+            TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
+            String className = dtoType.getNameAsString();
 
+            List<FieldDeclaration> fields = dtoType.getFields();
 
-        List<FieldDeclaration> fields = dtoType.getFields();
+            ByteBuddy byteBuddy = new ByteBuddy();
+            DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
+                    .method(ElementMatchers.not(
+                            ElementMatchers.isDeclaredBy(Object.class)
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                    ))
+                    .intercept(MethodDelegation.to(interceptor));
 
-        ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
-                .method(ElementMatchers.any())
-                .intercept(MethodDelegation.to(interceptor));
+            builder = addFields(fields, cu, builder);
+            builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
-        builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
+            ClassLoader targetLoader = findSafeLoader(Object.class.getClassLoader(), interceptor.getClass().getClassLoader());
+            return builder.make()
+                    .load(targetLoader)
+                    .getLoaded();
+        } else {
+            Class<?> wrappedClass = interceptor.getWrappedClass();
+            ByteBuddy byteBuddy = new ByteBuddy();
+            ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
-        return builder.make()
-                .load(Evaluator.class.getClassLoader())
-                .getLoaded();
+            return byteBuddy.subclass(wrappedClass)
+                    .method(ElementMatchers.not(
+                            ElementMatchers.isDeclaredBy(Object.class)
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                                    .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                    ))
+                    .intercept(MethodDelegation.to(interceptor))
+                    .make()
+                    .load(targetLoader)
+                    .getLoaded();
+        }
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
@@ -139,4 +161,12 @@ public class DTOBuddy {
         return builder;
     }
 
+    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
+        try {
+            Class.forName(MethodInterceptor.class.getName(), false, primary);
+            return primary;
+        } catch (ClassNotFoundException e) {
+            return fallback;
+        }
+    }
 }

@@ -83,9 +83,9 @@ public class Callable {
     @Override
     public int hashCode() {
         if (method != null) {
-            return method.hashCode();
+            return method.hashCode() + 141;
         }
-        return callableDeclaration.hashCode();
+        return callableDeclaration.hashCode() + 431;
     }
 
     @Override

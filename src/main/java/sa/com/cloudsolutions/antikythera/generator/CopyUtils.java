@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -27,7 +26,7 @@ public class CopyUtils {
     }
 
     public static void writeFile( String relativePath, String content) throws IOException {
-        String filePath = Settings.getProperty(Constants.OUTPUT_PATH).toString() +
+        String filePath = Settings.getProperty(Settings.OUTPUT_PATH).toString() +
                 File.separator + SRC + File.separator + "main" + File.separator + "java" +
                 File.separator + relativePath;
 

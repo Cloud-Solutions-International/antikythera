@@ -146,6 +146,46 @@ public class Conditional {
         return "Negative";
     }
 
+    public void multiVariate(int a, int b) {
+        if (a == 0) {
+            if (b == 0) {
+                System.out.println("Zero!");
+            } else {
+                System.out.println("Bee!");
+            }
+        } else {
+            if (b == 0) {
+                System.out.println("Aargh!");
+            }
+            else {
+                System.out.println("Antikythera!");
+            }
+        }
+    }
+
+    public void multiVariateDeep(int a, int b) {
+        if (a == 0) { // o
+            System.out.println("A0!");
+            if (b == 0) { // 1
+                System.out.println("B0!");
+            } else {
+                if (b == 1) { // 2
+                    System.out.println("Bee!");
+                }
+                else {
+                    System.out.println("Queen Bee!");
+                }
+            }
+        } else {
+            if (b == 0) { // 3
+                System.out.println("Aargh!");
+            }
+            else {
+                System.out.println("Antikythera!");
+            }
+        }
+    }
+
 
     public static void main(String[] args) {
         Person p = new Person("Hello");

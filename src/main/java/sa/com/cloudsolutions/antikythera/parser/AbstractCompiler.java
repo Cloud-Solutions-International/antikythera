@@ -17,6 +17,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
@@ -885,5 +886,19 @@ public class AbstractCompiler {
             currentNode = currentNode.getParentNode().orElse(null);
         }
         return null; // No block statement found
+    }
+
+    public static Optional<ExpressionStmt> findExpressionStatement(MethodCallExpr methodCall) {
+        Node n = methodCall;
+        while (n != null && !(n instanceof MethodDeclaration)) {
+            if (n instanceof ExpressionStmt stmt) {
+                /*
+                 * We have found the expression statement corresponding to this query
+                 */
+                return Optional.of(stmt);
+            }
+            n = n.getParentNode().orElse(null);
+        }
+        return Optional.empty();
     }
 }

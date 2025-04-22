@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 /*
- * These unusused imports are here to test imports!
+ * These unused imports are here to test imports!
  */
 import java.util.*;
 import sa.com.cloudsolutions.antikythera.evaluator.*;

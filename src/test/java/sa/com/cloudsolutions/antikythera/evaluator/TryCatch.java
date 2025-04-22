@@ -46,6 +46,10 @@ public class TryCatch {
         System.out.println("Bye");
     }
 
+    public void justThrow() throws CustomException {
+        throw new CustomException();
+    }
+
     public void tryNPE() {
         try {
             String s = null;
@@ -56,5 +60,9 @@ public class TryCatch {
         } finally {
             System.out.println("Finally block");
         }
+    }
+
+    public static class CustomException extends Exception {
+
     }
 }

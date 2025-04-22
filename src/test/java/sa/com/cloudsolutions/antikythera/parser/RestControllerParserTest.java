@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.constants.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -20,7 +19,7 @@ class RestControllerParserTest {
     void setUp() throws IOException {
         AntikytheraRunTime.reset();
         Settings.loadConfigMap();
-        outputPath = Settings.getProperty(Constants.OUTPUT_PATH).toString();
+        outputPath = Settings.getProperty(Settings.OUTPUT_PATH).toString();
 
         parser = new RestControllerParser("sa.com.cloudsolutions.controller.ComplexController");
     }
