@@ -255,6 +255,7 @@ public class Antikythera {
 
         if (pomModel != null) {
             List<Dependency> dependencies = pomModel.getDependencies();
+            Properties properties = pomModel.getProperties();
             Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
 
             if (m2.isPresent()) {
@@ -263,15 +264,25 @@ public class Antikythera {
                     String artifactId = dependency.getArtifactId();
                     String version = dependency.getVersion();
 
+                    // Handle property variables in version
+                    if (version != null && version.startsWith("${") && version.endsWith("}")) {
+                        String propertyName = version.substring(2, version.length() - 1);
+                        version = properties.getProperty(propertyName);
+                    }
+
                     if (version == null || version.isEmpty()) {
                         version = findLatestVersion(groupIdPath, artifactId, m2.get());
                     }
-                    Path p = Paths.get(m2.get(), groupIdPath, artifactId, version, artifactId + "-" + version + ".jar");
-                    if (!Files.exists(p)) {
-                        continue;
+
+                    if (version != null) {
+                        Path p = Paths.get(m2.get(), groupIdPath, artifactId, version,
+                                artifactId + "-" + version + ".jar");
+                        if (Files.exists(p)) {
+                            jarPaths.add(p.toString());
+                        } else {
+                            logger.warn("Jar not found: {}", p);
+                        }
                     }
-                    String jarPath = p.toString();
-                    jarPaths.add(jarPath);
                 }
             }
         }
