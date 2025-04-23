@@ -196,7 +196,7 @@ class TestConditionalWithOptional extends TestHelper {
     @ParameterizedTest
     @CsvSource({
         "ifEmpty, ID: 1\\nID not found",
-        "ifPresent, ID: 1",
+        "ifPresent, ID: 1", "binOptionals, x is 10\\nx is not 10",
         "optionalString, ANTIKYTHERA"
     })
     void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {

@@ -44,9 +44,11 @@ public class Reflect {
     public static final String BOOLEAN = "Boolean";
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
+    public static final String STRING = "String";
+
     /**
      * Keeps a map of wrapper types to their primitive counterpart
-     * for example : `Integer.class -> int.class`
+     * for example, `Integer.class -> int.class`
      */
     static Map<Class<?>, Class<?>> wrapperToPrimitive = new HashMap<>();
     /**
@@ -77,10 +79,10 @@ public class Reflect {
     }
 
     /**
-     * Build the suitable set of arguments for use with a reflective  method call
+     * Build the suitable set of arguments for use with a reflective method call
      *
-     * @param methodCall ObjectCreationExpr from java parser , which will be used as the basis for finding the
-     *                   *            method to be called along with it's arguments.
+     * @param methodCall ObjectCreationExpr from java parser, which will be used as the basis for finding the
+     *                   *            method to be called along with its arguments.
      * @param evaluator  the evaluator to use to evaluate the arguments if any
      * @return A ReflectionArguments object which contains all the information required to execute a method
      * using reflection.
@@ -89,7 +91,9 @@ public class Reflect {
      */
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
-        return buildArgumentsCommon(methodCall.getNameAsString(), methodCall.getArguments(), evaluator, scope);
+        ReflectionArguments args = buildArgumentsCommon(methodCall.getNameAsString(), methodCall.getArguments(), evaluator, scope);
+        args.setExpression(methodCall);
+        return args;
     }
 
     /**
@@ -105,7 +109,9 @@ public class Reflect {
      */
     public static ReflectionArguments buildArguments(ObjectCreationExpr oce, Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
-        return buildArgumentsCommon(null, oce.getArguments(), evaluator, scope);
+        ReflectionArguments args = buildArgumentsCommon(null, oce.getArguments(), evaluator, scope);
+        args.setExpression(oce);
+        return args;
     }
 
     private static ReflectionArguments buildArgumentsCommon(String methodName, List<Expression> arguments,
@@ -233,7 +239,7 @@ public class Reflect {
             case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
             case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
             case "char", "java.lang.Character" -> PrimitiveType.charType();
-            case "java.lang.String" -> new ClassOrInterfaceType().setName("String");
+            case "java.lang.String" -> new ClassOrInterfaceType().setName(STRING);
             default -> null;
         };
     }
@@ -345,7 +351,7 @@ public class Reflect {
 
             case "Long", "long", "java.lang.Long" -> createVariable(1L, "Long", "1");
 
-            case "String", "java.lang.String" -> createVariable("Antikythera", "String", "Antikythera");
+            case STRING, "java.lang.String" -> createVariable("Antikythera", STRING, "Antikythera");
 
             default -> new Variable(null);
         };

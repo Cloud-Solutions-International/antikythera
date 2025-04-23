@@ -751,7 +751,7 @@ public class Evaluator {
      *
      * @param methodCall the method call expression
      * @return the result of executing that code.
-     * @throws EvaluatorException if there is an error evaluating the method call or if the
+     * @throws EvaluatorException if there is an error evaluating the method call, or if the
      *          feature is not yet implemented.
      */
     public Variable evaluateMethodCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
@@ -1020,7 +1020,7 @@ public class Evaluator {
 
     /**
      * Execute a method that is part of a chain of method calls
-     * @param sc the methods scope
+     * @param sc the method scope
      * @return the result from executing the method or null if the method is void.
      * @throws ReflectiveOperationException if the execution involves a class available only
      *      in byte code format and an exception occurs in reflecting.
@@ -1448,8 +1448,9 @@ public class Evaluator {
     /**
      * Execute a statement.
      * In the java parser architecture a statement is not always a single line of code. They can be
-     * block statements as well. For example when an IF condition is encountered that counts as
-     * statement. It's child elements the then and else blocks are also block statements.
+     * block statements as well. For example, when an IF condition is encountered, that counts as
+     * a statement. The child elements of the if statement happen to be a Then and an Else both of
+     * which can be block statements.
      *
      * @param stmt the statement to execute
      * @throws Exception if the execution fails.
