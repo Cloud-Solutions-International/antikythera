@@ -1290,7 +1290,9 @@ public class Evaluator {
                     }
                 }
             }
-            v.setType(t);
+            if (v != null) {
+                v.setType(t);
+            }
         }
         else
         {

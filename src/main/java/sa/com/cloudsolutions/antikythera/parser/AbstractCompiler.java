@@ -8,6 +8,7 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -834,9 +835,12 @@ public class AbstractCompiler {
         }
     }
 
-    public static TypeDeclaration<?> getEnclosingClassOrInterface(Node n) {
+    public static TypeDeclaration<?> getEnclosingType(Node n) {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
             return cdecl;
+        }
+        if (n instanceof EnumDeclaration ed) {
+            return ed;
         }
         if (n instanceof AnnotationDeclaration ad) {
             return ad;
@@ -844,7 +848,7 @@ public class AbstractCompiler {
         if (n != null) {
             Optional<Node> parent = n.getParentNode();
             if (parent.isPresent()) {
-                return getEnclosingClassOrInterface(parent.get());
+                return getEnclosingType(parent.get());
             }
         }
         return null;
