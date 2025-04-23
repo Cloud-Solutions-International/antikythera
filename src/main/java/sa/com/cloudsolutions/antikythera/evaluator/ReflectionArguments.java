@@ -1,5 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+
 import java.lang.reflect.Method;
 
 public class ReflectionArguments {
@@ -29,6 +32,7 @@ public class ReflectionArguments {
     private Variable scope;
 
     private Object[] finalArgs;
+    private Expression expression;
 
     public ReflectionArguments(String methodName, Object[] args, Class<?>[] argumentTypes) {
         this.methodName = methodName;
@@ -80,5 +84,13 @@ public class ReflectionArguments {
 
     public Object[] getFinalArgs() {
         return finalArgs;
+    }
+
+    public void setExpression(Expression methodCall) {
+        this.expression = methodCall;
+    }
+
+    public Expression getExpression() {
+        return expression;
     }
 }

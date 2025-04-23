@@ -216,4 +216,19 @@ public class ControlFlowEvaluator extends Evaluator{
     Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         throw new IllegalStateException("straight path Should be overridden");
     }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
+        super.invokeReflectively(v, reflectionArguments);
+
+        if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals("java.util.Optional")) {
+            Object[] finalArgs = reflectionArguments.getFinalArgs();
+            if (finalArgs.length == 1 && reflectionArguments.getMethodName().equals("ofNullable")) {
+                Statement stmt = reflectionArguments.getExpression().findAncestor(Statement.class).orElseThrow();
+                LineOfCode l = Branching.get(stmt.hashCode());
+            }
+        }
+
+    }
 }
