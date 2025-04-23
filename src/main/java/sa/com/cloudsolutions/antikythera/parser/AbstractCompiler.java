@@ -106,7 +106,6 @@ public class AbstractCompiler {
             urls.add(Paths.get(s).toUri().toURL());
         }
         for (String s : Antikythera.getInstance().getJarPaths()) {
-            System.out.println(s);
             jarFiles.add(s);
             urls.add(Paths.get(s).toUri().toURL());
         }

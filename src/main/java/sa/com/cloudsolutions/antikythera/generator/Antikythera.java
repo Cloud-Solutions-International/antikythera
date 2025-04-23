@@ -260,33 +260,37 @@ public class Antikythera {
 
             if (m2.isPresent()) {
                 for (Dependency dependency : dependencies) {
-                    String groupIdPath = dependency.getGroupId().replace('.', '/');
-                    String artifactId = dependency.getArtifactId();
-                    String version = dependency.getVersion();
-
-                    // Handle property variables in version
-                    if (version != null && version.startsWith("${") && version.endsWith("}")) {
-                        String propertyName = version.substring(2, version.length() - 1);
-                        version = properties.getProperty(propertyName);
-                    }
-
-                    if (version == null || version.isEmpty()) {
-                        version = findLatestVersion(groupIdPath, artifactId, m2.get());
-                    }
-
-                    if (version != null) {
-                        Path p = Paths.get(m2.get(), groupIdPath, artifactId, version,
-                                artifactId + "-" + version + ".jar");
-                        if (Files.exists(p)) {
-                            jarPaths.add(p.toString());
-                        } else {
-                            logger.warn("Jar not found: {}", p);
-                        }
-                    }
+                    addJarPath(dependency, properties, m2.get(), jarPaths);
                 }
             }
         }
         return jarPaths.toArray(new String[0]);
+    }
+
+    private void addJarPath(Dependency dependency, Properties properties, String m2, List<String> jarPaths) {
+        String groupIdPath = dependency.getGroupId().replace('.', '/');
+        String artifactId = dependency.getArtifactId();
+        String version = dependency.getVersion();
+
+        // Handle property variables in version
+        if (version != null && version.startsWith("${") && version.endsWith("}")) {
+            String propertyName = version.substring(2, version.length() - 1);
+            version = properties.getProperty(propertyName);
+        }
+
+        if (version == null || version.isEmpty()) {
+            version = findLatestVersion(groupIdPath, artifactId, m2);
+        }
+
+        if (version != null) {
+            Path p = Paths.get(m2, groupIdPath, artifactId, version,
+                    artifactId + "-" + version + ".jar");
+            if (Files.exists(p)) {
+                jarPaths.add(p.toString());
+            } else {
+                logger.warn("Jar not found: {}", p);
+            }
+        }
     }
 
     private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
