@@ -370,6 +370,34 @@ class TestTruthTable {
     }
 
     @Test
+    void testLongLiteralExpression() {
+        // Test with a long literal in a greater than comparison
+        String condition = "a > 5L";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        try {
+            List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+            assertFalse(v.isEmpty());
+
+            Map<Expression, Object> first = v.getFirst();
+            int value = (int) first.get(new NameExpr("a"));
+            assertTrue(value > 5);
+
+            v = tt.findValuesForCondition(false);
+            assertFalse(v.isEmpty());
+            first = v.getFirst();
+            value = (int) first.get(new NameExpr("a"));
+            assertTrue(value <= 5);
+        } catch (Exception e) {
+            // If the test fails with the current approach, let's try a different one
+            // This is a fallback to ensure we get some coverage of handleLongLiteral
+            System.out.println("[DEBUG_LOG] Exception in testLongLiteralExpression: " + e.getMessage());
+            fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @Test
     void testFieldAccess() {
         String condition = "person.age > 18";
         TruthTable tt = new TruthTable(condition);

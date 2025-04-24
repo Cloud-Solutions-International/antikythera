@@ -571,6 +571,8 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
             return getValue(condition, truthValues);
         } else if (condition.isDoubleLiteralExpr()) {
             return getValue(condition, truthValues);
+        } else if (condition.isLongLiteralExpr()) {
+            return getValue(condition, truthValues);
         }
 
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
@@ -614,13 +616,23 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 return n.intValue();
             }
         } else if (expr.isLiteralExpr()) {
-            return switch (expr) {
-                case IntegerLiteralExpr integerLiteralExpr -> Integer.valueOf(integerLiteralExpr.getValue());
-                case DoubleLiteralExpr doubleLiteralExpr -> Double.valueOf(doubleLiteralExpr.getValue());
-                case StringLiteralExpr stringLiteralExpr -> stringLiteralExpr.getValue();
-                case NullLiteralExpr nullLiteralExpr -> null;
-                default -> throw new UnsupportedOperationException("Unsupported literal expression: " + expr);
-            };
+            if (expr.isIntegerLiteralExpr()) {
+                return Integer.valueOf(expr.asIntegerLiteralExpr().getValue());
+            } else if (expr.isDoubleLiteralExpr()) {
+                return Double.valueOf(expr.asDoubleLiteralExpr().getValue());
+            } else if (expr.isStringLiteralExpr()) {
+                return expr.asStringLiteralExpr().getValue();
+            } else if (expr.isNullLiteralExpr()) {
+                return null;
+            } else if (expr.isLongLiteralExpr()) {
+                String value = expr.asLongLiteralExpr().getValue();
+                if (value.endsWith("L") || value.endsWith("l")) {
+                    value = value.substring(0, value.length() - 1);
+                }
+                return Long.valueOf(value);
+            } else {
+                throw new UnsupportedOperationException("Unsupported literal expression: " + expr);
+            }
         }
 
         return truthValues.get(expr);
@@ -718,7 +730,12 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
 
         private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
                 Expression compareWith) {
-            long literalValue = Long.parseLong(compareWith.asLongLiteralExpr().getValue());
+            // Handle the case where the value might have an 'L' suffix
+            String valueStr = compareWith.asLongLiteralExpr().getValue();
+            if (valueStr.endsWith("L") || valueStr.endsWith("l")) {
+                valueStr = valueStr.substring(0, valueStr.length() - 1);
+            }
+            long literalValue = Long.parseLong(valueStr);
             Node parent = n.getParentNode().orElse(null);
 
             if (parent instanceof BinaryExpr binaryExpr) {
