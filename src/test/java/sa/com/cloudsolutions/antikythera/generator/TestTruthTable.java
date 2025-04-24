@@ -178,28 +178,19 @@ class TestTruthTable {
         tt.setAllowNullInputs(allowNullInputs);
         tt.generateTruthTable();
 
+        // Since the condition contains a null literal, allowNullInputs should be disregarded
+        // and null inputs should always be allowed
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
 
-        if (allowNullInputs) {
-            // When null inputs are allowed
-            assertEquals(1, v.size());
-            Map<Expression, Object> first = v.getFirst();
-            assertNull(first.get(new NameExpr("a")));
+        // Null inputs should be allowed regardless of allowNullInputs setting
+        assertEquals(1, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertNull(first.get(new NameExpr("a")));
 
-            v = tt.findValuesForCondition(false);
-            assertEquals(1, v.size());
-            first = v.getFirst();
-            assertNotNull(first.get(new NameExpr("a")));
-        } else {
-            // When null inputs are disallowed
-            // The condition "a == null" can't be true because there are no null values
-            assertEquals(0, v.size());
-
-            v = tt.findValuesForCondition(false);
-            assertFalse(v.isEmpty());
-            Map<Expression, Object> first = v.getFirst();
-            assertNotNull(first.get(new NameExpr("a")));
-        }
+        v = tt.findValuesForCondition(false);
+        assertEquals(1, v.size());
+        first = v.getFirst();
+        assertNotNull(first.get(new NameExpr("a")));
     }
 
     @ParameterizedTest
@@ -212,6 +203,7 @@ class TestTruthTable {
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
 
+        // This condition doesn't contain null literals, so allowNullInputs should be respected
         if (allowNullInputs) {
             // When null inputs are allowed
             assertEquals(1, v.size());
@@ -394,6 +386,39 @@ class TestTruthTable {
             // This is a fallback to ensure we get some coverage of handleLongLiteral
             System.out.println("[DEBUG_LOG] Exception in testLongLiteralExpression: " + e.getMessage());
             fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void testNullLiteralDisregardsAllowNullInputs() {
+        // Test that when a condition contains null literals, allowNullInputs is disregarded
+        String condition = "a == null || b == null";
+        TruthTable tt = new TruthTable(condition);
+
+        // Set allowNullInputs to false, but it should be disregarded
+        tt.setAllowNullInputs(false);
+        tt.generateTruthTable();
+
+        // Verify that null values are still allowed in the truth table
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        // At least one row should have a null value for 'a' or 'b'
+        boolean foundNullValue = false;
+        for (Map<Expression, Object> row : v) {
+            if (row.get(new NameExpr("a")) == null || row.get(new NameExpr("b")) == null) {
+                foundNullValue = true;
+                break;
+            }
+        }
+        assertTrue(foundNullValue, "Should find at least one row with null values");
+
+        // Check that the condition evaluates correctly
+        for (Map<Expression, Object> row : v) {
+            Object aValue = row.get(new NameExpr("a"));
+            Object bValue = row.get(new NameExpr("b"));
+            assertTrue(aValue == null || bValue == null, 
+                    "Condition 'a == null || b == null' should be true for this row");
         }
     }
 
