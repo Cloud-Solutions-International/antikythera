@@ -12,7 +12,7 @@ public class Variable {
     /**
      * Represents the type as it was identified by reflection.
      * This is needed because sometimes the value maybe null because it's supposed to hold null, but when
-     * that happens you cannot call value.getClass() because it will throw a null pointer exception.
+     * that happens, you cannot call value.getClass() because it will throw a null pointer exception.
      *
      */
     private Class<?> clazz;

@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -177,11 +178,6 @@ public class ControlFlowEvaluator extends Evaluator{
 
     @Override
     Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
-        Variable v = evaluateOptionalEmptyCall(chain);
-        return (v == null) ?  super.handleOptionalEmpties(chain) : v;
-    }
-
-    private Variable evaluateOptionalEmptyCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         return switch (methodCall.getNameAsString()) {
             case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
@@ -225,10 +221,31 @@ public class ControlFlowEvaluator extends Evaluator{
         if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals("java.util.Optional")) {
             Object[] finalArgs = reflectionArguments.getFinalArgs();
             if (finalArgs.length == 1 && reflectionArguments.getMethodName().equals("ofNullable")) {
-                Statement stmt = reflectionArguments.getExpression().findAncestor(Statement.class).orElseThrow();
+                Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
                 LineOfCode l = Branching.get(stmt.hashCode());
+                if (l == null) {
+                    Expression expr = reflectionArguments.getMethodCallExpression();
+                    if (expr instanceof MethodCallExpr mce) {
+                        Expression argument = mce.getArguments().getFirst().orElseThrow();
+                        if (argument.isNameExpr()) {
+                            l = new LineOfCode(stmt);
+                            Branching.add(l);
+
+                            if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
+                                if (opt.isPresent()) {
+                                    l.setPathTaken(LineOfCode.TRUE_PATH);
+                                }
+                                else {
+                                    l.setPathTaken(LineOfCode.FALSE_PATH);
+                                }
+                                Variable arg = getValue(stmt, argument.asNameExpr().getNameAsString());
+                                Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, Reflect.getDefault(arg.getClazz()));
+                                setupConditionThroughAssignment(stmt, entry);
+                            }
+                        }
+                    }
+                }
             }
         }
-
     }
 }

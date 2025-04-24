@@ -92,7 +92,7 @@ public class Reflect {
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
         ReflectionArguments args = buildArgumentsCommon(methodCall.getNameAsString(), methodCall.getArguments(), evaluator, scope);
-        args.setExpression(methodCall);
+        args.setMethodCallExpression(methodCall);
         return args;
     }
 
@@ -110,7 +110,7 @@ public class Reflect {
     public static ReflectionArguments buildArguments(ObjectCreationExpr oce, Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
         ReflectionArguments args = buildArgumentsCommon(null, oce.getArguments(), evaluator, scope);
-        args.setExpression(oce);
+        args.setMethodCallExpression(oce);
         return args;
     }
 
