@@ -232,14 +232,16 @@ public class ControlFlowEvaluator extends Evaluator{
                             Branching.add(l);
 
                             if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
+                                Object value = null;
                                 if (opt.isPresent()) {
                                     l.setPathTaken(LineOfCode.TRUE_PATH);
                                 }
                                 else {
+                                    value = Reflect.getDefault(argument.getClass());
                                     l.setPathTaken(LineOfCode.FALSE_PATH);
                                 }
                                 Variable arg = getValue(stmt, argument.asNameExpr().getNameAsString());
-                                Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, Reflect.getDefault(arg.getClazz()));
+                                Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
                                 setupConditionThroughAssignment(stmt, entry);
                             }
                         }
