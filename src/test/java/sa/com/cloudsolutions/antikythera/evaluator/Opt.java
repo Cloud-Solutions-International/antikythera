@@ -87,8 +87,8 @@ public class Opt {
     }
 
     public void optionalString(String input) {
-        Optional<String> optionalInput = Optional.ofNullable(input);
-        System.out.println(optionalInput.map(String::toUpperCase).orElse("default"));
+        String optionalInput = Optional.ofNullable(input).orElse("default");
+        System.out.println(optionalInput);
     }
 
     public static void main(String[] args) {

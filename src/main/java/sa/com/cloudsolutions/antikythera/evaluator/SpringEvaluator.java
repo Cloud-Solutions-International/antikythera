@@ -16,6 +16,7 @@ import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -179,7 +180,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
-            case "Integer" -> Integer.parseInt(value.toString());
+            case "Integer" -> value instanceof NullLiteralExpr ? null : Integer.parseInt(value.toString());
             case "Double" -> Double.parseDouble(value.toString());
             case "Long" -> Long.parseLong(value.toString());
             case "Float" -> Float.parseFloat(value.toString());
