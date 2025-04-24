@@ -63,6 +63,8 @@ public class TruthTable {
      */
     private List<Map<Expression, Object>> table;
 
+    boolean allowNullInputs = true;
+
     public TruthTable() {
         this.variables = new HashMap<>();
         this.conditions = new HashSet<>();
@@ -92,6 +94,9 @@ public class TruthTable {
                 || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
     }
 
+    public void setAllowNullInputs(boolean allowNullInputs) {
+        this.allowNullInputs = allowNullInputs;
+    }
 
     /**
      * Main method to test the truth table generation and printing with different conditions.
@@ -206,7 +211,7 @@ public class TruthTable {
     }
 
     /**
-     * Depending on the number of variables and their domain the number of possibilities can change.
+     * Depending on the number of variables and their domain, the number of possibilities can change.
      * @param variableList all the variables in the truth table.
      * @param domain the domain of values for integer literals
      * @return the total number of combinations that are available to us.
@@ -670,32 +675,43 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
 
         /**
          * Find the domain for the given name expression
-         * @param n
-         * @param collector
-         * @param compareWith
+         * @param nameExpression the name expression for which we need to find the domain
+         * @param collector the collection into which we will put the eligible expressions
+         * @param compareWith the expression that we will compare against.
          */
-        private void findDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector, Expression compareWith) {
+        private void findDomain(Expression nameExpression, HashMap<Expression,
+                Pair<Object, Object>> collector, Expression compareWith) {
             if (compareWith.isNullLiteralExpr()) {
-                collector.put(n, new Pair<>(null, "T"));
+                if (allowNullInputs) {
+                    collector.put(nameExpression, new Pair<>(null, "T"));
+                } else {
+                    // If null inputs are not allowed, use a non-null domain
+                    collector.put(nameExpression, new Pair<>(false, true));
+                }
             }
             else if (compareWith.isIntegerLiteralExpr()) {
-                handleIntegerLiteral(n, collector, compareWith);
+                handleIntegerLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isLongLiteralExpr()) {
-                handleLongLiteral(n, collector, compareWith);
+                handleLongLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isDoubleLiteralExpr()) {
-                handleDoubleLiteral(n, collector, compareWith);
+                handleDoubleLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
-                collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
+                if (allowNullInputs) {
+                    collector.put(nameExpression, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
+                } else {
+                    // If null inputs are not allowed, use a non-null domain for strings
+                    collector.put(nameExpression, new Pair<>("", compareWith.asStringLiteralExpr().getValue()));
+                }
             }
             else {
                 if (isInequalityPresent()) {
-                    collector.put(n, new Pair<>(0, 1));
+                    collector.put(nameExpression, new Pair<>(0, 1));
                 }
                 else {
-                    collector.put(n, new Pair<>(true, false));
+                    collector.put(nameExpression, new Pair<>(true, false));
                 }
             }
         }

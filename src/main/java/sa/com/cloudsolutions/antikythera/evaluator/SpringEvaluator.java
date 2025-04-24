@@ -652,7 +652,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         }
-
     }
 
     /**
