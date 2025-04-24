@@ -170,41 +170,72 @@ class TestTruthTable {
         assertFalse(v.isEmpty());
     }
 
-    @Test
-    void testSimpleNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testSimpleNull(boolean allowNullInputs) {
         String condition = "a == null";
         TruthTable tt = new TruthTable(condition);
+        tt.setAllowNullInputs(allowNullInputs);
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
-        assertEquals(1, v.size());
-        Map<Expression, Object> first = v.getFirst();
-        assertNull(first.get(new NameExpr("a")));
 
-        v = tt.findValuesForCondition(false);
-        assertEquals(1, v.size());
-        first = v.getFirst();
-        assertNotNull(first.get(new NameExpr("a")));
+        if (allowNullInputs) {
+            // When null inputs are allowed
+            assertEquals(1, v.size());
+            Map<Expression, Object> first = v.getFirst();
+            assertNull(first.get(new NameExpr("a")));
 
-        v = tt.findValuesForCondition(true);
-        assertFalse(v.isEmpty());
+            v = tt.findValuesForCondition(false);
+            assertEquals(1, v.size());
+            first = v.getFirst();
+            assertNotNull(first.get(new NameExpr("a")));
+        } else {
+            // When null inputs are disallowed
+            // The condition "a == null" can't be true because there are no null values
+            assertEquals(0, v.size());
+
+            v = tt.findValuesForCondition(false);
+            assertFalse(v.isEmpty());
+            Map<Expression, Object> first = v.getFirst();
+            assertNotNull(first.get(new NameExpr("a")));
+        }
     }
 
-    @Test
-    void testNotNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testNotNull(boolean allowNullInputs) {
         String condition = "a != null && b != null";
         TruthTable tt = new TruthTable(condition);
+        tt.setAllowNullInputs(allowNullInputs);
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
-        assertEquals(1, v.size());
-        Map<Expression, Object> first = v.getFirst();
-        assertTrue(TruthTable.isTrue(first.get(new NameExpr("a"))));
 
-        v = tt.findValuesForCondition(false);
-        assertEquals(3, v.size());
-        first = v.getFirst();
-        assertNull(first.get(new NameExpr("a")));
+        if (allowNullInputs) {
+            // When null inputs are allowed
+            assertEquals(1, v.size());
+            Map<Expression, Object> first = v.getFirst();
+            assertTrue(TruthTable.isTrue(first.get(new NameExpr("a"))));
+            assertTrue(TruthTable.isTrue(first.get(new NameExpr("b"))));
+
+            v = tt.findValuesForCondition(false);
+            assertEquals(3, v.size());
+            first = v.getFirst();
+            assertNull(first.get(new NameExpr("a")));
+        } else {
+            // When null inputs are disallowed
+            // All values should be non-null, so the condition should be true for all combinations
+            assertFalse(v.isEmpty());
+            for (Map<Expression, Object> row : v) {
+                assertNotNull(row.get(new NameExpr("a")));
+                assertNotNull(row.get(new NameExpr("b")));
+            }
+
+            // There should be no false conditions since all values are non-null
+            v = tt.findValuesForCondition(false);
+            assertEquals(0, v.size());
+        }
     }
 
     @Test
@@ -248,20 +279,47 @@ class TestTruthTable {
 
     }
 
-    @Test
-    void testMethodCall() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testMethodCall(boolean allowNullInputs) {
         String condition = "person.getName() != null";
         TruthTable tt = new TruthTable(condition);
+        tt.setAllowNullInputs(allowNullInputs);
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
-        assertEquals(1, v.size());
-        Expression first = v.getFirst().keySet().stream().findFirst().orElse(null);
-        assertNotNull(first);
-        assertTrue(TruthTable.isTrue(v.getFirst().get(first)));
 
-        v = tt.findValuesForCondition(false);
-        assertFalse(v.isEmpty());
+        if (allowNullInputs) {
+            // When null inputs are allowed
+            assertEquals(1, v.size());
+            Expression first = v.getFirst().keySet().stream().findFirst().orElse(null);
+            assertNotNull(first);
+            assertTrue(TruthTable.isTrue(v.getFirst().get(first)));
+
+            v = tt.findValuesForCondition(false);
+            assertFalse(v.isEmpty());
+        } else {
+            // When null inputs are disallowed
+            // All method call results should be non-null
+            assertFalse(v.isEmpty());
+
+            // Find the method call expression
+            Expression methodCall = v.getFirst().keySet().stream()
+                .filter(e -> e.isMethodCallExpr())
+                .findFirst()
+                .orElse(null);
+
+            if (methodCall != null) {
+                // Verify that the method call result is not null
+                for (Map<Expression, Object> row : v) {
+                    assertNotNull(row.get(methodCall));
+                }
+            }
+
+            // There should be no false conditions since all values are non-null
+            v = tt.findValuesForCondition(false);
+            assertEquals(0, v.size());
+        }
     }
 
     @Test
