@@ -186,7 +186,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             case "Float" -> Float.parseFloat(value.toString());
             case "Boolean" -> value.isBooleanLiteralExpr() ? value.asBooleanLiteralExpr().getValue() : value;
             case "Character" -> value.isCharLiteralExpr() ? value.asCharLiteralExpr().getValue() : value;
-            case "String" -> value.isStringLiteralExpr() ? value.asStringLiteralExpr().getValue() : value;
+            case "String" -> {
+                if (value.isStringLiteralExpr()) {
+                    yield value.asStringLiteralExpr().getValue();
+                }
+                if (value.isNullLiteralExpr()) {
+                    yield null;
+                }
+                yield value;
+            }
             default -> value;
         };
         va.setValue(result);
@@ -197,8 +205,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * <p>
      * The method will be called by the java parser method visitor. Note that we may run the same
      * code repeatedly so that we can exercise all the paths in the code.
-     * This is done by setting the values of variables to ensure conditionals evaluate to both true
-     * state and the false state
+     * This is done by setting the values of variables to ensure conditionals evaluate to both the
+     * true state and the false state
      *
      * @param md The MethodDeclaration being worked on
      * @throws AntikytheraException         if evaluation fails
@@ -356,8 +364,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * Mocks method arguments.
      * In the case of a rest api controller, the URL contains Path variables, Query string
-     * parameters and post bodies. We mock them here with the help of the argument generator.
-     * In the case of services and other classes we can use a mocking library.
+     * parameters and post-bodies. We mock them here with the help of the argument generator.
+     * In the case of services and other classes, we can use a mocking library.
      *
      * @param md The method declaration representing an HTTP API end point
      * @throws ReflectiveOperationException if the variables cannot be mocked.

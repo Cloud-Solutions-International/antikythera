@@ -240,7 +240,6 @@ public class ControlFlowEvaluator extends Evaluator{
                                     value = Reflect.getDefault(argument.getClass());
                                     l.setPathTaken(LineOfCode.FALSE_PATH);
                                 }
-                                Variable arg = getValue(stmt, argument.asNameExpr().getNameAsString());
                                 Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
                                 setupConditionThroughAssignment(stmt, entry);
                             }
