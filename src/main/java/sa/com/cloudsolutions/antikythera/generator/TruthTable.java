@@ -140,7 +140,8 @@ public class TruthTable {
 
         // If the condition contains actual null literals (not just comparisons with null),
         // we always allow null inputs regardless of the allowNullInputs setting
-        boolean originalAllowNullInputs = this.allowNullInputs;
+        boolean oldState = this.allowNullInputs;
+
         if (containsNullLiteral(this.condition)) {
             this.allowNullInputs = true;
         }
@@ -149,7 +150,7 @@ public class TruthTable {
         adjustDomain();
 
         // Restore the original setting after domain adjustment
-        this.allowNullInputs = originalAllowNullInputs;
+        this.allowNullInputs = oldState;
 
         Expression[] variableList = variables.keySet().toArray(new Expression[0]);
         table = new ArrayList<>();
@@ -157,56 +158,39 @@ public class TruthTable {
     }
 
     /**
-     * Checks if the given expression contains any null literals that should cause allowNullInputs to be disregarded.
-     * For the purpose of this method, only expressions like "a == null" are considered to contain null literals,
-     * but expressions like "a != null" or "person.getName() != null" are not.
+     * Checks if the given expression contains any null literals.
+     * WHen the expression contains null, we would disregard the allowNullInputs settings when
+     * determining the domain.
      * 
      * @param expression The expression to check
-     * @return true if the expression contains any null literals that should cause allowNullInputs to be disregarded, false otherwise
+     * @return true if the expression contains any null literals that should cause
+     *        allowNullInputs to be disregarded, false otherwise
      */
     private boolean containsNullLiteral(Expression expression) {
         if (expression == null) {
             return false;
         }
 
-        // For binary expressions that directly compare with null
+        if (expression.isEnclosedExpr()) {
+            return containsNullLiteral(expression.asEnclosedExpr().getInner());
+        }
+
         if (expression.isBinaryExpr()) {
             BinaryExpr binaryExpr = expression.asBinaryExpr();
 
-            // Check if either side is a null literal
-            boolean leftIsNull = binaryExpr.getLeft().isNullLiteralExpr();
-            boolean rightIsNull = binaryExpr.getRight().isNullLiteralExpr();
-
-            // If either side is a null literal, check the context
-            if (leftIsNull || rightIsNull) {
-               return true;
-            }
-
-            // For other binary expressions, check their children
             return containsNullLiteral(binaryExpr.getLeft()) || containsNullLiteral(binaryExpr.getRight());
         } 
         // For standalone null literals, consider them as null components
         else if (expression.isNullLiteralExpr()) {
             return true;
-        }
-        // Check other types of expressions
-        else if (expression.isUnaryExpr()) {
-            UnaryExpr unaryExpr = expression.asUnaryExpr();
-            return containsNullLiteral(unaryExpr.getExpression());
         } else if (expression.isMethodCallExpr()) {
             MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
-            // Check scope
-            if (methodCallExpr.getScope().isPresent() && containsNullLiteral(methodCallExpr.getScope().get())) {
-                return true;
-            }
-            // Check arguments
+
             for (Expression arg : methodCallExpr.getArguments()) {
                 if (containsNullLiteral(arg)) {
                     return true;
                 }
             }
-        } else if (expression.isEnclosedExpr()) {
-            return containsNullLiteral(expression.asEnclosedExpr().getInner());
         }
 
         return false;
