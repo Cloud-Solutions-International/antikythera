@@ -10,7 +10,9 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -668,23 +670,8 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 return n.intValue();
             }
         } else if (expr.isLiteralExpr()) {
-            if (expr.isIntegerLiteralExpr()) {
-                return Integer.valueOf(expr.asIntegerLiteralExpr().getValue());
-            } else if (expr.isDoubleLiteralExpr()) {
-                return Double.valueOf(expr.asDoubleLiteralExpr().getValue());
-            } else if (expr.isStringLiteralExpr()) {
-                return expr.asStringLiteralExpr().getValue();
-            } else if (expr.isNullLiteralExpr()) {
-                return null;
-            } else if (expr.isLongLiteralExpr()) {
-                String value = expr.asLongLiteralExpr().getValue();
-                if (value.endsWith("L") || value.endsWith("l")) {
-                    value = value.substring(0, value.length() - 1);
-                }
-                return Long.valueOf(value);
-            } else {
-                throw new UnsupportedOperationException("Unsupported literal expression: " + expr);
-            }
+            Variable v = Evaluator.evaluateLiteral(expr);
+            return v.getValue();
         }
 
         return truthValues.get(expr);

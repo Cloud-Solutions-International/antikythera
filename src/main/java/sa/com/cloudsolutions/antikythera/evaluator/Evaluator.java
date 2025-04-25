@@ -386,7 +386,7 @@ public class Evaluator {
         return null;
     }
 
-    private static Variable evaluateLiteral(Expression expr) throws EvaluatorException {
+    public static Variable evaluateLiteral(Expression expr) throws EvaluatorException {
         return switch (expr) {
             case BooleanLiteralExpr booleanLiteralExpr ->
                 new Variable(AbstractCompiler.convertLiteralToType(booleanLiteralExpr), booleanLiteralExpr.getValue());
