@@ -1388,7 +1388,7 @@ public class Evaluator {
      *
      * @param md the method declaration into whose variable space this parameter will be copied
      * @param p the parameter in question.
-     * @throws ReflectiveOperationException is not really thrown here but the sub classes might.
+     * @throws ReflectiveOperationException is not really thrown here, but the subclasses might.
      */
     @SuppressWarnings("java:S1130")
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {

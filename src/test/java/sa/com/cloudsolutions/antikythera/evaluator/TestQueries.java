@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.UnitTestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -29,6 +30,8 @@ class TestQueries extends TestHelper{
     @BeforeEach
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+        UnitTestGenerator gen = new UnitTestGenerator(cu);
+        gen.mockFields();
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
     }

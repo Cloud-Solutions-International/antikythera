@@ -17,11 +17,13 @@ import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.util.Optional;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
@@ -232,7 +234,50 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     @Override
     Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
-        return null;
+        Callable callable = sc.getMCEWrapper().getMatchingCallable();
+        if (callable == null) {
+            return null;
+        }
+        Method m = callable.getMethod();
+        Class<?> clazz = m.getReturnType();
+
+        if (clazz.equals(void.class)) {
+            return null;
+        }
+
+        // Get the declaring class (the repository interface)
+        Class<?> repositoryClass = m.getDeclaringClass();
+        // Get the generic superclass/interfaces
+        java.lang.reflect.Type[] genericInterfaces = repositoryClass.getGenericInterfaces();
+
+        for (java.lang.reflect.Type genericInterface : genericInterfaces) {
+            if (genericInterface instanceof ParameterizedType paramType) {
+                java.lang.reflect.Type[] typeArguments = paramType.getActualTypeArguments();
+                if (typeArguments.length > 0) {
+                    // First type argument is the entity type
+                    String entityTypeName = typeArguments[0].getTypeName();
+                    Variable result = Reflect.variableFactory(entityTypeName);
+                    if (result != null) {
+                        Object then = MockingRegistry.getThen(entityTypeName, callable);
+                        if (then != null) {
+                            result.setValue(then);
+                        }
+                    }
+                    return result;
+                }
+            }
+        }
+
+        // Fallback to original behavior
+        String typeName = m.getGenericReturnType().getTypeName();
+        Variable result = Reflect.variableFactory(typeName);
+        if (result != null) {
+            Object then = MockingRegistry.getThen(typeName, callable);
+            if (then != null) {
+                result.setValue(then);
+            }
+        }
+        return result;
     }
 
     @Override
