@@ -68,11 +68,13 @@ public class ControlFlowEvaluator extends Evaluator{
 
     private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
-        Expression valueExpr = switch (v.getType()) {
-            case PrimitiveType p -> Reflect.createLiteralExpression(entry.getValue());
-            default -> entry.getValue() == null ? new NullLiteralExpr()
+        Expression valueExpr;
+        if (v.getType() instanceof PrimitiveType) {
+            valueExpr = Reflect.createLiteralExpression(entry.getValue());
+        } else {
+            valueExpr = entry.getValue() == null ? new NullLiteralExpr()
                     : new StringLiteralExpr(entry.getValue().toString());
-        };
+        }
 
         return new AssignExpr(
                 new NameExpr(nameExpr.getNameAsString()),
