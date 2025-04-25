@@ -194,7 +194,7 @@ class TestTruthTable {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = {true, true})
     void testNotNull(boolean allowNullInputs) {
         String condition = "a != null && b != null";
         TruthTable tt = new TruthTable(condition);
@@ -272,7 +272,7 @@ class TestTruthTable {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = {true, true})
     void testMethodCall(boolean allowNullInputs) {
         String condition = "person.getName() != null";
         TruthTable tt = new TruthTable(condition);

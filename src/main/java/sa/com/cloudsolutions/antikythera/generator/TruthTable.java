@@ -179,16 +179,7 @@ public class TruthTable {
 
             // If either side is a null literal, check the context
             if (leftIsNull || rightIsNull) {
-                // For expressions like "a == null" or "null == a", consider them as containing null literals
-                if (binaryExpr.getOperator() == BinaryExpr.Operator.EQUALS) {
-                    return true;
-                }
-
-                // For expressions like "a != null" or "null != a", don't consider them as containing null literals
-                // regardless of whether the other side is a method call or not
-                if (binaryExpr.getOperator() == BinaryExpr.Operator.NOT_EQUALS) {
-                    return false;
-                }
+               return true;
             }
 
             // For other binary expressions, check their children
