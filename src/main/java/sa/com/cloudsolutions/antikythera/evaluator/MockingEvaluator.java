@@ -234,50 +234,99 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     @Override
     Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        // Get the Method or MethodDeclaration from the MCEWrapper
         Callable callable = sc.getMCEWrapper().getMatchingCallable();
-        if (callable == null) {
+
+        // Get the return type
+        java.lang.reflect.Type returnType = null;
+        String className = null;
+
+        if (callable.isMethod()) {
+            // It's a Method
+            Method method = callable.getMethod();
+            returnType = method.getGenericReturnType();
+            className = method.getDeclaringClass().getName();
+        } else if (callable.isMethodDeclaration()) {
+            // It's a MethodDeclaration
+            MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
+            returnType = Reflect.getComponentClass(methodDeclaration.getType().asString());
+            className = methodDeclaration.findAncestor(CompilationUnit.class)
+                    .flatMap(cu -> cu.getPrimaryType())
+                    .map(type -> type.getFullyQualifiedName().orElse(null))
+                    .orElse(null);
+        } else {
+            // Neither Method nor MethodDeclaration
             return null;
         }
-        Method m = callable.getMethod();
-        Class<?> clazz = m.getReturnType();
 
-        if (clazz.equals(void.class)) {
-            return null;
-        }
+        // Create a default instance based on the return type
+        Object defaultInstance = null;
 
-        // Get the declaring class (the repository interface)
-        Class<?> repositoryClass = m.getDeclaringClass();
-        // Get the generic superclass/interfaces
-        java.lang.reflect.Type[] genericInterfaces = repositoryClass.getGenericInterfaces();
+        // Check if it's a parameterized type like Optional<T>
+        if (returnType instanceof ParameterizedType parameterizedType) {
+            // Get the raw type (e.g., Optional)
+            Class<?> rawType = (Class<?>) parameterizedType.getRawType();
 
-        for (java.lang.reflect.Type genericInterface : genericInterfaces) {
-            if (genericInterface instanceof ParameterizedType paramType) {
-                java.lang.reflect.Type[] typeArguments = paramType.getActualTypeArguments();
-                if (typeArguments.length > 0) {
-                    // First type argument is the entity type
-                    String entityTypeName = typeArguments[0].getTypeName();
-                    Variable result = Reflect.variableFactory(entityTypeName);
-                    if (result != null) {
-                        Object then = MockingRegistry.getThen(entityTypeName, callable);
-                        if (then != null) {
-                            result.setValue(then);
-                        }
-                    }
-                    return result;
+            // Check if it's an Optional
+            if (rawType.equals(Optional.class)) {
+                // Get the actual type argument (e.g., Integer in Optional<Integer>)
+                java.lang.reflect.Type actualTypeArgument = parameterizedType.getActualTypeArguments()[0];
+
+                // Create a default instance of the actual type argument
+                if (actualTypeArgument instanceof Class<?>) {
+                    Class<?> actualType = (Class<?>) actualTypeArgument;
+                    defaultInstance = createDefaultInstance(actualType);
+
+                    // Wrap it in an Optional
+                    defaultInstance = Optional.ofNullable(defaultInstance);
                 }
+            } else {
+                // For other parameterized types, create a default instance of the raw type
+                defaultInstance = createDefaultInstance(rawType);
             }
+        } else if (returnType instanceof Class<?>) {
+            // For non-parameterized types, create a default instance of the type
+            defaultInstance = createDefaultInstance((Class<?>) returnType);
         }
 
-        // Fallback to original behavior
-        String typeName = m.getGenericReturnType().getTypeName();
-        Variable result = Reflect.variableFactory(typeName);
-        if (result != null) {
-            Object then = MockingRegistry.getThen(typeName, callable);
-            if (then != null) {
-                result.setValue(then);
+        // Register the mock
+        if (className != null && callable != null && defaultInstance != null) {
+            MockingRegistry.when(className, callable, defaultInstance);
+        }
+
+        // Return a Variable with the default instance
+        return new Variable(defaultInstance);
+    }
+
+    private Object createDefaultInstance(Class<?> type) {
+        // Create a default instance based on the type
+        if (type.equals(String.class)) {
+            return "Default String";
+        } else if (type.equals(Integer.class) || type.equals(int.class)) {
+            return 0;
+        } else if (type.equals(Long.class) || type.equals(long.class)) {
+            return 0L;
+        } else if (type.equals(Double.class) || type.equals(double.class)) {
+            return 0.0;
+        } else if (type.equals(Float.class) || type.equals(float.class)) {
+            return 0.0f;
+        } else if (type.equals(Boolean.class) || type.equals(boolean.class)) {
+            return false;
+        } else if (type.equals(Byte.class) || type.equals(byte.class)) {
+            return (byte) 0;
+        } else if (type.equals(Short.class) || type.equals(short.class)) {
+            return (short) 0;
+        } else if (type.equals(Character.class) || type.equals(char.class)) {
+            return '\0';
+        } else {
+            try {
+                // Try to create a new instance using the default constructor
+                return type.getDeclaredConstructor().newInstance();
+            } catch (Exception e) {
+                // If that fails, return null
+                return null;
             }
         }
-        return result;
     }
 
     @Override
