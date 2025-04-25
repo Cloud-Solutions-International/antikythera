@@ -213,38 +213,46 @@ public class ControlFlowEvaluator extends Evaluator{
         throw new IllegalStateException("straight path Should be overridden");
     }
 
-    @SuppressWarnings("unchecked")
+
     @Override
+    @SuppressWarnings("java:S1872")
     void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         super.invokeReflectively(v, reflectionArguments);
 
         if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals("java.util.Optional")) {
             Object[] finalArgs = reflectionArguments.getFinalArgs();
             if (finalArgs.length == 1 && reflectionArguments.getMethodName().equals("ofNullable")) {
-                Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
-                LineOfCode l = Branching.get(stmt.hashCode());
-                if (l == null) {
-                    Expression expr = reflectionArguments.getMethodCallExpression();
-                    if (expr instanceof MethodCallExpr mce) {
-                        Expression argument = mce.getArguments().getFirst().orElseThrow();
-                        if (argument.isNameExpr()) {
-                            l = new LineOfCode(stmt);
-                            Branching.add(l);
+                handleOptionalOfNullable(reflectionArguments);
+            }
+        }
+    }
 
-                            if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
-                                Object value = null;
-                                if (opt.isPresent()) {
-                                    l.setPathTaken(LineOfCode.TRUE_PATH);
-                                }
-                                else {
-                                    value = Reflect.getDefault(argument.getClass());
-                                    l.setPathTaken(LineOfCode.FALSE_PATH);
-                                }
-                                Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
-                                setupConditionThroughAssignment(stmt, entry);
-                            }
-                        }
+    @SuppressWarnings("unchecked")
+    private void handleOptionalOfNullable(ReflectionArguments reflectionArguments) {
+        Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+        if (l != null) {
+            return;
+        }
+
+        Expression expr = reflectionArguments.getMethodCallExpression();
+        if (expr instanceof MethodCallExpr mce) {
+            Expression argument = mce.getArguments().getFirst().orElseThrow();
+            if (argument.isNameExpr()) {
+                l = new LineOfCode(stmt);
+                Branching.add(l);
+
+                if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
+                    Object value = null;
+                    if (opt.isPresent()) {
+                        l.setPathTaken(LineOfCode.TRUE_PATH);
                     }
+                    else {
+                        value = Reflect.getDefault(argument.getClass());
+                        l.setPathTaken(LineOfCode.FALSE_PATH);
+                    }
+                    Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
+                    setupConditionThroughAssignment(stmt, entry);
                 }
             }
         }
