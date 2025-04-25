@@ -194,7 +194,7 @@ public class ControlFlowEvaluator extends Evaluator{
     }
 
     @SuppressWarnings("unchecked")
-    Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
+    Variable handleOptionalsHelper(Scope sc) throws ReflectiveOperationException {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
@@ -207,11 +207,11 @@ public class ControlFlowEvaluator extends Evaluator{
         }
     }
 
-    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l)  throws ReflectiveOperationException  {
+    Variable riggedPath(Scope sc, LineOfCode l)  throws ReflectiveOperationException  {
         throw new IllegalStateException("rigged path Should be overridden");
     }
 
-    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable straightPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         throw new IllegalStateException("straight path Should be overridden");
     }
 

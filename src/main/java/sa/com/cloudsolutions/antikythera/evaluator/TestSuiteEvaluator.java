@@ -19,7 +19,7 @@ public class TestSuiteEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (methodCall.getNameAsString().equals("when")) {
             when = true;
@@ -40,7 +40,7 @@ public class TestSuiteEvaluator extends Evaluator {
     Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         Variable variable = evaluateScopeChain(chain);
-        ScopeChain.Scope scope = chain.getChain().getLast();
+        Scope scope = chain.getChain().getLast();
         scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
         return evaluateMethodCall(scope);

@@ -777,13 +777,13 @@ public class Evaluator {
                 return o;
             }
         }
-        ScopeChain.Scope scope = chain.getChain().getLast();
+        Scope scope = chain.getChain().getLast();
         scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
         return evaluateMethodCall(scope);
     }
 
-    Variable handleOptionals(ScopeChain.Scope scope) throws ReflectiveOperationException {
+    Variable handleOptionals(Scope scope) throws ReflectiveOperationException {
         Callable callable = scope.getMCEWrapper().getMatchingCallable();
         if (callable.isCallableDeclaration()) {
             MethodDeclaration md = callable.asMethodDeclaration();
@@ -841,7 +841,7 @@ public class Evaluator {
 
     public Variable evaluateScopeChain(ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = null;
-        for (ScopeChain.Scope scope : chain.getChain().reversed()) {
+        for (Scope scope : chain.getChain().reversed()) {
             Expression expr2 = scope.getExpression();
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());
@@ -942,7 +942,7 @@ public class Evaluator {
         }
     }
 
-    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {
         Variable v = scope.getVariable();
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (v != null) {
@@ -1025,7 +1025,7 @@ public class Evaluator {
      * @throws ReflectiveOperationException if the execution involves a class available only
      *      in byte code format and an exception occurs in reflecting.
      */
-    public Variable executeMethod(ScopeChain.Scope sc) throws ReflectiveOperationException {
+    public Variable executeMethod(Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
         MCEWrapper mceWrapper = sc.getMCEWrapper();

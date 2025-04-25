@@ -575,7 +575,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {
         Variable v = scope.getVariable();
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         try {
@@ -799,7 +799,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable handleOptionals(ScopeChain.Scope sc) throws ReflectiveOperationException {
+    Variable handleOptionals(Scope sc) throws ReflectiveOperationException {
         if (sc.getExpression().isMethodCallExpr()) {
             MCEWrapper wrapper = sc.getMCEWrapper();
             Callable callable = wrapper.getMatchingCallable();
@@ -812,7 +812,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable straightPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         LineOfCode l =  new LineOfCode(stmt);
         Branching.add(l);
@@ -838,7 +838,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
+    Variable riggedPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
         List<Precondition> expressions;
         if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
             expressions = l.getPreconditions();
