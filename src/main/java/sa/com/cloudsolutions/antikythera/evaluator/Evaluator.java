@@ -1271,15 +1271,6 @@ public class Evaluator {
                     Evaluator eval = EvaluatorFactory.create(importWrapper.getType().getFullyQualifiedName().orElseThrow(), this);
                     v = eval.getFields().get(name);
                 }
-                else {
-                    // Use AbstractCompiler to find the fully qualified name
-                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, name);
-                    if (fullyQualifiedName != null) {
-                        Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
-
-                        v = eval.getFields().get(name);
-                    }
-                }
             }
         }
         else
