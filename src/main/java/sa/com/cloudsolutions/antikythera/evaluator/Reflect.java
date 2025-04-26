@@ -28,6 +28,7 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -330,6 +331,8 @@ public class Reflect {
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" ->
                     createVariable(new ArrayList<>(), "java.util.ArrayList", null);
+            case "java.util.LinkedList" ->
+                    createVariable(new LinkedList<>(), "java.util.LinkedList", null);
 
             case "Map", "java.util.Map", "java.util.HashMap" ->
                     createVariable(new HashMap<>(), "java.util.HashMap", null);
