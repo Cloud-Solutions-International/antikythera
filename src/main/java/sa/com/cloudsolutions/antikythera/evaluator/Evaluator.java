@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -1081,6 +1080,7 @@ public class Evaluator {
      * @throws AntikytheraException if there are parsing related errors
      * @throws ReflectiveOperationException if there are reflection related errors
      */
+    @SuppressWarnings("unchecked")
     public Variable executeLocalMethod(MCEWrapper methodCallWrapper) throws ReflectiveOperationException {
         returnFrom = null;
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
@@ -1197,6 +1197,7 @@ public class Evaluator {
         return locals;
     }
 
+    @SuppressWarnings("unchecked")
     protected void invokeDefaultConstructor() {
         String[] parts = className.split("\\.");
         String shortName = parts[parts.length - 1];
