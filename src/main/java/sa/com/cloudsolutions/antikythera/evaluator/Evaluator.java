@@ -1260,38 +1260,32 @@ public class Evaluator {
     private Variable setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
-        if(init.isPresent()) {
+        if (init.isPresent()) {
             v = evaluateExpression(init.get());
             if (v == null && init.get().isNameExpr()) {
-                /*
-                 * This is probably a constant that is imported as static.
-                 */
-
                 NameExpr nameExpr = init.get().asNameExpr();
                 String name = nameExpr.getNameAsString();
 
-                for (ImportDeclaration importDeclaration : cu.getImports()) {
-                    Name importedName = importDeclaration.getName();
-                    String[] parts = importedName.toString().split("\\.");
-
-                    if (importedName.toString().equals(name)) {
-                        Evaluator eval = EvaluatorFactory.create(importedName.toString(), this);
+                ImportWrapper importWrapper = AbstractCompiler.findImport(cu, name);
+                if (importWrapper != null && importWrapper.getImport().isStatic()) {
+                    String className = importWrapper.getNameAsString();
+                    // Remove the field/method name from the fully qualified name
+                    int lastDot = className.lastIndexOf('.');
+                    if (lastDot > 0) {
+                        String containingClass = className.substring(0, lastDot);
+                        Evaluator eval = EvaluatorFactory.create(containingClass, this);
                         v = eval.getFields().get(name);
-                        break;
-                    }
-                    else if(parts.length > 1 && parts[parts.length - 1].equals(name)) {
-                        /* todo : change this to use abstractcompiler methods */
-                        int last = importedName.toString().lastIndexOf(".");
-                        String cname = importedName.toString().substring(0, last);
-                        Evaluator eval = EvaluatorFactory.create(cname, this);
-
-                        v = eval.getFields().get(name);
-                        break;
                     }
                 }
-            }
-            if (v != null) {
-                v.setType(t);
+                else {
+                    // Use AbstractCompiler to find the fully qualified name
+                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, name);
+                    if (fullyQualifiedName != null) {
+                        Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
+
+                        v = eval.getFields().get(name);
+                    }
+                }
             }
         }
         else
