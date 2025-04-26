@@ -1268,14 +1268,8 @@ public class Evaluator {
 
                 ImportWrapper importWrapper = AbstractCompiler.findImport(cu, name);
                 if (importWrapper != null && importWrapper.getImport().isStatic()) {
-                    String className = importWrapper.getNameAsString();
-                    // Remove the field/method name from the fully qualified name
-                    int lastDot = className.lastIndexOf('.');
-                    if (lastDot > 0) {
-                        String containingClass = className.substring(0, lastDot);
-                        Evaluator eval = EvaluatorFactory.create(containingClass, this);
-                        v = eval.getFields().get(name);
-                    }
+                    Evaluator eval = EvaluatorFactory.create(importWrapper.getType().getFullyQualifiedName().orElseThrow(), this);
+                    v = eval.getFields().get(name);
                 }
                 else {
                     // Use AbstractCompiler to find the fully qualified name
