@@ -579,7 +579,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Variable v = scope.getVariable();
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         try {
-            if (v.getValue() instanceof SpringEvaluator) {
+            if (v != null && v.getValue() instanceof SpringEvaluator) {
                 Optional<Expression> expr = methodCall.getScope();
                 if (expr.isPresent()) {
                     String fieldClass = getFieldClass(expr.get());
