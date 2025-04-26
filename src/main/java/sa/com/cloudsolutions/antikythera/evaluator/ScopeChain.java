@@ -3,8 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import sa.com.cloudsolutions.antikythera.parser.Callable;
-import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.util.ArrayList;
 import java.util.List;

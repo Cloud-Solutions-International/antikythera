@@ -14,7 +14,7 @@ public class Overlord {
         System.out.println("First int: " + input1 + ", Second int: " + input2);
     }
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         Overlord ov = new Overlord();
         ov.print(args[0]);
         ov.print(1);
