@@ -236,6 +236,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     @Override
     Variable straightPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        LineOfCode l = new LineOfCode(stmt);
+        Branching.add(l);
+
         if (sc.getVariable().getValue() instanceof MockingEvaluator eval) {
             CompilationUnit cu = eval.getCompilationUnit();
             if (cu != null) {

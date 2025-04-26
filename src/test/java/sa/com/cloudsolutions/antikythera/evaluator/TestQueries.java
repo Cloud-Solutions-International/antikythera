@@ -17,7 +17,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestQueries extends TestHelper{
-    private final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Queries";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Queries";
     CompilationUnit cu;
 
     @BeforeAll
@@ -43,6 +43,6 @@ class TestQueries extends TestHelper{
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("getById")).orElseThrow();
         evaluator.visit(doStuff);
-        assertEquals("bada", outContent.toString());
+        assertEquals("Entity found: null\nEntity not found\nEntity not found\nEntity not found\n", outContent.toString());
     }
 }
