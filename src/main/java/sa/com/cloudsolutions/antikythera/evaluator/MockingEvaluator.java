@@ -261,7 +261,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                     if (typeDecl.isPresent()) {
                         // Type is available as source code, use Evaluator
                         String typeName = typeDecl.get().getFullyQualifiedName().orElse(ciType.getNameAsString());
-                        Evaluator typeEval = EvaluatorFactory.create(typeName, this);
+                        Evaluator typeEval = EvaluatorFactory.create(typeName, Evaluator.class);
+                        typeEval.setupFields();
+                        typeEval.initializeFields();
                         return new Variable(Optional.of(typeEval));
                     } else {
                         // Type is not available as source code, use AKBuddy

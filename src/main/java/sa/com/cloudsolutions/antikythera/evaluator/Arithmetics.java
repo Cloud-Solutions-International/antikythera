@@ -16,6 +16,9 @@ public class Arithmetics {
      */
     static Variable operate(Variable left, Variable right, BinaryExpr.Operator operator) {
         if (left.getValue() instanceof String || right.getValue() instanceof String) {
+            if (right.getValue() == null) {
+                return new Variable(left.getValue().toString() + "null");
+            }
             return new Variable(left.getValue().toString() + right.getValue().toString());
         }
         if (left.getValue() instanceof Number l && right.getValue() instanceof Number r) {
