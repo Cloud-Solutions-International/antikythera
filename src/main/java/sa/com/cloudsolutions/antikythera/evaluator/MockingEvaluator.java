@@ -241,38 +241,41 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (cu != null) {
                 TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
                 if (typeDeclaration instanceof ClassOrInterfaceDeclaration cdecl) {
-                    for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
-                        if (t.getTypeArguments().isPresent()) {
-                            Type x = t.getTypeArguments().get().getFirst().orElse(null);
-                            if (x != null) {
-                                // Try to create an instance of the type
-                                if (x.isClassOrInterfaceType()) {
-                                    ClassOrInterfaceType ciType = x.asClassOrInterfaceType();
+                    return straightPathHelper(cdecl);
+                }
+            }
+        }
+        return null;
+    }
 
-                                    // Check if type is available as source code
-                                    Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.resolveTypeSafely(ciType, t);
-                                    if (typeDecl.isPresent()) {
-                                        // Type is available as source code, use Evaluator
-                                        String typeName = typeDecl.get().getFullyQualifiedName().orElse(ciType.getNameAsString());
-                                        Evaluator typeEval = EvaluatorFactory.create(typeName, this);
-                                        return new Variable(Optional.of(typeEval));
-                                    } else {
-                                        // Type is not available as source code, use AKBuddy
-                                        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, ciType.getNameAsString());
-                                        if (resolvedClass != null) {
-                                            try {
-                                                Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
-                                                MethodInterceptor interceptor = new MethodInterceptor(clazz);
-                                                Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
-                                                Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-                                                return new Variable(Optional.of(instance));
-                                            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-                                                // If we can't create the instance, return null
-                                                return null;
-                                            }
-                                        }
-                                    }
-                                }
+    Variable straightPathHelper(ClassOrInterfaceDeclaration cdecl) throws ReflectiveOperationException {
+        for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
+            Type x = t.getTypeArguments().orElse(new NodeList<>()).getFirst().orElse(null);
+            if (x != null) {
+                // Try to create an instance of the type
+                if (x.isClassOrInterfaceType()) {
+                    ClassOrInterfaceType ciType = x.asClassOrInterfaceType();
+
+                    // Check if type is available as source code
+                    Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.resolveTypeSafely(ciType, t);
+                    if (typeDecl.isPresent()) {
+                        // Type is available as source code, use Evaluator
+                        String typeName = typeDecl.get().getFullyQualifiedName().orElse(ciType.getNameAsString());
+                        Evaluator typeEval = EvaluatorFactory.create(typeName, this);
+                        return new Variable(Optional.of(typeEval));
+                    } else {
+                        // Type is not available as source code, use AKBuddy
+                        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, ciType.getNameAsString());
+                        if (resolvedClass != null) {
+                            try {
+                                Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
+                                MethodInterceptor interceptor = new MethodInterceptor(clazz);
+                                Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+                                Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                                return new Variable(Optional.of(instance));
+                            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+                                // If we can't create the instance, return null
+                                return null;
                             }
                         }
                     }
@@ -281,7 +284,6 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
         return null;
     }
-
     @Override
     Variable riggedPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
         return null;
