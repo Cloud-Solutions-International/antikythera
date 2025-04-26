@@ -21,10 +21,6 @@ public class Scope {
         return expression;
     }
 
-    public void setExpression(Expression expression) {
-        this.expression = expression;
-    }
-
     public Callable getCallable() {
         return callable;
     }

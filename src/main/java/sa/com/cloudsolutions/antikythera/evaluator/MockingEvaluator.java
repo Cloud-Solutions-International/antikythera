@@ -3,7 +3,9 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -234,6 +236,49 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     @Override
     Variable straightPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        if (sc.getVariable().getValue() instanceof MockingEvaluator eval) {
+            CompilationUnit cu = eval.getCompilationUnit();
+            if (cu != null) {
+                TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
+                if (typeDeclaration instanceof ClassOrInterfaceDeclaration cdecl) {
+                    for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
+                        if (t.getTypeArguments().isPresent()) {
+                            Type x = t.getTypeArguments().get().getFirst().orElse(null);
+                            if (x != null) {
+                                // Try to create an instance of the type
+                                if (x.isClassOrInterfaceType()) {
+                                    ClassOrInterfaceType ciType = x.asClassOrInterfaceType();
+
+                                    // Check if type is available as source code
+                                    Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.resolveTypeSafely(ciType, t);
+                                    if (typeDecl.isPresent()) {
+                                        // Type is available as source code, use Evaluator
+                                        String typeName = typeDecl.get().getFullyQualifiedName().orElse(ciType.getNameAsString());
+                                        Evaluator typeEval = EvaluatorFactory.create(typeName, this);
+                                        return new Variable(Optional.of(typeEval));
+                                    } else {
+                                        // Type is not available as source code, use AKBuddy
+                                        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, ciType.getNameAsString());
+                                        if (resolvedClass != null) {
+                                            try {
+                                                Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
+                                                MethodInterceptor interceptor = new MethodInterceptor(clazz);
+                                                Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+                                                Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                                                return new Variable(Optional.of(instance));
+                                            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+                                                // If we can't create the instance, return null
+                                                return null;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         return null;
     }
 

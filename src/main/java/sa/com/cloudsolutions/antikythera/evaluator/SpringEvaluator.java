@@ -508,9 +508,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
-                    v = autoWireFromSourceCode(variable, resolvedClass, fd);
+                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
                 } else {
-                    v = autoWireFromByteCode(resolvedClass);
+                    v = wireFromByteCode(resolvedClass);
                 }
             }
             fields.put(variable.getNameAsString(), v);
@@ -519,7 +519,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    private static Variable autoWireFromByteCode(String resolvedClass) {
+    private static Variable wireFromByteCode(String resolvedClass) {
         try {
             Class<?> cls = AbstractCompiler.loadClass(resolvedClass);
             if (!cls.isInterface()) {
@@ -532,14 +532,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private static Variable autoWireFromSourceCode(VariableDeclarator variable, String resolvedClass, FieldDeclaration fd) {
+    private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
         Evaluator eval = MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
         v = new Variable(eval);
-        v.setType(variable.getType());
+        v.setType(type);
         AntikytheraRunTime.autoWire(resolvedClass, v);
         if (! (eval instanceof MockingEvaluator)) {
             eval.setupFields();
@@ -579,17 +579,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Variable v = scope.getVariable();
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         try {
-            Optional<Expression> expr = methodCall.getScope();
-            if (expr.isPresent()) {
-                String fieldClass = getFieldClass(expr.get());
-                if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
-                    boolean isMocked = false;
-                    String fieldName = getFieldName(expr.get());
-                    if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
-                        isMocked = MockingRegistry.isMockTarget(fieldClass);
-                    }
-                    if (!isMocked) {
-                        return executeSource(methodCall);
+            if (v.getValue() instanceof SpringEvaluator) {
+                Optional<Expression> expr = methodCall.getScope();
+                if (expr.isPresent()) {
+                    String fieldClass = getFieldClass(expr.get());
+                    if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
+                        boolean isMocked = false;
+                        String fieldName = getFieldName(expr.get());
+                        if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
+                            isMocked = MockingRegistry.isMockTarget(fieldClass);
+                        }
+                        if (!isMocked) {
+                            return executeSource(methodCall);
+                        }
                     }
                 }
             }
