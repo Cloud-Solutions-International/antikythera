@@ -239,7 +239,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
 
     @Override
-    Variable straightPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         LineOfCode l = new LineOfCode(stmt);
         Branching.add(l);
 
@@ -290,7 +290,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return null;
     }
     @Override
-    Variable riggedPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
+    Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
         return new Variable(Optional.empty());
     }
 }

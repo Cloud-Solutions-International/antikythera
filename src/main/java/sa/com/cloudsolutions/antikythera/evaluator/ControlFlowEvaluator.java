@@ -178,20 +178,7 @@ public class ControlFlowEvaluator extends Evaluator{
         return expressions;
     }
 
-    @Override
-    Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
-        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
-        return switch (methodCall.getNameAsString()) {
-            case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
-            case "orElseThrow" -> throw new NoSuchElementException("Optional is empty");
-            case "ifPresent" -> null;
-            case "ifPresentOrElse" -> {
-                Variable v = evaluateExpression(methodCall.getArgument(1));
-                yield executeLambda(v);
-            }
-            default -> super.handleOptionalEmpties(chain);
-        };
-    }
+
 
     @SuppressWarnings("unchecked")
     Variable handleOptionalsHelper(Scope sc) throws ReflectiveOperationException {
@@ -203,14 +190,14 @@ public class ControlFlowEvaluator extends Evaluator{
             l = new LineOfCode(stmt);
             l.setPathTaken(LineOfCode.TRUE_PATH);
             Branching.add(l);
-            return straightPath(sc, stmt, methodCall);
+            return optionalPresentPath(sc, stmt, methodCall);
         }
         else {
-            return riggedPath(sc, l);
+            return optionalEmptyPath(sc, l);
         }
     }
 
-    Variable straightPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
         LineOfCode l =  new LineOfCode(stmt);
         Branching.add(l);
@@ -235,7 +222,7 @@ public class ControlFlowEvaluator extends Evaluator{
         throw new IllegalStateException("This should be returning an optional");
     }
 
-    Variable riggedPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
+    Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
         List<Precondition> expressions;
         if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
             expressions = l.getPreconditions();
