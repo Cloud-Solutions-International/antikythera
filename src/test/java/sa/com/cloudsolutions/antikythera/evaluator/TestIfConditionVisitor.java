@@ -8,6 +8,8 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -38,9 +40,19 @@ class TestIfConditionVisitor {
         Branching.clear();
     }
 
+    @ParameterizedTest
+    @CsvSource({"conditional1, 1","conditional4, 2", "cannotControl, 0"})
+    void testBranchingCount(String name, int count) {
+        md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals(name)).orElseThrow();
+        IfConditionVisitor visitor = new IfConditionVisitor();
+        md.accept(visitor, null);
+        assertEquals(count, Branching.size(md));
+    }
+
     @Test
     void testCollectConditionsUpToMethod() {
-        md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("multiVariate")).get();
+        md = cu.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals("multiVariate")).orElseThrow();
         md.accept(new VoidVisitorAdapter<Void>() {
                       @Override
                       public void visit(IfStmt n, Void arg) {
@@ -58,7 +70,8 @@ class TestIfConditionVisitor {
 
     @Test
     void testCollectConditionsUpToMethodAgain() {
-        md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("multiVariateDeep")).get();
+        md = cu.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals("multiVariateDeep")).orElseThrow();
         md.accept(new VoidVisitorAdapter<Void>() {
                       @Override
                       public void visit(IfStmt n, Void arg) {
@@ -78,7 +91,8 @@ class TestIfConditionVisitor {
 
     @Test
     void testGraph() {
-        md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("multiVariateDeep")).get();
+        md = cu.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals("multiVariateDeep")).orElseThrow();
         md.accept(new IfConditionVisitor(), null);
         List<LineOfCode> lines = new ArrayList<>(Branching.get(md));
         assertEquals(4, lines.size());
