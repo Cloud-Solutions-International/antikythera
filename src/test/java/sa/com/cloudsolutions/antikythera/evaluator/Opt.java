@@ -12,10 +12,12 @@ public class Opt {
         }
     }
 
+    @SuppressWarnings("unused")
     void ifPresent(int a) {
         getById(a).ifPresent(id -> System.out.println("ID: " + id));
     }
 
+    @SuppressWarnings("unused")
     void ifEmpty(int a) {
         getById(a).ifPresentOrElse(
             id -> System.out.println("ID: " + id),
