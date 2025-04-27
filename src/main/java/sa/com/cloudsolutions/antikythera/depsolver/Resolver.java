@@ -568,6 +568,7 @@ public class Resolver {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
         if (cdecl != null) {
