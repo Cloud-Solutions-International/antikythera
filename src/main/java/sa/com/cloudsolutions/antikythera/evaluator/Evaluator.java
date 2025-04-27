@@ -58,6 +58,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -550,7 +551,7 @@ public class Evaluator {
         TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
-            annonymousOverrides(type, oce, eval);
+            anonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
                 return new Variable(eval);
@@ -602,7 +603,7 @@ public class Evaluator {
         return mce;
     }
 
-    private static void annonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
+    private static void anonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
 
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
         if (anonymousClassBody.isPresent()) {
@@ -1713,15 +1714,39 @@ public class Evaluator {
     }
 
     public void setupFields()  {
-        cu.accept(new LazyFieldVisitor(), null);
+        cu.accept(new LazyFieldVisitor(className), null);
+        processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "LazyFieldVisitor");
+
     }
 
     public void initializeFields() {
-        cu.accept(new FieldVisitor(), null);
+        cu.accept(new FieldVisitor(className), null);
+        processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "FieldVisitor");
     }
 
     protected String getClassName() {
         return className;
+    }
+
+    private void processParentClasses(TypeDeclaration<?> type, String visitorName) {
+        if (type instanceof ClassOrInterfaceDeclaration cid) {
+            for (ClassOrInterfaceType parentType : cid.getExtendedTypes()) {
+                String parentClass = AbstractCompiler.findFullyQualifiedName(cu, parentType.getNameAsString());
+                if (parentClass != null) {
+                    CompilationUnit parentCu = AntikytheraRunTime.getCompilationUnit(parentClass);
+                    if (parentCu != null) {
+                        VoidVisitorAdapter<?> v = visitorName.equals("LazyFieldVisitor")
+                                ? new LazyFieldVisitor(parentClass) : new FieldVisitor(parentClass);
+                        parentCu.accept(v, null);
+
+                        Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(parentCu, parentType.getNameAsString());
+                        if (t.isPresent()) {
+                            processParentClasses(t.get(), visitorName);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -1730,6 +1755,10 @@ public class Evaluator {
      * When we initialize a class the fields also need to be initialized, so here we are
      */
     private class LazyFieldVisitor extends VoidVisitorAdapter<Void> {
+        String matchingClass;
+        LazyFieldVisitor(String matchinClass) {
+            this.matchingClass = matchinClass;
+        }
         /**
          * The field visitor will be used to identify the fields that are being used in the class
          *
@@ -1742,7 +1771,7 @@ public class Evaluator {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
-                    if (cdecl.getFullyQualifiedName().isPresent() && cdecl.getFullyQualifiedName().get().equals(className)) {
+                    if (cdecl.getFullyQualifiedName().isPresent() && cdecl.getFullyQualifiedName().get().equals(matchingClass)) {
                         setupField(field, variable);
                     }
                 });
@@ -1751,6 +1780,11 @@ public class Evaluator {
     }
 
     private class FieldVisitor extends VoidVisitorAdapter<Void> {
+        String matchingClass;
+        FieldVisitor(String matchinClass) {
+            this.matchingClass = matchinClass;
+        }
+
         @SuppressWarnings("unchecked")
         @Override
         public void visit(InitializerDeclaration init, Void arg) {
@@ -1758,7 +1792,7 @@ public class Evaluator {
             init.findAncestor(ClassOrInterfaceDeclaration.class)
                     .flatMap(ClassOrInterfaceDeclaration::getFullyQualifiedName)
                     .ifPresent(name -> {
-                        if (name.equals(getClassName())) {
+                        if (name.equals(matchingClass)) {
                             try {
                                 executeBlock(init.getBody().getStatements());
                             } catch (ReflectiveOperationException e) {
