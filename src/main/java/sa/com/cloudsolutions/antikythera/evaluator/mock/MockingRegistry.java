@@ -15,13 +15,15 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.mockito.Mockito.withSettings;
 
 public class MockingRegistry {
-    private static final Map<String, Map<Callable, Object>> mockedFields = new HashMap<>();
+    private static final Map<String, Map<Callable, Variable>> mockedFields = new HashMap<>();
 
     private MockingRegistry() {
 
@@ -39,8 +41,8 @@ public class MockingRegistry {
         mockedFields.clear();
     }
 
-    public static void when(String className, Callable callable, Object then) {
-        Map<Callable, Object> map = mockedFields.computeIfAbsent(className, k -> new HashMap<>());
+    public static void when(String className, Callable callable, Variable then) {
+        Map<Callable, Variable> map = mockedFields.computeIfAbsent(className, k -> new HashMap<>());
         map.put(callable, then);
     }
 
@@ -81,8 +83,16 @@ public class MockingRegistry {
         return v;
     }
 
-    public static Object getThen(String className, Callable callable) {
-        Map<Callable, Object> map = mockedFields.get(className);
+    public static List<Variable> getAllMocks() {
+        List<Variable> result = new ArrayList<>();
+        for (Map<Callable, Variable> map : mockedFields.values()) {
+            result.addAll(map.values());
+        }
+        return result;
+    }
+
+    public static Variable getThen(String className, Callable callable) {
+        Map<Callable, Variable> map = mockedFields.get(className);
         if (map != null) {
             return map.get(callable);
         }

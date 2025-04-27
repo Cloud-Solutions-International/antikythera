@@ -14,6 +14,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -182,13 +183,11 @@ public class ControlFlowEvaluator extends Evaluator{
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
+        Variable v = (l == null) ? optionalPresentPath(sc, stmt, methodCall)
+                : optionalEmptyPath(sc, l);
 
-        if (l == null) {
-            return optionalPresentPath(sc, stmt, methodCall);
-        }
-        else {
-            return optionalEmptyPath(sc, l);
-        }
+        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), v);
+        return v;
     }
 
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {

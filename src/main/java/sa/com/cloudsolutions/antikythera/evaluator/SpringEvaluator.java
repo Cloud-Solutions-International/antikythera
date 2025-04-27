@@ -489,6 +489,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
+                List<Variable> mocks = MockingRegistry.getAllMocks();
                 generator.setPreConditions(Branching.getApplicableConditions(currentMethod));
                 generator.createTests(currentMethod, response);
             }

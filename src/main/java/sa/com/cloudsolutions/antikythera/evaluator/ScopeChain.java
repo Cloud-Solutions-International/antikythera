@@ -52,7 +52,7 @@ public class ScopeChain {
     }
 
     private void addLast(Expression expressions) {
-        chain.addLast(new Scope(expressions));
+        chain.addLast(new Scope(this, expressions));
     }
 
     public boolean isEmpty() {
