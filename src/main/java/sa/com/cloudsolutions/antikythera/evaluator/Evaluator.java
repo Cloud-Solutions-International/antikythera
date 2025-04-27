@@ -1029,38 +1029,75 @@ public class Evaluator {
         returnFrom = null;
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
         MCEWrapper mceWrapper = sc.getMCEWrapper();
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl.orElseThrow().asClassOrInterfaceDeclaration());
+        ClassOrInterfaceDeclaration classOrInterfaceDeclaration = cdecl.orElseThrow().asClassOrInterfaceDeclaration();
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, classOrInterfaceDeclaration);
+
         if (n.isPresent()) {
-            Callable callable = n.get();
-            mceWrapper.setMatchingCallable(callable);
-            if (callable.isMethodDeclaration()) {
-                MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
-                Type returnType = methodDeclaration.getType();
+            mceWrapper.setMatchingCallable(n.get());
+            return executeCallable(sc, n.get());
+        }
+        return executeGettersOrSetters(mceWrapper, classOrInterfaceDeclaration);
+    }
 
-                if (returnType.asString().startsWith("Optional") ||
-                        returnType.asString().startsWith("java.util.Optional")) {
-                    return handleOptionals(sc);
-                }
-                else {
-                    Variable v = executeMethod(methodDeclaration);
-                    if (v != null && v.getValue() == null) {
+    private Variable executeGettersOrSetters(MCEWrapper mceWrapper, ClassOrInterfaceDeclaration classOrInterfaceDeclaration) {
+        String methodName = mceWrapper.getMethodName();
+        if (classOrInterfaceDeclaration.getAnnotationByName("Data").isPresent() ||
+                classOrInterfaceDeclaration.getAnnotationByName("Getter").isPresent()) {
+            if (methodName.startsWith("get")) {
+                String field = ClassProcessor.classToInstanceName(
+                        methodName.replace("get","")
+                );
 
-                        v.setType(returnType);
-                    }
-                    return v;
-                }
+                return fields.get(field);
             }
-            else {
-                Method method = getMethod(callable);
-                Class<?> clazz = method.getReturnType();
-                if (Optional.class.equals(clazz)) {
-                    return handleOptionals(sc);
-                }
-                return executeMethod(method);
+            if (methodName.startsWith("is")) {
+                String field = ClassProcessor.classToInstanceName(
+                        methodName.replace("is","")
+                );
+                return fields.get(field);
             }
+        }
+        if ( (classOrInterfaceDeclaration.getAnnotationByName("Data").isPresent() ||
+                classOrInterfaceDeclaration.getAnnotationByName("Setter").isPresent())
+                        && methodName.startsWith("set")) {
+                String field = ClassProcessor.classToInstanceName(
+                        methodName.replace("set","")
+                );
+            Variable va = AntikytheraRunTime.pop();
+            fields.put(field, va);
+            return new Variable(null);
         }
 
         return null;
+    }
+
+    private Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
+
+        if (callable.isMethodDeclaration()) {
+            MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
+            Type returnType = methodDeclaration.getType();
+
+            if (returnType.asString().startsWith("Optional") ||
+                    returnType.asString().startsWith("java.util.Optional")) {
+                return handleOptionals(sc);
+            }
+            else {
+                Variable v = executeMethod(methodDeclaration);
+                if (v != null && v.getValue() == null) {
+
+                    v.setType(returnType);
+                }
+                return v;
+            }
+        }
+        else {
+            Method method = getMethod(callable);
+            Class<?> clazz = method.getReturnType();
+            if (Optional.class.equals(clazz)) {
+                return handleOptionals(sc);
+            }
+            return executeMethod(method);
+        }
     }
 
     private static Method getMethod(Callable callable) {
