@@ -244,7 +244,12 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (cu != null) {
                 TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
                 if (typeDeclaration instanceof ClassOrInterfaceDeclaration cdecl) {
-                    return straightPathHelper(cdecl);
+                    Variable v = straightPathHelper(cdecl);
+                    if (v != null) {
+                        for (int i = 0 , j = methodCall.getArguments().size() ; i < j ; i++) {
+                            AntikytheraRunTime.pop();
+                        }
+                    }
                 }
             }
         }

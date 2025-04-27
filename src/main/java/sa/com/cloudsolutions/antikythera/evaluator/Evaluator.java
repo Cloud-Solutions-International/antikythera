@@ -933,6 +933,7 @@ public class Evaluator {
                 else {
                     Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
                     eval.setupFields();
+                    eval.initializeFields();
                     v = new Variable(eval);
                 }
             }
@@ -947,7 +948,7 @@ public class Evaluator {
         if (v != null) {
             Object value = v.getValue();
             if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
-                MCEWrapper wrapper = wrapCallExpression(scope.getScopedMethodCall());
+                MCEWrapper wrapper = wrapCallExpression(methodCall);
                 scope.setMCEWrapper(wrapper);
                 return eval.executeMethod(scope);
             }
@@ -955,7 +956,7 @@ public class Evaluator {
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         } else {
-            MCEWrapper wrapper = wrapCallExpression(scope.getScopedMethodCall());
+            MCEWrapper wrapper = wrapCallExpression(methodCall);
             scope.setMCEWrapper(wrapper);
             return executeMethod(scope);
         }
