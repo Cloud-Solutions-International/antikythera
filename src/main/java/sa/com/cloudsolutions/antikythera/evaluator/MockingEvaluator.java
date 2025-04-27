@@ -244,6 +244,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Branching.add(l);
 
         if (sc.getVariable().getValue() instanceof MockingEvaluator eval) {
+            l.setPathTaken(LineOfCode.TRUE_PATH);
             CompilationUnit cu = eval.getCompilationUnit();
             if (cu != null) {
                 TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
