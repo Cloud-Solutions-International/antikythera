@@ -1159,7 +1159,7 @@ public class Evaluator {
         try {
             return AbstractCompiler.loadClass(className);
         } catch (ClassNotFoundException e) {
-            logger.info("Could not find class {}", className);
+            // this can be silently ignored.
         }
         return null;
     }

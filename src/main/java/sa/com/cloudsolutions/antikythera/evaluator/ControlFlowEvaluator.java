@@ -200,6 +200,9 @@ public class ControlFlowEvaluator extends Evaluator{
         LineOfCode l = Branching.get(stmt.hashCode());
 
         if (l == null) {
+            l = new LineOfCode(stmt);
+            l.setPathTaken(LineOfCode.TRUE_PATH);
+            Branching.add(l);
             return straightPath(sc, stmt, methodCall);
         }
         else {

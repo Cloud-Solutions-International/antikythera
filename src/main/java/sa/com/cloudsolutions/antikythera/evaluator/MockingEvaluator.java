@@ -230,6 +230,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (v == null) {
             return executeMethod(m);
         }
+        for (int i = 0 , j = scope.getScopedMethodCall().getArguments().size() ; i < j ; i++) {
+            AntikytheraRunTime.pop();
+        }
+
         return v;
     }
 
@@ -244,12 +248,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (cu != null) {
                 TypeDeclaration<?> typeDeclaration = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
                 if (typeDeclaration instanceof ClassOrInterfaceDeclaration cdecl) {
-                    Variable v = straightPathHelper(cdecl);
-                    if (v != null) {
-                        for (int i = 0 , j = methodCall.getArguments().size() ; i < j ; i++) {
-                            AntikytheraRunTime.pop();
-                        }
-                    }
+                    return straightPathHelper(cdecl);
                 }
             }
         }
