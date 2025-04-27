@@ -43,6 +43,6 @@ class TestQueries extends TestHelper{
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("getById")).orElseThrow();
         evaluator.visit(doStuff);
-        assertEquals("Entity found: null\nEntity not found\nEntity not found\nEntity not found\n", outContent.toString());
+        assertEquals("Entity found: null\nEntity not found\nEntity not found\n", outContent.toString());
     }
 }

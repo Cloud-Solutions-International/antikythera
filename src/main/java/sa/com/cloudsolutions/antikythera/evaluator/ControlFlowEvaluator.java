@@ -21,7 +21,6 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 
@@ -178,8 +177,6 @@ public class ControlFlowEvaluator extends Evaluator{
         return expressions;
     }
 
-
-
     @SuppressWarnings("unchecked")
     Variable handleOptionalsHelper(Scope sc) throws ReflectiveOperationException {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
@@ -187,9 +184,6 @@ public class ControlFlowEvaluator extends Evaluator{
         LineOfCode l = Branching.get(stmt.hashCode());
 
         if (l == null) {
-            l = new LineOfCode(stmt);
-            l.setPathTaken(LineOfCode.TRUE_PATH);
-            Branching.add(l);
             return optionalPresentPath(sc, stmt, methodCall);
         }
         else {
