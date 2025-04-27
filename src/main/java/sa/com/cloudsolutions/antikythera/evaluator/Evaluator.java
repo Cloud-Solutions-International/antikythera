@@ -1737,12 +1737,11 @@ public class Evaluator {
                     if (parentCu != null) {
                         VoidVisitorAdapter<?> v = visitorName.equals("LazyFieldVisitor")
                                 ? new LazyFieldVisitor(parentClass) : new FieldVisitor(parentClass);
+
                         parentCu.accept(v, null);
 
-                        Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(parentCu, parentType.getNameAsString());
-                        if (t.isPresent()) {
-                            processParentClasses(t.get(), visitorName);
-                        }
+                        AbstractCompiler.getMatchingType(parentCu, parentType.getNameAsString())
+                                .ifPresent(t -> processParentClasses(t, visitorName));
                     }
                 }
             }
