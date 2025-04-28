@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Scanner;
 
 /**
- * Manages the configuration properties from generator.yml file or generator.cfg file.
+ * Manages the configuration properties from a generator.yml file.
  */
 public class Settings {
     public static final String APPLICATION_HOST = "application.host";
@@ -50,7 +50,7 @@ public class Settings {
     protected static HashMap<String, Object> props;
 
     /**
-     * Private constructor to prevent class being initialized.
+     * Private constructor to prevent the class being initialized.
      */
     private Settings() {}
 

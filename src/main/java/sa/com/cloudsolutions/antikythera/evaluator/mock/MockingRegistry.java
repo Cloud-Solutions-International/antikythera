@@ -116,6 +116,10 @@ public class MockingRegistry {
 
 
     public static MethodCallExpr buildMockitoWhen(String name, String returnType, String variableName) {
+        return buildMockitoWhen(name, expressionFactory(returnType), variableName);
+    }
+
+    public static MethodCallExpr buildMockitoWhen(String name, Expression returnValue, String variableName) {
         MethodCallExpr mockitoWhen = new MethodCallExpr(
                 new NameExpr(MOCKITO),
                 "when"
@@ -127,7 +131,7 @@ public class MockingRegistry {
         mockitoWhen.setArguments(new NodeList<>(methodCall));
 
         MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
-                .setArguments(new NodeList<>(expressionFactory(returnType)));
+                .setArguments(new NodeList<>(returnValue));
         TestGenerator.addWhenThen(thenReturn);
 
         return methodCall;

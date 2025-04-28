@@ -302,6 +302,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
         gen.addImport("org.mockito.InjectMocks");
