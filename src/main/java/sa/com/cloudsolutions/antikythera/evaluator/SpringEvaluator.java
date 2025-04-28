@@ -509,6 +509,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (v == null) {
                 if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
                     v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
+                } else if (MockingRegistry.isMockTarget(resolvedClass)) {
+                    try {
+                        v = MockingRegistry.mockIt(variable);
+                    } catch (ClassNotFoundException e) {
+                        throw new AntikytheraException(e);
+                    }
                 } else {
                     v = wireFromByteCode(resolvedClass);
                 }

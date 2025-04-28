@@ -1,7 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
-import static org.mockito.Mockito.verify;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import org.junit.jupiter.api.BeforeAll;
