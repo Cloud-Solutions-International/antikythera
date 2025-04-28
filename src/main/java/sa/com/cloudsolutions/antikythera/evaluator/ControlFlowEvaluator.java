@@ -14,6 +14,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -186,7 +187,7 @@ public class ControlFlowEvaluator extends Evaluator{
         Variable v = (l == null) ? optionalPresentPath(sc, stmt, methodCall)
                 : optionalEmptyPath(sc, l);
 
-        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), v);
+        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), new MockingCall(v));
         return v;
     }
 

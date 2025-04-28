@@ -17,6 +17,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -75,10 +76,10 @@ class UnitTestGeneratorTest {
         Method m = Statement.class.getDeclaredMethod("execute", String.class);
         assertNotNull(m);
         Callable callable = new Callable(m);
-        Object result = MockingRegistry.getThen("java.sql.Statement", callable);
+        MockingCall result = MockingRegistry.getThen("java.sql.Statement", callable);
         assertNotNull(result);
-        assertInstanceOf(Boolean.class, result);
-        assertEquals(true, result);
+        assertInstanceOf(Boolean.class, result.getVariable().getValue());
+        assertEquals(true, result.getVariable().getValue());
 
         m = Statement.class.getDeclaredMethod("getMaxFieldSize");
         callable = new Callable(m);

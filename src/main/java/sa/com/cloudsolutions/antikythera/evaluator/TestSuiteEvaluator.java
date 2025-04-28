@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
@@ -30,7 +31,9 @@ public class TestSuiteEvaluator extends Evaluator {
             Expression arg = methodCall.getArgument(0);
             Variable v = evaluateExpression(arg);
             when = false;
-            MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), callable, v);
+            MockingCall mockingCall = new MockingCall(v);
+            mockingCall.setFromSetup(true);
+            MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), callable, mockingCall);
             return v;
         }
         return super.evaluateMethodCall(scope);
