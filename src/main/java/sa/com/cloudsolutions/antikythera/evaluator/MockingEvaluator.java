@@ -6,21 +6,12 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.BooleanLiteralExpr;
-import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
-import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
@@ -121,7 +112,6 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return v;
     }
 
-
     @Override
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         LineOfCode l = new LineOfCode(stmt);
@@ -154,26 +144,28 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                     typeEval.initializeFields();
                     return new Variable(Optional.of(typeEval));
                 } else {
-                    // Type is not available as source code, use AKBuddy
-                    String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, ciType.getNameAsString());
-                    if (resolvedClass != null) {
-                        try {
-                            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
-                            MethodInterceptor interceptor = new MethodInterceptor(clazz);
-                            Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
-                            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-                            return new Variable(Optional.of(instance));
-                        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-                            // If we can't create the instance, return null
-                            return null;
-                        }
+                    Variable v = optionalByteBuddy(ciType.getNameAsString());
+                    if (v != null) {
+                        return v;
                     }
                 }
-
             }
         }
         return null;
     }
+
+    private Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
+        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+        if (resolvedClass != null) {
+            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
+            MethodInterceptor interceptor = new MethodInterceptor(clazz);
+            Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+            return new Variable(Optional.of(instance));
+        }
+        return null;
+    }
+
     @Override
     Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
         return new Variable(Optional.empty());
