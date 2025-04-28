@@ -39,6 +39,7 @@ import static org.mockito.Mockito.withSettings;
 
 public class MockingRegistry {
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
+    public static final String MOCKITO = "Mockito";
 
     private MockingRegistry() {
 
@@ -61,22 +62,6 @@ public class MockingRegistry {
         map.put(callable, then);
     }
 
-
-    public static Variable useMockito(String className) throws ClassNotFoundException {
-        Class<?> cls = AbstractCompiler.loadClass(className);
-        Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
-        v.setClazz(cls);
-        return v;
-    }
-
-    public static Variable useByteBuddy(String className) throws ClassNotFoundException {
-        Class<?> cls = AbstractCompiler.loadClass(className);
-        MethodInterceptor interceptor = new MethodInterceptor(cls);
-        Variable v = new Variable(AKBuddy.createDynamicClass(interceptor));
-        v.setClazz(cls);
-        return v;
-    }
-
     public static Variable mockIt(VariableDeclarator variable) throws ClassNotFoundException {
         String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
         Variable v;
@@ -87,14 +72,29 @@ public class MockingRegistry {
         }
         else {
             String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
-            if (mocker.equals("Mockito")) {
-                v = MockingRegistry.useMockito(fqn);
+            if (mocker.equals(MOCKITO)) {
+                v = MockingRegistry.createMockitoMockInstance(fqn);
             }
             else {
-                v = MockingRegistry.useByteBuddy(fqn);
+                v = MockingRegistry.createByteBuddyMockInstance(fqn);
             }
         }
         v.setType(variable.getType());
+        return v;
+    }
+
+    public static Variable createMockitoMockInstance(String className) throws ClassNotFoundException {
+        Class<?> cls = AbstractCompiler.loadClass(className);
+        Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+        v.setClazz(cls);
+        return v;
+    }
+
+    public static Variable createByteBuddyMockInstance(String className) throws ClassNotFoundException {
+        Class<?> cls = AbstractCompiler.loadClass(className);
+        MethodInterceptor interceptor = new MethodInterceptor(cls);
+        Variable v = new Variable(AKBuddy.createDynamicClass(interceptor));
+        v.setClazz(cls);
         return v;
     }
 
@@ -117,7 +117,7 @@ public class MockingRegistry {
 
     public static MethodCallExpr buildMockitoWhen(String name, String returnType, String variableName) {
         MethodCallExpr mockitoWhen = new MethodCallExpr(
-                new NameExpr("Mockito"),
+                new NameExpr(MOCKITO),
                 "when"
         );
 
@@ -220,7 +220,7 @@ public class MockingRegistry {
 
     public static MethodCallExpr createMockitoArgument(String typeName) {
         return new MethodCallExpr(
-                new NameExpr("Mockito"),
+                new NameExpr(MOCKITO),
                 switch (typeName) {
                     case "String" -> "anyString";
                     case "int", "Integer" -> "anyInt";
