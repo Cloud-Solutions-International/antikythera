@@ -1,19 +1,30 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mockito;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class TestMockingRegistry extends TestHelper {
@@ -33,7 +44,7 @@ class TestMockingRegistry extends TestHelper {
     }
 
     @Test
-    void testUseMockito() throws ClassNotFoundException {
+    void testUseByteBuddy() throws ClassNotFoundException {
         VariableDeclarator variableDeclarator = evaluator.getCompilationUnit()
                 .findFirst(VariableDeclarator.class, vd -> vd.getNameAsString().equals("objectMapper")).orElseThrow();
 
@@ -41,5 +52,72 @@ class TestMockingRegistry extends TestHelper {
 
         assertNotNull(result);
         assertEquals(ObjectMapper.class, result.getClazz());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "String,     anyString",
+            "int,        anyInt",
+            "Integer,    anyInt",
+            "long,       anyLong",
+            "Long,       anyLong",
+            "double,     anyDouble",
+            "Double,     anyDouble",
+            "boolean,    anyBoolean",
+            "Boolean,    anyBoolean",
+            "Object,     any"
+    })
+    void fakeArgumentsCreatesCorrectMatchers(String parameterType, String expectedMatcher) {
+        // Setup
+        MethodDeclaration methodDecl = new MethodDeclaration();
+        Parameter parameter = new Parameter()
+                .setType(parameterType)
+                .setName("param");
+        methodDecl.addParameter(parameter);
+
+        // Execute
+        NodeList<Expression> args = MockingRegistry.fakeArguments(methodDecl);
+
+        // Verify
+        assertEquals(1, args.size());
+        MethodCallExpr matcher = (MethodCallExpr) args.getFirst().orElseThrow();
+        assertEquals("Mockito", matcher.getScope().orElseThrow().toString());
+        assertEquals(expectedMatcher, matcher.getNameAsString());
+    }
+
+    @Test
+    void testGetAllMocks() {
+        MockingRegistry.reset();
+        MockingRegistry.markAsMocked("TestClass1");
+        MockingRegistry.markAsMocked("TestClass2");
+
+        Callable callable1 = new Callable(new MethodDeclaration());
+        Callable callable2 = new Callable(new MethodDeclaration());
+        Variable returnVal = new Variable("test");
+
+        MockingRegistry.when("TestClass1", callable1, new MockingCall(returnVal));
+        MockingRegistry.when("TestClass2", callable2, new MockingCall(returnVal));
+
+        List<MockingCall> result = MockingRegistry.getAllMocks();
+
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testMockItWithMockito() throws ClassNotFoundException {
+        // Setup
+        MockingRegistry.reset();
+        Settings.setProperty(Settings.MOCK_WITH_INTERNAL, "Mockito");
+
+        VariableDeclarator variableDeclarator = evaluator.getCompilationUnit()
+                .findFirst(VariableDeclarator.class, vd -> vd.getNameAsString().equals("objectMapper")).orElseThrow();
+
+        Variable result = MockingRegistry.mockIt(variableDeclarator);
+
+        assertNotNull(result);
+        assertEquals(ObjectMapper.class, result.getClazz());
+
+        assertNotNull(result);
+        assertTrue(Mockito.mockingDetails(result.getValue()).isMock());
     }
 }

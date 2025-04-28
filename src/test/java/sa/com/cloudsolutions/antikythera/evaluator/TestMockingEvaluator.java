@@ -161,37 +161,6 @@ class TestMockingEvaluator {
         return type;
     }
 
-    @ParameterizedTest
-    @CsvSource({
-        "String,     anyString",
-        "int,        anyInt",
-        "Integer,    anyInt",
-        "long,       anyLong",
-        "Long,       anyLong",
-        "double,     anyDouble",
-        "Double,     anyDouble",
-        "boolean,    anyBoolean",
-        "Boolean,    anyBoolean",
-        "Object,     any"
-    })
-    void fakeArgumentsCreatesCorrectMatchers(String parameterType, String expectedMatcher) {
-        // Setup
-        MethodDeclaration methodDecl = new MethodDeclaration();
-        Parameter parameter = new Parameter()
-                .setType(parameterType)
-                .setName("param");
-        methodDecl.addParameter(parameter);
-
-        // Execute
-        NodeList<Expression> args = MockingRegistry.fakeArguments(methodDecl);
-
-        // Verify
-        assertEquals(1, args.size());
-        MethodCallExpr matcher = (MethodCallExpr) args.getFirst().orElseThrow();
-        assertEquals("Mockito", matcher.getScope().orElseThrow().toString());
-        assertEquals(expectedMatcher, matcher.getNameAsString());
-    }
-
     @Test
     void executeMethodHandlesReflectiveMethod() throws NoSuchMethodException {
         // Setup
