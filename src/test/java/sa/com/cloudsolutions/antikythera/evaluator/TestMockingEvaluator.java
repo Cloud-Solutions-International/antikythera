@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 
 import java.io.File;
 import java.io.IOException;
@@ -182,7 +183,7 @@ class TestMockingEvaluator {
         methodDecl.addParameter(parameter);
 
         // Execute
-        NodeList<Expression> args = MockingEvaluator.fakeArguments(methodDecl);
+        NodeList<Expression> args = MockingRegistry.fakeArguments(methodDecl);
 
         // Verify
         assertEquals(1, args.size());

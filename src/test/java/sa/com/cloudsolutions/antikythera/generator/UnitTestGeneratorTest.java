@@ -28,8 +28,6 @@ import java.lang.reflect.Method;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 
@@ -64,7 +62,7 @@ class UnitTestGeneratorTest {
     /**
      * THis is an integration test.
      * It covers parts of TestSuiteEvaluator, UnitTestGenerator and MockingRegistry
-     * @throws NoSuchMethodException
+     * @throws NoSuchMethodException if the method is not found
      */
     @Test
     void testSetUpBase() throws NoSuchMethodException {
