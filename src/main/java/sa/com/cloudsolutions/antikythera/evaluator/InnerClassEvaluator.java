@@ -38,6 +38,7 @@ public class InnerClassEvaluator extends Evaluator {
         this.enclosure = eval;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Variable executeLocalMethod(MCEWrapper methodCall) throws ReflectiveOperationException {
         Variable v = super.executeLocalMethod(methodCall);

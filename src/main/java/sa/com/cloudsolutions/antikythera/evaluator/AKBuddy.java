@@ -28,7 +28,7 @@ public class AKBuddy {
     protected AKBuddy() {}
 
     /**
-     * <p>Dynamically create a class matching given type declaration and then create an instance</p>
+     * <p>Dynamically create a class matching a given type declaration and then create an instance</p>
      *
      * We will iterate through all the fields declared in the source code and make fake fields
      * accordingly so that they show up in reflective inspections. Similarly, we will add fake

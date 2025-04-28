@@ -186,7 +186,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             case "Float" -> Float.parseFloat(value.toString());
             case "Boolean" -> value.isBooleanLiteralExpr() ? value.asBooleanLiteralExpr().getValue() : value;
             case "Character" -> value.isCharLiteralExpr() ? value.asCharLiteralExpr().getValue() : value;
-            case "String" -> value.isStringLiteralExpr() ? value.asStringLiteralExpr().getValue() : value;
+            case "String" -> {
+                if (value.isStringLiteralExpr()) {
+                    yield value.asStringLiteralExpr().getValue();
+                }
+                if (value.isNullLiteralExpr()) {
+                    yield null;
+                }
+                yield value;
+            }
             default -> value;
         };
         va.setValue(result);
@@ -197,8 +205,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * <p>
      * The method will be called by the java parser method visitor. Note that we may run the same
      * code repeatedly so that we can exercise all the paths in the code.
-     * This is done by setting the values of variables to ensure conditionals evaluate to both true
-     * state and the false state
+     * This is done by setting the values of variables to ensure conditionals evaluate to both the
+     * true state and the false state
      *
      * @param md The MethodDeclaration being worked on
      * @throws AntikytheraException         if evaluation fails
@@ -356,8 +364,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * Mocks method arguments.
      * In the case of a rest api controller, the URL contains Path variables, Query string
-     * parameters and post bodies. We mock them here with the help of the argument generator.
-     * In the case of services and other classes we can use a mocking library.
+     * parameters and post-bodies. We mock them here with the help of the argument generator.
+     * In the case of services and other classes, we can use a mocking library.
      *
      * @param md The method declaration representing an HTTP API end point
      * @throws ReflectiveOperationException if the variables cannot be mocked.
@@ -500,9 +508,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
                 if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
-                    v = autoWireFromSourceCode(variable, resolvedClass, fd);
+                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
                 } else {
-                    v = autoWireFromByteCode(resolvedClass);
+                    v = wireFromByteCode(resolvedClass);
                 }
             }
             fields.put(variable.getNameAsString(), v);
@@ -511,7 +519,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    private static Variable autoWireFromByteCode(String resolvedClass) {
+    private static Variable wireFromByteCode(String resolvedClass) {
         try {
             Class<?> cls = AbstractCompiler.loadClass(resolvedClass);
             if (!cls.isInterface()) {
@@ -524,14 +532,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private static Variable autoWireFromSourceCode(VariableDeclarator variable, String resolvedClass, FieldDeclaration fd) {
+    private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
         Evaluator eval = MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
         v = new Variable(eval);
-        v.setType(variable.getType());
+        v.setType(type);
         AntikytheraRunTime.autoWire(resolvedClass, v);
         if (! (eval instanceof MockingEvaluator)) {
             eval.setupFields();
@@ -567,21 +575,23 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {
         Variable v = scope.getVariable();
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         try {
-            Optional<Expression> expr = methodCall.getScope();
-            if (expr.isPresent()) {
-                String fieldClass = getFieldClass(expr.get());
-                if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
-                    boolean isMocked = false;
-                    String fieldName = getFieldName(expr.get());
-                    if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
-                        isMocked = MockingRegistry.isMockTarget(fieldClass);
-                    }
-                    if (!isMocked) {
-                        return executeSource(methodCall);
+            if (v != null && v.getValue() instanceof SpringEvaluator) {
+                Optional<Expression> expr = methodCall.getScope();
+                if (expr.isPresent()) {
+                    String fieldClass = getFieldClass(expr.get());
+                    if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
+                        boolean isMocked = false;
+                        String fieldName = getFieldName(expr.get());
+                        if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
+                            isMocked = MockingRegistry.isMockTarget(fieldClass);
+                        }
+                        if (!isMocked) {
+                            return executeSource(methodCall);
+                        }
                     }
                 }
             }
@@ -644,7 +654,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         }
-
     }
 
     /**
@@ -792,7 +801,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable handleOptionals(ScopeChain.Scope sc) throws ReflectiveOperationException {
+    Variable handleOptionals(Scope sc) throws ReflectiveOperationException {
         if (sc.getExpression().isMethodCallExpr()) {
             MCEWrapper wrapper = sc.getMCEWrapper();
             Callable callable = wrapper.getMatchingCallable();
@@ -804,73 +813,5 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    @Override
-    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
-        MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
-        LineOfCode l =  new LineOfCode(stmt);
-        Branching.add(l);
-
-        List<Expression> expressions;
-        Variable v = super.handleOptionals(sc);
-        if (v.getValue() instanceof Optional<?> optional) {
-            if (optional.isPresent()) {
-                ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
-                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
-                l.setPathTaken(LineOfCode.TRUE_PATH);
-            } else {
-                ReturnStmt emptyReturn = findReturnStatement(method, true);
-                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
-                l.setPathTaken(LineOfCode.FALSE_PATH);
-            }
-            for (Expression expr : expressions) {
-                mapParameterToArguments(expr, method, methodCall);
-            }
-            return v;
-        }
-        throw new IllegalStateException("This should be returning an optional");
-    }
-
-    @Override
-    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l) throws ReflectiveOperationException {
-        List<Precondition> expressions;
-        if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
-            expressions = l.getPreconditions();
-
-            for (Precondition expression : expressions) {
-                evaluateExpression(expression.getExpression());
-            }
-        }
-        return super.handleOptionals(sc);
-    }
-
-    private void mapParameterToArguments(Expression expr, MethodDeclaration method, MethodCallExpr methodCall) {
-        // Direct parameter to argument mapping and replacement
-        for (int i = 0, j = method.getParameters().size() ; i <  j ; i++) {
-            String paramName = method.getParameter(i).getNameAsString();
-            String argName = methodCall.getArgument(i).toString();
-
-            if (expr instanceof MethodCallExpr methodExpr) {
-                // Replace parameter references in method scope
-                Optional<Expression> scope = methodExpr.getScope();
-                if (scope.isPresent() && scope.get() instanceof NameExpr scopeName
-                        && scopeName.getNameAsString().equals(paramName)) {
-                    methodExpr.setScope(methodCall.getArgument(i));
-                }
-            } else if (expr instanceof AssignExpr assignExpr &&
-                    assignExpr.getTarget() instanceof NameExpr nameExpr && nameExpr.getNameAsString().equals(paramName)) {
-                    assignExpr.setTarget(new NameExpr(argName));
-            }
-        }
-    }
-
-    private ReturnStmt findReturnStatement(MethodDeclaration method, boolean isEmpty) {
-        return method.findAll(ReturnStmt.class).stream()
-                .filter(r -> r.getExpression()
-                        .map(e -> isEmpty ? e.toString().contains("Optional.empty")
-                                        : !e.toString().contains("Optional.empty"))
-                        .orElse(false))
-                .findFirst()
-                .orElse(null);
-    }
 }
 

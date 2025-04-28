@@ -2,32 +2,55 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
     @Override
     public void visit(IfStmt stmt, LineOfCode parent) {
-        LineOfCode lineOfCode = new LineOfCode(stmt);
-        lineOfCode.setParent(parent);
-        Branching.add(lineOfCode);
+        if (canMatchParameters(stmt)) {
+            LineOfCode lineOfCode = new LineOfCode(stmt);
+            lineOfCode.setParent(parent);
+            Branching.add(lineOfCode);
 
-        // Visit the "then" branch
-        stmt.getThenStmt().accept(this, lineOfCode);
+            // Visit the "then" branch
+            stmt.getThenStmt().accept(this, lineOfCode);
 
-        // Visit the "else" branch if it exists
-        stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
+            // Visit the "else" branch if it exists
+            stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
+        }
     }
 
+    @SuppressWarnings("unchecked")
+    private boolean canMatchParameters(IfStmt stmt) {
+        MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
+        NameCollector nameCollector = new NameCollector();
 
+        Set<String> names = nameCollector.getNames();
+        stmt.getCondition().accept(nameCollector, null);
+
+        for (String name : names) {
+            for (Parameter p : md.getParameters()) {
+                if (p.getName().asString().equals(name)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
     /**
      * Given a statement find all the conditions that are required to be met to reach that line
      * @param stmt a statement to search upwards from
@@ -81,5 +104,20 @@ public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
             }
         }
         return false;
+    }
+
+
+    private static class NameCollector extends VoidVisitorAdapter<Void> {
+        private final Set<String> names = new HashSet<>();
+
+        @Override
+        public void visit(NameExpr n, Void arg) {
+            names.add(n.getNameAsString());
+            super.visit(n, arg);
+        }
+
+        public Set<String> getNames() {
+            return names;
+        }
     }
 }

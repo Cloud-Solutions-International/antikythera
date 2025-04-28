@@ -10,6 +10,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional2(Person person) {
         if (person.getName() == null) {
             System.out.print("The name is null");
@@ -40,6 +41,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional5(int a) {
         if (a == 1) {
             System.out.print("One!");
@@ -163,6 +165,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void multiVariateDeep(int a, int b) {
         if (a == 0) { // o
             System.out.println("A0!");
@@ -186,6 +189,12 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
+    public void cannotControl(int a, double b, String c) {
+        if (System.currentTimeMillis() == 10000) {
+            System.out.println("This condition cannot be met");
+        }
+    }
 
     public static void main(String[] args) {
         Person p = new Person("Hello");

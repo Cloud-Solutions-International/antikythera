@@ -196,8 +196,8 @@ class TestConditionalWithOptional extends TestHelper {
     @ParameterizedTest
     @CsvSource({
         "ifEmpty, ID: 1\\nID not found",
-        "ifPresent, ID: 1", "binOptionals, x is not 10\\nx is not 10\\nx is 10",
-        "optionalString, ANTIKYTHERA"
+        "ifPresent, ID: 1", "binOptionals, x is not 10\\nx is 10",
+        "optionalString, ANTIKYTHERA\\nDEFAULT"
     })
     void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

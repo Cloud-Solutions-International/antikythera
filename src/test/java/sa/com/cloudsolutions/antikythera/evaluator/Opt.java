@@ -12,10 +12,12 @@ public class Opt {
         }
     }
 
+    @SuppressWarnings("unused")
     void ifPresent(int a) {
         getById(a).ifPresent(id -> System.out.println("ID: " + id));
     }
 
+    @SuppressWarnings("unused")
     void ifEmpty(int a) {
         getById(a).ifPresentOrElse(
             id -> System.out.println("ID: " + id),
@@ -88,7 +90,7 @@ public class Opt {
 
     public void optionalString(String input) {
         String optionalInput = Optional.ofNullable(input).orElse("default");
-        System.out.println(optionalInput);
+        System.out.println(optionalInput.toUpperCase());
     }
 
     public static void main(String[] args) {

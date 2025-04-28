@@ -15,7 +15,7 @@ import static sa.com.cloudsolutions.dto.Constants.FIRST_GROUP;
 @AllArgsConstructor
 public class MediumDTO {
     private Integer group = FIRST_GROUP;
-
+    private int number = 17;
     private Long id;
     private String name;
     private String description;

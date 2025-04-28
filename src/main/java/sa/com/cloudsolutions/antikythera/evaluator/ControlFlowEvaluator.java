@@ -14,6 +14,8 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -21,7 +23,6 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 
@@ -68,11 +69,13 @@ public class ControlFlowEvaluator extends Evaluator{
 
     private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
-        Expression valueExpr = switch (v.getType()) {
-            case PrimitiveType p -> Reflect.createLiteralExpression(entry.getValue());
-            default -> entry.getValue() == null ? new NullLiteralExpr()
+        Expression valueExpr;
+        if (v.getType() instanceof PrimitiveType) {
+            valueExpr = Reflect.createLiteralExpression(entry.getValue());
+        } else {
+            valueExpr = entry.getValue() == null ? new NullLiteralExpr()
                     : new StringLiteralExpr(entry.getValue().toString());
-        };
+        }
 
         return new AssignExpr(
                 new NameExpr(nameExpr.getNameAsString()),
@@ -176,76 +179,124 @@ public class ControlFlowEvaluator extends Evaluator{
         return expressions;
     }
 
-    @Override
-    Variable handleOptionalEmpties(ScopeChain chain) throws ReflectiveOperationException {
-        MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
-        return switch (methodCall.getNameAsString()) {
-            case "orElse", "orElseGet" -> evaluateExpression(methodCall.getArgument(0));
-            case "orElseThrow" -> throw new NoSuchElementException("Optional is empty");
-            case "ifPresent" -> null;
-            case "ifPresentOrElse" -> {
-                Variable v = evaluateExpression(methodCall.getArgument(1));
-                yield executeLambda(v);
-            }
-            default -> super.handleOptionalEmpties(chain);
-        };
-    }
-
     @SuppressWarnings("unchecked")
-    Variable handleOptionalsHelper(ScopeChain.Scope sc) throws ReflectiveOperationException {
+    Variable handleOptionalsHelper(Scope sc) throws ReflectiveOperationException {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
+        Variable v = (l == null) ? optionalPresentPath(sc, stmt, methodCall)
+                : optionalEmptyPath(sc, l);
 
-        if (l == null) {
-            return straightPath(sc, stmt, methodCall);
+        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), new MockingCall(v));
+        return v;
+    }
+
+    Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
+        LineOfCode l =  new LineOfCode(stmt);
+        Branching.add(l);
+
+        List<Expression> expressions;
+        Variable v = super.handleOptionals(sc);
+        if (v.getValue() instanceof Optional<?> optional) {
+            if (optional.isPresent()) {
+                ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
+                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
+                l.setPathTaken(LineOfCode.TRUE_PATH);
+            } else {
+                ReturnStmt emptyReturn = findReturnStatement(method, true);
+                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
+                l.setPathTaken(LineOfCode.FALSE_PATH);
+            }
+            for (Expression expr : expressions) {
+                mapParameterToArguments(expr, method, methodCall);
+            }
+            return v;
         }
-        else {
-            return riggedPath(sc, l);
+        throw new IllegalStateException("This should be returning an optional");
+    }
+
+    Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
+        List<Precondition> expressions;
+        if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
+            expressions = l.getPreconditions();
+
+            for (Precondition expression : expressions) {
+                evaluateExpression(expression.getExpression());
+            }
+        }
+        return super.handleOptionals(sc);
+    }
+
+    private void mapParameterToArguments(Expression expr, MethodDeclaration method, MethodCallExpr methodCall) {
+        // Direct parameter to argument mapping and replacement
+        for (int i = 0, j = method.getParameters().size() ; i <  j ; i++) {
+            String paramName = method.getParameter(i).getNameAsString();
+            String argName = methodCall.getArgument(i).toString();
+
+            if (expr instanceof MethodCallExpr methodExpr) {
+                // Replace parameter references in method scope
+                Optional<Expression> scope = methodExpr.getScope();
+                if (scope.isPresent() && scope.get() instanceof NameExpr scopeName
+                        && scopeName.getNameAsString().equals(paramName)) {
+                    methodExpr.setScope(methodCall.getArgument(i));
+                }
+            } else if (expr instanceof AssignExpr assignExpr &&
+                    assignExpr.getTarget() instanceof NameExpr nameExpr && nameExpr.getNameAsString().equals(paramName)) {
+                assignExpr.setTarget(new NameExpr(argName));
+            }
         }
     }
 
-    Variable riggedPath(ScopeChain.Scope sc, LineOfCode l)  throws ReflectiveOperationException  {
-        throw new IllegalStateException("rigged path Should be overridden");
+    private ReturnStmt findReturnStatement(MethodDeclaration method, boolean isEmpty) {
+        return method.findAll(ReturnStmt.class).stream()
+                .filter(r -> r.getExpression()
+                        .map(e -> isEmpty ? e.toString().contains("Optional.empty")
+                                : !e.toString().contains("Optional.empty"))
+                        .orElse(false))
+                .findFirst()
+                .orElse(null);
     }
 
-    Variable straightPath(ScopeChain.Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
-        throw new IllegalStateException("straight path Should be overridden");
-    }
-
-    @SuppressWarnings("unchecked")
     @Override
+    @SuppressWarnings("java:S1872")
     void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         super.invokeReflectively(v, reflectionArguments);
 
         if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals("java.util.Optional")) {
             Object[] finalArgs = reflectionArguments.getFinalArgs();
             if (finalArgs.length == 1 && reflectionArguments.getMethodName().equals("ofNullable")) {
-                Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
-                LineOfCode l = Branching.get(stmt.hashCode());
-                if (l == null) {
-                    Expression expr = reflectionArguments.getMethodCallExpression();
-                    if (expr instanceof MethodCallExpr mce) {
-                        Expression argument = mce.getArguments().getFirst().orElseThrow();
-                        if (argument.isNameExpr()) {
-                            l = new LineOfCode(stmt);
-                            Branching.add(l);
+                handleOptionalOfNullable(reflectionArguments);
+            }
+        }
+    }
 
-                            if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
-                                Object value = null;
-                                if (opt.isPresent()) {
-                                    l.setPathTaken(LineOfCode.TRUE_PATH);
-                                }
-                                else {
-                                    value = Reflect.getDefault(argument.getClass());
-                                    l.setPathTaken(LineOfCode.FALSE_PATH);
-                                }
-                                Variable arg = getValue(stmt, argument.asNameExpr().getNameAsString());
-                                Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
-                                setupConditionThroughAssignment(stmt, entry);
-                            }
-                        }
+    @SuppressWarnings("unchecked")
+    private void handleOptionalOfNullable(ReflectionArguments reflectionArguments) {
+        Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+        if (l != null) {
+            return;
+        }
+
+        Expression expr = reflectionArguments.getMethodCallExpression();
+        if (expr instanceof MethodCallExpr mce) {
+            Expression argument = mce.getArguments().getFirst().orElseThrow();
+            if (argument.isNameExpr()) {
+                l = new LineOfCode(stmt);
+                Branching.add(l);
+
+                if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
+                    Object value = null;
+                    if (opt.isPresent()) {
+                        l.setPathTaken(LineOfCode.TRUE_PATH);
                     }
+                    else {
+                        value = Reflect.getDefault(argument.getClass());
+                        l.setPathTaken(LineOfCode.FALSE_PATH);
+                    }
+                    Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
+                    setupConditionThroughAssignment(stmt, entry);
                 }
             }
         }

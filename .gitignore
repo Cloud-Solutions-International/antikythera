@@ -49,3 +49,4 @@ build/
 ### Mac OS ###
 .DS_Store
 src/test/resources/sources/target/
+.junie/

@@ -3,18 +3,16 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
-import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -63,6 +61,13 @@ public class TruthTable {
      */
     private List<Map<Expression, Object>> table;
 
+    /**
+     * Should we consider null values when generating the truth table?
+     * This setting is only applicable when the condition itself does not contain any null
+     * component.
+     */
+    boolean allowNullInputs = false;
+
     public TruthTable() {
         this.variables = new HashMap<>();
         this.conditions = new HashSet<>();
@@ -92,6 +97,9 @@ public class TruthTable {
                 || binaryExpr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
     }
 
+    public void setAllowNullInputs(boolean allowNullInputs) {
+        this.allowNullInputs = allowNullInputs;
+    }
 
     /**
      * Main method to test the truth table generation and printing with different conditions.
@@ -131,12 +139,63 @@ public class TruthTable {
      */
     public void generateTruthTable() {
         this.condition.accept(new ConditionCollector(), conditions);
+
+        // If the condition contains actual null literals (not just comparisons with null),
+        // we always allow null inputs regardless of the allowNullInputs setting
+        boolean oldState = this.allowNullInputs;
+
+        if (containsNullLiteral(this.condition)) {
+            this.allowNullInputs = true;
+        }
+
         this.condition.accept(new VariableCollector(), variables);
         adjustDomain();
+
+        // Restore the original setting after domain adjustment
+        this.allowNullInputs = oldState;
 
         Expression[] variableList = variables.keySet().toArray(new Expression[0]);
         table = new ArrayList<>();
         generateCombinations(variableList);
+    }
+
+    /**
+     * Checks if the given expression contains any null literals.
+     * WHen the expression contains null, we would disregard the allowNullInputs settings when
+     * determining the domain.
+     * 
+     * @param expression The expression to check
+     * @return true if the expression contains any null literals that should cause
+     *        allowNullInputs to be disregarded, false otherwise
+     */
+    private boolean containsNullLiteral(Expression expression) {
+        if (expression == null) {
+            return false;
+        }
+
+        if (expression.isEnclosedExpr()) {
+            return containsNullLiteral(expression.asEnclosedExpr().getInner());
+        }
+
+        if (expression.isBinaryExpr()) {
+            BinaryExpr binaryExpr = expression.asBinaryExpr();
+
+            return containsNullLiteral(binaryExpr.getLeft()) || containsNullLiteral(binaryExpr.getRight());
+        } 
+        // For standalone null literals, consider them as null components
+        else if (expression.isNullLiteralExpr()) {
+            return true;
+        } else if (expression.isMethodCallExpr()) {
+            MethodCallExpr methodCallExpr = expression.asMethodCallExpr();
+
+            for (Expression arg : methodCallExpr.getArguments()) {
+                if (containsNullLiteral(arg)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -206,7 +265,7 @@ public class TruthTable {
     }
 
     /**
-     * Depending on the number of variables and their domain the number of possibilities can change.
+     * Depending on the number of variables and their domain, the number of possibilities can change.
      * @param variableList all the variables in the truth table.
      * @param domain the domain of values for integer literals
      * @return the total number of combinations that are available to us.
@@ -566,6 +625,8 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
             return getValue(condition, truthValues);
         } else if (condition.isDoubleLiteralExpr()) {
             return getValue(condition, truthValues);
+        } else if (condition.isLongLiteralExpr()) {
+            return getValue(condition, truthValues);
         }
 
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
@@ -609,13 +670,8 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 return n.intValue();
             }
         } else if (expr.isLiteralExpr()) {
-            return switch (expr) {
-                case IntegerLiteralExpr integerLiteralExpr -> Integer.valueOf(integerLiteralExpr.getValue());
-                case DoubleLiteralExpr doubleLiteralExpr -> Double.valueOf(doubleLiteralExpr.getValue());
-                case StringLiteralExpr stringLiteralExpr -> stringLiteralExpr.getValue();
-                case NullLiteralExpr nullLiteralExpr -> null;
-                default -> throw new UnsupportedOperationException("Unsupported literal expression: " + expr);
-            };
+            Variable v = Evaluator.evaluateLiteral(expr);
+            return v.getValue();
         }
 
         return truthValues.get(expr);
@@ -670,39 +726,55 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
 
         /**
          * Find the domain for the given name expression
-         * @param n
-         * @param collector
-         * @param compareWith
+         * @param nameExpression the name expression for which we need to find the domain
+         * @param collector the collection into which we will put the eligible expressions
+         * @param compareWith the expression that we will compare against.
          */
-        private void findDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector, Expression compareWith) {
+        private void findDomain(Expression nameExpression, HashMap<Expression,
+                Pair<Object, Object>> collector, Expression compareWith) {
             if (compareWith.isNullLiteralExpr()) {
-                collector.put(n, new Pair<>(null, "T"));
+                if (allowNullInputs) {
+                    collector.put(nameExpression, new Pair<>(null, "T"));
+                } else {
+                    // If null inputs are not allowed, use a non-null domain
+                    collector.put(nameExpression, new Pair<>(false, true));
+                }
             }
             else if (compareWith.isIntegerLiteralExpr()) {
-                handleIntegerLiteral(n, collector, compareWith);
+                handleIntegerLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isLongLiteralExpr()) {
-                handleLongLiteral(n, collector, compareWith);
+                handleLongLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isDoubleLiteralExpr()) {
-                handleDoubleLiteral(n, collector, compareWith);
+                handleDoubleLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
-                collector.put(n, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
+                if (allowNullInputs) {
+                    collector.put(nameExpression, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
+                } else {
+                    // If null inputs are not allowed, use a non-null domain for strings
+                    collector.put(nameExpression, new Pair<>("", compareWith.asStringLiteralExpr().getValue()));
+                }
             }
             else {
                 if (isInequalityPresent()) {
-                    collector.put(n, new Pair<>(0, 1));
+                    collector.put(nameExpression, new Pair<>(0, 1));
                 }
                 else {
-                    collector.put(n, new Pair<>(true, false));
+                    collector.put(nameExpression, new Pair<>(true, false));
                 }
             }
         }
 
         private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
                 Expression compareWith) {
-            long literalValue = Long.parseLong(compareWith.asLongLiteralExpr().getValue());
+            // Handle the case where the value might have an 'L' suffix
+            String valueStr = compareWith.asLongLiteralExpr().getValue();
+            if (valueStr.endsWith("L") || valueStr.endsWith("l")) {
+                valueStr = valueStr.substring(0, valueStr.length() - 1);
+            }
+            long literalValue = Long.parseLong(valueStr);
             Node parent = n.getParentNode().orElse(null);
 
             if (parent instanceof BinaryExpr binaryExpr) {

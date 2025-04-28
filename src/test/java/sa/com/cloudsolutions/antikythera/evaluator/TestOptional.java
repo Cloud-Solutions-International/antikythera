@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -21,8 +20,6 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TestOptional extends TestHelper {
-
-    private static Evaluator evaluator;
 
     @BeforeAll
     static void setup() throws IOException {
@@ -55,7 +52,7 @@ class TestOptional extends TestHelper {
         assertEquals(isPresent, optionalResult.isPresent());
 
         if (isPresent) {
-            assertEquals(value, optionalResult.get(), "Value should be: " + value);
+            assertEquals(value, optionalResult.orElseThrow(), "Value should be: " + value);
         }
     }
 
@@ -234,4 +231,5 @@ class TestOptional extends TestHelper {
         Optional<?> optionalResult = (Optional<?>) result.getValue();
         assertTrue(optionalResult.isPresent());
     }
+
 }
