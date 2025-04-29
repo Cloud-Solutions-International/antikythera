@@ -6,25 +6,16 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.BooleanLiteralExpr;
-import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
-import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
 import java.util.Optional;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
@@ -39,36 +30,18 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         Variable result = Reflect.variableFactory(returnType.getName());
         if (result != null) {
-            MethodCallExpr methodCall = buildMockitoWhen(m.getName(), returnType.getName());
+            MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(m.getName(), returnType.getName(), variableName);
             NodeList<Expression> args = new NodeList<>();
             java.lang.reflect.Parameter[] parameters = m.getParameters();
             for (java.lang.reflect.Parameter p : parameters) {
                 String typeName = p.getType().getSimpleName();
-                args.add(createMockitoArgument(typeName));
+                args.add(MockingRegistry.createMockitoArgument(typeName));
             }
             methodCall.setArguments(args);
 
             return result;
         }
         return null;
-    }
-
-    MethodCallExpr buildMockitoWhen(String name, String returnType) {
-        MethodCallExpr mockitoWhen = new MethodCallExpr(
-                new NameExpr("Mockito"),
-                "when"
-        );
-
-        MethodCallExpr methodCall = new MethodCallExpr()
-                .setScope(new NameExpr(variableName))
-                .setName(name);
-        mockitoWhen.setArguments(new NodeList<>(methodCall));
-
-        MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
-                .setArguments(new NodeList<>(expressionFactory(returnType)));
-        TestGenerator.addWhenThen(thenReturn);
-
-        return methodCall;
     }
 
     /**
@@ -93,14 +66,14 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (returnType.isClassOrInterfaceType()) {
             result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
             if (result != null) {
-                addMockitoExpression(md, result.getValue());
+                MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
                 return result;
             }
         }
 
         if (returnType.isPrimitiveType()) {
             result = Reflect.variableFactory(returnType.toString());
-            addMockitoExpression(md, result.getValue());
+            MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
             return result;
         }
 
@@ -119,106 +92,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
                 result = Reflect.variableFactory(fqdn);
             }
-            addMockitoExpression(md, result.getValue());
+            MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
         }
         return result;
-    }
-
-    private void addMockitoExpression(MethodDeclaration md, Object returnValue) {
-        if (returnValue != null) {
-            MethodCallExpr methodCall = buildMockitoWhen(md.getNameAsString(), returnValue.getClass().getName());
-            NodeList<Expression> args = fakeArguments(md);
-            methodCall.setArguments(args);
-        }
-    }
-
-    static NodeList<Expression> fakeArguments(MethodDeclaration md) {
-        NodeList<Expression> args = new NodeList<>();
-        md.getParameters().forEach(param -> {
-            String typeName = param.getType().asString();
-            args.add(createMockitoArgument(typeName));
-        });
-        return args;
-    }
-
-    private static MethodCallExpr createMockitoArgument(String typeName) {
-        return new MethodCallExpr(
-                new NameExpr("Mockito"),
-                switch (typeName) {
-                    case "String" -> "anyString";
-                    case "int", "Integer" -> "anyInt";
-                    case "long", "Long" -> "anyLong";
-                    case "double", "Double" -> "anyDouble";
-                    case "boolean", "Boolean" -> "anyBoolean";
-                    default -> "any";
-                }
-        );
-    }
-
-    static Expression expressionFactory(String qualifiedName) {
-        if (qualifiedName == null) {
-            return new NullLiteralExpr();
-        }
-
-        return switch (qualifiedName) {
-            case "List", "java.util.List", "java.util.ArrayList" -> {
-                TestGenerator.addDependency("java.util.ArrayList");
-                yield new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("ArrayList"))
-                        .setArguments(new NodeList<>());
-            }
-
-            case "Map", "java.util.Map", "java.util.HashMap" -> {
-                TestGenerator.addDependency("java.util.HashMap");
-                yield new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("HashMap"))
-                        .setArguments(new NodeList<>());
-            }
-
-            case "java.util.TreeMap" -> {
-                TestGenerator.addDependency("java.util.TreeMap");
-                yield new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("TreeMap"))
-                        .setArguments(new NodeList<>());
-            }
-
-            case "Set", "java.util.Set", "java.util.HashSet" -> {
-                TestGenerator.addDependency("java.util.HashSet");
-                yield new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("HashSet"))
-                        .setArguments(new NodeList<>());
-            }
-
-            case "java.util.TreeSet" -> {
-                TestGenerator.addDependency("java.util.TreeSet");
-                yield new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("TreeSet"))
-                        .setArguments(new NodeList<>());
-            }
-
-            case "java.util.Optional" -> {
-                TestGenerator.addDependency("java.util.Optional");
-                yield new MethodCallExpr(
-                        new NameExpr("Optional"),
-                        "empty"
-                );
-            }
-
-            case "Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
-
-            case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE ->
-                    new DoubleLiteralExpr("0.0");
-
-            case Reflect.INTEGER, "int" -> new IntegerLiteralExpr("0");
-
-            case "Long", "long", "java.lang.Long" -> new LongLiteralExpr("-100L");
-
-            case "String", "java.lang.String" -> new StringLiteralExpr("Ibuprofen");
-
-            default -> new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(qualifiedName))
-                    .setArguments(new NodeList<>());
-        };
     }
 
     @Override
@@ -235,7 +111,6 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         return v;
     }
-
 
     @Override
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
@@ -269,26 +144,28 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                     typeEval.initializeFields();
                     return new Variable(Optional.of(typeEval));
                 } else {
-                    // Type is not available as source code, use AKBuddy
-                    String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, ciType.getNameAsString());
-                    if (resolvedClass != null) {
-                        try {
-                            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
-                            MethodInterceptor interceptor = new MethodInterceptor(clazz);
-                            Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
-                            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-                            return new Variable(Optional.of(instance));
-                        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-                            // If we can't create the instance, return null
-                            return null;
-                        }
+                    Variable v = optionalByteBuddy(ciType.getNameAsString());
+                    if (v != null) {
+                        return v;
                     }
                 }
-
             }
         }
         return null;
     }
+
+    private Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
+        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+        if (resolvedClass != null) {
+            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
+            MethodInterceptor interceptor = new MethodInterceptor(clazz);
+            Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+            return new Variable(Optional.of(instance));
+        }
+        return null;
+    }
+
     @Override
     Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
         return new Variable(Optional.empty());
