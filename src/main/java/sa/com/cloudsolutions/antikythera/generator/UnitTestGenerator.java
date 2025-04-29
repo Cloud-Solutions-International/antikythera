@@ -402,14 +402,15 @@ public class UnitTestGenerator extends TestGenerator {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
             if (result.getVariable().getValue() instanceof Optional<?> value) {
                 if (value.isPresent()) {
-                    // create an expression that represents Optional.empty()
-                    Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
-                    MethodCallExpr mce = MockingRegistry.buildMockitoWhen(result.getVariableName(), empty, result.getVariableName());
-                    System.out.println(mce);
-                }
-                else {
                     Object o = value.get();
                     System.out.println(o);
+                }
+                else {
+                    // create an expression that represents Optional.empty()
+                    Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
+                    MethodCallExpr mce = MockingRegistry.buildMockitoWhen(
+                            result.getCallable().getNameAsString(), empty, result.getVariableName());
+
                 }
             }
         }
