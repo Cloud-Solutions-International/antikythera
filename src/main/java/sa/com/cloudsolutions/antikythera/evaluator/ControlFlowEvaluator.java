@@ -187,7 +187,9 @@ public class ControlFlowEvaluator extends Evaluator{
         Variable v = (l == null) ? optionalPresentPath(sc, stmt, methodCall)
                 : optionalEmptyPath(sc, l);
 
-        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), new MockingCall(v));
+        MockingCall then = new MockingCall(v);
+        then.setVariableName(variableName);
+        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), then);
         return v;
     }
 

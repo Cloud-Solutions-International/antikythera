@@ -7,6 +7,7 @@ public class MockingCall {
     private boolean fromSetup;
     private Expression expression;
     private Variable variable;
+    private String variableName;
 
     public MockingCall(Variable variable) {
         this.variable = variable;
@@ -34,5 +35,13 @@ public class MockingCall {
 
     public void setVariable(Variable variable) {
         this.variable = variable;
+    }
+
+    public String getVariableName() {
+        return variableName;
+    }
+
+    public void setVariableName(String variableName) {
+        this.variableName = variableName;
     }
 }
