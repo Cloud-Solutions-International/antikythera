@@ -30,7 +30,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -122,7 +121,7 @@ public class Antikythera {
      * Copy the pom.xml file to the specified path injecting the dependencies as needed.
      * <p>
      * The configuration file needs to have a dependencies section that provides the list of
-     * artifactids that need to be included in the output pom file. If these dependencies
+     * `artifactids` that need to be included in the output pom file. If these dependencies
      * require any variables, those are copied as well.
      * <p>
      * The primary source file is the file from the template folder. The dependencies are
@@ -256,13 +255,12 @@ public class Antikythera {
         if (pomModel != null) {
             List<Dependency> dependencies = pomModel.getDependencies();
             Properties properties = pomModel.getProperties();
-            Optional<String> m2 = Settings.getProperty("variables.m2_folder", String.class);
-
-            if (m2.isPresent()) {
-                for (Dependency dependency : dependencies) {
-                    addJarPath(dependency, properties, m2.get(), jarPaths);
-                }
-            }
+            Settings.getProperty("variables.m2_folder", String.class)
+                .ifPresent(m2 -> {
+                    for (Dependency dependency : dependencies) {
+                        addJarPath(dependency, properties, m2, jarPaths);
+                    }
+                });
         }
         return jarPaths.toArray(new String[0]);
     }

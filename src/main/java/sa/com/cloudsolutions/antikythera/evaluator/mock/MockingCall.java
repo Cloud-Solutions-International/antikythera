@@ -9,6 +9,7 @@ public class MockingCall {
     private Expression expression;
     private Variable variable;
     private final Callable callable;
+    private String variableName;
 
     public MockingCall(Callable callable, Variable variable)
     {
@@ -42,5 +43,13 @@ public class MockingCall {
 
     public Callable getCallable() {
         return callable;
+    }
+
+    public String getVariableName() {
+        return variableName;
+    }
+
+    public void setVariableName(String variableName) {
+        this.variableName = variableName;
     }
 }

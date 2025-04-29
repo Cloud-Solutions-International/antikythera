@@ -24,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -398,6 +399,21 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void applyPreconditions() {
+        for (MockingCall  result : MockingRegistry.getAllMocks()) {
+            if (result.getVariable().getValue() instanceof Optional<?> value) {
+                if (value.isPresent()) {
+                    // create an expression that represents Optional.empty()
+                    Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
+                    MethodCallExpr mce = MockingRegistry.buildMockitoWhen(result.getVariableName(), empty, result.getVariableName());
+                    System.out.println(mce);
+                }
+                else {
+                    Object o = value.get();
+                    System.out.println(o);
+                }
+            }
+        }
+
         for (Precondition expr : preConditions) {
             applyPrecondition.accept(expr.getExpression());
         }
