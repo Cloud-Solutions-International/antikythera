@@ -24,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -398,6 +399,8 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void applyPreconditions() {
+        List<MockingCall> result = MockingRegistry.getAllMocks();
+
         for (Precondition expr : preConditions) {
             applyPrecondition.accept(expr.getExpression());
         }
