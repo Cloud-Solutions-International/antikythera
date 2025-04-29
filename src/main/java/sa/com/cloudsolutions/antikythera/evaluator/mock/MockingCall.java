@@ -8,7 +8,7 @@ public class MockingCall {
     private boolean fromSetup;
     private Expression expression;
     private Variable variable;
-    private Callable callable;
+    private final Callable callable;
 
     public MockingCall(Callable callable, Variable variable)
     {

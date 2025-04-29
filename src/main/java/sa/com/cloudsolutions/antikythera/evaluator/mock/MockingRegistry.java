@@ -78,7 +78,7 @@ public class MockingRegistry {
     }
 
     /**
-     * Creates a mock of the given variable using mockito or byte buddy.
+     * Creates a mocked version of the given variable using mockito or byte buddy.
      *
      * @param variable This should be a part of a field declaration. The variable declared in the
      *                 field will be mocked.
