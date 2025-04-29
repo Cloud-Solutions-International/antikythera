@@ -31,9 +31,9 @@ public class TestSuiteEvaluator extends Evaluator {
             Expression arg = methodCall.getArgument(0);
             Variable v = evaluateExpression(arg);
             when = false;
-            MockingCall mockingCall = new MockingCall(v);
+            MockingCall mockingCall = new MockingCall(callable, v);
             mockingCall.setFromSetup(true);
-            MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), callable, mockingCall);
+            MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), mockingCall);
             return v;
         }
         return super.evaluateMethodCall(scope);
