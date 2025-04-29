@@ -62,4 +62,30 @@ class TestDummyArgumentGenerator {
         assertNotNull(v);
         assertEquals(value, v.getValue().toString());
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        "Integer, 1",
+        "Double, 1.0",
+        "Boolean, true",
+        "ArrayList, []",
+        "HashMap, {}",
+        "LinkedList, []"
+    })
+    void testMockNonPrimitiveParameter(String type, String expectedValue) throws ReflectiveOperationException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
+        cu.addImport("java.util." + type);
+
+        MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).orElseThrow();
+        Parameter parameter = new Parameter();
+        md.addParameter(parameter);
+        parameter.setName("param");
+        parameter.setType(type);
+
+        dummy.generateArgument(parameter);
+        Variable v = AntikytheraRunTime.pop();
+
+        assertNotNull(v);
+        assertEquals(expectedValue, v.getValue().toString());
+    }
 }

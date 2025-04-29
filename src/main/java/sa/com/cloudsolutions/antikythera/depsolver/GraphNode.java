@@ -74,7 +74,7 @@ public class GraphNode {
      */
     private GraphNode(Node node) {
         this.node = node;
-        enclosingType = AbstractCompiler.getEnclosingClassOrInterface(node);
+        enclosingType = AbstractCompiler.getEnclosingType(node);
         if (enclosingType != null) {
             Optional<CompilationUnit> cu = enclosingType.findCompilationUnit();
 
@@ -234,7 +234,6 @@ public class GraphNode {
         }
         if(parent.getSuperclass() !=null){
              addAbstractMethods(md,parent.getSuperclass() );
-            return;
         }
 
     }

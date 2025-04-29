@@ -12,10 +12,12 @@ public class Opt {
         }
     }
 
+    @SuppressWarnings("unused")
     void ifPresent(int a) {
         getById(a).ifPresent(id -> System.out.println("ID: " + id));
     }
 
+    @SuppressWarnings("unused")
     void ifEmpty(int a) {
         getById(a).ifPresentOrElse(
             id -> System.out.println("ID: " + id),
@@ -77,9 +79,18 @@ public class Opt {
         return Optional.ofNullable(o);
     }
 
+    void binOptionals(Integer a) {
+        Integer x = Optional.ofNullable(a).orElse(10);
+        if (x == 10) {
+            System.out.println("x is 10");
+        } else {
+            System.out.println("x is not 10");
+        }
+    }
+
     public void optionalString(String input) {
-        Optional<String> optionalInput = Optional.ofNullable(input);
-        System.out.println(optionalInput.map(String::toUpperCase).orElse("default"));
+        String optionalInput = Optional.ofNullable(input).orElse("default");
+        System.out.println(optionalInput.toUpperCase());
     }
 
     public static void main(String[] args) {

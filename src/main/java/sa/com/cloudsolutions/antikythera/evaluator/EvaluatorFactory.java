@@ -21,9 +21,6 @@ public class EvaluatorFactory {
             return EvaluatorFactory.create(c, InnerClassEvaluator.class);
         }
 
-        if (enclosure instanceof SpringEvaluator) {
-            return EvaluatorFactory.create(c, InnerClassEvaluator.class);
-        }
         return EvaluatorFactory.create(c, enclosure.getClass());
     }
 

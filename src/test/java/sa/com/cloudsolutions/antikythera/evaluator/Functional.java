@@ -14,7 +14,7 @@ public class Functional {
     Person a = new Person("A");
     Person b = new Person("B");
     List<Person> people = List.of(a, b);
-    private List<Integer> numbers = new ArrayList<>(List.of(8,9,0,3,1,4,5,6,7,2));
+    private final List<Integer> numbers = new ArrayList<>(List.of(8,9,0,3,1,4,5,6,7,2));
 
     private void printHello(Function<String, String> f)
     {

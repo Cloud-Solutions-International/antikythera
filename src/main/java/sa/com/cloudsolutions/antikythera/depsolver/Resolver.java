@@ -26,6 +26,7 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
@@ -334,7 +335,7 @@ public class Resolver {
 
     static GraphNode evaluateScopeChain(GraphNode node, ScopeChain chain) throws AntikytheraException {
         GraphNode gn = node;
-        Iterator<ScopeChain.Scope> iterator = chain.getChain().reversed().iterator();
+        Iterator<Scope> iterator = chain.getChain().reversed().iterator();
         while (iterator.hasNext() && gn != null) {
             Expression expr = iterator.next().getExpression();
             if (expr.isFieldAccessExpr()) {
@@ -567,6 +568,7 @@ public class Resolver {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
         if (cdecl != null) {

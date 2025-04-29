@@ -32,7 +32,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             String fullClassName = AbstractCompiler.findFullyQualifiedName(param.findCompilationUnit().orElseThrow(), t.asClassOrInterfaceType().getNameAsString());
             if (fullClassName.startsWith("java")) {
                 /*
-                 * However you can't rule out the possibility that this is a Map or a List or even a
+                 * However, you can't rule out the possibility that this is a Map or a List or even a
                  * boxed type.
                  */
                 if (t.asClassOrInterfaceType().isBoxedType()) {

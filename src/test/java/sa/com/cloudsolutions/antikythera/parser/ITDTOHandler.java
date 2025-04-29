@@ -82,5 +82,10 @@ class ITDTOHandler {
 
         Variable v = eval.getFields().get("group");
         assertNotNull(v);
+        assertEquals(1, v.getValue());
+
+        v = eval.getFields().get("number");
+        assertNotNull(v);
+        assertEquals(17, v.getValue());
     }
 }

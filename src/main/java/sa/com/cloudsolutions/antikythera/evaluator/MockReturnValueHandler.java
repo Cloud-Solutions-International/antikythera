@@ -10,6 +10,7 @@ import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -69,7 +70,7 @@ public class MockReturnValueHandler implements Answer<Object> {
 
                     whenExpr.setArguments(new NodeList<>(methodCall));
                     MethodCallExpr thenReturn = new MethodCallExpr(whenExpr, "thenReturn")
-                            .setArguments(new NodeList<>(MockingEvaluator.expressionFactory(clsName)));
+                            .setArguments(new NodeList<>(MockingRegistry.expressionFactory(clsName)));
 
                     TestGenerator.addWhenThen(thenReturn);
                 }

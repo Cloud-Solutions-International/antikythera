@@ -8,6 +8,7 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -130,7 +131,7 @@ public class AbstractCompiler {
 
     /**
      * Converts a class name to a path name.
-     * Simply replaces the . with the /
+     * Simply replaces the `.` with the `/`
      * @param className the fully qualified class name
      * @return a path relative to the base
      */
@@ -326,7 +327,7 @@ public class AbstractCompiler {
      * Get the public class in a compilation unit
      * @param cu the compilation unit
      * @return the public class, enum or interface that is held in the compilation unit if any.
-     *      when no public type is found null is returned.
+     *      when no public type is found, null is returned.
      */
     public static TypeDeclaration<?> getPublicType(CompilationUnit cu) {
         for (var type : cu.getTypes()) {
@@ -417,8 +418,8 @@ public class AbstractCompiler {
     /**
      * Finds the fully qualified classname given the short name of a class.
      * @param cu Compilation unit where the classname name was discovered
-     * @param className to find the fully qualified name for. If the class name is a already a
-     *                  fully qualified name the same will be returned.
+     * @param className to find the fully qualified name for. If the class name is already a
+     *                  fully qualified name, the same will be returned.
      * @return the fully qualified name of the class.
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
@@ -438,9 +439,9 @@ public class AbstractCompiler {
         }
 
         /*
-         * First check if the compilation unit directly contains it.
-         * Then check if there exists an import that ends with the short class name as it's last component.
-         * Check if the package folder contains a java source file with the same name
+         * First, check if the compilation unit directly contains the name.
+         * Then check if there exists an import that ends with the short class name as its last component.
+         * Check if the package folder contains a java source file with the same name.
          * Lastly, we will try to invoke Class.forName to see if the class can be located in any jar file
          *    that we have loaded.
          */
@@ -568,7 +569,7 @@ public class AbstractCompiler {
             Name importName = imp.getName();
             if (className.equals(importName.getIdentifier()) && !imp.isAsterisk()) {
                 /*
-                 * last part of the import matches the class name
+                 * the last part of the import matches the class name
                  */
                 ImportWrapper wrapper = new ImportWrapper(imp);
                 if (!imp.isStatic()) {
@@ -617,7 +618,7 @@ public class AbstractCompiler {
                     Class.forName(fullClassName);
                     /*
                      * Wild card import. Append the class name to the end and load the class,
-                     * we are on this line because it has worked so this is the correct import.
+                     * we are on this line because it has worked, so this is the correct import.
                      */
                     ImportWrapper wrapper = new ImportWrapper(imp, true);
                     ImportDeclaration decl = new ImportDeclaration(fullClassName, imp.isStatic(), false);
@@ -627,8 +628,8 @@ public class AbstractCompiler {
                     try {
                         AbstractCompiler.loadClass(fullClassName);
                         /*
-                         * We are here because the previous attempt at class forname was
-                         * unsuccessfully simply because the class had not been loaded.
+                         * We are here because the previous attempt at `class forname` was
+                         * unsuccessful simply because the class had not been loaded.
                          * Here we have loaded it, which obviously means it's there
                          */
                         return new ImportWrapper(imp, true);
@@ -707,9 +708,11 @@ public class AbstractCompiler {
             }
         }
 
-        Optional<Callable> c = findCallableInParent(methodCall, decl);
-        if (c.isPresent()) {
-            return c;
+        if (decl.isClassOrInterfaceDeclaration()) {
+            Optional<Callable> c = findCallableInParent(methodCall, decl.asClassOrInterfaceDeclaration());
+            if (c.isPresent()) {
+                return c;
+            }
         }
 
         if (found != -1 && occurs == 1) {
@@ -746,8 +749,8 @@ public class AbstractCompiler {
                 }
             }
 
-            if (overRides) {
-                Optional<Callable> method = findCallableInParent(methodCall, decl);
+            if (overRides && decl.isClassOrInterfaceDeclaration()) {
+                Optional<Callable> method = findCallableInParent(methodCall, decl.asClassOrInterfaceDeclaration());
                 if (method.isPresent()) {
                     return method;
                 }
@@ -761,45 +764,43 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> decl) {
-        if (decl.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = decl.asClassOrInterfaceDeclaration();
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl) {
 
-            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
-                if (compilationUnit.isPresent()) {
-                    String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                    if (cu != null) {
-                        TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString()).orElse(null);
-                        Optional<Callable> method = findCallableDeclaration(methodCall, p);
-                        if (method.isPresent()) {
-                            return method;
-                        }
-                    } else {
-                        /*
-                         * the extended type is not in the same compilation unit, we will have to
-                         * load the class and try to find the method in it.
-                         */
-                        ImportWrapper wrapper = findImport(decl.findCompilationUnit().get(), extended.getNameAsString());
-                        if (wrapper != null && wrapper.isExternal()) {
-                            try {
-                                Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
-                                ReflectionArguments reflectionArguments = new ReflectionArguments(
-                                        methodCall.getMethodName(), new Object[] {}, methodCall.getArgumentTypesAsClasses()
-                                );
-                                Method method = Reflect.findMethod(clazz, reflectionArguments);
-                                if (method != null) {
-                                    return Optional.of(new Callable(method));
-                                }
-                            } catch (ClassNotFoundException e) {
-                                return Optional.empty();
+        for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+            Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+            if (compilationUnit.isPresent()) {
+                String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                if (cu != null) {
+                    TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString()).orElse(null);
+                    Optional<Callable> method = findCallableDeclaration(methodCall, p);
+                    if (method.isPresent()) {
+                        return method;
+                    }
+                } else {
+                    /*
+                     * the extended type is not in the same compilation unit, we will have to
+                     * load the class and try to find the method in it.
+                     */
+                    ImportWrapper wrapper = findImport(cdecl.findCompilationUnit().orElseThrow(), extended.getNameAsString());
+                    if (wrapper != null && wrapper.isExternal()) {
+                        try {
+                            Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
+                            ReflectionArguments reflectionArguments = new ReflectionArguments(
+                                    methodCall.getMethodName(), new Object[] {}, methodCall.getArgumentTypesAsClasses()
+                            );
+                            Method method = Reflect.findMethod(clazz, reflectionArguments);
+                            if (method != null) {
+                                return Optional.of(new Callable(method));
                             }
+                        } catch (ClassNotFoundException e) {
+                            return Optional.empty();
                         }
                     }
                 }
             }
         }
+
         return Optional.empty();
     }
 
@@ -834,9 +835,12 @@ public class AbstractCompiler {
         }
     }
 
-    public static TypeDeclaration<?> getEnclosingClassOrInterface(Node n) {
+    public static TypeDeclaration<?> getEnclosingType(Node n) {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
             return cdecl;
+        }
+        if (n instanceof EnumDeclaration ed) {
+            return ed;
         }
         if (n instanceof AnnotationDeclaration ad) {
             return ad;
@@ -844,7 +848,7 @@ public class AbstractCompiler {
         if (n != null) {
             Optional<Node> parent = n.getParentNode();
             if (parent.isPresent()) {
-                return getEnclosingClassOrInterface(parent.get());
+                return getEnclosingType(parent.get());
             }
         }
         return null;

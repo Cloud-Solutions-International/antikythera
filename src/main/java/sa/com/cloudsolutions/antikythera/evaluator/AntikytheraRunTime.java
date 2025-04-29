@@ -46,11 +46,11 @@ public class AntikytheraRunTime {
 
     /**
      * Stores the fields that have been autowired.
-     * While there should not be cyclic dependencies the reality is that they do exist in the wild.
-     * Additionally due to the way that transactions work in spring boot, you often find classes
+     * While there should not be cyclic dependencies, the reality is that they do exist in the wild.
+     * Additionally, due to the way that transactions work in spring boot, you often find classes
      * auto wiring themselves.
      * What this means to us is that setting up the fields will often lead to infinite recursions
-     * and stack overflows. To avoid that lets keep all Autowired instances cached.
+     * and stack overflows. To avoid that, lets keep all Autowired instances cached.
      */
     protected static final Map<String, Variable> autowired = new HashMap<>();
 

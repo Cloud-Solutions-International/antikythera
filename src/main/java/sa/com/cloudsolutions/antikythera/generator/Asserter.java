@@ -9,6 +9,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.Map;
 
 public abstract class Asserter {
@@ -43,22 +44,22 @@ public abstract class Asserter {
 
 
     public Expression fieldAssertion(String getter, Variable v) {
-
         Object value = v.getValue();
 
+        String getterCall = "resp." + getter + "()";
         if (value instanceof String) {
-            return assertEquals("\"" + v.getValue() + "\"", "resp." + getter + "()");
+            return assertEquals("\"" + v.getValue() + "\"", getterCall);
         }
-        if (v.getClazz() != null) {
+        if (value instanceof Collection<?>) {
             try {
                 Method m = v.getClazz().getMethod("size");
                 Object result = m.invoke(value);
-                return assertEquals(result.toString(), "resp." + getter + "().size()");
+                return assertEquals(result.toString(), getterCall + ".size()");
             } catch (ReflectiveOperationException e) {
                 logger.warn("Could not use reflection for assertion");
             }
         }
-        return assertEquals(v.getValue().toString(), "resp." + getter + "()");
+        return assertEquals(v.getValue().toString(), getterCall);
 
     }
 }

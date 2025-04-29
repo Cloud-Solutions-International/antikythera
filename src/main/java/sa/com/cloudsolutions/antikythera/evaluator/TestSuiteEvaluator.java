@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
@@ -19,7 +20,7 @@ public class TestSuiteEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable evaluateMethodCall(ScopeChain.Scope scope) throws ReflectiveOperationException {
+    public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (methodCall.getNameAsString().equals("when")) {
             when = true;
@@ -30,7 +31,9 @@ public class TestSuiteEvaluator extends Evaluator {
             Expression arg = methodCall.getArgument(0);
             Variable v = evaluateExpression(arg);
             when = false;
-            MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), callable, v.getValue());
+            MockingCall mockingCall = new MockingCall(v);
+            mockingCall.setFromSetup(true);
+            MockingRegistry.when(callable.getMethod().getDeclaringClass().getName(), callable, mockingCall);
             return v;
         }
         return super.evaluateMethodCall(scope);
@@ -40,7 +43,7 @@ public class TestSuiteEvaluator extends Evaluator {
     Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
         Variable variable = evaluateScopeChain(chain);
-        ScopeChain.Scope scope = chain.getChain().getLast();
+        Scope scope = chain.getChain().getLast();
         scope.setScopedMethodCall(methodCall);
         scope.setVariable(variable);
         return evaluateMethodCall(scope);
