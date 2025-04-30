@@ -26,7 +26,8 @@ public abstract class Asserter {
             int i = 0;
             for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
                 try {
-                    if (field.getValue() != null && field.getValue().getValue() != null) {
+                    if (field.getValue() != null && !field.getKey().equals("serialVersionUID")
+                            && field.getValue().getValue() != null) {
                         Variable v = field.getValue();
                         String getter = "get" + field.getKey().substring(0, 1).toUpperCase() + field.getKey().substring(1);
                         body.addStatement(fieldAssertion(getter, v));
