@@ -1724,7 +1724,7 @@ public class Evaluator {
         processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "FieldVisitor");
     }
 
-    protected String getClassName() {
+    public String getClassName() {
         return className;
     }
 
