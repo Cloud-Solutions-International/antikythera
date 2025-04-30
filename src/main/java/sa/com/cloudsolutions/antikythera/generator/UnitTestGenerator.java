@@ -403,37 +403,41 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
-            if (result.getVariable().getValue() instanceof Optional<?> value) {
-                Callable callable = result.getCallable();
-                MethodCallExpr methodCall = null;
-                if (value.isPresent()) {
-                    Object o = value.get();
-                    if (o instanceof Evaluator eval) {
-                        Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() +   "())");
-                        methodCall = MockingRegistry.buildMockitoWhen(
-                                callable.getNameAsString(), opt, result.getVariableName());
-                    }
-                    else {
-                        throw new IllegalStateException("Not implemented yet");
-                    }
-                }
-                else {
-                    // create an expression that represents Optional.empty()
-                    Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
-                    methodCall = MockingRegistry.buildMockitoWhen(
-                            callable.getNameAsString(), empty, result.getVariableName());
-                }
-                if (callable.isMethodDeclaration()) {
-                    NodeList<Expression> args = MockingRegistry.fakeArguments(callable.asMethodDeclaration());
-                    methodCall.setArguments(args);
-                } else {
-                    MockingRegistry.addArgumentsToWhen(callable.getMethod(), methodCall);
-                }
-            }
+            applyPreconditionsForOptionals(result);
         }
 
         for (Precondition expr : preConditions) {
             applyPrecondition.accept(expr.getExpression());
+        }
+    }
+
+    private static void applyPreconditionsForOptionals(MockingCall result) {
+        if (result.getVariable().getValue() instanceof Optional<?> value) {
+            Callable callable = result.getCallable();
+            MethodCallExpr methodCall = null;
+            if (value.isPresent()) {
+                Object o = value.get();
+                if (o instanceof Evaluator eval) {
+                    Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() +   "())");
+                    methodCall = MockingRegistry.buildMockitoWhen(
+                            callable.getNameAsString(), opt, result.getVariableName());
+                }
+                else {
+                    throw new IllegalStateException("Not implemented yet");
+                }
+            }
+            else {
+                // create an expression that represents Optional.empty()
+                Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
+                methodCall = MockingRegistry.buildMockitoWhen(
+                        callable.getNameAsString(), empty, result.getVariableName());
+            }
+            if (callable.isMethodDeclaration()) {
+                NodeList<Expression> args = MockingRegistry.fakeArguments(callable.asMethodDeclaration());
+                methodCall.setArguments(args);
+            } else {
+                MockingRegistry.addArgumentsToWhen(callable.getMethod(), methodCall);
+            }
         }
     }
 
