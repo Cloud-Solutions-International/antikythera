@@ -186,8 +186,10 @@ public class ControlFlowEvaluator extends Evaluator{
         LineOfCode l = Branching.get(stmt.hashCode());
         Variable v = (l == null) ? optionalPresentPath(sc, stmt, methodCall)
                 : optionalEmptyPath(sc, l);
+        MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(),v);
+        then.setVariableName(variableName);
 
-        MockingRegistry.when(className, sc.getMCEWrapper().getMatchingCallable(), new MockingCall(v));
+        MockingRegistry.when(className, then);
         return v;
     }
 

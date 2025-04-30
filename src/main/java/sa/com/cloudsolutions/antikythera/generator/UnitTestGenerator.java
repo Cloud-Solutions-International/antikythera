@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -28,6 +30,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.File;
@@ -399,10 +402,42 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void applyPreconditions() {
-        List<MockingCall> result = MockingRegistry.getAllMocks();
+        for (MockingCall  result : MockingRegistry.getAllMocks()) {
+            applyPreconditionsForOptionals(result);
+        }
 
         for (Precondition expr : preConditions) {
             applyPrecondition.accept(expr.getExpression());
+        }
+    }
+
+    static void applyPreconditionsForOptionals(MockingCall result) {
+        if (result.getVariable().getValue() instanceof Optional<?> value) {
+            Callable callable = result.getCallable();
+            MethodCallExpr methodCall;
+            if (value.isPresent()) {
+                Object o = value.get();
+                if (o instanceof Evaluator eval) {
+                    Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() +   "())");
+                    methodCall = MockingRegistry.buildMockitoWhen(
+                            callable.getNameAsString(), opt, result.getVariableName());
+                }
+                else {
+                    throw new IllegalStateException("Not implemented yet");
+                }
+            }
+            else {
+                // create an expression that represents Optional.empty()
+                Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
+                methodCall = MockingRegistry.buildMockitoWhen(
+                        callable.getNameAsString(), empty, result.getVariableName());
+            }
+            if (callable.isMethodDeclaration()) {
+                NodeList<Expression> args = MockingRegistry.fakeArguments(callable.asMethodDeclaration());
+                methodCall.setArguments(args);
+            } else {
+                MockingRegistry.addArgumentsToWhen(callable.getMethod(), methodCall);
+            }
         }
     }
 

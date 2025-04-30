@@ -31,13 +31,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Variable result = Reflect.variableFactory(returnType.getName());
         if (result != null) {
             MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(m.getName(), returnType.getName(), variableName);
-            NodeList<Expression> args = new NodeList<>();
-            java.lang.reflect.Parameter[] parameters = m.getParameters();
-            for (java.lang.reflect.Parameter p : parameters) {
-                String typeName = p.getType().getSimpleName();
-                args.add(MockingRegistry.createMockitoArgument(typeName));
-            }
-            methodCall.setArguments(args);
+            MockingRegistry.addArgumentsToWhen(m, methodCall);
 
             return result;
         }

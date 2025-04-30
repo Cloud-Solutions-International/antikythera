@@ -95,8 +95,8 @@ class TestMockingRegistry extends TestHelper {
         Callable callable2 = new Callable(new MethodDeclaration());
         Variable returnVal = new Variable("test");
 
-        MockingRegistry.when("TestClass1", callable1, new MockingCall(returnVal));
-        MockingRegistry.when("TestClass2", callable2, new MockingCall(returnVal));
+        MockingRegistry.when("TestClass1", new MockingCall(callable1, returnVal));
+        MockingRegistry.when("TestClass2", new MockingCall(callable2, returnVal));
 
         List<MockingCall> result = MockingRegistry.getAllMocks();
 

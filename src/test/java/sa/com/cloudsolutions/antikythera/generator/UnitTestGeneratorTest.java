@@ -172,11 +172,65 @@ class UnitTestGeneratorTest {
         assertFalse(unitTestGenerator.gen.toString().contains("Author : Antikythera"));
 
         assertTrue(MockingRegistry.isMockTarget("java.util.zip.Adler32"));
+    }
 
+    @Test
+    void testApplyPreconditionsForOptionals() throws Exception {
+        // Reset MockingRegistry to ensure clean state
+        MockingRegistry.reset();
+        TestGenerator.whenThen.clear();
+
+        // Test case 1: Optional.empty()
+        // Create a Variable with Optional.empty()
+        Variable emptyOptionalVar = new Variable(Optional.empty());
+
+        // Create a MockingCall with the empty Optional
+        Method method = String.class.getDeclaredMethod("length");
+        Callable callable = new Callable(method);
+        MockingCall emptyOptionalCall = new MockingCall(callable, emptyOptionalVar);
+        emptyOptionalCall.setVariableName("mockString");
+
+        // Apply preconditions for the empty Optional
+        UnitTestGenerator.applyPreconditionsForOptionals(emptyOptionalCall);
+
+        // Verify that the whenThen list contains an expression for Optional.empty()
+        assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing empty Optional");
+        String whenThenString = TestGenerator.whenThen.get(0).toString();
+        assertTrue(whenThenString.contains("Optional.empty()"), 
+                "The whenThen expression should contain 'Optional.empty()' but was: " + whenThenString);
+
+        // Clear the whenThen list for the next test
+        TestGenerator.whenThen.clear();
+
+        // Test case 2: Optional with Evaluator
+        // Create a mock Evaluator
+        sa.com.cloudsolutions.antikythera.evaluator.Evaluator mockEvaluator = Mockito.mock(sa.com.cloudsolutions.antikythera.evaluator.Evaluator.class);
+        Mockito.when(mockEvaluator.getClassName()).thenReturn("TestClass");
+
+        // Create a Variable with Optional containing the Evaluator
+        Variable evaluatorOptionalVar = new Variable(Optional.of(mockEvaluator));
+
+        // Create a MockingCall with the Optional containing Evaluator
+        Method method2 = String.class.getDeclaredMethod("isEmpty");
+        Callable callable2 = new Callable(method2);
+        MockingCall evaluatorOptionalCall = new MockingCall(callable2, evaluatorOptionalVar);
+        evaluatorOptionalCall.setVariableName("mockString2");
+
+        // Apply preconditions for the Optional with Evaluator
+        UnitTestGenerator.applyPreconditionsForOptionals(evaluatorOptionalCall);
+
+        // Verify that mockEvaluator.getClassName() was called
+        Mockito.verify(mockEvaluator).getClassName();
+
+        // Verify that the whenThen list contains an expression for Optional.of(new TestClass())
+        assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing Optional with Evaluator");
+        whenThenString = TestGenerator.whenThen.get(0).toString();
+        assertTrue(whenThenString.contains("Optional.of(new TestClass())"), 
+                "The whenThen expression should contain 'Optional.of(new TestClass())' but was: " + whenThenString);
     }
 }
 
-class UnitTestGeneratorMoreTest {
+class UnitTestGeneratorMoreTests {
 
     @BeforeAll
     static void beforeClass() throws IOException {

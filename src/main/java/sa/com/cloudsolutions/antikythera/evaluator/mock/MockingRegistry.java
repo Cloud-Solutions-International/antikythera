@@ -30,6 +30,7 @@ import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,9 @@ import java.util.Map;
 
 import static org.mockito.Mockito.withSettings;
 
+/**
+ * Keep track of all the types that are being mocked internally while evaluating expressions.
+ */
 public class MockingRegistry {
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
     public static final String MOCKITO = "Mockito";
@@ -45,6 +49,10 @@ public class MockingRegistry {
 
     }
 
+    /**
+     * Mark a class as mocked.
+     * @param className the name of the class to mark as mocked
+     */
     public static void markAsMocked(String className) {
         mockedFields.put(className, new HashMap<>());
     }
@@ -57,11 +65,27 @@ public class MockingRegistry {
         mockedFields.clear();
     }
 
-    public static void when(String className, Callable callable, MockingCall then) {
+    /**
+     * Creates p 'Mockito.when().then()' style setup.
+     * This may or may not translate to a real Mockito call. That depends on the mocking framework
+     * being used.
+     *
+     * @param className the name of the class the mocked method belongs to.
+     * @param mockingCall represents the method being called and the mocked return value
+     */
+    public static void when(String className, MockingCall mockingCall) {
         Map<Callable, MockingCall> map = mockedFields.computeIfAbsent(className, k -> new HashMap<>());
-        map.put(callable, then);
+        map.put(mockingCall.getCallable(), mockingCall);
     }
 
+    /**
+     * Creates a mocked version of the given variable using mockito or byte buddy.
+     *
+     * @param variable This should be a part of a field declaration. The variable declared in the
+     *                 field will be mocked.
+     * @return a Variable representing the mocked object
+     * @throws ClassNotFoundException if the class cannot be found
+     */
     public static Variable mockIt(VariableDeclarator variable) throws ClassNotFoundException {
         String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
         Variable v;
@@ -106,6 +130,13 @@ public class MockingRegistry {
         return result;
     }
 
+    /**
+     * What value should be returned when the method is called.
+     * Intended for use my MethodInterceptor instances attached to dynamic classes.
+     * @param className the name of the class that is supposed to have been mocked.
+     * @param callable identifies the method for which a when/then has been set up.
+     * @return the MockingCall that was created for the method.
+     */
     public static MockingCall getThen(String className, Callable callable) {
         Map<Callable, MockingCall> map = mockedFields.get(className);
         if (map != null) {
@@ -114,20 +145,20 @@ public class MockingRegistry {
         return null;
     }
 
-
-    public static MethodCallExpr buildMockitoWhen(String name, String returnType, String variableName) {
-        return buildMockitoWhen(name, expressionFactory(returnType), variableName);
+    public static MethodCallExpr buildMockitoWhen(String methodName, String returnType, String variableName) {
+        return buildMockitoWhen(methodName, expressionFactory(returnType), variableName);
     }
 
-    public static MethodCallExpr buildMockitoWhen(String name, Expression returnValue, String variableName) {
+    public static MethodCallExpr buildMockitoWhen(String methodName, Expression returnValue, String scopeVariable) {
         MethodCallExpr mockitoWhen = new MethodCallExpr(
                 new NameExpr(MOCKITO),
                 "when"
         );
 
         MethodCallExpr methodCall = new MethodCallExpr()
-                .setScope(new NameExpr(variableName))
-                .setName(name);
+                .setScope(new NameExpr(scopeVariable))
+                .setName(methodName);
+
         mockitoWhen.setArguments(new NodeList<>(methodCall));
 
         MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
@@ -155,6 +186,22 @@ public class MockingRegistry {
         });
         return args;
     }
+    /**
+     * Adds arguments to the method call expression.
+     * These will typically be in the form of anyInt(), anyString(), etc. Operates via side effects
+     * @param m the method to add arguments for
+     * @param methodCall the method call expression to modify
+     */
+    public static void addArgumentsToWhen(Method m, MethodCallExpr methodCall) {
+        NodeList<Expression> args = new NodeList<>();
+        java.lang.reflect.Parameter[] parameters = m.getParameters();
+        for (java.lang.reflect.Parameter p : parameters) {
+            String typeName = p.getType().getSimpleName();
+            args.add(MockingRegistry.createMockitoArgument(typeName));
+        }
+        methodCall.setArguments(args);
+    }
+
 
     public static Expression expressionFactory(String qualifiedName) {
         if (qualifiedName == null) {
