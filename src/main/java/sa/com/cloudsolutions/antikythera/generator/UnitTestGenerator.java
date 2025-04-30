@@ -411,10 +411,10 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private static void applyPreconditionsForOptionals(MockingCall result) {
+    static void applyPreconditionsForOptionals(MockingCall result) {
         if (result.getVariable().getValue() instanceof Optional<?> value) {
             Callable callable = result.getCallable();
-            MethodCallExpr methodCall = null;
+            MethodCallExpr methodCall;
             if (value.isPresent()) {
                 Object o = value.get();
                 if (o instanceof Evaluator eval) {
