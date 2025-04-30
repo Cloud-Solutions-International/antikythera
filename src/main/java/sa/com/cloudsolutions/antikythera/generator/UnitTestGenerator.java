@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -28,6 +29,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.io.File;
@@ -401,6 +403,8 @@ public class UnitTestGenerator extends TestGenerator {
     private void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
             if (result.getVariable().getValue() instanceof Optional<?> value) {
+                Callable callable = result.getCallable();
+
                 if (value.isPresent()) {
                     Object o = value.get();
                     System.out.println(o);
@@ -408,9 +412,14 @@ public class UnitTestGenerator extends TestGenerator {
                 else {
                     // create an expression that represents Optional.empty()
                     Expression empty = StaticJavaParser.parseExpression("Optional.empty()");
-                    MethodCallExpr mce = MockingRegistry.buildMockitoWhen(
-                            result.getCallable().getNameAsString(), empty, result.getVariableName());
-
+                    MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(
+                            callable.getNameAsString(), empty, result.getVariableName());
+                    if (callable.isMethodDeclaration()) {
+                        NodeList<Expression> args = MockingRegistry.fakeArguments(callable.asMethodDeclaration());
+                        methodCall.setArguments(args);
+                    } else {
+                        MockingRegistry.addArgumentsToWhen(callable.getMethod(), methodCall);
+                    }
                 }
             }
         }

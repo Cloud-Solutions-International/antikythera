@@ -30,6 +30,7 @@ import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -144,19 +145,20 @@ public class MockingRegistry {
         return null;
     }
 
-    public static MethodCallExpr buildMockitoWhen(String name, String returnType, String variableName) {
-        return buildMockitoWhen(name, expressionFactory(returnType), variableName);
+    public static MethodCallExpr buildMockitoWhen(String methodName, String returnType, String variableName) {
+        return buildMockitoWhen(methodName, expressionFactory(returnType), variableName);
     }
 
-    public static MethodCallExpr buildMockitoWhen(String name, Expression returnValue, String variableName) {
+    public static MethodCallExpr buildMockitoWhen(String methodName, Expression returnValue, String scopeVariable) {
         MethodCallExpr mockitoWhen = new MethodCallExpr(
                 new NameExpr(MOCKITO),
                 "when"
         );
 
         MethodCallExpr methodCall = new MethodCallExpr()
-                .setScope(new NameExpr(variableName))
-                .setName(name);
+                .setScope(new NameExpr(scopeVariable))
+                .setName(methodName);
+
         mockitoWhen.setArguments(new NodeList<>(methodCall));
 
         MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
@@ -184,6 +186,22 @@ public class MockingRegistry {
         });
         return args;
     }
+    /**
+     * Adds arguments to the method call expression.
+     * These will typically be in the form of anyInt(), anyString(), etc. Operates via side effects
+     * @param m the method to add arguments for
+     * @param methodCall the method call expression to modify
+     */
+    public static void addArgumentsToWhen(Method m, MethodCallExpr methodCall) {
+        NodeList<Expression> args = new NodeList<>();
+        java.lang.reflect.Parameter[] parameters = m.getParameters();
+        for (java.lang.reflect.Parameter p : parameters) {
+            String typeName = p.getType().getSimpleName();
+            args.add(MockingRegistry.createMockitoArgument(typeName));
+        }
+        methodCall.setArguments(args);
+    }
+
 
     public static Expression expressionFactory(String qualifiedName) {
         if (qualifiedName == null) {
