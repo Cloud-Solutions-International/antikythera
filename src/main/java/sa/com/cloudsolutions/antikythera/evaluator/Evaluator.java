@@ -471,6 +471,7 @@ public class Evaluator {
      *    using the local symbol table.
      * @throws ReflectiveOperationException if a reflective operation failed
      */
+    @SuppressWarnings("java:S2259")
     Variable evaluateVariableDeclaration(Expression expr) throws ReflectiveOperationException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
         Variable v = null;
@@ -478,12 +479,16 @@ public class Evaluator {
             Optional<Expression> init = decl.getInitializer();
             if (init.isPresent()) {
                 v = initializeVariable(decl, init.get());
+                /*
+                 * this could raise a null pointer exception, that's fine with me. that means
+                 * some other code is misbehaving and this NPE will give a change to catch it
+                 */
                 v.setInitializer(init.get());
             }
             else {
                 /*
                  * No initializer. We need to create an entry in the symbol table. If the variable is
-                 * primitive we need to set the appropriate default value. Non primitives will be null
+                 * primitive, we need to set the appropriate default value. Non-primitives will be null
                  */
                 if (decl.getType().isPrimitiveType()) {
                     Object obj = Reflect.getDefault(decl.getType().asString());
@@ -1853,5 +1858,9 @@ public class Evaluator {
 
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
+    }
+
+    public TypeDeclaration<?> getTypeDeclaration() {
+        return typeDeclaration;
     }
 }

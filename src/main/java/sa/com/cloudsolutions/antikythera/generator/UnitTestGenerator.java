@@ -358,14 +358,28 @@ public class UnitTestGenerator extends TestGenerator {
                 varDecl.addVariable(v);
                 getBody(testMethod).addStatement(varDecl);
             } else {
-                addClassImports(paramType);
-                Variable value = argumentGenerator.getArguments().get(nameAsString);
-                if (value != null) {
-                    mocker.accept(param, value);
-                }
+                if (mockNonPrimitiveArgument(param, paramType, nameAsString)) return;
             }
         }
         applyPreconditions();
+    }
+
+    private boolean mockNonPrimitiveArgument(Parameter param, Type paramType, String nameAsString) {
+        addClassImports(paramType);
+        Variable value = argumentGenerator.getArguments().get(nameAsString);
+        if (value != null) {
+            if (value.getValue() instanceof Evaluator eval && eval.getTypeDeclaration() != null) {
+                if (eval.getTypeDeclaration().getAnnotations().stream().anyMatch(a ->
+                        a.getNameAsString().equals("Data") || a.getNameAsString().equals("Setter")
+                                || a.getNameAsString().equals("Getter"))) {
+
+                    mockWithEvaluator(param, value);
+                    return true;
+                }
+            }
+            mocker.accept(param, value);
+        }
+        return false;
     }
 
     private void mockWithEvaluator(Parameter param, Variable v) {
