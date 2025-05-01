@@ -23,6 +23,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -208,9 +209,9 @@ public class UnitTestGenerator extends TestGenerator {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
-
         createInstance();
         mockArguments();
+        applyPreconditions();
         addWhens();
         addDependencies();
         String invocation = invokeMethod();
@@ -331,6 +332,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     void mockArguments() {
+
         for (var param : methodUnderTest.getParameters()) {
             Type paramType = param.getType();
             String nameAsString = param.getNameAsString();
@@ -365,7 +367,6 @@ public class UnitTestGenerator extends TestGenerator {
                 }
             }
         }
-        applyPreconditions();
     }
 
     private void mockWithEvaluator(Parameter param, Variable v) {
@@ -401,11 +402,15 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (v.getValue() instanceof Evaluator eval) {
             for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
-                if (entry.getValue().getValue() != null && !entry.getKey().equals("serialVersionUID")) {
+                if (entry.getValue().getValue() != null && entry.getValue().getType() != null
+                        && entry.getValue().getType().isPrimitiveType()
+                        && !entry.getKey().equals("serialVersionUID")) {
+
+                    Object value = entry.getValue().getValue();
                     body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
                             nameAsString,
                             ClassProcessor.instanceToClassName(entry.getKey()),
-                            entry.getValue().getValue()));
+                            value instanceof Long ? value + "L" : value.toString()));
                 }
             }
         }

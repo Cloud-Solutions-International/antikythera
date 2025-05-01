@@ -6,6 +6,7 @@ import com.github.javaparser.ast.expr.CharLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
@@ -251,7 +252,8 @@ public class Reflect {
         }
 
         return switch (value.getClass().getSimpleName()) {
-            case INTEGER, "Long" -> new IntegerLiteralExpr(value.toString());
+            case INTEGER -> new IntegerLiteralExpr(value.toString());
+            case "Long" -> new LongLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
             case BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
             case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
@@ -290,7 +292,7 @@ public class Reflect {
         };
     }
 
-    private static Variable createVariable(Object initialValue, String typeName, String stringValue) {
+    public static Variable createVariable(Object initialValue, String typeName, String stringValue) {
         Variable v = new Variable(initialValue);
 
         switch (typeName) {

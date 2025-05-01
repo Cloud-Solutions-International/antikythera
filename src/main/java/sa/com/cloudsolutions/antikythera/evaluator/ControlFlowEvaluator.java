@@ -14,6 +14,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
@@ -135,7 +136,22 @@ public class ControlFlowEvaluator extends Evaluator{
             setter.addArgument("null");
         } else {
             if (entry.getValue().equals("T")) {
-                setter.addArgument("\"T\"");
+                MethodCallExpr mce = entry.getKey().asMethodCallExpr();
+                String value = "\"T\"";
+                if (mce.getScope().isPresent()) {
+                    Variable scopeVar = getValue(stmt, mce.getScope().orElseThrow().toString());
+                    if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
+                        Variable field = evaluator.fields.get(
+                                ClassProcessor.classToInstanceName(name.substring(3)));
+                        if (field != null && field.getClazz() != null) {
+                            Variable v = Reflect.variableFactory(field.getClazz().getName());
+                            if (v != null) {
+                                value = v.getInitializer().toString();
+                            }
+                        }
+                    }
+                }
+                setter.addArgument(value);
             } else {
                 setter.addArgument(entry.getValue().toString());
             }
