@@ -10,11 +10,14 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
@@ -45,26 +48,45 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return super.executeCallable(sc, callable);
         }
         else {
-            Method method = getMethod(callable);
-            Class<?> clazz = method.getReturnType();
-            if (Optional.class.equals(clazz)) {
-                return handleOptionals(sc);
-            }
-            else if (Object.class.equals(clazz)) {
-                if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
-                    return new Variable(Optional.of(sc.getVariable().getValue()));
-                }
-
-                Class<?> foundIn = callable.getFoundInClass();
-                if (foundIn != null) {
-                    Variable v = mockReturnFromBinaryParent(foundIn, method);
-                    if (v != null) {
-                        return v;
-                    }
-                }
-            }
-            return executeMethod(method);
+            return mockBinaryMethodExecution(sc, callable);
         }
+    }
+
+    private Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
+        Method method = getMethod(callable);
+
+        Class<?> clazz = method.getReturnType();
+        if (Optional.class.equals(clazz)) {
+            return handleOptionals(sc);
+        }
+        else if (Object.class.equals(clazz)) {
+            List<Variable> variables = new ArrayList<>();
+            for (int i = 0 ; i < method.getParameters().length ; i++) {
+                variables.add(AntikytheraRunTime.pop());
+            }
+
+            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+                if (method.getName().equals("save")) {
+                    MockingCall call = MockingRegistry.getThen(className, callable);
+                    if (call != null) {
+                        return call.getVariable();
+                    }
+                    MockingRegistry.when(className, new MockingCall(callable, variables.getFirst()));
+                    return variables.getFirst();
+                }
+                return mockFromTypeArguments(
+                        typeDeclaration.asClassOrInterfaceDeclaration().getExtendedTypes(0), method);
+            }
+
+            Class<?> foundIn = callable.getFoundInClass();
+            if (foundIn != null) {
+                Variable v = mockReturnFromBinaryParent(foundIn, method);
+                if (v != null) {
+                    return v;
+                }
+            }
+        }
+        return executeMethod(method);
     }
 
     private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {
