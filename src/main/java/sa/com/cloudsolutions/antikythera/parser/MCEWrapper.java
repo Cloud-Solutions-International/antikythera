@@ -68,10 +68,6 @@ public class MCEWrapper {
         return methodCallExpr;
     }
 
-    public void setMethodCallExpr(NodeWithArguments<?> methodCallExpr) {
-        this.methodCallExpr = methodCallExpr;
-    }
-
     @Override
     public String toString() {
         if (methodCallExpr != null) {
