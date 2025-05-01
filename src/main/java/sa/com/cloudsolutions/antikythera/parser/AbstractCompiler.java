@@ -23,6 +23,8 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -86,6 +88,8 @@ public class AbstractCompiler {
     protected static ClassLoader loader;
     protected CompilationUnit cu;
     protected String className;
+
+    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
@@ -329,7 +333,7 @@ public class AbstractCompiler {
      *      when no public type is found, null is returned.
      */
     public static TypeDeclaration<?> getPublicType(CompilationUnit cu) {
-        for (var type : cu.getTypes()) {
+        for (TypeDeclaration<?> type : cu.getTypes()) {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
                 return type;
             }
@@ -384,7 +388,7 @@ public class AbstractCompiler {
                 if (! (paramType.equals(argumentType)
                         || paramType.toString().equals("java.lang.Object")
                         || argumentType.getElementType().isUnknownType()
-                        || argumentType.toString().equals(Reflect.primitiveToWrapper(paramType.toString())))
+                        || argumentType.toString().equals(Reflect.primitiveToWrapper(paramType.toString()).getName()))
                 ) {
                     return Optional.empty();
                 }
@@ -427,8 +431,8 @@ public class AbstractCompiler {
          */
         if (cu == null) {
             try {
-                Class.forName("java.lang." + className);
-                return "java.lang." + className;
+                Class<?> c = Class.forName("java.lang." + className);
+                return c.getName();
             } catch (ClassNotFoundException e) {
                 /*
                  * dirty hack to handle an extreme edge case
@@ -777,29 +781,37 @@ public class AbstractCompiler {
                         return method;
                     }
                 } else {
-                    /*
-                     * the extended type is not in the same compilation unit, we will have to
-                     * load the class and try to find the method in it.
-                     */
                     ImportWrapper wrapper = findImport(cdecl.findCompilationUnit().orElseThrow(), extended.getNameAsString());
                     if (wrapper != null && wrapper.isExternal()) {
-                        try {
-                            Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
-                            ReflectionArguments reflectionArguments = new ReflectionArguments(
-                                    methodCall.getMethodName(), new Object[] {}, methodCall.getArgumentTypesAsClasses()
-                            );
-                            Method method = Reflect.findMethod(clazz, reflectionArguments);
-                            if (method != null) {
-                                return Optional.of(new Callable(method));
-                            }
-                        } catch (ClassNotFoundException e) {
-                            return Optional.empty();
-                        }
+                        return findCallableInBinaryCode(wrapper, methodCall);
                     }
                 }
             }
         }
 
+        return Optional.empty();
+    }
+
+    private static Optional<Callable> findCallableInBinaryCode(ImportWrapper wrapper, MCEWrapper methodCall) {
+        /*
+         * the extended type is not in the same compilation unit, we will have to
+         * load the class and try to find the method in it.
+         */
+        try {
+            Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
+            ReflectionArguments reflectionArguments = new ReflectionArguments(
+                    methodCall.getMethodName(), new Object[] {}, methodCall.getArgumentTypesAsClasses()
+            );
+            Method method = Reflect.findMethod(clazz, reflectionArguments);
+            if (method != null) {
+                Callable callable = new Callable(method);
+                callable.setFoundInClass(clazz);
+                return Optional.of(callable);
+            }
+        } catch (ClassNotFoundException e) {
+            // can ignore this one
+            logger.warn(e.getMessage());
+        }
         return Optional.empty();
     }
 

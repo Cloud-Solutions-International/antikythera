@@ -678,7 +678,7 @@ public class Evaluator {
      * Does not look at fields. You probably want to call getValue() instead.
      *
      * @param node the node representing the current expression.
-     *             It's primary purpose is to help identify the current block
+     *             Its primary purpose is to help identify the current block
      * @param name the name of the variable to look up
      * @return the Variable if it's found or null.
      */
@@ -1072,7 +1072,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
+    protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
 
         if (callable.isMethodDeclaration()) {
             MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
@@ -1101,7 +1101,7 @@ public class Evaluator {
         }
     }
 
-    private static Method getMethod(Callable callable) {
+    static Method getMethod(Callable callable) {
         return callable.getMethod();
     }
 

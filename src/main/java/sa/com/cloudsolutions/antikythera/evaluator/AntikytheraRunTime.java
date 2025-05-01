@@ -15,7 +15,7 @@ import java.util.TreeMap;
 /**
  * <p>A basic Runtime for Antikythera.</p>
  *
- * This class will be used to by the Evaluator to mimic a stack and keep track of
+ * This class will be used by the Evaluator to mimic a stack and keep track of
  * all the classes that we have compiled.
  */
 public class AntikytheraRunTime {

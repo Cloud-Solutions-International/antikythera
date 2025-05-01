@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 public class Callable {
     CallableDeclaration<?> callableDeclaration;
     Method method;
+    Class<?> foundInClass;
 
     public Callable(CallableDeclaration<?> callableDeclaration) {
         this.callableDeclaration = callableDeclaration;
@@ -53,14 +54,14 @@ public class Callable {
     }
 
     public MethodDeclaration asMethodDeclaration() {
-        if(isCallableDeclaration()) {
+        if (isCallableDeclaration()) {
             return callableDeclaration.asMethodDeclaration();
         }
         return null;
     }
 
     public String getNameAsString() {
-        if(isMethod()) {
+        if (isMethod()) {
             return method.getName();
         }
         if (callableDeclaration != null) {
@@ -91,5 +92,13 @@ public class Callable {
     @Override
     public String toString() {
         return getNameAsString();
+   }
+
+    public Class<?> getFoundInClass() {
+        return foundInClass;
+    }
+
+    public void setFoundInClass(Class<?> foundInClass) {
+        this.foundInClass = foundInClass;
     }
 }
