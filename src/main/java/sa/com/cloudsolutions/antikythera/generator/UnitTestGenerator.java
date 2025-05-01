@@ -12,6 +12,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -402,7 +403,9 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
-            applyRegistryCondition(result);
+            if (! result.isFromSetup()) {
+                applyRegistryCondition(result);
+            }
         }
 
         for (Precondition expr : preConditions) {
@@ -416,11 +419,12 @@ public class UnitTestGenerator extends TestGenerator {
         }
         else {
             Callable callable = result.getCallable();
-            MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(callable.getNameAsString(),
-                    result.getExpression(), result.getVariableName());
-            System.out.println("bb");
-        }
 
+            MethodCallExpr mce = (MethodCallExpr) callable.getMce().getMethodCallExpr();
+            Expression scope = mce.getScope().orElseThrow().asNameExpr();
+            MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(callable.getNameAsString(),
+                    mce.getArgument(0), scope.toString());
+        }
     }
 
     static void applyPreconditionsForOptionals(MockingCall result) {
