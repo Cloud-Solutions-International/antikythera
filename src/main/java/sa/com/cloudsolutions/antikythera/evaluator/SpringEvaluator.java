@@ -264,13 +264,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
-
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
-        }
-
-        if (currentConditional != null && currentConditional.getPreconditions() != null) {
-            currentConditional.getPreconditions().clear();
         }
     }
 
