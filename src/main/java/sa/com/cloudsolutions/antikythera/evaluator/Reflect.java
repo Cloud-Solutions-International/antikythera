@@ -313,6 +313,9 @@ public class Reflect {
                 v.setInitializer(expr);
             }
         }
+        if (v.getType() == null) {
+            v.setType(new ClassOrInterfaceType().setName(typeName));
+        }
         return v;
     }
 
