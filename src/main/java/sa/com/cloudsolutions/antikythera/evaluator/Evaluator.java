@@ -1116,8 +1116,8 @@ public class Evaluator {
      * That means the method being called is a member of the current class or a parent of the current class.
      * @param methodCallWrapper the method call expression to be executed
      * @return a Variable containing the result of the method call
-     * @throws AntikytheraException if there are parsing related errors
-     * @throws ReflectiveOperationException if there are reflection related errors
+     * @throws AntikytheraException if there are parsing-related errors
+     * @throws ReflectiveOperationException if there are reflection-related errors
      */
     @SuppressWarnings("unchecked")
     public Variable executeLocalMethod(MCEWrapper methodCallWrapper) throws ReflectiveOperationException {
@@ -1149,7 +1149,7 @@ public class Evaluator {
         return null;
     }
 
-    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) {
         if (methodCall.getNameAsString().startsWith("get") && (
                 c.getAnnotationByName("Data").isPresent()
                         || c.getAnnotationByName("Getter").isPresent())) {
@@ -1164,8 +1164,8 @@ public class Evaluator {
             String field = ClassProcessor.classToInstanceName(
                     methodCall.getNameAsString().replace("set","")
             );
-            Expression arg = methodCall.getArguments().get(0);
-            fields.put(field, evaluateExpression(arg));
+            Variable va = AntikytheraRunTime.pop();
+            fields.put(field, va);
             return new Variable(getValue(methodCall, field).getValue());
         }
 

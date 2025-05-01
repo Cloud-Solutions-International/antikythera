@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -145,7 +144,7 @@ public class UnitTestGenerator extends TestGenerator {
      * <p>Loads a base class that is common to all generated test classes.</p>
      * <p>
      * Provided that an entry called base_test_class exists in the settings file and the source for
-     * that class can be found it will be loaded. If such an entry does not exist and the test suite
+     * that class can be found, it will be loaded. If such an entry does not exist and the test suite
      * had previously been generated, we will check the extended types of the test class.
      *
      * @param testClass the declaration of the test suite being built

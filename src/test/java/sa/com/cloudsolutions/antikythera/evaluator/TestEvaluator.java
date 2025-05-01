@@ -48,100 +48,85 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateExpressionReturnsIntegerLiteral() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
-        Expression expr = new IntegerLiteralExpr(42);
-        Variable result = evaluator.evaluateExpression(expr);
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
+        Expression expr = new IntegerLiteralExpr("42");
+        Variable result = eval.evaluateExpression(expr);
         assertEquals(42, result.getValue());
     }
 
     @Test
     void evaluateExpressionReturnsStringLiteral() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
         Expression expr = new StringLiteralExpr("test");
-        Variable result = evaluator.evaluateExpression(expr);
+        Variable result = eval.evaluateExpression(expr);
         assertEquals("test", result.getValue());
     }
 
     @Test
     void evaluateExpressionReturnsVariableValue() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
         Variable expected = new Variable(42);
-        evaluator.setLocal(new IntegerLiteralExpr(42), "testVar", expected);
+        eval.setLocal(new IntegerLiteralExpr("42"), "testVar", expected);
         Expression expr = new NameExpr("testVar");
-        Variable result = evaluator.evaluateExpression(expr);
+        Variable result = eval.evaluateExpression(expr);
         assertEquals(expected, result);
     }
 
     @Test
     void evaluateBinaryExpression() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
-        Variable result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
+        Variable result = eval.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new IntegerLiteralExpr("40"), new IntegerLiteralExpr("2"));
         assertEquals(42, result.getValue());
 
-        result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
+        result = eval.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new DoubleLiteralExpr("1.0"), new DoubleLiteralExpr("2.0"));
         assertEquals(3.0, result.getValue());
 
-        result = evaluator.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
+        result = eval.evaluateBinaryExpression(BinaryExpr.Operator.PLUS,
                 new StringLiteralExpr("40"), new StringLiteralExpr("2.0"));
         assertEquals("402.0", result.getValue());
     }
 
     @Test
     void evaluateMethodCallPrintsToSystemOut() throws AntikytheraException, ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));
         MethodCallExpr methodCall = new MethodCallExpr(new FieldAccessExpr(new NameExpr("System"), "out"),
                 "println", NodeList.nodeList(new StringLiteralExpr("Hello World")));
-        evaluator.evaluateMethodCall(methodCall);
+        eval.evaluateMethodCall(methodCall);
         assertTrue(outContent.toString().contains("Hello World"));
         System.setOut(System.out);
     }
 
     @Test
     void executeViaDataAnnotation() throws ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
-
-        // Create a class declaration with @Data annotation
-        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration()
-            .addAnnotation("Data")
-            .setName("TestClass");
-
-
-        annotationHelper(evaluator, classDecl);
+        evaluator.getCompilationUnit().getType(0).addAnnotation("Data");
+        annotationHelper();
     }
 
     @Test
     void executeViaGetterSetterAnnotation() throws ReflectiveOperationException {
-        Evaluator evaluator = EvaluatorFactory.create("", Evaluator.class);
-
-        // Create a class declaration with @Data annotation
-        ClassOrInterfaceDeclaration classDecl = new ClassOrInterfaceDeclaration()
-                .addAnnotation("Setter").addAnnotation("Getter")
-                .setName("TestClass");
-
-
-        annotationHelper(evaluator, classDecl);
+        evaluator.getCompilationUnit().getType(0).addAnnotation("Getter");
+        evaluator.getCompilationUnit().getType(0).addAnnotation("Setter");
+        annotationHelper();
     }
 
-    private static void annotationHelper(Evaluator evaluator, ClassOrInterfaceDeclaration classDecl) throws ReflectiveOperationException {
+    private void annotationHelper() throws ReflectiveOperationException {
         MethodCallExpr getterCall = new MethodCallExpr()
-            .setName("getName");
+            .setName("getNumber");
 
-        Variable nameVar = new Variable("test value");
-        evaluator.getFields().put("name", nameVar);
-
-        Variable result = evaluator.executeViaDataAnnotation(classDecl, getterCall);
-        assertEquals("test value", result.getValue());
+        Variable result = evaluator.evaluateMethodCall(getterCall);
+        assertEquals(42, result.getValue());
 
         MethodCallExpr setterCall = new MethodCallExpr()
-            .setName("setName")
-            .addArgument(new StringLiteralExpr("new value"));
+            .setName("setNumber")
+            .addArgument(new IntegerLiteralExpr("43"));
 
-        evaluator.executeViaDataAnnotation(classDecl, setterCall);
-        assertEquals("new value", evaluator.getFields().get("name").getValue());
+        evaluator.evaluateMethodCall(setterCall);
+        result = evaluator.evaluateMethodCall(getterCall);
+        assertEquals(43, result.getValue());
     }
 
     @Test
