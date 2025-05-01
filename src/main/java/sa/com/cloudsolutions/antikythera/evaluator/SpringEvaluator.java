@@ -507,14 +507,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
-                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
-                } else if (MockingRegistry.isMockTarget(resolvedClass)) {
+                if (MockingRegistry.isMockTarget(resolvedClass)) {
                     try {
                         v = MockingRegistry.mockIt(variable);
                     } catch (ClassNotFoundException e) {
                         throw new AntikytheraException(e);
                     }
+                } else if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
+                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
                 } else {
                     v = wireFromByteCode(resolvedClass);
                 }

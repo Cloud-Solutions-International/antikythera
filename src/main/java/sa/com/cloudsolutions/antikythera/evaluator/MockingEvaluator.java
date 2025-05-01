@@ -55,29 +55,43 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             else if (Object.class.equals(clazz)) {
                 Class<?> foundIn = callable.getFoundInClass();
                 if (foundIn != null) {
-                    TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, className).orElseThrow();
-                    if (t instanceof ClassOrInterfaceDeclaration cdecl) {
-                        for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
-                            if (foundIn.getName().equals(parent.getName().asString())  || foundIn.getSimpleName().equals(parent.getName().asString())) {
-                                Optional<NodeList<Type>> o = parent.getTypeArguments();
-                                if (o.isPresent()) {
-                                    Type r = o.get().getFirst().orElseThrow();
-                                    String fullName = AbstractCompiler.findFullyQualifiedName(cu, r.toString());
-                                    if (fullName != null) {
-                                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                                        if (cu != null) {
-                                            return new Variable(EvaluatorFactory.create(fullName, this));
-                                        }
-                                        return mockExecution(method, r.toString());
-                                    }
-                                }
-                            }
-                        }
+                    Variable v = mockReturnFromBinaryParent(foundIn, method);
+                    if (v != null) {
+                        return v;
                     }
                 }
             }
             return executeMethod(method);
         }
+    }
+
+    private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {
+        TypeDeclaration<?> t = AbstractCompiler.getMatchingType(cu, className).orElseThrow();
+        if (! t.isClassOrInterfaceDeclaration()) {
+            return null;
+        }
+
+        ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
+        for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
+            if ( parent.getTypeArguments().isPresent() &&
+                    (foundIn.getName().equals(parent.getName().asString())
+                            || foundIn.getSimpleName().equals(parent.getName().asString()))) {
+
+
+                Type r = parent.getTypeArguments().orElseThrow().getFirst().orElseThrow();
+                String fullName = AbstractCompiler.findFullyQualifiedName(cu, r.toString());
+                if (fullName != null) {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
+                    if (cu != null) {
+                        return new Variable(EvaluatorFactory.create(fullName, Evaluator.class));
+                    }
+                    return mockExecution(method, r.toString());
+                }
+
+            }
+        }
+
+        return null;
     }
 
     /**
