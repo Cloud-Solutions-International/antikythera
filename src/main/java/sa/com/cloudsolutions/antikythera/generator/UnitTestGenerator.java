@@ -402,12 +402,25 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
-            applyPreconditionsForOptionals(result);
+            applyRegistryCondition(result);
         }
 
         for (Precondition expr : preConditions) {
             applyPrecondition.accept(expr.getExpression());
         }
+    }
+
+    static void applyRegistryCondition(MockingCall result) {
+        if (result.getVariable().getValue() instanceof Optional<?>) {
+            applyPreconditionsForOptionals(result);
+        }
+        else {
+            Callable callable = result.getCallable();
+            MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(callable.getNameAsString(),
+                    result.getExpression(), result.getVariableName());
+            System.out.println("bb");
+        }
+
     }
 
     static void applyPreconditionsForOptionals(MockingCall result) {
