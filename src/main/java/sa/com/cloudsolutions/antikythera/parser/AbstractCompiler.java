@@ -702,7 +702,7 @@ public class AbstractCompiler {
             ConstructorDeclaration constructor = constructors.get(i);
             Optional<CallableDeclaration<?>> callable = matchCallable(methodCall.getArgumentTypes(), constructor);
             if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
-                return Optional.of(new Callable(md));
+                return Optional.of(new Callable(md, methodCall));
             }
             if (methodCall.getArgumentTypes() != null &&
                     constructor.getParameters().size() == methodCall.getArgumentTypes().size()) {
@@ -719,7 +719,7 @@ public class AbstractCompiler {
         }
 
         if (found != -1 && occurs == 1) {
-            return Optional.of(new Callable(constructors.get(found)));
+            return Optional.of(new Callable(constructors.get(found), methodCall));
         }
         return Optional.empty();
     }
@@ -743,7 +743,7 @@ public class AbstractCompiler {
                 if (methodCall.getArgumentTypes() != null) {
                     Optional<CallableDeclaration<?>> callable = matchCallable(methodCall.getArgumentTypes(), method);
                     if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
-                        return Optional.of(new Callable(md));
+                        return Optional.of(new Callable(md, methodCall));
                     }
                 }
                 if (method.getParameters().size() == mce.getArguments().size()) {
@@ -760,7 +760,7 @@ public class AbstractCompiler {
             }
 
             if (found != -1 && occurs == 1) {
-                return Optional.of(new Callable(methodsByName.get(found)));
+                return Optional.of(new Callable(methodsByName.get(found), methodCall));
             }
         }
 
@@ -804,7 +804,7 @@ public class AbstractCompiler {
             );
             Method method = Reflect.findMethod(clazz, reflectionArguments);
             if (method != null) {
-                Callable callable = new Callable(method);
+                Callable callable = new Callable(method, methodCall);
                 callable.setFoundInClass(clazz);
                 return Optional.of(callable);
             }

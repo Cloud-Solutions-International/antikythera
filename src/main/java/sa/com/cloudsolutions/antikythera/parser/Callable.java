@@ -31,12 +31,14 @@ public class Callable {
      * criteria that resulted in this instance being created.
      */
     MCEWrapper mce;
-    public Callable(CallableDeclaration<?> callableDeclaration) {
+    public Callable(CallableDeclaration<?> callableDeclaration, MCEWrapper mce) {
         this.callableDeclaration = callableDeclaration;
+        this.mce = mce;
     }
 
-    public Callable(Method method) {
+    public Callable(Method method, MCEWrapper mce) {
         this.method = method;
+        this.mce = mce;
     }
 
     protected Callable() {
