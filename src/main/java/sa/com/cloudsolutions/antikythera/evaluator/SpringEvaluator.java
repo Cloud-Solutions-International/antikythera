@@ -267,6 +267,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
         }
+
+        if (currentConditional != null && currentConditional.getPreconditions() != null) {
+            currentConditional.getPreconditions().clear();
+        }
     }
 
     /**
