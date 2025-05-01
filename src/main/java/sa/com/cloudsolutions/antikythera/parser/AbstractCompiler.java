@@ -252,22 +252,21 @@ public class AbstractCompiler {
      * @return the name of the parameter
      */
     public static String getRestParameterName(Parameter param) {
-        String paramString = String.valueOf(param);
-        if(paramString.startsWith("@PathVariable")) {
-            Optional<AnnotationExpr> ann = param.getAnnotations().stream().findFirst();
-            if(ann.isPresent()) {
-                if(ann.get().isSingleMemberAnnotationExpr()) {
-                    return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
-                }
-                if(ann.get().isNormalAnnotationExpr()) {
-                    for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                        if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
-                            return pair.getValue().toString().replace("\"", "");
-                        }
+        Optional<AnnotationExpr> ann = param.getAnnotationByName("PathVariable");
+
+        if(ann.isPresent()) {
+            if(ann.get().isSingleMemberAnnotationExpr()) {
+                return ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+            }
+            if(ann.get().isNormalAnnotationExpr()) {
+                for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("value") || pair.getNameAsString().equals("name")) {
+                        return pair.getValue().toString().replace("\"", "");
                     }
                 }
             }
         }
+
         return param.getNameAsString();
     }
 
