@@ -1,9 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
@@ -11,7 +8,6 @@ import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import static org.mockito.Mockito.withSettings;
@@ -52,22 +48,9 @@ public class MockReturnValueHandler implements Answer<Object> {
                         mockName.substring(1);
 
                 if (!mockName.equals("traceable")) {
-                    MethodCallExpr whenExpr = new MethodCallExpr(
-                            new NameExpr("Mockito"),
-                            "when"
-                    );
 
-                    MethodCallExpr methodCall = new MethodCallExpr()
-                            .setScope(new NameExpr(mockName))
-                            .setName(invocation.getMethod().getName());
-
+                    MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(invocation.getMethod().getName(),clsName,mockName);
                     methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(invocation.getMethod()));
-
-                    whenExpr.setArguments(new NodeList<>(methodCall));
-                    MethodCallExpr thenReturn = new MethodCallExpr(whenExpr, "thenReturn")
-                            .setArguments(new NodeList<>(MockingRegistry.expressionFactory(clsName)));
-
-                    TestGenerator.addWhenThen(thenReturn);
                 }
             } catch (Exception ex) {
                 logger.warn(ex.getMessage());
