@@ -23,7 +23,6 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
-import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -547,7 +546,9 @@ public class UnitTestGenerator extends TestGenerator {
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
         before.setJavadocComment("Author : Antikythera");
         for (TypeDeclaration<?> t : gen.getTypes()) {
-            t.addMember(before);
+            if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("setUp")).isEmpty()) {
+                t.addMember(before);
+            }
         }
     }
 
