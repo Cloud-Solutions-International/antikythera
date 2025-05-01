@@ -61,12 +61,7 @@ public class MockReturnValueHandler implements Answer<Object> {
                             .setScope(new NameExpr(mockName))
                             .setName(invocation.getMethod().getName());
 
-                    // Add matchers for parameters
-                    NodeList<Expression> args = new NodeList<>();
-                    for (Class<?> paramType : invocation.getMethod().getParameterTypes()) {
-                        args.add(createMatcher(paramType));
-                    }
-                    methodCall.setArguments(args);
+                    methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(invocation.getMethod()));
 
                     whenExpr.setArguments(new NodeList<>(methodCall));
                     MethodCallExpr thenReturn = new MethodCallExpr(whenExpr, "thenReturn")
@@ -78,19 +73,6 @@ public class MockReturnValueHandler implements Answer<Object> {
                 logger.warn(ex.getMessage());
             }
         }
-    }
-
-    private MethodCallExpr createMatcher(Class<?> paramType) {
-        String matcherName = switch (paramType.getName()) {
-            case "java.lang.String" -> "anyString";
-            case "int", "java.lang.Integer" -> "anyInt";
-            case "long", "java.lang.Long" -> "anyLong";
-            case "double", "java.lang.Double" -> "anyDouble";
-            case "boolean", "java.lang.Boolean" -> "anyBoolean";
-            default -> "any";
-        };
-
-        return new MethodCallExpr(new NameExpr("Mockito"), matcherName);
     }
 }
 

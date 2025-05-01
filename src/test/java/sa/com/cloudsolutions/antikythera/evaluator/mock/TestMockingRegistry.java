@@ -23,6 +23,7 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -104,7 +105,7 @@ class TestMockingRegistry extends TestHelper {
     }
 
     @Test
-    void testMockItWithMockito() throws ClassNotFoundException {
+    void testMockItWithMockito() throws Exception {
         // Setup
         MockingRegistry.reset();
         Settings.setProperty(Settings.MOCK_WITH_INTERNAL, "Mockito");
@@ -114,10 +115,16 @@ class TestMockingRegistry extends TestHelper {
 
         Variable result = MockingRegistry.mockIt(variableDeclarator);
 
+        // Verify the initial mock
         assertNotNull(result);
         assertEquals(ObjectMapper.class, result.getClazz());
-
-        assertNotNull(result);
         assertTrue(Mockito.mockingDetails(result.getValue()).isMock());
+
+        // Call createParser() using reflection and verify its return value is also a mock
+        Method createParser = ObjectMapper.class.getMethod("createParser", String.class);
+        Object parser = createParser.invoke(result.getValue(), "test");
+
+        assertNotNull(parser);
+        assertTrue(Mockito.mockingDetails(parser).isMock());
     }
 }

@@ -186,20 +186,15 @@ public class MockingRegistry {
         });
         return args;
     }
-    /**
-     * Adds arguments to the method call expression.
-     * These will typically be in the form of anyInt(), anyString(), etc. Operates via side effects
-     * @param m the method to add arguments for
-     * @param methodCall the method call expression to modify
-     */
-    public static void addArgumentsToWhen(Method m, MethodCallExpr methodCall) {
+
+    public static NodeList<Expression> generateArgumentsForWhen(Method m) {
         NodeList<Expression> args = new NodeList<>();
         java.lang.reflect.Parameter[] parameters = m.getParameters();
         for (java.lang.reflect.Parameter p : parameters) {
             String typeName = p.getType().getSimpleName();
             args.add(MockingRegistry.createMockitoArgument(typeName));
         }
-        methodCall.setArguments(args);
+        return args;
     }
 
 

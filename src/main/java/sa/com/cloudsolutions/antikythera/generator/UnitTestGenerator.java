@@ -433,10 +433,9 @@ public class UnitTestGenerator extends TestGenerator {
                         callable.getNameAsString(), empty, result.getVariableName());
             }
             if (callable.isMethodDeclaration()) {
-                NodeList<Expression> args = MockingRegistry.fakeArguments(callable.asMethodDeclaration());
-                methodCall.setArguments(args);
+                methodCall.setArguments(MockingRegistry.fakeArguments(callable.asMethodDeclaration()));
             } else {
-                MockingRegistry.addArgumentsToWhen(callable.getMethod(), methodCall);
+                methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(callable.getMethod()));
             }
         }
     }
