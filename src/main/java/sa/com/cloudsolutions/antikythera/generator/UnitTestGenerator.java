@@ -358,28 +358,14 @@ public class UnitTestGenerator extends TestGenerator {
                 varDecl.addVariable(v);
                 getBody(testMethod).addStatement(varDecl);
             } else {
-                if (mockNonPrimitiveArgument(param, paramType, nameAsString)) return;
+                addClassImports(paramType);
+                Variable value = argumentGenerator.getArguments().get(nameAsString);
+                if (value != null) {
+                    mocker.accept(param, value);
+                }
             }
         }
         applyPreconditions();
-    }
-
-    private boolean mockNonPrimitiveArgument(Parameter param, Type paramType, String nameAsString) {
-        addClassImports(paramType);
-        Variable value = argumentGenerator.getArguments().get(nameAsString);
-        if (value != null) {
-            if (value.getValue() instanceof Evaluator eval && eval.getTypeDeclaration() != null) {
-                if (eval.getTypeDeclaration().getAnnotations().stream().anyMatch(a ->
-                        a.getNameAsString().equals("Data") || a.getNameAsString().equals("Setter")
-                                || a.getNameAsString().equals("Getter"))) {
-
-                    mockWithEvaluator(param, value);
-                    return true;
-                }
-            }
-            mocker.accept(param, value);
-        }
-        return false;
     }
 
     private void mockWithEvaluator(Parameter param, Variable v) {
@@ -411,6 +397,17 @@ public class UnitTestGenerator extends TestGenerator {
         } else {
             body.addStatement(param.getTypeAsString() + " " + nameAsString +
                     " = Mockito.mock(" + param.getTypeAsString() + ".class);");
+        }
+
+        if (v.getValue() instanceof Evaluator eval) {
+            for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
+                if (entry.getValue().getValue() != null && !entry.getKey().equals("serialVersionUID")) {
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(entry.getKey()),
+                            entry.getValue().getValue()));
+                }
+            }
         }
     }
 
