@@ -58,7 +58,6 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -114,6 +113,8 @@ public class Evaluator {
 
     protected String variableName;
 
+    protected TypeDeclaration<?> typeDeclaration;
+
     protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
@@ -123,6 +124,9 @@ public class Evaluator {
         this();
         this.className = context.getClassName();
         cu = AntikytheraRunTime.getCompilationUnit(className);
+        if (cu != null) {
+            typeDeclaration = AbstractCompiler.getMatchingType(cu, className).orElseThrow();
+        }
         Finch.loadFinches();
     }
 
@@ -364,9 +368,9 @@ public class Evaluator {
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep)  {
-        Optional<TypeDeclaration<?>> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (typeDeclaration.isPresent()) {
-            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.get().getFieldByName(fae.getNameAsString());
+        Optional<TypeDeclaration<?>> td = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
+        if (td.isPresent()) {
+            Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
 
             if (fieldDeclaration.isPresent()) {
                 FieldDeclaration field = fieldDeclaration.get();
@@ -1689,7 +1693,7 @@ public class Evaluator {
                     setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
                     executeBlock(clause.getBody().getStatements());
                     if(t.getFinallyBlock().isPresent()) {
-                        executeBlock(t.getFinallyBlock().get().getStatements());
+                        executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
                     }
                     matched = true;
                     break;
@@ -1715,13 +1719,13 @@ public class Evaluator {
 
     public void setupFields()  {
         cu.accept(new LazyFieldVisitor(className), null);
-        processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "LazyFieldVisitor");
+        processParentClasses(typeDeclaration, "LazyFieldVisitor");
 
     }
 
     public void initializeFields() {
         cu.accept(new FieldVisitor(className), null);
-        processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "FieldVisitor");
+        processParentClasses(typeDeclaration, "FieldVisitor");
     }
 
     public String getClassName() {
