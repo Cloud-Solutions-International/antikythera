@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
@@ -7,6 +8,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -71,7 +73,15 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                     if (call != null) {
                         return call.getVariable();
                     }
-                    MockingRegistry.when(className, new MockingCall(callable, variables.getFirst()));
+                    MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
+                    MethodCallExpr mce = StaticJavaParser.parseExpression(
+                        String.format(
+                                "Mockito.when(%s.save(any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                                variableName)
+                    );
+                    mockingCall.setExpression(mce);
+
+                    MockingRegistry.when(className, mockingCall);
                     return variables.getFirst();
                 }
                 return mockFromTypeArguments(

@@ -12,7 +12,6 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -418,12 +417,9 @@ public class UnitTestGenerator extends TestGenerator {
             applyPreconditionsForOptionals(result);
         }
         else {
-            Callable callable = result.getCallable();
-
-            MethodCallExpr mce = (MethodCallExpr) callable.getMce().getMethodCallExpr();
-            Expression scope = mce.getScope().orElseThrow().asNameExpr();
-            MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(callable.getNameAsString(),
-                    mce.getArgument(0), scope.toString());
+            if (result.getExpression() != null) {
+                addWhenThen(result.getExpression());
+            }
         }
     }
 
