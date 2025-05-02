@@ -69,9 +69,11 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
 
         FPEvaluator<?> fp = createEvaluator(md);
         fp.enclosure = enclosure;
+
         fp.expr = lambda;
         Variable v = new Variable(fp);
         v.setType(fp.getType());
+
         return v;
     }
 

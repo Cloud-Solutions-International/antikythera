@@ -947,17 +947,18 @@ public class Evaluator {
                  * presence of an import, a class from same package or this is part of java.lang package
                  * or a Static import
                  */
-                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, expr.getNameAsString());
-                Class<?> clazz = getClass(fullyQualifiedName);
-                if (clazz != null) {
-                    v = new Variable(clazz);
-                    v.setClazz(clazz);
-                }
-                else {
-                    Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
-                    eval.setupFields();
-                    eval.initializeFields();
-                    v = new Variable(eval);
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, expr.getNameAsString());
+                if (wrapper != null) {
+                    Class<?> clazz = wrapper.getCls();
+                    if (clazz != null) {
+                        v = new Variable(clazz);
+                        v.setClazz(clazz);
+                    } else {
+                        Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
+                        eval.setupFields();
+                        eval.initializeFields();
+                        v = new Variable(eval);
+                    }
                 }
             }
 
