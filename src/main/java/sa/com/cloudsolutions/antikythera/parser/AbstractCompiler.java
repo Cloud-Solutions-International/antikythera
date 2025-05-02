@@ -110,7 +110,7 @@ public class AbstractCompiler {
             jarFiles.add(s);
             urls.add(Paths.get(s).toUri().toURL());
         }
-        for (String s : Antikythera.getInstance().getJarPaths()) {
+        for (String s : MavenHelper.getJarPaths()) {
             jarFiles.add(s);
             urls.add(Paths.get(s).toUri().toURL());
         }
