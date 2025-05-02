@@ -710,7 +710,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         Variable variable = Reflect.variableFactory(fullyQualifiedName);
                         if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
                             for (int i = 0; i < 10; i++) {
-                                Variable row = createObject(stmt, v, objectCreationExpr);
+                                Variable row = createObject(stmt, objectCreationExpr);
                                 if (SpringEvaluator.resultToEntity(row, rs)) {
                                     ((Collection) variable.getValue()).add(row);
                                 } else {
@@ -722,7 +722,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     }
                 } else {
                     ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
-                    Variable row = createObject(stmt, v, objectCreationExpr);
+                    Variable row = createObject(stmt, objectCreationExpr);
                     if (SpringEvaluator.resultToEntity(row, rs)) {
                         return row;
                     } else {
@@ -777,8 +777,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
-        Variable v = super.createObject(instructionPointer, decl, oce);
+    Variable createObject(Node instructionPointer, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = super.createObject(instructionPointer, oce);
         ClassOrInterfaceType type = oce.getType();
         if (type.toString().contains("ResponseEntity")) {
             MethodResponse response = new MethodResponse(v);

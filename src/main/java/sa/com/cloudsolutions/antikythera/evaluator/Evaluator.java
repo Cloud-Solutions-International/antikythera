@@ -192,7 +192,7 @@ public class Evaluator {
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
-            return createObject(expr, null, expr.asObjectCreationExpr());
+            return createObject(expr, expr.asObjectCreationExpr());
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
@@ -532,7 +532,7 @@ public class Evaluator {
         if (init.isMethodCallExpr()) {
             v = evaluateMethodCall(init.asMethodCallExpr());
         } else if (init.isObjectCreationExpr()) {
-            v = createObject(init, decl, init.asObjectCreationExpr());
+            v = createObject(init, init.asObjectCreationExpr());
         } else if (init.isLambdaExpr()) {
             v = FPEvaluator.create(init.asLambdaExpr(), this);
         } else {
@@ -553,37 +553,21 @@ public class Evaluator {
      * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
      *                           We recursively fetch it's parent until we reach the start of the block. This is
      *                           needed because local variables are local to a block rather than a method.
-     * @param decl  The variable declaration. Pass null here if you don't want to create local variable.
-     *              This would typically be the case if you have a method call and one of the arguments
-     *              to the method call is a new instance.
      * @param oce The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
-    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws ReflectiveOperationException {
+    Variable createObject(Node instructionPointer, ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
         TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
         if (wrapper == null) {
             return null;
         }
-        if (decl == null) {
-            Node parent = oce.getParentNode().orElse(null);
-            if (parent instanceof VariableDeclarator vd) {
-                decl = vd;
-            }
-        }
+
         if (wrapper.getType() != null) {
-            Variable vx = createUsingEvaluator(wrapper.getType(), oce);
-            if (decl != null) {
-                setLocal(instructionPointer, decl.getNameAsString(), vx);
-            }
-            return vx;
+            return createUsingEvaluator(wrapper.getType(), oce);
         }
         if (wrapper.getCls() != null) {
-            Variable vx = createUsingReflection(wrapper.getCls(), oce);
-            if (decl != null) {
-                setLocal(instructionPointer, decl.getNameAsString(), vx);
-            }
-            return vx;
+            return createUsingReflection(wrapper.getCls(), oce);
         }
         return null;
     }
@@ -595,7 +579,7 @@ public class Evaluator {
     private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce) throws ReflectiveOperationException {
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
-            anonymousOverrides(match, oce, eval);
+            anonymousOverrides(match, oce);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
                 return new Variable(eval);
@@ -648,17 +632,13 @@ public class Evaluator {
         return mce;
     }
 
-    private static void anonymousOverrides(TypeDeclaration<?> type, ObjectCreationExpr oce, Evaluator eval) {
+    private static void anonymousOverrides(TypeDeclaration<?> type, ObjectCreationExpr oce) {
 
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
-        if (anonymousClassBody.isPresent()) {
-            /*
-             * Merge the anon class stuff into the parent
-             */
-            CompilationUnit cu = eval.getCompilationUnit().clone();
-            eval.setCompilationUnit(cu);
-            injectMethods(type, anonymousClassBody.get());
-        }
+        /*
+         * Merge the anon class stuff into the parent
+         */
+        anonymousClassBody.ifPresent(bodyDeclarations -> injectMethods(type, bodyDeclarations));
     }
 
     private static void injectMethods(TypeDeclaration<?> match, NodeList<BodyDeclaration<?>> anonymousClassBody) {
@@ -1376,7 +1356,7 @@ public class Evaluator {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
-                Variable v = createObject(variable, variable, init.get().asObjectCreationExpr());
+                Variable v = createObject(variable, init.get().asObjectCreationExpr());
                 v.setType(variable.getType());
                 return v;
             }
@@ -1671,7 +1651,7 @@ public class Evaluator {
         ThrowStmt t = stmt.asThrowStmt();
         if (t.getExpression().isObjectCreationExpr()) {
             ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
-            Variable v = createObject(stmt, null, oce);
+            Variable v = createObject(stmt, oce);
             if (v.getValue() instanceof Exception ex) {
                 throw ex;
             } else  {
