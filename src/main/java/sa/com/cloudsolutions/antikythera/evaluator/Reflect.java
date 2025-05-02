@@ -359,7 +359,7 @@ public class Reflect {
                 Variable v = new Variable(arr);
                 v.setInitializer(new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(STRING))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr(new NodeList<>(new StringLiteralExpr(ANTIKYTHERA)))));
                 yield v;
             }
             case INTEGER, JAVA_LANG_INTEGER -> {

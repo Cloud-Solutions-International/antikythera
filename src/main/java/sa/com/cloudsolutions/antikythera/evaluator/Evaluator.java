@@ -60,7 +60,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -215,6 +214,21 @@ public class Evaluator {
             return evaluateClassExpression(expr);
         } else if (expr.isLambdaExpr()) {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
+        } else if (expr.isArrayAccessExpr()) {
+            Variable value = evaluateArrayAccess(expr);
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    private Variable evaluateArrayAccess(Expression expr) throws ReflectiveOperationException {
+        ArrayAccessExpr arrayAccessExpr = expr.asArrayAccessExpr();
+        Variable array = evaluateExpression(arrayAccessExpr.getName());
+        Expression index = arrayAccessExpr.getIndex();
+        Variable pos = evaluateExpression(index);
+        if (array != null && array.getValue() != null) {
+            Object value = Array.get(array.getValue(), (Integer) pos.getValue());
+            return new Variable(value);
         }
         return null;
     }
@@ -359,8 +373,15 @@ public class Evaluator {
                 }
             }
             Variable v = evaluateExpression(fae.getScope());
-            if (v != null && v.getValue() instanceof  Evaluator eval) {
-                return eval.getFields().get(fae.getNameAsString());
+            if (v != null) {
+                if (v.getValue() instanceof  Evaluator eval) {
+                    return eval.getFields().get(fae.getNameAsString());
+                }
+                else if (v.getValue() != null && v.getValue().getClass().isArray()) {
+                    if (fae.getNameAsString().equals("length")) {
+                        return new Variable(Array.getLength(v.getValue()));
+                    }
+                }
             }
             logger.warn("Could not resolve {} for field access", fae.getScope());
         }
