@@ -396,27 +396,10 @@ public class UnitTestGenerator extends TestGenerator {
         Type t = param.getType();
 
         if (param.findCompilationUnit().isPresent()) {
-            boolean f = false;
-            String fullClassName = AbstractCompiler.findFullyQualifiedName(param.findCompilationUnit().orElseThrow(), t.asString());
-            if (fullClassName != null) {
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullClassName);
-                if (cu != null) {
-                    TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, t.asString()).orElse(null);
-                    if (type != null && type.getModifiers().contains(Modifier.FINAL)) {
-                        f = true;
-                    }
-                } else {
-                    try {
-                        Class<?> clazz = AbstractCompiler.loadClass(fullClassName);
-                        if (clazz != null && Modifier.isFinal(clazz.getModifiers())) {
-                            f = true;
-                        }
-                    } catch (ClassNotFoundException e) {
-                        // safe to ignore
-                    }
-                }
-            }
-            if (f) {
+            CompilationUnit cu = param.findCompilationUnit().get();
+
+            if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
+                String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
                 Variable mocked = Reflect.variableFactory(fullClassName);
                 body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
                 mockParameterFields(v, body, nameAsString);
