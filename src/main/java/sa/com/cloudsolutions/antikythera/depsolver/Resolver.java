@@ -557,12 +557,14 @@ public class Resolver {
                 cid.getAnnotationByName("Getter").isPresent()
         ) {
             String field = argMethodCall.getNameAsString().substring(3);
-            Optional<FieldDeclaration> fd = cid.getFieldByName(ClassProcessor.classToInstanceName(field));
-            if (fd.isPresent()) {
-                Type t = fd.get().getElementType();
-                ImportUtils.addImport(gn, t);
+            if (!field.isEmpty()) {
+                Optional<FieldDeclaration> fd = cid.getFieldByName(ClassProcessor.classToInstanceName(field));
+                if (fd.isPresent()) {
+                    Type t = fd.get().getElementType();
+                    ImportUtils.addImport(gn, t);
 
-                return t;
+                    return t;
+                }
             }
         }
         return null;
