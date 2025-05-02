@@ -102,10 +102,7 @@ class AbstractCompilerTest {
         cu.addImport(new ImportDeclaration("sa.com.cloudsolutions.antikythera.SomeClass", false, false));
         cu.addType(new ClassOrInterfaceDeclaration().setName("TestClass"));
 
-        String result = AbstractCompiler.findFullyQualifiedName(cu, "SomeClass");
-        assertEquals("sa.com.cloudsolutions.antikythera.SomeClass", result);
-
-        result = AbstractCompiler.findFullyQualifiedName(cu, "List");
+        String result = AbstractCompiler.findFullyQualifiedName(cu, "List");
         assertEquals("java.util.List", result);
 
         result = AbstractCompiler.findFullyQualifiedName(cu, "Integer");

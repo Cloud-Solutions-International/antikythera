@@ -498,7 +498,7 @@ public class AbstractCompiler {
         }
 
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
-        String fileName = packageName + "." + className + SUFFIX;
+        String fileName = packageName + "." + className;
         if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
             CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(fileName);
             if (compilationUnit != null) {
