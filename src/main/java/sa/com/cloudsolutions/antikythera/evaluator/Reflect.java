@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.ArrayCreationExpr;
+import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.CharLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
@@ -43,11 +45,17 @@ public class Reflect {
     public static final String PRIMITIVE_DOUBLE = "double";
     public static final String PRIMITIVE_SHORT = "short";
     public static final String INTEGER = "Integer";
+    public static final String LONG = "Long";
     public static final String BOOLEAN = "Boolean";
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
     public static final String STRING = "String";
     public static final String ANTIKYTHERA = "Antikythera";
+    public static final String JAVA_LANG_DOUBLE = "java.lang.Double";
+    public static final String JAVA_LANG_BOOLEAN = "java.lang.Boolean";
+    public static final String JAVA_LANG_LONG = "java.lang.Long";
+    public static final String JAVA_LANG_STRING = "java.lang.String";
+    public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -233,16 +241,17 @@ public class Reflect {
     }
 
     public static Type getComponentType(Class<?> clazz) {
+
         return switch (clazz.getName()) {
-            case "int", "java.lang.Integer" -> PrimitiveType.intType();
-            case PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> PrimitiveType.doubleType();
-            case PRIMITIVE_BOOLEAN, "java.lang.Boolean" -> PrimitiveType.booleanType();
-            case "long", "java.lang.Long", "java.lang.BigDecimal" -> PrimitiveType.longType();
+            case "int", JAVA_LANG_INTEGER -> PrimitiveType.intType();
+            case PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE -> PrimitiveType.doubleType();
+            case PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> PrimitiveType.booleanType();
+            case "long", JAVA_LANG_LONG, "java.lang.BigDecimal" -> PrimitiveType.longType();
             case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
             case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
             case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
             case "char", "java.lang.Character" -> PrimitiveType.charType();
-            case "java.lang.String" -> new ClassOrInterfaceType().setName(STRING);
+            case JAVA_LANG_STRING -> new ClassOrInterfaceType().setName(STRING);
             default -> null;
         };
     }
@@ -334,38 +343,83 @@ public class Reflect {
             return null;
         }
 
+        // Handle array types
+        if (qualifiedName.endsWith("[]")) {
+            return generateArrayVariable(qualifiedName);
+        }
+
+        return generateNonArrayVariable(qualifiedName);
+    }
+
+    private static Variable generateArrayVariable(String qualifiedName) {
+        String baseType = qualifiedName.substring(0, qualifiedName.length() - 2);
+        return switch (baseType) {
+            case STRING, JAVA_LANG_STRING -> {
+                String[] arr = new String[]{ANTIKYTHERA};
+                Variable v = new Variable(arr);
+                v.setInitializer(new ArrayCreationExpr()
+                        .setElementType(new ClassOrInterfaceType().setName(STRING))
+                        .setInitializer(new ArrayInitializerExpr()));
+                yield v;
+            }
+            case INTEGER, JAVA_LANG_INTEGER -> {
+                Integer[] arr = new Integer[]{1};
+                Variable v = new Variable(arr);
+                v.setInitializer(new ArrayCreationExpr()
+                        .setElementType(new ClassOrInterfaceType().setName(INTEGER))
+                        .setInitializer(new ArrayInitializerExpr()));
+                yield v;
+            }
+            case LONG, JAVA_LANG_LONG -> {
+                Long[] arr = new Long[]{1L};
+                Variable v = new Variable(arr);
+                v.setInitializer(new ArrayCreationExpr()
+                        .setElementType(new ClassOrInterfaceType().setName("Long"))
+                        .setInitializer(new ArrayInitializerExpr()));
+                yield v;
+            }
+            case DOUBLE, JAVA_LANG_DOUBLE -> {
+                Double[] arr = new Double[]{1.0};
+                Variable v = new Variable(arr);
+                v.setInitializer(new ArrayCreationExpr()
+                        .setElementType(new ClassOrInterfaceType().setName(DOUBLE))
+                        .setInitializer(new ArrayInitializerExpr()));
+                yield v;
+            }
+            case BOOLEAN, JAVA_LANG_BOOLEAN -> {
+                Boolean[] arr = new Boolean[]{true};
+                Variable v = new Variable(arr);
+                v.setInitializer(new ArrayCreationExpr()
+                        .setElementType(new ClassOrInterfaceType().setName(BOOLEAN))
+                        .setInitializer(new ArrayInitializerExpr()));
+                yield v;
+            }
+            default -> new Variable(new Object[0]);
+        };
+    }
+
+    private static Variable generateNonArrayVariable(String qualifiedName) {
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" ->
                     createVariable(new ArrayList<>(), "java.util.ArrayList", null);
-            case "java.util.LinkedList" ->
-                    createVariable(new LinkedList<>(), "java.util.LinkedList", null);
-
+            case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", "java.util.Map", "java.util.HashMap" ->
                     createVariable(new HashMap<>(), "java.util.HashMap", null);
-
             case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
-
             case "Set", "java.util.Set", "java.util.HashSet" ->
                     createVariable(new HashSet<>(), "java.util.HashSet", null);
-
             case "java.util.TreeSet" -> createVariable(new TreeSet<>(), "java.util.TreeSet", null);
-
             case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
-
-            case BOOLEAN, PRIMITIVE_BOOLEAN , "java.lang.Boolean" -> createVariable(true, BOOLEAN, "true");
-
-            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, "java.lang.Double" -> createVariable(1.0, DOUBLE, "1.0");
-
-            case INTEGER, "int", "java.lang.Integer" -> createVariable(1, INTEGER, "1");
-
-            case "Long", "long", "java.lang.Long" -> createVariable(1L, "Long", "1");
-
-            case STRING, "java.lang.String" -> {
+            case BOOLEAN, PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> createVariable(true, BOOLEAN, "true");
+            case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE ->
+                    createVariable(1.0, DOUBLE, "1.0");
+            case INTEGER, "int", JAVA_LANG_INTEGER -> createVariable(1, INTEGER, "1");
+            case "Long", "long", JAVA_LANG_LONG -> createVariable(1L, "Long", "1");
+            case STRING, JAVA_LANG_STRING -> {
                 Variable result = createVariable(ANTIKYTHERA, STRING, ANTIKYTHERA);
                 result.setInitializer(new StringLiteralExpr(ANTIKYTHERA));
                 yield result;
             }
-
             default -> new Variable(null);
         };
     }

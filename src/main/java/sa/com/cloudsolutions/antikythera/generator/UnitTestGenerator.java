@@ -336,7 +336,8 @@ public class UnitTestGenerator extends TestGenerator {
         for (var param : methodUnderTest.getParameters()) {
             Type paramType = param.getType();
             String nameAsString = param.getNameAsString();
-            if (paramType.isPrimitiveType() || paramType.asClassOrInterfaceType().isBoxedType()) {
+            if (paramType.isPrimitiveType() ||
+                    (paramType.isClassOrInterfaceType() && paramType.asClassOrInterfaceType().isBoxedType())) {
                 VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
                 VariableDeclarator v = new VariableDeclarator();
                 v.setType(param.getType());
