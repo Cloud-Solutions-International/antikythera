@@ -215,8 +215,7 @@ public class Evaluator {
         } else if (expr.isLambdaExpr()) {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
         } else if (expr.isArrayAccessExpr()) {
-            Variable value = evaluateArrayAccess(expr);
-            if (value != null) return value;
+            return evaluateArrayAccess(expr);
         }
         return null;
     }
@@ -1742,8 +1741,10 @@ public class Evaluator {
         boolean matched = false;
         for(CatchClause clause : t.getCatchClauses()) {
             if(clause.getParameter().getType().isClassOrInterfaceType()) {
-                String resolvedClass = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
-                if(resolvedClass.equals(e.getClass().getName())) {
+                ClassOrInterfaceType exType = clause.getParameter().getType().asClassOrInterfaceType();
+
+                String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, exType.getNameAsString());
+                if(resolvedClass != null && resolvedClass.equals(e.getClass().getName())) {
                     setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
                     executeBlock(clause.getBody().getStatements());
                     if(t.getFinallyBlock().isPresent()) {
