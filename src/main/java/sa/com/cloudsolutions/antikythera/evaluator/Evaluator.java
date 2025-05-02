@@ -346,10 +346,10 @@ public class Evaluator {
                     /*
                      * Use class loader
                      */
-                    Class<?> clazz = Class.forName(fullName);
+                    Class<?> clazz = AbstractCompiler.loadClass(fullName);
                     Field field = clazz.getDeclaredField(fae.getNameAsString());
                     field.setAccessible(true);
-                    return new Variable(field.get(null));
+                    return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()),  field.get(null));
                 } else {
                     Variable v = evaluateFieldAccessExpression(fae, dep);
                     if (v != null) {
