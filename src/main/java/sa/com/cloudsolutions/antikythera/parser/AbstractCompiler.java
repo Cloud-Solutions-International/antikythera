@@ -59,7 +59,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.ReflectionArguments;
-import sa.com.cloudsolutions.antikythera.generator.Antikythera;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 /**
  * Sets up the Java Parser and maintains a cache of the classes that have been compiled.
@@ -434,18 +434,39 @@ public class AbstractCompiler {
      * @return the fully qualified name of the class.
      */
     public static String findFullyQualifiedName(CompilationUnit cu, String className) {
+        if (cu == null) {
+            return null;
+        }
+        TypeWrapper wrapper = findType(cu, className);
+        if (wrapper == null) {
+            return null;
+        }
+        TypeDeclaration<?> p = wrapper.getType();
+        if (p != null) {
+            return p.getFullyQualifiedName().orElse(
+                    cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("") + "." + p.getName());
+        }
+        Class<?> cls = wrapper.getCls();
+        if (cls != null) {
+            return cls.getName();
+        }
+        return null;
+    }
+
+    public static TypeWrapper findType(CompilationUnit cu, String className) {
         /*
          * If the compilation unit is null, this may be part of the java.lang package.
          */
         if (cu == null) {
             try {
                 Class<?> c = Class.forName("java.lang." + className);
-                return c.getName();
+                return new TypeWrapper(c);
             } catch (ClassNotFoundException e) {
                 /*
                  * dirty hack to handle an extreme edge case
                  */
-                return className.equals("Optional") ? "java.util.Optional" : null;
+                return className.equals("Optional") ?
+                        new TypeWrapper(Optional.class) : new TypeWrapper();
             }
         }
 
@@ -459,26 +480,37 @@ public class AbstractCompiler {
 
         TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
         if (p != null) {
-            return p.getFullyQualifiedName().orElse(
-                    cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("") + "." + p.getName());
+            return new TypeWrapper(p);
         }
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
-            if (imp.getImport().isAsterisk()) {
-                return imp.getNameAsString() + "." + className;
+            if (imp.getType() != null) {
+                return new TypeWrapper(imp.getType());
             }
-            return imp.getNameAsString();
+            try {
+                if (imp.getImport().isAsterisk()) {
+                    return new TypeWrapper(Class.forName(imp.getNameAsString() + "." + className));
+                }
+                return new TypeWrapper(Class.forName(imp.getNameAsString()));
+            } catch (ClassNotFoundException e) {
+                // ignorable
+            }
         }
 
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String fileName = packageName + "." + className + SUFFIX;
         if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
-            return packageName + "." + className;
+            CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(fileName);
+            if (compilationUnit != null) {
+                Optional<TypeDeclaration<?>> match = AbstractCompiler.getMatchingType(compilationUnit, fileName);
+                if (match.isPresent()) {
+                    return new TypeWrapper(match.get());
+                }
+            }
         }
 
         try {
-            Class.forName(className);
-            return className;
+            return new TypeWrapper(Class.forName(className));
         } catch (ClassNotFoundException e) {
             /*
              * It's ok to silently ignore this one. It just means that the class cannot be
@@ -487,8 +519,8 @@ public class AbstractCompiler {
         }
 
         try {
-            Class.forName("java.lang." + className);
-            return "java.lang." + className;
+            return new TypeWrapper(Class.forName("java.lang." + className));
+
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package
@@ -496,8 +528,7 @@ public class AbstractCompiler {
         }
 
         try {
-            Class.forName(packageName + className);
-            return packageName + className;
+            return new TypeWrapper(Class.forName(packageName + className));
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package.
@@ -505,7 +536,11 @@ public class AbstractCompiler {
              * fully qualified name!
              */
             if (className.contains(".")) {
-                return className;
+                try {
+                    return new TypeWrapper(Class.forName(className));
+                } catch (ClassNotFoundException e) {
+                    return null;
+                }
             }
 
             return null;
