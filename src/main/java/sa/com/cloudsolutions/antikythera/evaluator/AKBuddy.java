@@ -150,7 +150,7 @@ public class AKBuddy {
                 try {
                     String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
                     fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
-                } catch (ClassNotFoundException cex) {
+                } catch (ClassNotFoundException|NullPointerException cex) {
                     continue;
                 }
             }

@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
@@ -396,7 +395,7 @@ public class UnitTestGenerator extends TestGenerator {
         Type t = param.getType();
 
         if (param.findCompilationUnit().isPresent()) {
-            CompilationUnit cu = param.findCompilationUnit().get();
+            CompilationUnit cu = param.findCompilationUnit().orElseThrow();
 
             if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
                 String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
