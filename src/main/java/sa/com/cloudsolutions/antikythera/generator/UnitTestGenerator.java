@@ -21,8 +21,10 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -32,6 +34,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import java.lang.reflect.Modifier;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -391,6 +394,35 @@ public class UnitTestGenerator extends TestGenerator {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
+
+        if (param.findCompilationUnit().isPresent()) {
+            boolean f = false;
+            String fullClassName = AbstractCompiler.findFullyQualifiedName(param.findCompilationUnit().orElseThrow(), t.asString());
+            if (fullClassName != null) {
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullClassName);
+                if (cu != null) {
+                    TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, t.asString()).orElse(null);
+                    if (type != null && type.getModifiers().contains(Modifier.FINAL)) {
+                        f = true;
+                    }
+                } else {
+                    try {
+                        Class<?> clazz = AbstractCompiler.loadClass(fullClassName);
+                        if (clazz != null && Modifier.isFinal(clazz.getModifiers())) {
+                            f = true;
+                        }
+                    } catch (ClassNotFoundException e) {
+                        // safe to ignore
+                    }
+                }
+            }
+            if (f) {
+                Variable mocked = Reflect.variableFactory(fullClassName);
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                mockParameterFields(v, body, nameAsString);
+                return;
+            }
+        }
         if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
             body.addStatement(param.getTypeAsString() + " " + nameAsString +
                     " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
@@ -399,6 +431,10 @@ public class UnitTestGenerator extends TestGenerator {
                     " = Mockito.mock(" + param.getTypeAsString() + ".class);");
         }
 
+        mockParameterFields(v, body, nameAsString);
+    }
+
+    private static void mockParameterFields(Variable v, BlockStmt body, String nameAsString) {
         if (v.getValue() instanceof Evaluator eval) {
             for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
                 if (entry.getValue().getValue() != null && entry.getValue().getType() != null

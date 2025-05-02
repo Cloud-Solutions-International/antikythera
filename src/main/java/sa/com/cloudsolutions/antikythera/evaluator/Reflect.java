@@ -47,6 +47,7 @@ public class Reflect {
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
     public static final String STRING = "String";
+    public static final String ANTIKYTHERA = "Antikythera";
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -359,7 +360,11 @@ public class Reflect {
 
             case "Long", "long", "java.lang.Long" -> createVariable(1L, "Long", "1");
 
-            case STRING, "java.lang.String" -> createVariable("Antikythera", STRING, "Antikythera");
+            case STRING, "java.lang.String" -> {
+                Variable result = createVariable(ANTIKYTHERA, STRING, ANTIKYTHERA);
+                result.setInitializer(new StringLiteralExpr(ANTIKYTHERA));
+                yield result;
+            }
 
             default -> new Variable(null);
         };
