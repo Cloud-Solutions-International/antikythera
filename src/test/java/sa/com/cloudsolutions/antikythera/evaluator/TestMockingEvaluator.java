@@ -7,6 +7,8 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,8 @@ class TestMockingEvaluator {
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @BeforeEach
@@ -173,5 +177,21 @@ class TestMockingEvaluator {
         // Verify
         assertNotNull(result);
         assertEquals("Antikythera", result.getValue());
-      }
+    }
+
+    @Test
+    void testRepositorySaveMethodCreatesEvaluator() throws ReflectiveOperationException, IOException {
+        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
+        AbstractCompiler.preProcess();
+        SpringEvaluator eval = EvaluatorFactory.create(
+                "sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+
+        MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("saveFakeData")).orElseThrow();
+
+        Variable v = eval.executeMethod(md);
+        assertNotNull(v);
+        assertNotNull(v.getValue());
+        assertInstanceOf(Evaluator.class, v.getValue());
+    }
 }

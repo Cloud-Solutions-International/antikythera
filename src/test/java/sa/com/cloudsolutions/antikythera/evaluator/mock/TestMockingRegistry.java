@@ -92,8 +92,8 @@ class TestMockingRegistry extends TestHelper {
         MockingRegistry.markAsMocked("TestClass1");
         MockingRegistry.markAsMocked("TestClass2");
 
-        Callable callable1 = new Callable(new MethodDeclaration());
-        Callable callable2 = new Callable(new MethodDeclaration());
+        Callable callable1 = new Callable(new MethodDeclaration(), null);
+        Callable callable2 = new Callable(new MethodDeclaration(), null);
         Variable returnVal = new Variable("test");
 
         MockingRegistry.when("TestClass1", new MockingCall(callable1, returnVal));

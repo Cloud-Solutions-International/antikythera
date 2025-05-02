@@ -14,6 +14,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
@@ -26,7 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 
 
-public class ControlFlowEvaluator extends Evaluator{
+public class ControlFlowEvaluator extends Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
 
     public ControlFlowEvaluator(EvaluatorFactory.Context context) {
@@ -57,8 +58,7 @@ public class ControlFlowEvaluator extends Evaluator{
                  */
                 return Optional.empty();
             }
-        }
-        else {
+        } else {
             v = new Variable(entry.getValue());
         }
 
@@ -125,8 +125,7 @@ public class ControlFlowEvaluator extends Evaluator{
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
             setter.setName("set" + name.substring(2));
-        }
-        else {
+        } else {
             setter.setName("set" + name.substring(3));
         }
         setter.setScope(scope);
@@ -135,12 +134,31 @@ public class ControlFlowEvaluator extends Evaluator{
             setter.addArgument("null");
         } else {
             if (entry.getValue().equals("T")) {
-                setter.addArgument("\"T\"");
+                setupConditionalNotNullValue(stmt, entry, name, setter);
             } else {
                 setter.addArgument(entry.getValue().toString());
             }
         }
         addPreCondition(stmt, setter);
+    }
+
+    private void setupConditionalNotNullValue(Statement stmt, Map.Entry<Expression, Object> entry, String name, MethodCallExpr setter) {
+        MethodCallExpr mce = entry.getKey().asMethodCallExpr();
+        String value = "\"T\"";
+        if (mce.getScope().isPresent()) {
+            Variable scopeVar = getValue(stmt, mce.getScope().orElseThrow().toString());
+            if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
+                Variable field = evaluator.fields.get(
+                        ClassProcessor.classToInstanceName(name.substring(3)));
+                if (field != null && field.getClazz() != null) {
+                    Variable v = Reflect.variableFactory(field.getClazz().getName());
+                    if (v != null) {
+                        value = v.getInitializer().toString();
+                    }
+                }
+            }
+        }
+        setter.addArgument(value);
     }
 
     private void addPreCondition(Statement statement, Expression expr) {
@@ -186,7 +204,7 @@ public class ControlFlowEvaluator extends Evaluator{
         LineOfCode l = Branching.get(stmt.hashCode());
         Variable v = (l == null) ? optionalPresentPath(sc, stmt, methodCall)
                 : optionalEmptyPath(sc, l);
-        MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(),v);
+        MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
         then.setVariableName(variableName);
 
         MockingRegistry.when(className, then);
@@ -195,7 +213,7 @@ public class ControlFlowEvaluator extends Evaluator{
 
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         MethodDeclaration method = sc.getMCEWrapper().getMatchingCallable().asMethodDeclaration();
-        LineOfCode l =  new LineOfCode(stmt);
+        LineOfCode l = new LineOfCode(stmt);
         Branching.add(l);
 
         List<Expression> expressions;
@@ -232,7 +250,7 @@ public class ControlFlowEvaluator extends Evaluator{
 
     private void mapParameterToArguments(Expression expr, MethodDeclaration method, MethodCallExpr methodCall) {
         // Direct parameter to argument mapping and replacement
-        for (int i = 0, j = method.getParameters().size() ; i <  j ; i++) {
+        for (int i = 0, j = method.getParameters().size(); i < j; i++) {
             String paramName = method.getParameter(i).getNameAsString();
             String argName = methodCall.getArgument(i).toString();
 
@@ -253,8 +271,7 @@ public class ControlFlowEvaluator extends Evaluator{
     private ReturnStmt findReturnStatement(MethodDeclaration method, boolean isEmpty) {
         return method.findAll(ReturnStmt.class).stream()
                 .filter(r -> r.getExpression()
-                        .map(e -> isEmpty ? e.toString().contains("Optional.empty")
-                                : !e.toString().contains("Optional.empty"))
+                        .map(e -> isEmpty == e.toString().contains("Optional.empty"))
                         .orElse(false))
                 .findFirst()
                 .orElse(null);
@@ -292,8 +309,7 @@ public class ControlFlowEvaluator extends Evaluator{
                     Object value = null;
                     if (opt.isPresent()) {
                         l.setPathTaken(LineOfCode.TRUE_PATH);
-                    }
-                    else {
+                    } else {
                         value = Reflect.getDefault(argument.getClass());
                         l.setPathTaken(LineOfCode.FALSE_PATH);
                     }

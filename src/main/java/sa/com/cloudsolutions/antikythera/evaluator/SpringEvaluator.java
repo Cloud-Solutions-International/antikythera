@@ -234,6 +234,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 if (currentConditional != null) {
                     currentConditional.transition();
                     Branching.add(currentConditional);
+
+                    if (currentConditional.getPreconditions() != null) {
+                        currentConditional.getPreconditions().clear();
+                    }
                 }
                 if (Branching.size(md) == 0) {
                     break;
@@ -264,13 +268,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
-
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
-        }
-
-        if (currentConditional != null && currentConditional.getPreconditions() != null) {
-            currentConditional.getPreconditions().clear();
         }
     }
 
@@ -507,14 +506,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 && fd.getAnnotationByName("Autowired").isPresent()) {
             Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
             if (v == null) {
-                if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
-                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
-                } else if (MockingRegistry.isMockTarget(resolvedClass)) {
+                if (MockingRegistry.isMockTarget(resolvedClass)) {
                     try {
                         v = MockingRegistry.mockIt(variable);
                     } catch (ClassNotFoundException e) {
                         throw new AntikytheraException(e);
                     }
+                } else if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
+                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
                 } else {
                     v = wireFromByteCode(resolvedClass);
                 }

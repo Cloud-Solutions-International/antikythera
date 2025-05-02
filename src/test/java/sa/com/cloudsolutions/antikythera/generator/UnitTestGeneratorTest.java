@@ -73,14 +73,14 @@ class UnitTestGeneratorTest {
 
         Method m = Statement.class.getDeclaredMethod("execute", String.class);
         assertNotNull(m);
-        Callable callable = new Callable(m);
+        Callable callable = new Callable(m, null);
         MockingCall result = MockingRegistry.getThen("java.sql.Statement", callable);
         assertNotNull(result);
         assertInstanceOf(Boolean.class, result.getVariable().getValue());
         assertEquals(true, result.getVariable().getValue());
 
         m = Statement.class.getDeclaredMethod("getMaxFieldSize");
-        callable = new Callable(m);
+        callable = new Callable(m, null);
         assertNull(MockingRegistry.getThen("java.sql.Statement", callable));
     }
 
@@ -186,7 +186,7 @@ class UnitTestGeneratorTest {
 
         // Create a MockingCall with the empty Optional
         Method method = String.class.getDeclaredMethod("length");
-        Callable callable = new Callable(method);
+        Callable callable = new Callable(method, null);
         MockingCall emptyOptionalCall = new MockingCall(callable, emptyOptionalVar);
         emptyOptionalCall.setVariableName("mockString");
 
@@ -212,7 +212,7 @@ class UnitTestGeneratorTest {
 
         // Create a MockingCall with the Optional containing Evaluator
         Method method2 = String.class.getDeclaredMethod("isEmpty");
-        Callable callable2 = new Callable(method2);
+        Callable callable2 = new Callable(method2, null);
         MockingCall evaluatorOptionalCall = new MockingCall(callable2, evaluatorOptionalVar);
         evaluatorOptionalCall.setVariableName("mockString2");
 

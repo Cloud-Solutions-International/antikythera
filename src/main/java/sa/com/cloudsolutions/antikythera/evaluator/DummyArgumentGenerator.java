@@ -55,6 +55,10 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     }
 
     protected Variable mockParameter(Parameter param) {
+        Type t = param.getType();
+        if (t.isClassOrInterfaceType()) {
+            return Reflect.variableFactory(t.asClassOrInterfaceType().getName().asString());
+        }
         return Reflect.variableFactory(param.getType().asString());
     }
 }

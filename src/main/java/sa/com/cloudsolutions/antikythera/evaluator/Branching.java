@@ -43,10 +43,9 @@ public class Branching {
 
     public static List<Precondition> getApplicableConditions(MethodDeclaration methodDeclaration) {
         List<Precondition> applicableConditions = new ArrayList<>();
-        PriorityQueue<LineOfCode> queue = conditionals.getOrDefault(methodDeclaration, new PriorityQueue<>(new LineOfCodeComparator()));
 
-        for (LineOfCode lineOfCode : queue) {
-            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS) {
+        for (LineOfCode lineOfCode : branches.values()) {
+            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS && lineOfCode.getMethodDeclaration().equals(methodDeclaration)) {
                 applicableConditions.addAll(lineOfCode.getPreconditions());
             }
         }

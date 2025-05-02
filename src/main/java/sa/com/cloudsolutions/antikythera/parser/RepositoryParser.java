@@ -500,7 +500,7 @@ public class RepositoryParser extends ClassProcessor {
                 }
             }
         }
-        Callable callable = new Callable(n);
+        Callable callable = new Callable(n, null);
         if (query != null) {
             queries.put(callable, queryBuilder(query, nt, callable));
         } else {

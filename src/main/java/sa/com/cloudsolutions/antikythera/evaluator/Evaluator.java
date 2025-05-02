@@ -58,9 +58,9 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -114,6 +114,8 @@ public class Evaluator {
 
     protected String variableName;
 
+    protected TypeDeclaration<?> typeDeclaration;
+
     protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
@@ -123,6 +125,9 @@ public class Evaluator {
         this();
         this.className = context.getClassName();
         cu = AntikytheraRunTime.getCompilationUnit(className);
+        if (cu != null) {
+            typeDeclaration = AbstractCompiler.getMatchingType(cu, className).orElseThrow();
+        }
         Finch.loadFinches();
     }
 
@@ -342,10 +347,10 @@ public class Evaluator {
                     /*
                      * Use class loader
                      */
-                    Class<?> clazz = Class.forName(fullName);
+                    Class<?> clazz = AbstractCompiler.loadClass(fullName);
                     Field field = clazz.getDeclaredField(fae.getNameAsString());
                     field.setAccessible(true);
-                    return new Variable(field.get(null));
+                    return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()),  field.get(null));
                 } else {
                     Variable v = evaluateFieldAccessExpression(fae, dep);
                     if (v != null) {
@@ -364,9 +369,9 @@ public class Evaluator {
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep)  {
-        Optional<TypeDeclaration<?>> typeDeclaration = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (typeDeclaration.isPresent()) {
-            Optional<FieldDeclaration> fieldDeclaration = typeDeclaration.get().getFieldByName(fae.getNameAsString());
+        Optional<TypeDeclaration<?>> td = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
+        if (td.isPresent()) {
+            Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
 
             if (fieldDeclaration.isPresent()) {
                 FieldDeclaration field = fieldDeclaration.get();
@@ -467,6 +472,7 @@ public class Evaluator {
      *    using the local symbol table.
      * @throws ReflectiveOperationException if a reflective operation failed
      */
+    @SuppressWarnings("java:S2259")
     Variable evaluateVariableDeclaration(Expression expr) throws ReflectiveOperationException {
         VariableDeclarationExpr varDeclExpr = expr.asVariableDeclarationExpr();
         Variable v = null;
@@ -474,12 +480,16 @@ public class Evaluator {
             Optional<Expression> init = decl.getInitializer();
             if (init.isPresent()) {
                 v = initializeVariable(decl, init.get());
+                /*
+                 * this could raise a null pointer exception, that's fine with me. that means
+                 * some other code is misbehaving and this NPE will give a change to catch it
+                 */
                 v.setInitializer(init.get());
             }
             else {
                 /*
                  * No initializer. We need to create an entry in the symbol table. If the variable is
-                 * primitive we need to set the appropriate default value. Non primitives will be null
+                 * primitive, we need to set the appropriate default value. Non-primitives will be null
                  */
                 if (decl.getType().isPrimitiveType()) {
                     Object obj = Reflect.getDefault(decl.getType().asString());
@@ -678,10 +688,11 @@ public class Evaluator {
      * Does not look at fields. You probably want to call getValue() instead.
      *
      * @param node the node representing the current expression.
-     *             It's primary purpose is to help identify the current block
+     *             Its primary purpose is to help identify the current block
      * @param name the name of the variable to look up
      * @return the Variable if it's found or null.
      */
+    @SuppressWarnings("java:S3776")
     public Variable getLocal(Node node, String name) {
         Node n = node;
 
@@ -1072,7 +1083,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
+    protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
 
         if (callable.isMethodDeclaration()) {
             MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
@@ -1101,7 +1112,7 @@ public class Evaluator {
         }
     }
 
-    private static Method getMethod(Callable callable) {
+    static Method getMethod(Callable callable) {
         return callable.getMethod();
     }
 
@@ -1116,8 +1127,8 @@ public class Evaluator {
      * That means the method being called is a member of the current class or a parent of the current class.
      * @param methodCallWrapper the method call expression to be executed
      * @return a Variable containing the result of the method call
-     * @throws AntikytheraException if there are parsing related errors
-     * @throws ReflectiveOperationException if there are reflection related errors
+     * @throws AntikytheraException if there are parsing-related errors
+     * @throws ReflectiveOperationException if there are reflection-related errors
      */
     @SuppressWarnings("unchecked")
     public Variable executeLocalMethod(MCEWrapper methodCallWrapper) throws ReflectiveOperationException {
@@ -1149,7 +1160,7 @@ public class Evaluator {
         return null;
     }
 
-    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) throws ReflectiveOperationException {
+    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) {
         if (methodCall.getNameAsString().startsWith("get") && (
                 c.getAnnotationByName("Data").isPresent()
                         || c.getAnnotationByName("Getter").isPresent())) {
@@ -1164,8 +1175,8 @@ public class Evaluator {
             String field = ClassProcessor.classToInstanceName(
                     methodCall.getNameAsString().replace("set","")
             );
-            Expression arg = methodCall.getArguments().get(0);
-            fields.put(field, evaluateExpression(arg));
+            Variable va = AntikytheraRunTime.pop();
+            fields.put(field, va);
             return new Variable(getValue(methodCall, field).getValue());
         }
 
@@ -1582,20 +1593,46 @@ public class Evaluator {
         loops.addLast(true);
         ForEachStmt forEachStmt = stmt.asForEachStmt();
         Variable iter = evaluateExpression(forEachStmt.getIterable());
-        Object arr = iter.getValue();
+        Object iterValue = iter.getValue();
+
+        if (iterValue instanceof List<?> list) {
+            executeForEachWithList(list, forEachStmt);
+        }
+        else {
+            executeForEachWithArray(forEachStmt, iterValue);
+        }
+
+        loops.pollLast();
+    }
+
+    private void executeForEachWithArray(ForEachStmt forEachStmt, Object iterValue) throws ReflectiveOperationException {
         evaluateExpression(forEachStmt.getVariable());
 
-        for(int i = 0 ; i < Array.getLength(arr) ; i++) {
-            Object value = Array.get(arr, i);
-            for(VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+        for (int i = 0; i < Array.getLength(iterValue); i++) {
+            Object value = Array.get(iterValue, i);
+            for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
                 Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
                 v.setValue(value);
             }
 
             executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
         }
+    }
 
-        loops.pollLast();
+    private void executeForEachWithList(List<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
+        for (Object value : list) {
+            for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+                Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
+                if (v != null) {
+                    v.setValue(value);
+                }
+                else {
+                    v = new Variable(value);
+                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
+                }
+            }
+            executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+        }
     }
 
     @SuppressWarnings("java:S112")
@@ -1689,7 +1726,7 @@ public class Evaluator {
                     setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
                     executeBlock(clause.getBody().getStatements());
                     if(t.getFinallyBlock().isPresent()) {
-                        executeBlock(t.getFinallyBlock().get().getStatements());
+                        executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
                     }
                     matched = true;
                     break;
@@ -1715,13 +1752,13 @@ public class Evaluator {
 
     public void setupFields()  {
         cu.accept(new LazyFieldVisitor(className), null);
-        processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "LazyFieldVisitor");
+        processParentClasses(typeDeclaration, "LazyFieldVisitor");
 
     }
 
     public void initializeFields() {
         cu.accept(new FieldVisitor(className), null);
-        processParentClasses(AbstractCompiler.getMatchingType(cu, className).orElseThrow(), "FieldVisitor");
+        processParentClasses(typeDeclaration, "FieldVisitor");
     }
 
     public String getClassName() {

@@ -6,30 +6,47 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import java.lang.reflect.Method;
 
 /**
- * A wrapper that unifies CallableDeclaration from java parser with reflection
+ * A wrapper that unifies CallableDeclaration from java parser with the reflection API
  */
 public class Callable {
+    /**
+     * A non-null callable declaration if the method call is associated with a source code.
+     */
     CallableDeclaration<?> callableDeclaration;
+    /**
+     * A non-null Method instance from java reflection for a call associated with a class
+     */
     Method method;
+    /**
+     * The class where the method was found.
+     * Useful when the class we are processing is not the one that actually provides the method but
+     * one of its ancestors.
+     */
+    Class<?> foundInClass;
 
-    public Callable(CallableDeclaration<?> callableDeclaration) {
+    /**
+     * The method call expression associated with this callable.
+     * A callable instance is typically created when we search through our source code and binaries
+     * to find a method declaration or method. In essence, the method call expression is the search
+     * criteria that resulted in this instance being created.
+     */
+    MCEWrapper mce;
+    public Callable(CallableDeclaration<?> callableDeclaration, MCEWrapper mce) {
         this.callableDeclaration = callableDeclaration;
+        this.mce = mce;
     }
 
-    public Callable(Method method) {
+    public Callable(Method method, MCEWrapper mce) {
         this.method = method;
+        this.mce = mce;
     }
 
-    public Callable() {
+    protected Callable() {
 
     }
 
     public CallableDeclaration<?> getCallableDeclaration() {
         return callableDeclaration;
-    }
-
-    public void setCallableDeclaration(CallableDeclaration<?> callableDeclaration) {
-        this.callableDeclaration = callableDeclaration;
     }
 
     public Method getMethod() {
@@ -53,14 +70,14 @@ public class Callable {
     }
 
     public MethodDeclaration asMethodDeclaration() {
-        if(isCallableDeclaration()) {
+        if (isCallableDeclaration()) {
             return callableDeclaration.asMethodDeclaration();
         }
         return null;
     }
 
     public String getNameAsString() {
-        if(isMethod()) {
+        if (isMethod()) {
             return method.getName();
         }
         if (callableDeclaration != null) {
@@ -91,5 +108,20 @@ public class Callable {
     @Override
     public String toString() {
         return getNameAsString();
+   }
+
+    public Class<?> getFoundInClass() {
+        return foundInClass;
+    }
+
+    public void setFoundInClass(Class<?> foundInClass) {
+        this.foundInClass = foundInClass;
+    }
+    public MCEWrapper getMce() {
+        return mce;
+    }
+
+    public void setMce(MCEWrapper mce) {
+        this.mce = mce;
     }
 }

@@ -98,7 +98,7 @@ public class Antikythera {
     }
 
     /**
-     * Copy template file to the specified path
+     * Copy a template file to the specified path
      *
      * @param filename the name of the template file to copy
      * @param subPath  the path components
@@ -118,7 +118,7 @@ public class Antikythera {
     }
 
     /**
-     * Copy the pom.xml file to the specified path injecting the dependencies as needed.
+     * Copy the pom.xml file to the specified path, injecting the dependencies as needed.
      * <p>
      * The configuration file needs to have a dependencies section that provides the list of
      * `artifactids` that need to be included in the output pom file. If these dependencies

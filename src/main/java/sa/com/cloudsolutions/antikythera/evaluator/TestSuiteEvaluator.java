@@ -53,7 +53,7 @@ public class TestSuiteEvaluator extends Evaluator {
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         if (when) {
             Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
-            callable = new Callable(method);
+            callable = new Callable(method, null);
             return new Variable(this);
         }
         return super.reflectiveMethodCall(v, reflectionArguments);

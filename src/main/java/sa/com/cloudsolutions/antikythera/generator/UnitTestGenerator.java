@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -16,6 +15,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -145,7 +146,7 @@ public class UnitTestGenerator extends TestGenerator {
      * <p>Loads a base class that is common to all generated test classes.</p>
      * <p>
      * Provided that an entry called base_test_class exists in the settings file and the source for
-     * that class can be found it will be loaded. If such an entry does not exist and the test suite
+     * that class can be found, it will be loaded. If such an entry does not exist and the test suite
      * had previously been generated, we will check the extended types of the test class.
      *
      * @param testClass the declaration of the test suite being built
@@ -209,9 +210,9 @@ public class UnitTestGenerator extends TestGenerator {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
-
         createInstance();
         mockArguments();
+        applyPreconditions();
         addWhens();
         addDependencies();
         String invocation = invokeMethod();
@@ -332,10 +333,12 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     void mockArguments() {
+
         for (var param : methodUnderTest.getParameters()) {
             Type paramType = param.getType();
             String nameAsString = param.getNameAsString();
-            if (paramType.isPrimitiveType() || paramType.asClassOrInterfaceType().isBoxedType()) {
+            if (paramType.isPrimitiveType() ||
+                    (paramType.isClassOrInterfaceType() && paramType.asClassOrInterfaceType().isBoxedType())) {
                 VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
                 VariableDeclarator v = new VariableDeclarator();
                 v.setType(param.getType());
@@ -366,7 +369,6 @@ public class UnitTestGenerator extends TestGenerator {
                 }
             }
         }
-        applyPreconditions();
     }
 
     private void mockWithEvaluator(Parameter param, Variable v) {
@@ -392,6 +394,23 @@ public class UnitTestGenerator extends TestGenerator {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
+
+        if (param.findCompilationUnit().isPresent()) {
+            CompilationUnit cu = param.findCompilationUnit().orElseThrow();
+            if (t instanceof ArrayType) {
+                Variable mocked = Reflect.variableFactory(t.asString());
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                mockParameterFields(v, body, nameAsString);
+                return;
+            }
+            if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
+                String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
+                Variable mocked = Reflect.variableFactory(fullClassName);
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                mockParameterFields(v, body, nameAsString);
+                return;
+            }
+        }
         if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
             body.addStatement(param.getTypeAsString() + " " + nameAsString +
                     " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
@@ -399,15 +418,47 @@ public class UnitTestGenerator extends TestGenerator {
             body.addStatement(param.getTypeAsString() + " " + nameAsString +
                     " = Mockito.mock(" + param.getTypeAsString() + ".class);");
         }
+
+        mockParameterFields(v, body, nameAsString);
+    }
+
+    private static void mockParameterFields(Variable v, BlockStmt body, String nameAsString) {
+        if (v.getValue() instanceof Evaluator eval) {
+            for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
+                if (entry.getValue().getValue() != null && entry.getValue().getType() != null
+                        && entry.getValue().getType().isPrimitiveType()
+                        && !entry.getKey().equals("serialVersionUID")) {
+
+                    Object value = entry.getValue().getValue();
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(entry.getKey()),
+                            value instanceof Long ? value + "L" : value.toString()));
+                }
+            }
+        }
     }
 
     private void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
-            applyPreconditionsForOptionals(result);
+            if (! result.isFromSetup()) {
+                applyRegistryCondition(result);
+            }
         }
 
         for (Precondition expr : preConditions) {
             applyPrecondition.accept(expr.getExpression());
+        }
+    }
+
+    static void applyRegistryCondition(MockingCall result) {
+        if (result.getVariable().getValue() instanceof Optional<?>) {
+            applyPreconditionsForOptionals(result);
+        }
+        else {
+            if (result.getExpression() != null) {
+                addWhenThen(result.getExpression());
+            }
         }
     }
 
@@ -519,7 +570,9 @@ public class UnitTestGenerator extends TestGenerator {
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
         before.setJavadocComment("Author : Antikythera");
         for (TypeDeclaration<?> t : gen.getTypes()) {
-            t.addMember(before);
+            if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("setUp")).isEmpty()) {
+                t.addMember(before);
+            }
         }
     }
 

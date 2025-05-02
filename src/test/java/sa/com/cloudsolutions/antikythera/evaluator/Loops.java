@@ -33,6 +33,7 @@ public class Loops {
         return null;
     }
 
+    @SuppressWarnings("unused")
     private void whileLoop() {
         int i = 0;
         while (i < 10) {
@@ -41,6 +42,7 @@ public class Loops {
         }
     }
 
+    @SuppressWarnings("unused")
     private void whileLoopWithBreak() {
         int i = 0;
         while (i < 20) {
@@ -52,6 +54,7 @@ public class Loops {
         }
     }
 
+    @SuppressWarnings("unused")
     private void doWhileLoop() {
         int i = 0;
         do {
@@ -60,6 +63,7 @@ public class Loops {
         } while (i < 10);
     }
 
+    @SuppressWarnings("unused")
     private void forEachLoop() {
         int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         for (int number : numbers) {
@@ -67,6 +71,7 @@ public class Loops {
         }
     }
 
+    @SuppressWarnings("unused")
     private void forEachLoopWithBreak() {
         int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10};
         for (int number : numbers) {
@@ -97,8 +102,17 @@ public class Loops {
         numbers.forEach(x -> System.out.println(x));
     }
 
+    @SuppressWarnings("unused")
     private void forEach5() {
         List<Integer> numbers = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         numbers.forEach(x -> { System.out.println(x); });
+    }
+
+    @SuppressWarnings("unused")
+    private void forEachLoopWithList() {
+        List<Integer> numbers = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        for (Integer number : numbers) {
+            System.out.println(number);
+        }
     }
 }
