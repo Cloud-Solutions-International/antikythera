@@ -279,36 +279,6 @@ public class AbstractCompiler {
         return param.getNameAsString();
     }
 
-    public static Optional<TypeDeclaration<?>> resolveTypeSafely(ClassOrInterfaceType type, Node context) {
-
-        Optional<CompilationUnit> compilationUnit = context.findCompilationUnit();
-        if (compilationUnit.isPresent()) {
-            CompilationUnit cu = compilationUnit.get();
-
-            for (TypeDeclaration<?> t : cu.getTypes()) {
-                if (t.getNameAsString().equals(type.getNameAsString())) {
-                    return Optional.of(t);
-                }
-                Optional<ClassOrInterfaceDeclaration> cid = t.findFirst(
-                        ClassOrInterfaceDeclaration.class,
-                        c -> c.getNameAsString().equals(type.getNameAsString())
-                );
-                if (cid.isPresent()) {
-                    return Optional.of(cid.get());
-                }
-            }
-
-            ImportWrapper wrapper = findImport(cu, type.getNameAsString());
-            if (wrapper != null && wrapper.getType() != null) {
-                return Optional.of(wrapper.getType());
-            }
-
-            return findInSamePackage(cu, type);
-        }
-
-        return Optional.empty();
-    }
-
     /**
      * Get the compilation unit for the current class
      *

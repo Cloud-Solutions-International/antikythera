@@ -40,6 +40,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
@@ -560,35 +561,44 @@ public class Evaluator {
      */
     Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
-        Variable vx = createUsingEvaluator(type, oce, instructionPointer);
-
-        if (vx == null) {
-            vx = createUsingReflection(type, oce);
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
+        if (wrapper == null) {
+            return null;
         }
-        if (decl != null) {
+        if (decl == null) {
+            Node parent = oce.getParentNode().orElse(null);
+            if (parent instanceof VariableDeclarator vd) {
+                decl = vd;
+            }
+        }
+        if (wrapper.getType() != null) {
+            Variable vx = createUsingEvaluator(wrapper.getType(), oce);
             setLocal(instructionPointer, decl.getNameAsString(), vx);
+            return vx;
         }
-
-        return vx;
+        if (wrapper.getCls() != null) {
+            Variable vx = createUsingReflection(type, oce);
+            setLocal(instructionPointer, decl.getNameAsString(), vx);
+            return vx;
+        }
+        return null;
     }
 
     /**
      * Create a new object as an evaluator instance.
-     * @param type the class or interface type that we need to create an instance of
      * @param oce the object creation expression.
      */
-    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
-        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
+    private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce) throws ReflectiveOperationException {
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
-            anonymousOverrides(type, oce, eval);
+//            anonymousOverrides(type, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
                 return new Variable(eval);
             }
             MCEWrapper mce = wrapCallExpression(oce);
 
-            Optional<Callable> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
+            Optional<Callable> matchingConstructor = AbstractCompiler.findConstructorDeclaration(mce, match);
 
             if (matchingConstructor.isPresent()) {
                 eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
@@ -599,6 +609,7 @@ public class Evaluator {
              */
             return new Variable(eval);
         }
+
 
         return null;
     }
