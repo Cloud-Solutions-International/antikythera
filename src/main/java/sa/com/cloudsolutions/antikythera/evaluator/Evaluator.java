@@ -1733,17 +1733,34 @@ public class Evaluator {
         boolean matched = false;
         for(CatchClause clause : t.getCatchClauses()) {
             if(clause.getParameter().getType().isClassOrInterfaceType()) {
-                ClassOrInterfaceType exType = clause.getParameter().getType().asClassOrInterfaceType();
+                ClassOrInterfaceType thrownType = clause.getParameter().getType().asClassOrInterfaceType();
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, thrownType.getNameAsString());
 
-                String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, exType.getNameAsString());
-                if(resolvedClass != null && resolvedClass.equals(e.getClass().getName())) {
-                    setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
-                    executeBlock(clause.getBody().getStatements());
-                    if(t.getFinallyBlock().isPresent()) {
-                        executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
+                if(wrapper != null) {
+                    TypeDeclaration<?> decl = wrapper.getType();
+                    if (decl != null) {
+                        if (e.getClass().getName().equals(decl.getFullyQualifiedName().orElse(null))) {
+                            setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                            executeBlock(clause.getBody().getStatements());
+                            if(t.getFinallyBlock().isPresent()) {
+                                executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
+                            }
+                            matched = true;
+                            break;
+                        }
                     }
-                    matched = true;
-                    break;
+                    else {
+                        if (wrapper.getCls().isAssignableFrom(e.getClass()))  {
+                            setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                            executeBlock(clause.getBody().getStatements());
+                            if(t.getFinallyBlock().isPresent()) {
+                                executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
+                            }
+                            matched = true;
+                            break;
+                        }
+                    }
+
                 }
             }
         }

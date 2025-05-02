@@ -461,7 +461,7 @@ public class AbstractCompiler {
                 if (imp.getImport().isAsterisk()) {
                     return new TypeWrapper(Class.forName(imp.getNameAsString() + "." + className));
                 }
-                return new TypeWrapper(Class.forName(imp.getNameAsString()));
+                return new TypeWrapper(AbstractCompiler.loadClass(imp.getNameAsString()));
             } catch (ClassNotFoundException e) {
                 // ignorable
             }
