@@ -82,12 +82,22 @@ public class Loops {
         }
     }
 
+    @SuppressWarnings("unused")
+    private void oldFashionsForEachArray() {
+        int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+        for (int i = 0 ; i < numbers.length ; i++) {
+            int number = numbers[i];
+            System.out.println(number);
+        }
+    }
 
+    @SuppressWarnings("unused")
     private void forEach() {
         List<Integer> numbers = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         numbers.forEach(System.out::println);
     }
 
+    @SuppressWarnings("unused")
     private void forEach2() {
         List<Integer> numbers = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         numbers.forEach(x -> System.out.println(x));

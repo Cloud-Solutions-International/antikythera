@@ -36,12 +36,25 @@ public class MethodInterceptor {
     }
 
     @RuntimeType
-    public Object intercept(@Origin Method method, @AllArguments Object[] args)  {
+    public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+        if (wrappedClass != null) {
+            try {
+                Method targetMethod = wrappedClass.getMethod(method.getName(), method.getParameterTypes());
+                // Create instance if the method is not static
+                if (!java.lang.reflect.Modifier.isStatic(targetMethod.getModifiers())) {
+                    Object instance = wrappedClass.getDeclaredConstructor().newInstance();
+                    return targetMethod.invoke(instance, args);
+                }
+                return targetMethod.invoke(null, args);
+            } catch (NoSuchMethodException e) {
+                // Method not found in wrapped class, fall through to default behavior
+            }
+        }
+
         Class<?> clazz = method.getReturnType();
         if (clazz.equals(void.class)) {
             return null;
         }
-
         return Reflect.getDefault(clazz);
     }
 

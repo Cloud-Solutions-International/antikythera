@@ -14,6 +14,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
@@ -227,19 +228,20 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
             Type x = t.getTypeArguments().orElse(new NodeList<>()).getFirst().orElse(null);
             if (x instanceof ClassOrInterfaceType ciType) {
-                // Check if type is available as source code
-                Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.resolveTypeSafely(ciType, t);
-                if (typeDecl.isPresent()) {
-                    // Type is available as source code, use Evaluator
-                    String typeName = typeDecl.get().getFullyQualifiedName().orElse(ciType.getNameAsString());
-                    Evaluator typeEval = EvaluatorFactory.create(typeName, Evaluator.class);
-                    typeEval.setupFields();
-                    typeEval.initializeFields();
-                    return new Variable(Optional.of(typeEval));
-                } else {
-                    Variable v = optionalByteBuddy(ciType.getNameAsString());
-                    if (v != null) {
-                        return v;
+                TypeWrapper wrapper = AbstractCompiler.findType(ciType.findCompilationUnit().orElse(null), t.getNameAsString());
+                if (wrapper != null) {
+                    if (wrapper.getType() != null) {
+                        // Type is available as source code, use Evaluator
+                        String typeName = wrapper.getType().getFullyQualifiedName().orElse(ciType.getNameAsString());
+                        Evaluator typeEval = EvaluatorFactory.create(typeName, Evaluator.class);
+                        typeEval.setupFields();
+                        typeEval.initializeFields();
+                        return new Variable(Optional.of(typeEval));
+                    } else {
+                        Variable v = optionalByteBuddy(ciType.getNameAsString());
+                        if (v != null) {
+                            return v;
+                        }
                     }
                 }
             }

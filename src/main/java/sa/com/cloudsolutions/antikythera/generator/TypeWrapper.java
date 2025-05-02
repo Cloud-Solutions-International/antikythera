@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 
 public class TypeWrapper {
     TypeDeclaration<?> type;
@@ -12,6 +13,10 @@ public class TypeWrapper {
 
     public TypeWrapper(Class<?> cls) {
         this.cls = cls;
+    }
+
+    public TypeWrapper() {
+
     }
 
     public TypeDeclaration<?> getType() {

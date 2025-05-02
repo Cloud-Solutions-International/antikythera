@@ -40,6 +40,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
@@ -60,7 +61,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -192,7 +192,7 @@ public class Evaluator {
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
-            return createObject(expr, null, expr.asObjectCreationExpr());
+            return createObject(expr, expr.asObjectCreationExpr());
         } else if(expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         } else if(expr.isArrayInitializerExpr()) {
@@ -215,6 +215,20 @@ public class Evaluator {
             return evaluateClassExpression(expr);
         } else if (expr.isLambdaExpr()) {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
+        } else if (expr.isArrayAccessExpr()) {
+            return evaluateArrayAccess(expr);
+        }
+        return null;
+    }
+
+    private Variable evaluateArrayAccess(Expression expr) throws ReflectiveOperationException {
+        ArrayAccessExpr arrayAccessExpr = expr.asArrayAccessExpr();
+        Variable array = evaluateExpression(arrayAccessExpr.getName());
+        Expression index = arrayAccessExpr.getIndex();
+        Variable pos = evaluateExpression(index);
+        if (array != null && array.getValue() != null) {
+            Object value = Array.get(array.getValue(), (Integer) pos.getValue());
+            return new Variable(value);
         }
         return null;
     }
@@ -359,8 +373,15 @@ public class Evaluator {
                 }
             }
             Variable v = evaluateExpression(fae.getScope());
-            if (v != null && v.getValue() instanceof  Evaluator eval) {
-                return eval.getFields().get(fae.getNameAsString());
+            if (v != null) {
+                if (v.getValue() instanceof  Evaluator eval) {
+                    return eval.getFields().get(fae.getNameAsString());
+                }
+                else if (v.getValue() != null && v.getValue().getClass().isArray()) {
+                    if (fae.getNameAsString().equals("length")) {
+                        return new Variable(Array.getLength(v.getValue()));
+                    }
+                }
             }
             logger.warn("Could not resolve {} for field access", fae.getScope());
         }
@@ -511,7 +532,7 @@ public class Evaluator {
         if (init.isMethodCallExpr()) {
             v = evaluateMethodCall(init.asMethodCallExpr());
         } else if (init.isObjectCreationExpr()) {
-            v = createObject(init, decl, init.asObjectCreationExpr());
+            v = createObject(init, init.asObjectCreationExpr());
         } else if (init.isLambdaExpr()) {
             v = FPEvaluator.create(init.asLambdaExpr(), this);
         } else {
@@ -532,43 +553,40 @@ public class Evaluator {
      * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
      *                           We recursively fetch it's parent until we reach the start of the block. This is
      *                           needed because local variables are local to a block rather than a method.
-     * @param decl  The variable declaration. Pass null here if you don't want to create local variable.
-     *              This would typically be the case if you have a method call and one of the arguments
-     *              to the method call is a new instance.
      * @param oce The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
-    Variable createObject(Node instructionPointer, VariableDeclarator decl, ObjectCreationExpr oce) throws ReflectiveOperationException {
+    Variable createObject(Node instructionPointer, ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
-        Variable vx = createUsingEvaluator(type, oce, instructionPointer);
-
-        if (vx == null) {
-            vx = createUsingReflection(type, oce);
-        }
-        if (decl != null) {
-            setLocal(instructionPointer, decl.getNameAsString(), vx);
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
+        if (wrapper == null) {
+            return null;
         }
 
-        return vx;
+        if (wrapper.getType() != null) {
+            return createUsingEvaluator(wrapper.getType(), oce);
+        }
+        if (wrapper.getCls() != null) {
+            return createUsingReflection(wrapper.getCls(), oce);
+        }
+        return null;
     }
 
     /**
      * Create a new object as an evaluator instance.
-     * @param type the class or interface type that we need to create an instance of
      * @param oce the object creation expression.
      */
-    private Variable createUsingEvaluator(ClassOrInterfaceType type, ObjectCreationExpr oce, Node context) throws ReflectiveOperationException {
-        TypeDeclaration<?> match = AbstractCompiler.resolveTypeSafely(type, context).orElse(null);
+    private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce) throws ReflectiveOperationException {
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
-            anonymousOverrides(type, oce, eval);
+            anonymousOverrides(match, oce);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
                 return new Variable(eval);
             }
             MCEWrapper mce = wrapCallExpression(oce);
 
-            Optional<Callable> matchingConstructor =  AbstractCompiler.findConstructorDeclaration(mce, match);
+            Optional<Callable> matchingConstructor = AbstractCompiler.findConstructorDeclaration(mce, match);
 
             if (matchingConstructor.isPresent()) {
                 eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
@@ -579,6 +597,7 @@ public class Evaluator {
              */
             return new Variable(eval);
         }
+
 
         return null;
     }
@@ -613,19 +632,13 @@ public class Evaluator {
         return mce;
     }
 
-    private static void anonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
+    private static void anonymousOverrides(TypeDeclaration<?> type, ObjectCreationExpr oce) {
 
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
-        if (anonymousClassBody.isPresent()) {
-            /*
-             * Merge the anon class stuff into the parent
-             */
-            CompilationUnit cu = eval.getCompilationUnit().clone();
-            eval.setCompilationUnit(cu);
-            AbstractCompiler.getMatchingType(cu, type.getNameAsString()).ifPresent(match ->
-                injectMethods(match, anonymousClassBody.get())
-            );
-        }
+        /*
+         * Merge the anon class stuff into the parent
+         */
+        anonymousClassBody.ifPresent(bodyDeclarations -> injectMethods(type, bodyDeclarations));
     }
 
     private static void injectMethods(TypeDeclaration<?> match, NodeList<BodyDeclaration<?>> anonymousClassBody) {
@@ -654,29 +667,27 @@ public class Evaluator {
      * Create a new object using reflection.
      * Typically intended for use for classes contained in the standard library.
      *
-     * @param type the type of the class
      * @param oce the object creation expression
      * @return a Variable if the instance could be created or null.
      */
-    private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
+    private Variable createUsingReflection(Class<?> clazz, ObjectCreationExpr oce) {
         try {
-            String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, type.getNameAsString());
-
-            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
             ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
             Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
                     reflectionArguments.getArguments());
             if(cons !=  null) {
                 Object instance = cons.newInstance(reflectionArguments.getArguments());
-                return new Variable(type, instance);
+                Variable v = new Variable(instance);
+                v.setClazz(clazz);
+                return v;
             }
             else {
                 throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
             }
 
         } catch (Exception e) {
-            logger.warn("Could not create an instance of type {} using reflection", type);
+            logger.warn("Could not create an instance of type {} using reflection", clazz);
             logger.warn("The error was {}", e.getMessage());
 
         }
@@ -936,17 +947,18 @@ public class Evaluator {
                  * presence of an import, a class from same package or this is part of java.lang package
                  * or a Static import
                  */
-                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, expr.getNameAsString());
-                Class<?> clazz = getClass(fullyQualifiedName);
-                if (clazz != null) {
-                    v = new Variable(clazz);
-                    v.setClazz(clazz);
-                }
-                else {
-                    Evaluator eval = EvaluatorFactory.create(fullyQualifiedName, this);
-                    eval.setupFields();
-                    eval.initializeFields();
-                    v = new Variable(eval);
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, expr.getNameAsString());
+                if (wrapper != null) {
+                    Class<?> clazz = wrapper.getCls();
+                    if (clazz != null) {
+                        v = new Variable(clazz);
+                        v.setClazz(clazz);
+                    } else {
+                        Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
+                        eval.setupFields();
+                        eval.initializeFields();
+                        v = new Variable(eval);
+                    }
                 }
             }
 
@@ -1345,7 +1357,7 @@ public class Evaluator {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if(init.get().isObjectCreationExpr()) {
-                Variable v = createObject(variable, variable, init.get().asObjectCreationExpr());
+                Variable v = createObject(variable, init.get().asObjectCreationExpr());
                 v.setType(variable.getType());
                 return v;
             }
@@ -1640,7 +1652,7 @@ public class Evaluator {
         ThrowStmt t = stmt.asThrowStmt();
         if (t.getExpression().isObjectCreationExpr()) {
             ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
-            Variable v = createObject(stmt, null, oce);
+            Variable v = createObject(stmt, oce);
             if (v.getValue() instanceof Exception ex) {
                 throw ex;
             } else  {
@@ -1714,28 +1726,42 @@ public class Evaluator {
     }
 
     protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
-        if(catching.isEmpty()) {
+        if (catching.isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
+
         TryStmt t = catching.pollLast();
-        boolean matched = false;
-        for(CatchClause clause : t.getCatchClauses()) {
-            if(clause.getParameter().getType().isClassOrInterfaceType()) {
-                String resolvedClass = clause.getParameter().getType().asClassOrInterfaceType().resolve().describe();
-                if(resolvedClass.equals(e.getClass().getName())) {
+        boolean matchFound = false;
+
+        for (CatchClause clause : t.getCatchClauses()) {
+            if (clause.getParameter().getType().isClassOrInterfaceType()) {
+                TypeWrapper wrapper = AbstractCompiler.findType(cu,
+                    clause.getParameter().getType().asClassOrInterfaceType().getNameAsString());
+
+                if (wrapper != null && isExceptionMatch(wrapper, e)) {
                     setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
                     executeBlock(clause.getBody().getStatements());
-                    if(t.getFinallyBlock().isPresent()) {
-                        executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
-                    }
-                    matched = true;
+                    matchFound = true;
                     break;
                 }
             }
         }
-        if(!matched) {
+
+        if (t.getFinallyBlock().isPresent()) {
+            executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
+        }
+
+        if (!matchFound && !t.getFinallyBlock().isPresent()) {
             throw new AUTException("Unhandled exception", e);
         }
+    }
+
+    private boolean isExceptionMatch(TypeWrapper wrapper, Exception e) {
+        TypeDeclaration<?> decl = wrapper.getType();
+        if (decl != null) {
+            return e.getClass().getName().equals(decl.getFullyQualifiedName().orElse(null));
+        }
+        return wrapper.getCls().isAssignableFrom(e.getClass());
     }
 
     Variable executeReturnStatement(Statement stmt) throws ReflectiveOperationException {
