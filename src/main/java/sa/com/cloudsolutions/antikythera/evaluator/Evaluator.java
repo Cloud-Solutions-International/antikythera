@@ -573,12 +573,16 @@ public class Evaluator {
         }
         if (wrapper.getType() != null) {
             Variable vx = createUsingEvaluator(wrapper.getType(), oce);
-            setLocal(instructionPointer, decl.getNameAsString(), vx);
+            if (decl != null) {
+                setLocal(instructionPointer, decl.getNameAsString(), vx);
+            }
             return vx;
         }
         if (wrapper.getCls() != null) {
-            Variable vx = createUsingReflection(type, oce);
-            setLocal(instructionPointer, decl.getNameAsString(), vx);
+            Variable vx = createUsingReflection(wrapper.getCls(), oce);
+            if (decl != null) {
+                setLocal(instructionPointer, decl.getNameAsString(), vx);
+            }
             return vx;
         }
         return null;
@@ -591,7 +595,7 @@ public class Evaluator {
     private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce) throws ReflectiveOperationException {
         if (match != null) {
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
-//            anonymousOverrides(type, oce, eval);
+            anonymousOverrides(match, oce, eval);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
             if (constructors.isEmpty()) {
                 return new Variable(eval);
@@ -644,7 +648,7 @@ public class Evaluator {
         return mce;
     }
 
-    private static void anonymousOverrides(ClassOrInterfaceType type, ObjectCreationExpr oce, Evaluator eval) {
+    private static void anonymousOverrides(TypeDeclaration<?> type, ObjectCreationExpr oce, Evaluator eval) {
 
         Optional<NodeList<BodyDeclaration<?>>> anonymousClassBody = oce.getAnonymousClassBody();
         if (anonymousClassBody.isPresent()) {
@@ -653,9 +657,7 @@ public class Evaluator {
              */
             CompilationUnit cu = eval.getCompilationUnit().clone();
             eval.setCompilationUnit(cu);
-            AbstractCompiler.getMatchingType(cu, type.getNameAsString()).ifPresent(match ->
-                injectMethods(match, anonymousClassBody.get())
-            );
+            injectMethods(type, anonymousClassBody.get());
         }
     }
 
@@ -685,29 +687,27 @@ public class Evaluator {
      * Create a new object using reflection.
      * Typically intended for use for classes contained in the standard library.
      *
-     * @param type the type of the class
      * @param oce the object creation expression
      * @return a Variable if the instance could be created or null.
      */
-    private Variable createUsingReflection(ClassOrInterfaceType type, ObjectCreationExpr oce) {
+    private Variable createUsingReflection(Class<?> clazz, ObjectCreationExpr oce) {
         try {
-            String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, type.getNameAsString());
-
-            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
             ReflectionArguments reflectionArguments = Reflect.buildArguments(oce, this, null);
 
             Constructor<?> cons = Reflect.findConstructor(clazz, reflectionArguments.getArgumentTypes(),
                     reflectionArguments.getArguments());
             if(cons !=  null) {
                 Object instance = cons.newInstance(reflectionArguments.getArguments());
-                return new Variable(type, instance);
+                Variable v = new Variable(instance);
+                v.setClazz(clazz);
+                return v;
             }
             else {
                 throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
             }
 
         } catch (Exception e) {
-            logger.warn("Could not create an instance of type {} using reflection", type);
+            logger.warn("Could not create an instance of type {} using reflection", clazz);
             logger.warn("The error was {}", e.getMessage());
 
         }
