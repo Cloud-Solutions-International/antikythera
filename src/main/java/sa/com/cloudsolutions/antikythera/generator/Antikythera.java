@@ -5,23 +5,6 @@ import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
-import org.eclipse.aether.DefaultRepositorySystemSession;
-import org.eclipse.aether.RepositorySystem;
-import org.eclipse.aether.artifact.Artifact;
-import org.eclipse.aether.artifact.DefaultArtifact;
-import org.eclipse.aether.collection.CollectRequest;
-import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory;
-import org.eclipse.aether.impl.DefaultServiceLocator;
-import org.eclipse.aether.repository.LocalRepository;
-import org.eclipse.aether.repository.RemoteRepository;
-import org.eclipse.aether.resolution.ArtifactResult;
-import org.eclipse.aether.resolution.DependencyRequest;
-import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
-import org.eclipse.aether.spi.connector.transport.TransporterFactory;
-import org.eclipse.aether.transport.file.FileTransporterFactory;
-import org.eclipse.aether.transport.http.HttpTransporterFactory;
-import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -47,7 +30,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -268,60 +250,18 @@ public class Antikythera {
     }
 
     public String[] getJarPaths() {
-        return getAllJarPathsWithTransitives();
-    }
-
-    public String[] getAllJarPathsWithTransitives() {
         List<String> jarPaths = new ArrayList<>();
 
-        Optional<String> m2Optional = Settings.getProperty("variables.m2_folder", String.class);
-        if (m2Optional.isEmpty()) return new String[0];
-
-        String m2 = m2Optional.get();
-
-        try {
-            org.apache.maven.model.Repository localRepo = new org.apache.maven.model.Repository();
-            localRepo.setId("local");
-            localRepo.setUrl("file://" + m2);
-
-            DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
-            locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
-            locator.addService(TransporterFactory.class, FileTransporterFactory.class);
-            locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
-
-            RepositorySystem system = locator.getService(RepositorySystem.class);
-
-            DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
-            LocalRepository local = new LocalRepository(m2);
-            session.setLocalRepositoryManager(system.newLocalRepositoryManager(session, local));
-
-            RemoteRepository central = new RemoteRepository.Builder("central", "default", "https://repo.maven.apache.org/maven2").build();
-
+        if (pomModel != null) {
             List<Dependency> dependencies = pomModel.getDependencies();
-            for (Dependency dep : dependencies) {
-                Artifact artifact = new DefaultArtifact(dep.getGroupId(), dep.getArtifactId(), "jar", dep.getVersion());
-                CollectRequest collectRequest = new CollectRequest();
-                collectRequest.setRoot(new org.eclipse.aether.graph.Dependency(artifact, "compile"));
-                collectRequest.addRepository(central);
-
-                DependencyRequest dependencyRequest = new DependencyRequest();
-                dependencyRequest.setCollectRequest(collectRequest);
-
-                List<ArtifactResult> results = system.resolveDependencies(session, dependencyRequest).getArtifactResults();
-
-                for (ArtifactResult result : results) {
-                    File file = result.getArtifact().getFile();
-                    if (file != null && file.exists()) {
-                        jarPaths.add(file.getAbsolutePath());
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            logger.error("Dependency resolution failed", e);
-            return new String[0];
+            Properties properties = pomModel.getProperties();
+            Settings.getProperty("variables.m2_folder", String.class)
+                    .ifPresent(m2 -> {
+                        for (Dependency dependency : dependencies) {
+                            addJarPath(dependency, properties, m2, jarPaths);
+                        }
+                    });
         }
-
         return jarPaths.toArray(new String[0]);
     }
 
@@ -345,7 +285,6 @@ public class Antikythera {
                     artifactId + "-" + version + ".jar");
             if (Files.exists(p)) {
                 jarPaths.add(p.toString());
-                System.out.println(p);
             } else {
                 logger.warn("Jar not found: {}", p);
             }
