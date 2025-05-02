@@ -15,6 +15,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -396,7 +397,12 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (param.findCompilationUnit().isPresent()) {
             CompilationUnit cu = param.findCompilationUnit().orElseThrow();
-
+            if (t instanceof ArrayType) {
+                Variable mocked = Reflect.variableFactory(t.asString());
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                mockParameterFields(v, body, nameAsString);
+                return;
+            }
             if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
                 String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
                 Variable mocked = Reflect.variableFactory(fullClassName);
