@@ -1859,8 +1859,4 @@ public class Evaluator {
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
     }
-
-    public TypeDeclaration<?> getTypeDeclaration() {
-        return typeDeclaration;
-    }
 }

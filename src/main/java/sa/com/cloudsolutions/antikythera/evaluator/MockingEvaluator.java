@@ -68,24 +68,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
 
             if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
-                if (method.getName().equals("save")) {
-                    MockingCall call = MockingRegistry.getThen(className, callable);
-                    if (call != null) {
-                        return call.getVariable();
-                    }
-                    MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
-                    MethodCallExpr mce = StaticJavaParser.parseExpression(
-                        String.format(
-                                "Mockito.when(%s.save(any())).thenAnswer(invocation-> invocation.getArgument(0))",
-                                variableName)
-                    );
-                    mockingCall.setExpression(mce);
-
-                    MockingRegistry.when(className, mockingCall);
-                    return variables.getFirst();
-                }
-                return mockFromTypeArguments(
-                        typeDeclaration.asClassOrInterfaceDeclaration().getExtendedTypes(0), method);
+                return mockRepositoryMethod(callable, method, variables);
             }
 
             Class<?> foundIn = callable.getFoundInClass();
@@ -97,6 +80,27 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
         }
         return executeMethod(method);
+    }
+
+    private Variable mockRepositoryMethod(Callable callable, Method method, List<Variable> variables) {
+        if (method.getName().equals("save")) {
+            MockingCall call = MockingRegistry.getThen(className, callable);
+            if (call != null) {
+                return call.getVariable();
+            }
+            MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
+            MethodCallExpr mce = StaticJavaParser.parseExpression(
+                String.format(
+                        "Mockito.when(%s.save(any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                        variableName)
+            );
+            mockingCall.setExpression(mce);
+
+            MockingRegistry.when(className, mockingCall);
+            return variables.getFirst();
+        }
+        return mockFromTypeArguments(
+                typeDeclaration.asClassOrInterfaceDeclaration().getExtendedTypes(0), method);
     }
 
     private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {

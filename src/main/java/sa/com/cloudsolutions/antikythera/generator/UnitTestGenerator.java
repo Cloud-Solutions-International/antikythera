@@ -33,7 +33,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
-import java.lang.reflect.Modifier;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
