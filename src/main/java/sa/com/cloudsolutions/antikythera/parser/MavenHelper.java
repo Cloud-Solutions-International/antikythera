@@ -8,6 +8,7 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -144,11 +145,15 @@ public class MavenHelper {
 
         if (pomModel != null) {
             List<Dependency> dependencies = pomModel.getDependencies();
-            Properties properties = pomModel.getProperties();
+
             Settings.getProperty("variables.m2_folder", String.class)
                 .ifPresent(m2 -> {
                     for (Dependency dependency : dependencies) {
-                        addJarPath(dependency, properties, m2);
+                        try {
+                            addJarPath(dependency, m2);
+                        } catch (XmlPullParserException|IOException e) {
+                            throw new AntikytheraException(e);
+                        }
                     }
                 });
         }
@@ -192,21 +197,27 @@ public class MavenHelper {
     }
 
     private int compareVersions(String v1, String v2) {
-        String[] parts1 = v1.split("\\.");
-        String[] parts2 = v2.split("\\.");
+        try {
+            String[] parts1 = v1.split("\\.");
+            String[] parts2 = v2.split("\\.");
 
-        int length = Math.max(parts1.length, parts2.length);
-        for (int i = 0; i < length; i++) {
-            int part1 = i < parts1.length ? Integer.parseInt(parts1[i]) : 0;
-            int part2 = i < parts2.length ? Integer.parseInt(parts2[i]) : 0;
-            if (part1 != part2) {
-                return Integer.compare(part1, part2);
+            int length = Math.max(parts1.length, parts2.length);
+            for (int i = 0; i < length; i++) {
+                int part1 = i < parts1.length ? Integer.parseInt(parts1[i]) : 0;
+                int part2 = i < parts2.length ? Integer.parseInt(parts2[i]) : 0;
+                if (part1 != part2) {
+                    return Integer.compare(part1, part2);
+                }
             }
+        } catch (NumberFormatException e) {
+            // ignore invalid version formats
         }
         return 0;
     }
 
-    private void addJarPath(Dependency dependency, Properties properties, String m2) {
+    private void addJarPath(Dependency dependency, String m2) throws XmlPullParserException, IOException {
+        Properties properties = pomModel.getProperties();
+
         String groupIdPath = dependency.getGroupId().replace('.', '/');
         String artifactId = dependency.getArtifactId();
         String version = dependency.getVersion();
@@ -232,9 +243,17 @@ public class MavenHelper {
                 }
                 else {
                     artifacts.put(artifactId, new Artifact(artifactId, version, p.toString()));
+
+                    Path pom = Paths.get(m2, groupIdPath, artifactId, version,
+                            artifactId + "-" + version + ".pom");
+                    if (Files.exists(pom)) {
+                        MavenHelper pomHelper = new MavenHelper();
+                        pomHelper.readPomFile(pom);
+                        pomHelper.buildJarPaths();
+                    }
                 }
             } else {
-                logger.warn("Jar not found: {}", p);
+                logger.debug("Jar not found: {}", p);
             }
         }
     }

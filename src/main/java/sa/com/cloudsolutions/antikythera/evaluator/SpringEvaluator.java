@@ -340,7 +340,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+
             handleApplicationException(e);
         }
     }
