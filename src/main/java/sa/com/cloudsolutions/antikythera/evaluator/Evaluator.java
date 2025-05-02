@@ -60,6 +60,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -691,6 +692,7 @@ public class Evaluator {
      * @param name the name of the variable to look up
      * @return the Variable if it's found or null.
      */
+    @SuppressWarnings("java:S3776")
     public Variable getLocal(Node node, String name) {
         Node n = node;
 
@@ -1591,20 +1593,46 @@ public class Evaluator {
         loops.addLast(true);
         ForEachStmt forEachStmt = stmt.asForEachStmt();
         Variable iter = evaluateExpression(forEachStmt.getIterable());
-        Object arr = iter.getValue();
+        Object iterValue = iter.getValue();
+
+        if (iterValue instanceof List<?> list) {
+            executeForEachWithList(list, forEachStmt);
+        }
+        else {
+            executeForEachWithArray(forEachStmt, iterValue);
+        }
+
+        loops.pollLast();
+    }
+
+    private void executeForEachWithArray(ForEachStmt forEachStmt, Object iterValue) throws ReflectiveOperationException {
         evaluateExpression(forEachStmt.getVariable());
 
-        for(int i = 0 ; i < Array.getLength(arr) ; i++) {
-            Object value = Array.get(arr, i);
-            for(VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+        for (int i = 0; i < Array.getLength(iterValue); i++) {
+            Object value = Array.get(iterValue, i);
+            for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
                 Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
                 v.setValue(value);
             }
 
             executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
         }
+    }
 
-        loops.pollLast();
+    private void executeForEachWithList(List<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
+        for (Object value : list) {
+            for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+                Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
+                if (v != null) {
+                    v.setValue(value);
+                }
+                else {
+                    v = new Variable(value);
+                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
+                }
+            }
+            executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+        }
     }
 
     @SuppressWarnings("java:S112")
