@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class Conditional {
@@ -23,6 +24,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional3(Person person) {
         if (person.getId() == 0) {
             System.out.print("ZERO!");
@@ -32,6 +34,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional4(Person person) {
         if (person.getId() < 0) {
             System.out.print("Negative!");
@@ -60,6 +63,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional6(double a) {
         if (a == 1.0) {
             System.out.print("One!");
@@ -75,6 +79,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional7(Long a) {
         if (a == 1) {
             System.out.print("One!");
@@ -90,6 +95,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional8(String a) {
         if (a.equals("1")) {
             System.out.print("One!");
@@ -179,6 +185,16 @@ public class Conditional {
         }
         else {
             System.out.print("Set is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness5(Map<Integer, Integer> map) {
+        if (map != null && !map.isEmpty()) {
+            System.out.print("Map is not empty!");
+        }
+        else {
+            System.out.print("Map is empty!");
         }
     }
 
