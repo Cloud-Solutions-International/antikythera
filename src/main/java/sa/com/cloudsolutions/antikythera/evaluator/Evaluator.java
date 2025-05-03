@@ -354,41 +354,40 @@ public class Evaluator {
     Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
         FieldAccessExpr fae = expr.asFieldAccessExpr();
 
-        if (cu != null) {
-            String fullName = AbstractCompiler.findFullyQualifiedName(cu, fae.getScope().toString());
-            if (fullName != null) {
-                CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(fullName);
-                if (dep == null) {
-                    /*
-                     * Use class loader
-                     */
-                    Class<?> clazz = AbstractCompiler.loadClass(fullName);
-                    Field field = clazz.getDeclaredField(fae.getNameAsString());
-                    field.setAccessible(true);
-                    return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()),  field.get(null));
-                } else {
-                    Variable v = evaluateFieldAccessExpression(fae, dep);
-                    if (v != null) {
-                        return v;
-                    }
+        String fullName = AbstractCompiler.findFullyQualifiedName(cu, fae.getScope().toString());
+        if (fullName != null) {
+            CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(fullName);
+            if (dep == null) {
+                /*
+                 * Use class loader
+                 */
+                Class<?> clazz = AbstractCompiler.loadClass(fullName);
+                Field field = clazz.getDeclaredField(fae.getNameAsString());
+                field.setAccessible(true);
+                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()),  field.get(null));
+            } else {
+                Variable v = evaluateFieldAccessExpression(fae, dep);
+                if (v != null) {
+                    return v;
                 }
             }
-            Variable v = evaluateExpression(fae.getScope());
-            if (v != null) {
-                if (v.getValue() instanceof  Evaluator eval) {
-                    return eval.getFields().get(fae.getNameAsString());
-                }
-                else if (v.getValue() != null && v.getValue().getClass().isArray()) {
-                    if (fae.getNameAsString().equals("length")) {
-                        return new Variable(Array.getLength(v.getValue()));
-                    }
-                    else {
-                        logger.warn("Array field access {} not supported", fae.getNameAsString());
-                    }
-                }
-            }
-            logger.warn("Could not resolve {} for field access", fae.getScope());
         }
+        Variable v = evaluateExpression(fae.getScope());
+        if (v != null) {
+            if (v.getValue() instanceof  Evaluator eval) {
+                return eval.getFields().get(fae.getNameAsString());
+            }
+            else if (v.getValue() != null && v.getValue().getClass().isArray()) {
+                if (fae.getNameAsString().equals("length")) {
+                    return new Variable(Array.getLength(v.getValue()));
+                }
+                else {
+                    logger.warn("Array field access {} not supported", fae.getNameAsString());
+                }
+            }
+        }
+        logger.warn("Could not resolve {} for field access", fae.getScope());
+
 
         return null;
     }

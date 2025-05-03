@@ -56,7 +56,9 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional1, The name is nullT", "conditional2, TThe name is null",
-            "conditional3, 1ZERO!",
+            "conditional3, 1ZERO!", "emptiness1, List is not empty!List is not empty!",
+            "emptiness2, List is not empty!List is not empty!",
+            "emptiness3, List is not empty!List is not empty!"
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

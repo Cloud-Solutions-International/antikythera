@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import java.util.List;
+
 public class Conditional {
     public void conditional1(Person person) {
         if (person.getName() != null) {
@@ -136,6 +138,37 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
+    public void emptiness1(List<Integer> list) {
+        if (list.isEmpty()) {
+            System.out.print("List is empty!");
+        }
+        else {
+            System.out.print("List is not empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness2(List<Integer> list) {
+        if (list == null || list.isEmpty()) {
+            System.out.print("List is empty!");
+        }
+        else {
+            System.out.print("List is not empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness3(List<Integer> list) {
+        if (list != null && !list.isEmpty()) {
+            System.out.print("List is not empty!");
+        }
+        else {
+            System.out.print("List is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
     public String nested(int a) {
         if (a >= 0) {
             if (a == 0) {
