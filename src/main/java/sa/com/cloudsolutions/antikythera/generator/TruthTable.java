@@ -28,7 +28,7 @@ import java.util.Set;
  * <p>Generate (and print) truth tables for given conditionals</p>
  *
  * Comparisons involving Object.equals() are tricky. The range of values to assign to the variable
- * depends on the argument to the `equals` method. Obviously when the scope is null `null.equals`
+ * depends on the argument to the `equals` method. Obviously, when the scope is null `null.equals`
  * leads to Null Pointer Exceptions, so workarounds will have to be used.
  *
  * The values assigned may have its domain in Strings, Boolean or any other objects. This
@@ -232,10 +232,9 @@ public class TruthTable {
             }
 
             for (Expression constraintExpr : constraint.getValue()) {
-                if (constraintExpr instanceof BinaryExpr binaryExpr) {
-                    if (!satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
-                        return false;
-                    }
+                if (constraintExpr instanceof BinaryExpr binaryExpr &&
+                            !satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
+                    return false;
                 }
             }
         }
@@ -365,8 +364,10 @@ public class TruthTable {
                 }
             }
         }
+        adjustDomainBasedOnConstraints();
+    }
 
-        // Then handle constraints
+    private void adjustDomainBasedOnConstraints() {
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
             for (Expression constraintExpr : constraint.getValue()) {
@@ -439,8 +440,8 @@ public class TruthTable {
 
     private int findMaxIntegerLiteral() {
         int maxValue = 1;
-        for (Expression condition : conditions) {
-            if (condition instanceof BinaryExpr binaryExpr) {
+        for (Expression expr : conditions) {
+            if (expr instanceof BinaryExpr binaryExpr) {
                 if (isInequality(binaryExpr)) {
                     // Check both sides for integer literals
                     if (binaryExpr.getLeft().isIntegerLiteralExpr()) {
@@ -452,7 +453,7 @@ public class TruthTable {
                         maxValue = Math.max(maxValue, value + 1);
                     }
                 }
-            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
+            } else if (expr instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
                 // Check equals method arguments for integer literals
                 if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
                     int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
