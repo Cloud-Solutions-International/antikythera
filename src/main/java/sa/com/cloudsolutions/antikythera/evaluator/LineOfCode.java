@@ -292,4 +292,8 @@ public class LineOfCode {
     public List<LineOfCode> getChildren() {
         return children;
     }
+
+    public BinaryExpr getBinaryExpr() {
+        return binaryExpr;
+    }
 }

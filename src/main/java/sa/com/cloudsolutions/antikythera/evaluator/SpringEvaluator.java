@@ -292,12 +292,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         );
 
         if (currentConditional != null ) {
-            Statement statement = currentConditional.getStatement();
-            boolean nextState = currentConditional.isFalsePath();
-            if (statement instanceof IfStmt ifStmt) {
-                setupIfCondition(ifStmt, nextState);
-            } else {
-
+            if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getBinaryExpr() != null) {
+                setupIfCondition();
             }
             applyPreconditions(p, va);
         }
@@ -631,12 +627,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     /**
      * Set up an if condition so that it will evaluate to true or false in future executions.
-     *
-     * @param conditionalStatement  the if statement to mess with
-     * @param state the desired state.
      */
-    void setupIfCondition(IfStmt conditionalStatement, boolean state) {
-        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(conditionalStatement);
+    void setupIfCondition() {
+        boolean state = currentConditional.isFalsePath();
+
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(currentConditional.getStatement());
         TruthTable tt = new TruthTable();
 
         for (Expression cond : collectedConditions) {
@@ -648,7 +643,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         }
 
-        collectedConditions.add(conditionalStatement.getCondition());
+        collectedConditions.add(currentConditional.getBinaryExpr());
         tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
         tt.generateTruthTable();
 
@@ -658,9 +653,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if (entry.getKey().isMethodCallExpr()) {
-                    setupConditionThroughMethodCalls(conditionalStatement, entry);
+                    setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                 } else if (entry.getKey().isNameExpr()) {
-                    setupConditionThroughAssignment(conditionalStatement, entry);
+                    setupConditionThroughAssignment(currentConditional.getStatement(), entry);
                 }
             }
         }

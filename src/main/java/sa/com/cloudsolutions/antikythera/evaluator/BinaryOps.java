@@ -71,7 +71,6 @@ public class BinaryOps {
         return new UnaryExpr(condition, UnaryExpr.Operator.LOGICAL_COMPLEMENT);
     }
 
-
     public static Expression getCombinedCondition(List<Expression> conditions) {
         if (conditions.isEmpty()) {
             return null;
