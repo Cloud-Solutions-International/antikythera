@@ -174,6 +174,30 @@ class TestConditional extends TestHelper {
         assertEquals("Bee!Zero!Zero!Aargh!Antikythera!Bee!",s.replaceAll("\\n",""));
     }
 
+
+    @ParameterizedTest
+    @CsvSource({
+            "ternary1, test,  It is not null",
+            "ternary1, null,  It is null",
+            "ternary2, test,  It is not null",
+            "ternary2, null,  It is null"
+    })
+    void testTernary(String name, String arg , String value) throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+
+        if (arg.equals("null")) {
+            AntikytheraRunTime.push(new Variable(null));
+        }
+        else {
+            AntikytheraRunTime.push(new Variable(arg));
+        }
+        Variable v = evaluator.executeMethod(method);
+        assertEquals(v.getValue(), value);
+
+    }
 }
 
 class TestConditionalWithOptional extends TestHelper {

@@ -148,6 +148,17 @@ public class Conditional {
         return "Negative";
     }
 
+    @SuppressWarnings("unused")
+    public String ternary1(String a) {
+        return null == a ? "It is null" : "It is not null";
+    }
+
+    @SuppressWarnings("unused")
+    public String ternary2(String a) {
+        return a == null ? "It is null" : "It is not null";
+    }
+
+    @SuppressWarnings("unused")
     public void multiVariate(int a, int b) {
         if (a == 0) {
             if (b == 0) {

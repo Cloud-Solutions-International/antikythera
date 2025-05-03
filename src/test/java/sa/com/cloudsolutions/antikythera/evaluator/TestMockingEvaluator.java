@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
@@ -19,6 +20,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -180,10 +182,9 @@ class TestMockingEvaluator {
     }
 
     @Test
-    void testRepositorySaveMethodCreatesEvaluator() throws ReflectiveOperationException, IOException {
+    void testRepositorySaveMethodCreatesEvaluator() throws ReflectiveOperationException {
         MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
-        AbstractCompiler.preProcess();
-        SpringEvaluator eval = EvaluatorFactory.create(
+                SpringEvaluator eval = EvaluatorFactory.create(
                 "sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
 
         MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
@@ -194,4 +195,5 @@ class TestMockingEvaluator {
         assertNotNull(v.getValue());
         assertInstanceOf(Evaluator.class, v.getValue());
     }
+
 }
