@@ -641,8 +641,19 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
     }
 
     private Object evaluateMethodCall(MethodCallExpr condition, Map<Expression, Object> truthValues) {
-        if (condition.toString().contains(EQUALS_CALL)) {
-            Expression scope = condition.getScope().orElse(null);
+        String methodName = condition.getNameAsString();
+        Expression scope = condition.getScope().orElse(null);
+
+        if (IS_EMPTY.equals(methodName)) {
+            Object scopeValue = truthValues.get(scope);
+            if (scopeValue == null) {
+                return true; // null collections are considered empty
+            }
+            if (scopeValue instanceof Collection<?> collection) {
+                return collection.isEmpty();
+            }
+            return false; // non-collection objects are not empty
+        } else if (EQUALS_CALL.equals(methodName)) {
             Object scopeValue = truthValues.get(scope);
             Expression argument = condition.getArgument(0);
 

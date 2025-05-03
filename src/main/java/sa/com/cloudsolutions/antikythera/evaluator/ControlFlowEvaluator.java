@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AssignExpr;
@@ -22,6 +23,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,7 +41,7 @@ public class ControlFlowEvaluator extends Evaluator {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
-            Expression init = v.getInitializer();
+            Expression init= v.getInitializer();
             if (init != null) {
                 MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
@@ -73,8 +75,14 @@ public class ControlFlowEvaluator extends Evaluator {
         if (v.getType() instanceof PrimitiveType) {
             valueExpr = Reflect.createLiteralExpression(entry.getValue());
         } else {
-            valueExpr = entry.getValue() == null ? new NullLiteralExpr()
-                    : new StringLiteralExpr(entry.getValue().toString());
+            if (entry.getValue() instanceof List<?>) {
+                valueExpr = StaticJavaParser.parseExpression("List.of(1)");
+
+            }
+            else {
+                valueExpr = entry.getValue() == null ? new NullLiteralExpr()
+                        : new StringLiteralExpr(entry.getValue().toString());
+            }
         }
 
         return new AssignExpr(

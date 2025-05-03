@@ -173,7 +173,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
+    private void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
         if (!assignExpr.getTarget().toString().equals(p.getNameAsString())) {
             return;
         }
@@ -195,7 +195,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
                 yield value;
             }
-            default -> va.getValue();
+            default -> {
+                try {
+                    yield evaluateExpression(value).getValue();
+                } catch (ReflectiveOperationException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
         };
         va.setValue(result);
     }
@@ -315,6 +321,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
                 parameterAssignment(p, assignExpr, va);
+                //va.setInitializer(assignExpr);
             }
         }
     }
