@@ -635,37 +635,36 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param conditionalStatement  the if statement to mess with
      * @param state the desired state.
      */
-    void setupIfCondition(Statement conditionalStatement, boolean state) {
-        if (conditionalStatement instanceof NodeWithCondition<?> nodeWithCondition) {
-            List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(conditionalStatement);
-            TruthTable tt = new TruthTable();
+    void setupIfCondition(IfStmt conditionalStatement, boolean state) {
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(conditionalStatement);
+        TruthTable tt = new TruthTable();
 
-            for (Expression cond : collectedConditions) {
-                if (cond.isBinaryExpr()) {
-                    BinaryExpr bin = cond.asBinaryExpr();
-                    if (bin.getLeft().isNameExpr()) {
-                        tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
-                    }
-                }
-            }
-
-            collectedConditions.add(nodeWithCondition.getCondition());
-            tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
-            tt.generateTruthTable();
-
-            List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
-
-            if (!values.isEmpty()) {
-                Map<Expression, Object> value = values.getFirst();
-                for (var entry : value.entrySet()) {
-                    if (entry.getKey().isMethodCallExpr()) {
-                        setupConditionThroughMethodCalls(conditionalStatement, entry);
-                    } else if (entry.getKey().isNameExpr()) {
-                        setupConditionThroughAssignment(conditionalStatement, entry);
-                    }
+        for (Expression cond : collectedConditions) {
+            if (cond.isBinaryExpr()) {
+                BinaryExpr bin = cond.asBinaryExpr();
+                if (bin.getLeft().isNameExpr()) {
+                    tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
                 }
             }
         }
+
+        collectedConditions.add(conditionalStatement.getCondition());
+        tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
+
+        if (!values.isEmpty()) {
+            Map<Expression, Object> value = values.getFirst();
+            for (var entry : value.entrySet()) {
+                if (entry.getKey().isMethodCallExpr()) {
+                    setupConditionThroughMethodCalls(conditionalStatement, entry);
+                } else if (entry.getKey().isNameExpr()) {
+                    setupConditionThroughAssignment(conditionalStatement, entry);
+                }
+            }
+        }
+
     }
 
     /**
