@@ -23,7 +23,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -77,7 +76,6 @@ public class ControlFlowEvaluator extends Evaluator {
         } else {
             if (entry.getValue() instanceof List<?>) {
                 valueExpr = StaticJavaParser.parseExpression("List.of(1)");
-
             }
             else {
                 valueExpr = entry.getValue() == null ? new NullLiteralExpr()

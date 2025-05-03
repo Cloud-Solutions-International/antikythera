@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import java.util.List;
+import java.util.Set;
 
 public class Conditional {
     public void conditional1(Person person) {
@@ -104,6 +105,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void smallDiff(Double a) {
         if (a > 1.1) {
             System.out.print("Nearly 2!");
@@ -113,6 +115,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void booleanWorks(Boolean b) {
         if(b) {
             System.out.print("True!");
@@ -122,6 +125,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void switchCase1(int a) {
         switch(a) {
             case 1:
@@ -165,6 +169,16 @@ public class Conditional {
         }
         else {
             System.out.print("List is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness4(Set<Integer> set) {
+        if (set != null && !set.isEmpty()) {
+            System.out.print("Set is not empty!");
+        }
+        else {
+            System.out.print("Set is empty!");
         }
     }
 
