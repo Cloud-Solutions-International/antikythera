@@ -692,7 +692,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private Variable processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
         if (stmt.getExpression().isVariableDeclarationExpr()) {
             VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
-            VariableDeclarator v = vdecl.getVariable(0);
 
             Type elementType = vdecl.getElementType();
             if (elementType.isClassOrInterfaceType()) {

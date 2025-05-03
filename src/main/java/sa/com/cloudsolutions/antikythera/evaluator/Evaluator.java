@@ -381,6 +381,9 @@ public class Evaluator {
                     if (fae.getNameAsString().equals("length")) {
                         return new Variable(Array.getLength(v.getValue()));
                     }
+                    else {
+                        logger.warn("Array field access {} not supported", fae.getNameAsString());
+                    }
                 }
             }
             logger.warn("Could not resolve {} for field access", fae.getScope());
