@@ -157,9 +157,20 @@ public class Conditional {
     public String ternary2(String a) {
         return a == null ? "It is null!" : "It is not null!";
     }
+
     @SuppressWarnings("unused")
     public void ternary3(String a) {
         System.out.println(a == null ? "It is null!" : "It is not null!");
+    }
+
+    @SuppressWarnings("unused")
+    public void ternary4(int a) {
+        System.out.println(a == 1 || a == 2 ? "Small!" : "Big!");
+    }
+
+    @SuppressWarnings("unused")
+    public void ternary5(boolean a) {
+        System.out.println(a ? "True!" : "False!");
     }
 
     @SuppressWarnings("unused")

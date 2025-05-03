@@ -38,7 +38,7 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
     @Override
     public void visit(ConditionalExpr expr, LineOfCode parent) {
-        LineOfCode lineOfCode = new LineOfCode(expr.getCondition().asBinaryExpr());
+        LineOfCode lineOfCode = new LineOfCode(expr.getCondition());
         if (canMatchParameters(lineOfCode.getMethodDeclaration(), expr.getCondition())) {
             lineOfCode.setParent(parent);
             Branching.add(lineOfCode);

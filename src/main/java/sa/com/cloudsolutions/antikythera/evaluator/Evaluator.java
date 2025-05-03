@@ -267,7 +267,7 @@ public class Evaluator {
     }
 
     private Variable evaluateConditionalExpression(ConditionalExpr conditionalExpr) throws ReflectiveOperationException {
-        Variable v = evaluateBinaryExpression(conditionalExpr.getCondition().asBinaryExpr());
+        Variable v = evaluateExpression(conditionalExpr.getCondition());
         if (v != null && v.getValue().equals(Boolean.TRUE)) {
             return evaluateExpression(conditionalExpr.getThenExpr());
         }

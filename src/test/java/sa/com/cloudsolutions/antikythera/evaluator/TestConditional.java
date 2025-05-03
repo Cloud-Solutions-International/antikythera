@@ -198,17 +198,20 @@ class TestConditional extends TestHelper {
         assertEquals(v.getValue(), value);
     }
 
-    @Test
-    void testTernaryVisit() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
+            "ternary5, False!True!"
+    })
+    void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("ternary3")).orElseThrow();
+                md -> md.getNameAsString().equals(name)).orElseThrow();
 
 
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals("It is not null!It is null!",s.replaceAll("\\n",""));
+        assertEquals(result,s.replaceAll("\\n",""));
     }
 }
 

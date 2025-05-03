@@ -82,7 +82,7 @@ public class LineOfCode {
     }
 
     @SuppressWarnings("unchecked")
-    public LineOfCode(BinaryExpr binaryExpr) {
+    public LineOfCode(Expression binaryExpr) {
 
         binaryExpr.findAncestor(Statement.class).ifPresent(stmt -> {
             statement = stmt;
