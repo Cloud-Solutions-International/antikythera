@@ -45,7 +45,7 @@ class TestMockingRegistry extends TestHelper {
     }
 
     @Test
-    void testUseByteBuddy() throws ClassNotFoundException {
+    void testUseByteBuddy() throws ReflectiveOperationException {
         VariableDeclarator variableDeclarator = evaluator.getCompilationUnit()
                 .findFirst(VariableDeclarator.class, vd -> vd.getNameAsString().equals("objectMapper")).orElseThrow();
 

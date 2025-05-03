@@ -158,6 +158,7 @@ public class Evaluator {
      * @param expr the expression to evaluate
      * @return the result as a Variable instance which can be null if the expression is supposed to return null
      */
+    @SuppressWarnings("java:S3776")
     public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
@@ -1000,14 +1001,13 @@ public class Evaluator {
 
     void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = reflectionArguments.getMethod();
+
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
-
             returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
             if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                 returnValue.setClazz(method.getReturnType());
             }
-
         } catch (IllegalAccessException e) {
             invokeinAccessibleMethod(v, reflectionArguments);
         }

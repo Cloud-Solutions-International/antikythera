@@ -86,7 +86,7 @@ public class MockingRegistry {
      * @return a Variable representing the mocked object
      * @throws ClassNotFoundException if the class cannot be found
      */
-    public static Variable mockIt(VariableDeclarator variable) throws ClassNotFoundException {
+    public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
         String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
         Variable v;
         if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
@@ -114,10 +114,11 @@ public class MockingRegistry {
         return v;
     }
 
-    public static Variable createByteBuddyMockInstance(String className) throws ClassNotFoundException {
+    public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {
         Class<?> cls = AbstractCompiler.loadClass(className);
         MethodInterceptor interceptor = new MethodInterceptor(cls);
-        Variable v = new Variable(AKBuddy.createDynamicClass(interceptor));
+        Class<?> bb = AKBuddy.createDynamicClass(interceptor);
+        Variable v = new Variable(bb.getDeclaredConstructor().newInstance());
         v.setClazz(cls);
         return v;
     }

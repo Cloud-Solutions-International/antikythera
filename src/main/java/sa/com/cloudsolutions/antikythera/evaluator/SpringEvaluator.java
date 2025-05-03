@@ -509,7 +509,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 if (MockingRegistry.isMockTarget(resolvedClass)) {
                     try {
                         v = MockingRegistry.mockIt(variable);
-                    } catch (ClassNotFoundException e) {
+                    } catch (ReflectiveOperationException e) {
                         throw new AntikytheraException(e);
                     }
                 } else if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
