@@ -648,7 +648,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         if (IS_EMPTY.equals(methodName)) {
             Object scopeValue = truthValues.get(scope);
             if (scopeValue == null) {
-                return true; // null collections are considered empty
+                return true; // null collections are considered empty for the moment
             }
             if (scopeValue instanceof Collection<?> collection) {
                 return collection.isEmpty();

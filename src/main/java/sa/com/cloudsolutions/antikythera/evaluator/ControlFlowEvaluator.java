@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 
 public class ControlFlowEvaluator extends Evaluator {
@@ -40,7 +41,7 @@ public class ControlFlowEvaluator extends Evaluator {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
-            Expression init= v.getInitializer();
+            Expression init = v.getInitializer();
             if (init != null) {
                 MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
@@ -74,10 +75,20 @@ public class ControlFlowEvaluator extends Evaluator {
         if (v.getType() instanceof PrimitiveType) {
             valueExpr = Reflect.createLiteralExpression(entry.getValue());
         } else {
-            if (entry.getValue() instanceof List<?>) {
-                valueExpr = StaticJavaParser.parseExpression("List.of(1)");
-            }
-            else {
+            if (entry.getValue() instanceof List<?> list) {
+                if (list.isEmpty()) {
+                    valueExpr = StaticJavaParser.parseExpression("List.of()");
+                } else {
+                    valueExpr = StaticJavaParser.parseExpression("List.of(1)");
+                }
+            } else if (entry.getValue() instanceof Set<?> set) {
+                if (set.isEmpty()) {
+                    valueExpr = StaticJavaParser.parseExpression("Set.of()");
+                } else {
+                    valueExpr = StaticJavaParser.parseExpression("Set.of(1)");
+                }
+
+            } else {
                 valueExpr = entry.getValue() == null ? new NullLiteralExpr()
                         : new StringLiteralExpr(entry.getValue().toString());
             }
