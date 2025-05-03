@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,6 +37,7 @@ import java.util.Set;
 public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
     public static final String EQUALS_CALL = "equals";
+    public static final String IS_EMPTY = "isEmpty";
     /**
      * The condition that this truth table is for
      */
@@ -350,22 +352,16 @@ public class TruthTable {
     }
 
     private void adjustDomain() {
-        // First handle the regular domain adjustment
-        boolean allDefaultDomain = true;
-        for(Pair<Object, Object> p : variables.values()) {
-            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
-                allDefaultDomain = false;
-                break;
-            }
-        }
-
-        if (allDefaultDomain) {
+        if (isDefaultDomain()) {
             int maxLiteral = findMaxIntegerLiteral();
             if (maxLiteral > 1) {
                 variables.replaceAll((e, v) -> new Pair<>(0, maxLiteral));
             } else {
-                for(Expression e : variables.keySet()) {
-                    variables.put(e, new Pair<>(0, Math.max(1, variables.size() - 1)));
+                for(Map.Entry<Expression, Pair<Object, Object>> entry : variables.entrySet()) {
+                    Pair<Object, Object> value = entry.getValue();
+                    if (value.a instanceof Number || value.b instanceof Number) {
+                        variables.put(entry.getKey(), new Pair<>(0, Math.max(1, variables.size() - 1)));
+                    }
                 }
             }
         }
@@ -379,6 +375,18 @@ public class TruthTable {
                 }
             }
         }
+    }
+
+    private boolean isDefaultDomain() {
+        for(Pair<Object, Object> p : variables.values()) {
+            if (p.a instanceof Collection<?> || p.b instanceof Collection<?>) {
+                continue;
+            }
+            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void adjustDomainForConstraint(Expression variable, BinaryExpr constraint) {
@@ -871,20 +879,26 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
 
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (!m.getNameAsString().equals(EQUALS_CALL)) {
+            if (m.getNameAsString().equals(IS_EMPTY)) {
+                Optional<Expression> scope = m.getScope();
+                if (scope.isPresent()) {
+                    // For isEmpty(), we want to consider both empty and non-empty collections
+                    List<?> emptyList = new ArrayList<>();
+                    List<Integer> nonEmptyList = new ArrayList<>();
+                    nonEmptyList.add(1);
+                    collector.put(scope.get(), new Pair<>(emptyList, nonEmptyList));
+                }
+            } else if (!m.getNameAsString().equals(EQUALS_CALL)) {
                 Optional<Node> parent = m.getParentNode();
-
-                 if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
+                if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
                     if (b.getLeft().equals(m)) {
                         findDomain(m, collector, b.getRight());
-                    }
-                    else {
+                    } else {
                         findDomain(m, collector, b.getLeft());
                     }
-                 }
-                 else {
-                     collector.put(m, new Pair<>(true, false));
-                 }
+                } else {
+                    collector.put(m, new Pair<>(true, false));
+                }
             }
             super.visit(m, collector);
         }

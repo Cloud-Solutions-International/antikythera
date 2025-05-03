@@ -195,7 +195,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
                 yield value;
             }
-            default -> value;
+            default -> va.getValue();
         };
         va.setValue(result);
     }
