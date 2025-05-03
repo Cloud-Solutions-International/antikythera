@@ -11,7 +11,6 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
-import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -20,7 +19,6 @@ import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
-import com.github.javaparser.ast.nodeTypes.NodeWithCondition;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -292,7 +290,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         );
 
         if (currentConditional != null ) {
-            if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getBinaryExpr() != null) {
+            if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
                 setupIfCondition();
             }
             applyPreconditions(p, va);
@@ -643,7 +641,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         }
 
-        collectedConditions.add(currentConditional.getBinaryExpr());
+        collectedConditions.add(currentConditional.getConditionalExpression());
         tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
         tt.generateTruthTable();
 

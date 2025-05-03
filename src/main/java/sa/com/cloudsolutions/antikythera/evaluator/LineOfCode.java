@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 
@@ -49,7 +50,7 @@ public class LineOfCode {
      * The if conditions that are direct descendents of the current statement
      */
     private final List<LineOfCode> children = new ArrayList<>();
-    private BinaryExpr binaryExpr;
+    private Expression binaryExpr;
     /**
      * The current path state of this line of code.
      */
@@ -75,8 +76,8 @@ public class LineOfCode {
     public LineOfCode(Statement statement) {
         this.methodDeclaration = statement.findAncestor(MethodDeclaration.class).orElseThrow();
         this.statement = statement;
-        if (statement instanceof IfStmt ifStmt && ifStmt.getCondition() instanceof BinaryExpr binExpr) {
-            this.binaryExpr = binExpr;
+        if (statement instanceof IfStmt ifStmt) {
+            this.binaryExpr = ifStmt.getCondition();
         }
     }
 
@@ -293,7 +294,7 @@ public class LineOfCode {
         return children;
     }
 
-    public BinaryExpr getBinaryExpr() {
+    public Expression getConditionalExpression() {
         return binaryExpr;
     }
 }
