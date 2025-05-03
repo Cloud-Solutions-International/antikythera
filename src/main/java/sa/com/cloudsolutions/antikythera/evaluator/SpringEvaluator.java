@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -290,9 +291,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         );
 
         if (currentConditional != null ) {
-            if (currentConditional.getStatement() instanceof IfStmt ifStmt) {
+            Statement statement = currentConditional.getStatement();
+            if (statement instanceof IfStmt ifStmt) {
                 boolean nextState = currentConditional.isFalsePath();
                 setupIfCondition(ifStmt, nextState);
+            } else {
+                statement.findFirst(ConditionalExpr.class).ifPresent(condition -> {
+
+                });
             }
             applyPreconditions(p, va);
         }
@@ -340,7 +346,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
             handleApplicationException(e);
         }
     }

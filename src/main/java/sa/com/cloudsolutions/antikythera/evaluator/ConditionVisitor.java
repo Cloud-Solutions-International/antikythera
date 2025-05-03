@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
@@ -19,27 +20,49 @@ import java.util.Set;
 public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
     @Override
+    @SuppressWarnings("unchecked")
     public void visit(IfStmt stmt, LineOfCode parent) {
-        if (canMatchParameters(stmt)) {
-            LineOfCode lineOfCode = new LineOfCode(stmt);
-            lineOfCode.setParent(parent);
-            Branching.add(lineOfCode);
+        stmt.findAncestor(MethodDeclaration.class).ifPresent(methodDeclaration -> {
+            if (canMatchParameters(methodDeclaration, stmt.getCondition())) {
+                LineOfCode lineOfCode = new LineOfCode(stmt);
+                lineOfCode.setParent(parent);
+                Branching.add(lineOfCode);
 
-            // Visit the "then" branch
-            stmt.getThenStmt().accept(this, lineOfCode);
+                // Visit the "then" branch
+                stmt.getThenStmt().accept(this, lineOfCode);
 
-            // Visit the "else" branch if it exists
-            stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
-        }
+                // Visit the "else" branch if it exists
+                stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
+            }
+        });
     }
 
+    @Override
     @SuppressWarnings("unchecked")
-    private boolean canMatchParameters(IfStmt stmt) {
-        MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
+    public void visit(ConditionalExpr expr, LineOfCode parent) {
+        expr.findAncestor(MethodDeclaration.class).ifPresent(methodDeclaration -> {
+            expr.findAncestor(Statement.class).ifPresent(statement -> {
+                LineOfCode lineOfCode = new LineOfCode(statement);
+                lineOfCode.setParent(parent);
+                Branching.add(lineOfCode);
+            });
+        });
+    }
+
+    /**
+     * Determines if the method parameters are directly connected to the condition
+     * Note due to a bug in java parser, accepting md as a parameter rather than
+     * determining it here. findAncestor does not seem to be working on Conditional expression
+     * as of May 3, 2025
+     * @param md the method declaration in which to check for the parameters and conditionals match
+     * @param condition the condition to check
+     * @return true if the parameters and conditionals match up
+     */
+    private boolean canMatchParameters(MethodDeclaration md, Expression condition) {
         NameCollector nameCollector = new NameCollector();
 
         Set<String> names = nameCollector.getNames();
-        stmt.getCondition().accept(nameCollector, null);
+        condition.accept(nameCollector, null);
 
         for (String name : names) {
             for (Parameter p : md.getParameters()) {
