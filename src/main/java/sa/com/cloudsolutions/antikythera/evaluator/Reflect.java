@@ -273,7 +273,7 @@ public class Reflect {
 
     public static Object getDefault(String elementType) {
         return switch (elementType) {
-            case "int" -> 0;
+            case "int", "Integer" -> 0;
             case DOUBLE, PRIMITIVE_DOUBLE -> 0.0;
             case PRIMITIVE_BOOLEAN -> false;
             case "long", "Long" -> 0L;

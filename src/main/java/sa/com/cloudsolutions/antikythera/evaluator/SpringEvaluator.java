@@ -80,7 +80,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     private MethodDeclaration currentMethod;
     private boolean onTest;
-    private LineOfCode currentConditional;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
         super(context);

@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AssignExpr;
@@ -8,9 +9,11 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
@@ -31,6 +34,7 @@ import java.util.Set;
 
 public class ControlFlowEvaluator extends Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
+    protected LineOfCode currentConditional;
 
     public ControlFlowEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -85,25 +89,34 @@ public class ControlFlowEvaluator extends Evaluator {
         );
     }
 
-    private static Expression setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
+    private Expression setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
         if (entry.getValue() instanceof List<?> list) {
-            if (v.getValue() instanceof List<?>) {
-                if (list.isEmpty()) {
+            if (list.isEmpty()) {
+                if (v.getValue() instanceof List<?>) {
                     return StaticJavaParser.parseExpression("List.of()");
-                }
-                return StaticJavaParser.parseExpression("List.of(1)");
-            } else if (v.getValue() instanceof Set<?>) {
-                if (list.isEmpty()) {
+                } else if (v.getValue() instanceof Set<?>) {
                     return StaticJavaParser.parseExpression("Set.of()");
-                }
-                return StaticJavaParser.parseExpression("Set.of(1)");
-            } else if (v.getValue() instanceof Map<?,?>) {
-                if (list.isEmpty()) {
+                } else if (v.getValue() instanceof Map<?,?>) {
                     return StaticJavaParser.parseExpression("Map.of()");
                 }
-                return StaticJavaParser.parseExpression("Map.of(1, 1)");
             }
+            else if(entry.getKey() instanceof NameExpr name) {
+                Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
+                Type type = param.getType();
+                NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+                String typeName = typeArgs.isEmpty() ? "Object" : typeArgs.get(0).asString();
 
+                Variable def = Reflect.createVariable(Reflect.getDefault(typeName), typeName, "bada");
+                if (v.getValue() instanceof List<?>) {
+                    return StaticJavaParser.parseExpression(String.format("List.of(%s)", def.getInitializer()));
+                }
+                if (v.getValue() instanceof Set<?>) {
+                    return StaticJavaParser.parseExpression(String.format("Set.of(%s)", def.getInitializer()));
+                }
+                if (v.getValue() instanceof Map<?,?>) {
+                    return StaticJavaParser.parseExpression(String.format("Map.of(%s)", def.getInitializer()));
+                }
+            }
         }
         return entry.getValue() == null ? new NullLiteralExpr()
                         : new StringLiteralExpr(entry.getValue().toString());

@@ -1594,7 +1594,7 @@ public class Evaluator {
         Object iterValue = iter.getValue();
 
         if (iterValue instanceof Collection<?> list) {
-            executeForEachWithList(list, forEachStmt);
+            executeForEachWithCollection(list, forEachStmt);
         } else {
             executeForEachWithArray(forEachStmt, iterValue);
         }
@@ -1616,7 +1616,7 @@ public class Evaluator {
         }
     }
 
-    private void executeForEachWithList(Collection<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
+    private void executeForEachWithCollection(Collection<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
         for (Object value : list) {
             for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
                 Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
