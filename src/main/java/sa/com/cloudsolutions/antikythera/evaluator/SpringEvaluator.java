@@ -20,6 +20,7 @@ import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithCondition;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -292,13 +293,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         if (currentConditional != null ) {
             Statement statement = currentConditional.getStatement();
+            boolean nextState = currentConditional.isFalsePath();
             if (statement instanceof IfStmt ifStmt) {
-                boolean nextState = currentConditional.isFalsePath();
                 setupIfCondition(ifStmt, nextState);
             } else {
-                statement.findFirst(ConditionalExpr.class).ifPresent(condition -> {
 
-                });
             }
             applyPreconditions(p, va);
         }
@@ -633,35 +632,37 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * Set up an if condition so that it will evaluate to true or false in future executions.
      *
-     * @param ifStmt  the if statement to mess with
+     * @param conditionalStatement  the if statement to mess with
      * @param state the desired state.
      */
-    void setupIfCondition(IfStmt ifStmt, boolean state) {
-        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(ifStmt);
-        TruthTable tt = new TruthTable();
+    void setupIfCondition(Statement conditionalStatement, boolean state) {
+        if (conditionalStatement instanceof NodeWithCondition<?> nodeWithCondition) {
+            List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(conditionalStatement);
+            TruthTable tt = new TruthTable();
 
-        for(Expression cond : collectedConditions) {
-            if (cond.isBinaryExpr()) {
-                BinaryExpr bin = cond.asBinaryExpr();
-                if (bin.getLeft().isNameExpr()) {
-                    tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
+            for (Expression cond : collectedConditions) {
+                if (cond.isBinaryExpr()) {
+                    BinaryExpr bin = cond.asBinaryExpr();
+                    if (bin.getLeft().isNameExpr()) {
+                        tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
+                    }
                 }
             }
-        }
 
-        collectedConditions.add(ifStmt.getCondition());
-        tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
-        tt.generateTruthTable();
+            collectedConditions.add(nodeWithCondition.getCondition());
+            tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
+            tt.generateTruthTable();
 
-        List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
+            List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
-        if (!values.isEmpty()) {
-            Map<Expression, Object> value = values.getFirst();
-            for (var entry : value.entrySet()) {
-                if (entry.getKey().isMethodCallExpr()) {
-                    setupConditionThroughMethodCalls(ifStmt, entry);
-                } else if (entry.getKey().isNameExpr()) {
-                    setupConditionThroughAssignment(ifStmt, entry);
+            if (!values.isEmpty()) {
+                Map<Expression, Object> value = values.getFirst();
+                for (var entry : value.entrySet()) {
+                    if (entry.getKey().isMethodCallExpr()) {
+                        setupConditionThroughMethodCalls(conditionalStatement, entry);
+                    } else if (entry.getKey().isNameExpr()) {
+                        setupConditionThroughAssignment(conditionalStatement, entry);
+                    }
                 }
             }
         }
