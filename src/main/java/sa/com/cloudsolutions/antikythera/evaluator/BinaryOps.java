@@ -40,6 +40,10 @@ public class BinaryOps {
             return new Variable(Boolean.TRUE);
         }
 
+        if (leftVal == null) {
+            return new Variable(Boolean.FALSE);
+        }
+
         if (leftVal instanceof Number && rightVal instanceof Number) {
             return new Variable(NumericComparator.compare(leftVal, rightVal) == 0);
         }
