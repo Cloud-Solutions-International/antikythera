@@ -83,7 +83,11 @@ public class LineOfCode {
 
     @SuppressWarnings("unchecked")
     public LineOfCode(BinaryExpr binaryExpr) {
-        binaryExpr.findAncestor(Statement.class).ifPresent( stmt -> statement = stmt);
+
+        binaryExpr.findAncestor(Statement.class).ifPresent(stmt -> {
+            statement = stmt;
+            this.methodDeclaration = binaryExpr.findAncestor(MethodDeclaration.class).orElseThrow();
+        });
         this.binaryExpr = binaryExpr;
     }
 
