@@ -75,7 +75,7 @@ public class ControlFlowEvaluator extends Evaluator {
         if (v.getType() instanceof PrimitiveType) {
             valueExpr = Reflect.createLiteralExpression(entry.getValue());
         } else {
-            valueExpr = setupConditionForNonPrimitive(entry);
+            valueExpr = setupConditionForNonPrimitive(entry, v);
         }
 
         return new AssignExpr(
@@ -85,33 +85,28 @@ public class ControlFlowEvaluator extends Evaluator {
         );
     }
 
-    private static Expression setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry) {
-        Expression valueExpr;
+    private static Expression setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
         if (entry.getValue() instanceof List<?> list) {
-            if (list.isEmpty()) {
-                valueExpr = StaticJavaParser.parseExpression("List.of()");
-            } else {
-                valueExpr = StaticJavaParser.parseExpression("List.of(1)");
-            }
-        } else if (entry.getValue() instanceof Set<?> set) {
-            if (set.isEmpty()) {
-                valueExpr = StaticJavaParser.parseExpression("Set.of()");
-            } else {
-                valueExpr = StaticJavaParser.parseExpression("Set.of(1)");
-            }
-
-        } else if (entry.getValue() instanceof Map<?,?> map) {
-            if (map.isEmpty()) {
-                valueExpr = StaticJavaParser.parseExpression("Map.of()");
-            } else {
-                valueExpr = StaticJavaParser.parseExpression("Map.of(1, 1)");
+            if (v.getValue() instanceof List<?>) {
+                if (list.isEmpty()) {
+                    return StaticJavaParser.parseExpression("List.of()");
+                }
+                return StaticJavaParser.parseExpression("List.of(1)");
+            } else if (v.getValue() instanceof Set<?>) {
+                if (list.isEmpty()) {
+                    return StaticJavaParser.parseExpression("Set.of()");
+                }
+                return StaticJavaParser.parseExpression("Set.of(1)");
+            } else if (v.getValue() instanceof Map<?,?>) {
+                if (list.isEmpty()) {
+                    return StaticJavaParser.parseExpression("Map.of()");
+                }
+                return StaticJavaParser.parseExpression("Map.of(1, 1)");
             }
 
-        } else {
-            valueExpr = entry.getValue() == null ? new NullLiteralExpr()
-                    : new StringLiteralExpr(entry.getValue().toString());
         }
-        return valueExpr;
+        return entry.getValue() == null ? new NullLiteralExpr()
+                        : new StringLiteralExpr(entry.getValue().toString());
     }
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {

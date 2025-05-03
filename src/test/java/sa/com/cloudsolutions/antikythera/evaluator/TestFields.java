@@ -72,7 +72,7 @@ class TestFields extends TestHelper {
         Variable v = evaluator.executeMethod(ts);
         assertNull(v.getValue());
         assertEquals("""
-            {"id":0,"name":"Hornblower","address":null}
+            {"id":0,"name":"Hornblower","address":null,"phone":null,"email":null}
             """.trim(), outContent.toString().strip());
     }
 }

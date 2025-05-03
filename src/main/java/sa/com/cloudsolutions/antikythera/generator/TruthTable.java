@@ -380,7 +380,7 @@ public class TruthTable {
 
     private boolean isDefaultDomain() {
         for(Pair<Object, Object> p : variables.values()) {
-            if (p.a instanceof Collection<?> || p.b instanceof Collection<?>) {
+            if (p.a instanceof Collection<?> || p.b instanceof Collection<?> || p.a instanceof Map<?,?> || p.b instanceof Map<?,?>) {
                 continue;
             }
             if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
@@ -652,6 +652,9 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
             }
             if (scopeValue instanceof Collection<?> collection) {
                 return collection.isEmpty();
+            }
+            if (scopeValue instanceof Map<?, ?> map) {
+                return map.isEmpty();
             }
             return false; // non-collection objects are not empty
         } else if (EQUALS_CALL.equals(methodName)) {

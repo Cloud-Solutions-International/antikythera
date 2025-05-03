@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -199,6 +200,18 @@ public class Conditional {
     }
 
     @SuppressWarnings("unused")
+    public static void printMap(Map<Integer, Person> map) {
+        if (map != null && !map.isEmpty()) {
+            for (Map.Entry<Integer, Person> entry : map.entrySet()) {
+                System.out.print("Key: " + entry.getKey() + ", Value: " + entry.getValue());
+            }
+        }
+        else {
+            System.out.print("Map is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
     public String nested(int a) {
         if (a >= 0) {
             if (a == 0) {
@@ -287,9 +300,11 @@ public class Conditional {
 
     public static void main(String[] args) {
         Person p = new Person("Hello");
-        Conditional c = new Conditional();
-        c.conditional1(p);
-        p.setName(null);
-        c.conditional1(p);
+        p.setId(1);
+
+        Map<Integer, Person> map = new HashMap<>();
+        map.put(1, p);
+        printMap(map);
+
     }
 }
