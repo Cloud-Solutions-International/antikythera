@@ -150,12 +150,16 @@ public class Conditional {
 
     @SuppressWarnings("unused")
     public String ternary1(String a) {
-        return null == a ? "It is null" : "It is not null";
+        return null == a ? "It is null!" : "It is not null!";
     }
 
     @SuppressWarnings("unused")
     public String ternary2(String a) {
-        return a == null ? "It is null" : "It is not null";
+        return a == null ? "It is null!" : "It is not null!";
+    }
+    @SuppressWarnings("unused")
+    public void ternary3(String a) {
+        System.out.println(a == null ? "It is null!" : "It is not null!");
     }
 
     @SuppressWarnings("unused")

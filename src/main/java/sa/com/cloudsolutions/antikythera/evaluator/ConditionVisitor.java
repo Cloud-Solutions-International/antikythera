@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
+public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
     @Override
     public void visit(IfStmt stmt, LineOfCode parent) {

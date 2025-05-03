@@ -262,7 +262,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Branching.clear();
         AntikytheraRunTime.reset();
 
-        md.accept(new IfConditionVisitor(), null);
+        md.accept(new ConditionVisitor(), null);
     }
 
     @Override
@@ -632,7 +632,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param state the desired state.
      */
     void setupIfCondition(IfStmt ifStmt, boolean state) {
-        List<Expression> collectedConditions = IfConditionVisitor.collectConditionsUpToMethod(ifStmt);
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(ifStmt);
         TruthTable tt = new TruthTable();
 
         for(Expression cond : collectedConditions) {

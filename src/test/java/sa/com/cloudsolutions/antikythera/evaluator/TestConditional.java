@@ -177,10 +177,10 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({
-            "ternary1, test,  It is not null",
-            "ternary1, null,  It is null",
-            "ternary2, test,  It is not null",
-            "ternary2, null,  It is null"
+            "ternary1, test,  It is not null!",
+            "ternary1, null,  It is null!",
+            "ternary2, test,  It is not null!",
+            "ternary2, null,  It is null!"
     })
     void testTernary(String name, String arg , String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -196,7 +196,19 @@ class TestConditional extends TestHelper {
         }
         Variable v = evaluator.executeMethod(method);
         assertEquals(v.getValue(), value);
+    }
 
+    @Test
+    void testTernaryVisit() throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("ternary3")).orElseThrow();
+
+
+        evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals("It is not null!It is null!",s.replaceAll("\\n",""));
     }
 }
 
