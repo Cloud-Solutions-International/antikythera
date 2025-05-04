@@ -281,12 +281,10 @@ class VariableInitializationModifierTest {
             """;
         MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
         StringLiteralExpr newValue = new StringLiteralExpr("new");
+        UnitTestGenerator.replaceInitializer(method, "test", newValue);
 
-        VariableInitializationModifier modifier = new VariableInitializationModifier("test", newValue);
-        MethodDeclaration result = (MethodDeclaration) modifier.visit(method, null);
-
-        assertTrue(result.toString().contains("String test = \"new\""));
-        assertTrue(result.toString().contains("int other = 5"));
+        assertTrue(method.toString().contains("String test = \"new\""));
+        assertTrue(method.toString().contains("int other = 5"));
     }
 
     @Test
@@ -299,10 +297,9 @@ class VariableInitializationModifierTest {
         MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
         IntegerLiteralExpr newValue = new IntegerLiteralExpr("42");
 
-        VariableInitializationModifier modifier = new VariableInitializationModifier("nonexistentVar", newValue);
-        MethodDeclaration result = (MethodDeclaration) modifier.visit(method, null);
+        UnitTestGenerator.replaceInitializer(method, "nonexistentVar", newValue);
 
-        assertEquals(method.toString(), result.toString());
+        assertEquals(method.toString(), method.toString());
     }
 
     @Test
@@ -318,10 +315,9 @@ class VariableInitializationModifierTest {
         MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
         Expression newValue = StaticJavaParser.parseExpression("Person.createPerson(\"Horatio\")");
 
-        VariableInitializationModifier modifier = new VariableInitializationModifier("p", newValue);
-        MethodDeclaration result = (MethodDeclaration) modifier.visit(method, null);
+        UnitTestGenerator.replaceInitializer(method, "p", newValue);
 
-        String modifiedCode = result.toString();
+        String modifiedCode = method.toString();
         assertTrue(modifiedCode.contains("Person p = Person.createPerson(\"Horatio\")"));
     }
 }

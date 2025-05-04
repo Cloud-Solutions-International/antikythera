@@ -18,6 +18,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -527,9 +528,7 @@ public class UnitTestGenerator extends TestGenerator {
             Expression target = assignExpr.getTarget();
             Expression value = assignExpr.getValue();
             if (target instanceof NameExpr nameExpr) {
-                VariableInitializationModifier modifier = new VariableInitializationModifier(
-                        nameExpr.getNameAsString(), value);
-                testMethod.accept(modifier, null);
+                replaceInitializer(testMethod, nameExpr.getNameAsString(), value);
             }
         }
     }
@@ -679,5 +678,23 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void save() throws IOException {
         Antikythera.getInstance().writeFile(filePath, gen.toString());
+    }
+
+    static void replaceInitializer(MethodDeclaration method, String name, Expression initialization) {
+        for (int i = 0; i < method.getBody().get().getStatements().size(); i++) {
+            if (method.getBody().get().getStatements().get(i).isExpressionStmt()) {
+                ExpressionStmt exprStmt = (ExpressionStmt) method.getBody().get().getStatements().get(i);
+                if (exprStmt.getExpression().isVariableDeclarationExpr()) {
+                    VariableDeclarationExpr varDeclExpr = exprStmt.getExpression().asVariableDeclarationExpr();
+                    for (VariableDeclarator varDeclarator : varDeclExpr.getVariables()) {
+                        if (varDeclarator.getName().getIdentifier().equals(name)) {
+                            // Variable found!  Replace the initializer.
+                            varDeclarator.setInitializer(initialization);
+                            break; // Exit the inner loop
+                        }
+                    }
+                }
+            }
+        }
     }
 }
