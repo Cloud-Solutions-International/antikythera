@@ -130,7 +130,7 @@ class TestEvaluator extends TestHelper {
     }
 
     @Test
-    void testResolveNonPrimitiveFields()  {
+    void testResolveNonPrimitiveVariable()  {
 
         Map<String, Variable> resolvedFields = evaluator.getFields();
 
@@ -168,7 +168,7 @@ class TestEvaluatorWithFinches extends TestHelper {
     }
 
     @Test
-    void testResolveNonPrimitiveField() {
+    void testResolveNonPrimitiveVariable() {
         String cls = """
                 import sa.com.cloudsolutions.Hello;
                 

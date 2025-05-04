@@ -1227,14 +1227,14 @@ public class Evaluator {
     }
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
-    Variable identifyVariableDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
             return MockingRegistry.mockIt(variable);
         } else {
             if (variable.getType().isClassOrInterfaceType()) {
-                return resolveNonPrimitiveFields(variable);
+                return resolveNonPrimitiveVariable(variable);
             } else {
-                return resolvePrimitiveFields(variable);
+                return resolvePrimitiveVariable(variable);
             }
         }
     }
@@ -1269,19 +1269,19 @@ public class Evaluator {
         }
     }
 
-    Variable resolveNonPrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    Variable resolveNonPrimitiveVariable(VariableDeclarator variable) throws ReflectiveOperationException {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
         if (imports.isEmpty()) {
             String fqn = AbstractCompiler.findFullyQualifiedName(cu, t.getNameAsString());
             if (fqn != null) {
-                return resolveNonPrimitiveField(fqn, variable, t);
+                return resolveNonPrimitiveVariable(fqn, variable, t);
             }
-            return setupPrimitiveOrBoxedField(variable, t);
+            return setupPrimitiveOrBoxedVariable(variable, t);
         } else {
             for (ImportWrapper imp : imports) {
                 String resolvedClass = imp.getNameAsString();
-                Variable v = resolveNonPrimitiveField(resolvedClass, variable, t);
+                Variable v = resolveNonPrimitiveVariable(resolvedClass, variable, t);
                 if (v != null) {
                     return v;
                 }
@@ -1290,7 +1290,7 @@ public class Evaluator {
         return null;
     }
 
-    Variable resolveNonPrimitiveField(String resolvedClass, VariableDeclarator variable, ClassOrInterfaceType t) throws ReflectiveOperationException {
+    Variable resolveNonPrimitiveVariable(String resolvedClass, VariableDeclarator variable, ClassOrInterfaceType t) throws ReflectiveOperationException {
         Object f = Finch.getFinch(resolvedClass);
         if (f != null) {
             Variable v = new Variable(t);
@@ -1299,15 +1299,15 @@ public class Evaluator {
         } else if (resolvedClass != null) {
             CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(resolvedClass);
             if (compilationUnit != null) {
-                return resolveFieldRepresentedByCode(variable, resolvedClass);
+                return resolveVariableRepresentedByCode(variable, resolvedClass);
             } else {
-                return setupPrimitiveOrBoxedField(variable, t);
+                return setupPrimitiveOrBoxedVariable(variable, t);
             }
         }
         return null;
     }
 
-    private Variable setupPrimitiveOrBoxedField(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
+    protected Variable setupPrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
@@ -1338,7 +1338,7 @@ public class Evaluator {
      * @throws AntikytheraException         if something goes wrong
      * @throws ReflectiveOperationException if a reflective operation fails
      */
-    Variable resolveFieldRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
+    Variable resolveVariableRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if (init.get().isObjectCreationExpr()) {
@@ -1356,7 +1356,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable resolvePrimitiveFields(VariableDeclarator variable) throws ReflectiveOperationException {
+    private Variable resolvePrimitiveVariable(VariableDeclarator variable) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
@@ -1805,7 +1805,7 @@ public class Evaluator {
                     return;
                 }
             }
-            Variable v = identifyVariableDeclarations(variableDeclarator);
+            Variable v = resolveVariableDeclaration(variableDeclarator);
             if (v != null) {
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {

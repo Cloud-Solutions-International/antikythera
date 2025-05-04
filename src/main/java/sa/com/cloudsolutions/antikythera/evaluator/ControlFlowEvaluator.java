@@ -4,6 +4,7 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -21,9 +22,11 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -104,17 +107,26 @@ public class ControlFlowEvaluator extends Evaluator {
                 Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
                 Type type = param.getType();
                 NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
-                String typeName = typeArgs.isEmpty() ? "Object" : typeArgs.get(0).asString();
+                if (typeArgs.isEmpty()) {
+                    typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+                }
+                VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
 
-                Variable def = Reflect.createVariable(Reflect.getDefault(typeName), typeName, "bada");
-                if (v.getValue() instanceof List<?>) {
-                    return StaticJavaParser.parseExpression(String.format("List.of(%s)", def.getInitializer()));
-                }
-                if (v.getValue() instanceof Set<?>) {
-                    return StaticJavaParser.parseExpression(String.format("Set.of(%s)", def.getInitializer()));
-                }
-                if (v.getValue() instanceof Map<?,?>) {
-                    return StaticJavaParser.parseExpression(String.format("Map.of(%s)", def.getInitializer()));
+                try {
+                    Variable resolved = resolveVariableDeclaration(vdecl);
+
+                    if (v.getValue() instanceof List<?>) {
+                        return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
+                    }
+                    if (v.getValue() instanceof Set<?>) {
+                        return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
+                    }
+                    if (v.getValue() instanceof Map<?,?>) {
+                        return StaticJavaParser.parseExpression(String.format("Map.of(%s)", resolved.getInitializer()));
+                    }
+
+                } catch (ReflectiveOperationException|IOException e) {
+                    throw new AntikytheraException(e);
                 }
             }
         }
@@ -356,5 +368,15 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
             }
         }
+    }
+
+    @Override
+    protected Variable setupPrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
+        Optional<Expression> init = variable.getInitializer();
+        if (init.isPresent()) {
+            return super.setupPrimitiveOrBoxedVariable(variable, t);
+        }
+
+        return Reflect.variableFactory(t.asString());
     }
 }
