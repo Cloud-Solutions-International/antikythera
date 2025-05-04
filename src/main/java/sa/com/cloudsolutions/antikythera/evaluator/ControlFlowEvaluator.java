@@ -399,16 +399,9 @@ public class ControlFlowEvaluator extends Evaluator {
         if (type instanceof ClassOrInterfaceDeclaration cdecl) {
             MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
             Variable v = new Variable(eval);
-
-            List<ConstructorDeclaration> constructors = cdecl.findAll(ConstructorDeclaration.class);
-            boolean defaultAvailable = constructors.stream()
-                    .anyMatch(constructor -> constructor.getParameters().isEmpty());
-            if (constructors.isEmpty() ||  defaultAvailable) {
-                v.setInitializer(new ObjectCreationExpr());
-            }
-            else {
-                v.setInitializer(StaticJavaParser.parseExpression("Mockito.mock(" + resolvedClass + ".class)"));
-            }
+            String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
+            String[] parts = init.split("=");
+            v.setInitializer(StaticJavaParser.parseExpression(parts[1]));
             return v;
         }
 

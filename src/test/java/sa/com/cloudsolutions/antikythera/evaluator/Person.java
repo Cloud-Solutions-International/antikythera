@@ -79,6 +79,7 @@ public class Person implements IPerson {
     @SuppressWarnings("unused")
     public void setEmail(String email) {
         this.email = email;
+
     }
 
 }

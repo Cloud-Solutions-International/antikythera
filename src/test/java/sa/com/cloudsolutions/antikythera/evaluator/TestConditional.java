@@ -75,7 +75,7 @@ class TestConditional extends TestHelper {
     @CsvSource({"conditional4, ZERO!Positive!ZERO!Negative!", "conditional5, ZERO!Three!Three!Two!Two!One!",
             "conditional6, ZERO!Three!Three!Two!Two!One!","conditional7, ZERO!Three!Three!Two!Two!One!",
             "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!",
-            "booleanWorks, False!True!", "printMap, 1!2!3!4!5!6!7!8!9!10!",
+            "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

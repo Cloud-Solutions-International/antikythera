@@ -204,7 +204,7 @@ public class Conditional {
     public static void printMap(Map<Integer, Person> map) {
         if (map != null && !map.isEmpty()) {
             for (Map.Entry<Integer, Person> entry : map.entrySet()) {
-                System.out.print("Key: " + entry.getKey() + ", Value: " + entry.getValue());
+                System.out.print("Key: " + entry.getKey() + " -> Value: " + entry.getValue());
             }
         }
         else {
