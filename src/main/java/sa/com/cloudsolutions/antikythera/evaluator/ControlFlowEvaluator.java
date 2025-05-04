@@ -4,7 +4,6 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -14,7 +13,6 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -28,7 +26,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
-import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.IOException;
@@ -66,7 +63,7 @@ public class ControlFlowEvaluator extends Evaluator {
                     }
                 }
                 /*
-                 * We tried to match the name of the variable with the name of the parameter but
+                 * We tried to match the name of the variable with the name of the parameter, but
                  * a match could not be found. So it is not possible to force branching by
                  * assigning values to a parameter in a conditional
                  */
@@ -109,41 +106,46 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
             }
             else if(entry.getKey() instanceof NameExpr name) {
-                Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
-                Type type = param.getType();
-                NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
-                if (typeArgs.isEmpty()) {
-                    typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-                }
-                VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
-
-                try {
-                    Variable resolved = resolveVariableDeclaration(vdecl);
-
-                    if (v.getValue() instanceof List<?>) {
-                        return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
-                    }
-                    if (v.getValue() instanceof Set<?>) {
-                        return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
-                    }
-                    if (v.getValue() instanceof Map<?,?>) {
-                        if (typeArgs.size() == 1) {
-                            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-                        }
-                        VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
-                        Variable resolved2 = resolveVariableDeclaration(vdecl2);
-                        return StaticJavaParser.parseExpression(
-                                String.format("Map.of(%s, %s)",
-                                        resolved.getInitializer(), resolved2.getInitializer()));
-                    }
-
-                } catch (ReflectiveOperationException|IOException e) {
-                    throw new AntikytheraException(e);
-                }
+                return setupNonEmptyCollections(v, name);
             }
         }
         return entry.getValue() == null ? new NullLiteralExpr()
                         : new StringLiteralExpr(entry.getValue().toString());
+    }
+
+    private Expression setupNonEmptyCollections(Variable v, NameExpr name) {
+        Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
+        Type type = param.getType();
+        NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        if (typeArgs.isEmpty()) {
+            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        }
+        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
+
+        try {
+            Variable resolved = resolveVariableDeclaration(vdecl);
+
+            if (v.getValue() instanceof List<?>) {
+                return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
+            }
+            if (v.getValue() instanceof Set<?>) {
+                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
+            }
+            if (v.getValue() instanceof Map<?,?>) {
+                if (typeArgs.size() == 1) {
+                    typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+                }
+                VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
+                Variable resolved2 = resolveVariableDeclaration(vdecl2);
+                return StaticJavaParser.parseExpression(
+                        String.format("Map.of(%s, %s)",
+                                resolved.getInitializer(), resolved2.getInitializer()));
+            }
+
+        } catch (ReflectiveOperationException|IOException e) {
+            throw new AntikytheraException(e);
+        }
+        return null;
     }
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
@@ -317,7 +319,7 @@ public class ControlFlowEvaluator extends Evaluator {
             String argName = methodCall.getArgument(i).toString();
 
             if (expr instanceof MethodCallExpr methodExpr) {
-                // Replace parameter references in method scope
+                // Replace parameter references in the method scope
                 Optional<Expression> scope = methodExpr.getScope();
                 if (scope.isPresent() && scope.get() instanceof NameExpr scopeName
                         && scopeName.getNameAsString().equals(paramName)) {
