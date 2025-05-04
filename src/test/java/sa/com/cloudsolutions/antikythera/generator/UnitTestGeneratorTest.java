@@ -21,6 +21,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -246,7 +247,7 @@ class UnitTestGeneratorMoreTests {
     }
 
     @Test
-    void testMockWithMockito() {
+    void testMockWithMockito1() {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
         UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
         unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
@@ -258,6 +259,21 @@ class UnitTestGeneratorMoreTests {
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
         assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito"));
+    }
+
+    @Test
+    void testMockWithMockito2() {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
+        unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("main")).orElseThrow();
+        unitTestGenerator.methodUnderTest = md;
+        unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        Parameter param = md.getParameter(0);
+        unitTestGenerator.mockWithMockito(param, new Variable("hello"));
+
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
     }
     /**
      * The base class should be added to the class under test.

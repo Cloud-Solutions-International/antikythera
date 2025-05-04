@@ -399,7 +399,7 @@ public class UnitTestGenerator extends TestGenerator {
             if (t instanceof ArrayType) {
                 Variable mocked = Reflect.variableFactory(t.asString());
                 body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-                mockParameterFields(v, body, nameAsString);
+                mockParameterFields(v, nameAsString);
                 return;
             }
             if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
@@ -415,7 +415,7 @@ public class UnitTestGenerator extends TestGenerator {
                     " = Mockito.mock(" + param.getTypeAsString() + ".class);");
         }
 
-        mockParameterFields(v, body, nameAsString);
+        mockParameterFields(v, nameAsString);
     }
 
     private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
@@ -436,11 +436,12 @@ public class UnitTestGenerator extends TestGenerator {
         }
         else {
             body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-            mockParameterFields(v, body, nameAsString);
+            mockParameterFields(v, nameAsString);
         }
     }
 
-    private static void mockParameterFields(Variable v, BlockStmt body, String nameAsString) {
+    private void mockParameterFields(Variable v, String nameAsString) {
+        BlockStmt body = getBody(testMethod);
         if (v.getValue() instanceof Evaluator eval) {
             for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
                 if (entry.getValue().getValue() != null && entry.getValue().getType() != null
