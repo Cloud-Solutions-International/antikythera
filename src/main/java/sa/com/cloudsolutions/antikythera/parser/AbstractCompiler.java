@@ -429,6 +429,12 @@ public class AbstractCompiler {
         }
         return null;
     }
+    public static TypeWrapper findType(CompilationUnit cu, Type type) {
+        if (type instanceof ClassOrInterfaceType ctype) {
+            return findType(cu, ctype.getNameAsString());
+        }
+        return findType(cu, type.asString());
+    }
 
     public static TypeWrapper findType(CompilationUnit cu, String className) {
         /*

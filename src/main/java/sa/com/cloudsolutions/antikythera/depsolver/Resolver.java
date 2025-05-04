@@ -419,8 +419,9 @@ public class Resolver {
      * Given a method call expression or new object creation expression, resolve the types of the arguments.
      * @param node a graph node representing the current context
      * @param mce method call expression or object creation expression
-     * @return a Method Call Wrapper instance that contains the original method call as well as the resolved
-     *              types of the arguments. If the arguments cannot be resolved correctly the arguments field
+     * @return a Method Call Wrapper instance that contains the original method call as well as
+     *              resolved argument types.
+     *              If the arguments cannot be resolved correctly, the corresponding field
      *              in the MCEWrapper will be null.
      */
     public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce)  {

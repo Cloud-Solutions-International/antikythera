@@ -10,6 +10,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.MethodInterceptor;
 import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 /**
  * Wraps method call expressions to solve their argument types.
@@ -55,25 +56,34 @@ public class MCEWrapper {
             try {
                 classes[i] = Reflect.getComponentClass(elementType);
             } catch (ClassNotFoundException e) {
-                if (methodCallExpr instanceof MethodCallExpr mce) {
-                    CompilationUnit cu = mce.findCompilationUnit().orElse(null);
-                    if (cu != null) {
-                        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, elementType);
-                        if (resolvedClass != null) {
-                            MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
-                            try {
-                                Class<?> cls = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                                classes[i] = cls;
-                            } catch (ClassNotFoundException ex) {
-                                classes[i] = Object.class;
-                            }
+                argumentTypeAsNonPrimitiveClass(type, classes, i);
+            }
+        }
+
+        return classes;
+    }
+
+    private void argumentTypeAsNonPrimitiveClass(Type type, Class<?>[] classes, int i) {
+        if (methodCallExpr instanceof MethodCallExpr mce) {
+            CompilationUnit cu = mce.findCompilationUnit().orElse(null);
+            if (cu != null) {
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
+                if (wrapper != null) {
+                    if (wrapper.getCls() != null) {
+                        classes[i] = wrapper.getCls();
+                    }
+                    else {
+                        MockingEvaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+                        try {
+                            Class<?> cls = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                            classes[i] = cls;
+                        } catch (ClassNotFoundException ex) {
+                            classes[i] = Object.class;
                         }
                     }
                 }
             }
         }
-
-        return classes;
     }
 
     /**
