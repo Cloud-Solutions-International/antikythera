@@ -51,11 +51,11 @@ class TestConditional extends TestHelper {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("conditional1")).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Hello", outContent.toString());
+        assertEquals("Hello!", outContent.toString());
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional1, The name is nullT", "conditional2, TThe name is null",
+    @CsvSource({"conditional1, The name is null!Antikythera!", "conditional2, Antikythera!The name is null!",
             "conditional3, 1ZERO!", "emptiness1, List is not empty!List is empty!",
             "emptiness2, List is not empty!List is empty!",
             "emptiness3, List is empty!List is not empty!",

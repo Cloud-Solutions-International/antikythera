@@ -6,22 +6,23 @@ import java.util.Map;
 import java.util.Set;
 
 public class Conditional {
+    @SuppressWarnings("unused")
     public void conditional1(Person person) {
         if (person.getName() != null) {
-            System.out.print(person.getName());
+            System.out.print(person.getName() +"!");
         }
         else {
-            System.out.print("The name is null");
+            System.out.print("The name is null!");
         }
     }
 
     @SuppressWarnings("unused")
     public void conditional2(Person person) {
         if (person.getName() == null) {
-            System.out.print("The name is null");
+            System.out.print("The name is null!");
         }
         else {
-            System.out.print(person.getName());
+            System.out.print(person.getName() + "!");
         }
     }
 
