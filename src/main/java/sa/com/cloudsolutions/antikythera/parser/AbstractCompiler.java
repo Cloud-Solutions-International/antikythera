@@ -395,6 +395,13 @@ public class AbstractCompiler {
         return false;
     }
 
+    public static String findFullyQualifiedName(CompilationUnit cu, Type t) {
+        if (t instanceof ClassOrInterfaceType ctype) {
+            return findFullyQualifiedName(cu, ctype.getNameAsString());
+        }
+        return findFullyQualifiedName(cu, t.asString());
+    }
+
     /**
      * Finds the fully qualified classname given the short name of a class.
      *
@@ -936,7 +943,7 @@ public class AbstractCompiler {
     }
 
     public static boolean isFinalClass(Type t, CompilationUnit compilationUnit) {
-        String fullClassName = AbstractCompiler.findFullyQualifiedName(compilationUnit, t.asString());
+        String fullClassName = AbstractCompiler.findFullyQualifiedName(compilationUnit, t);
 
         if (fullClassName != null) {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullClassName);

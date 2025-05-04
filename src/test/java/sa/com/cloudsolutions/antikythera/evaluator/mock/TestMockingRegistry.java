@@ -5,6 +5,7 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import org.junit.jupiter.api.BeforeAll;
@@ -81,9 +82,14 @@ class TestMockingRegistry extends TestHelper {
 
         // Verify
         assertEquals(1, args.size());
-        MethodCallExpr matcher = (MethodCallExpr) args.getFirst().orElseThrow();
-        assertEquals("Mockito", matcher.getScope().orElseThrow().toString());
-        assertEquals(expectedMatcher, matcher.getNameAsString());
+        if (expectedMatcher.equals("any")) {
+            assertInstanceOf(CastExpr.class, args.getFirst().orElseThrow());
+        }
+        else {
+            MethodCallExpr matcher = (MethodCallExpr) args.getFirst().orElseThrow();
+            assertEquals("Mockito", matcher.getScope().orElseThrow().toString());
+            assertEquals(expectedMatcher, matcher.getNameAsString());
+        }
     }
 
     @Test

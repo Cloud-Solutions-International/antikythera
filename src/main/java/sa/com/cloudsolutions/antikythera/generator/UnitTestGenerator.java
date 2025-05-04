@@ -379,10 +379,21 @@ public class UnitTestGenerator extends TestGenerator {
                 return;
             }
             if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
-                String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
+                String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t);
                 Variable mocked = Reflect.variableFactory(fullClassName);
-                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-                mockParameterFields(v, body, nameAsString);
+                if (v.getValue() instanceof Optional<?> value) {
+
+                    if (value.isPresent()) {
+                        body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                                "Optional.of(" + mocked.getInitializer() + ");");
+                    } else {
+                        body.addStatement(param.getTypeAsString() + " " + nameAsString + " = Optional.empty();");
+                    }
+                }
+                else {
+                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                    mockParameterFields(v, body, nameAsString);
+                }
                 return;
             }
         }
