@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -19,6 +20,7 @@ import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -681,20 +683,17 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     static void replaceInitializer(MethodDeclaration method, String name, Expression initialization) {
-        for (int i = 0; i < method.getBody().get().getStatements().size(); i++) {
-            if (method.getBody().get().getStatements().get(i).isExpressionStmt()) {
-                ExpressionStmt exprStmt = (ExpressionStmt) method.getBody().get().getStatements().get(i);
-                if (exprStmt.getExpression().isVariableDeclarationExpr()) {
-                    VariableDeclarationExpr varDeclExpr = exprStmt.getExpression().asVariableDeclarationExpr();
+        method.getBody().ifPresent(body ->{
+            NodeList<Statement> statements = method.getBody().get().getStatements();
+            for (Statement statement : statements) {
+                if (statement instanceof ExpressionStmt exprStmt && exprStmt.getExpression() instanceof VariableDeclarationExpr varDeclExpr) {
                     for (VariableDeclarator varDeclarator : varDeclExpr.getVariables()) {
                         if (varDeclarator.getName().getIdentifier().equals(name)) {
-                            // Variable found!  Replace the initializer.
                             varDeclarator.setInitializer(initialization);
-                            break; // Exit the inner loop
                         }
                     }
                 }
             }
-        }
+        });
     }
 }
