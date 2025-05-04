@@ -794,7 +794,10 @@ public class AbstractCompiler {
                 } else {
                     ImportWrapper wrapper = findImport(cdecl.findCompilationUnit().orElseThrow(), extended.getNameAsString());
                     if (wrapper != null && wrapper.isExternal()) {
-                        return findCallableInBinaryCode(wrapper, methodCall);
+                        Optional<Callable> c = findCallableInBinaryCode(wrapper, methodCall);
+                        if (c.isPresent()) {
+                            return c;
+                        }
                     }
                 }
             }
