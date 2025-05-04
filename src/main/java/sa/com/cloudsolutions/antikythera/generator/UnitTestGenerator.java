@@ -379,21 +379,7 @@ public class UnitTestGenerator extends TestGenerator {
                 return;
             }
             if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
-                String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t);
-                Variable mocked = Reflect.variableFactory(fullClassName);
-                if (v.getValue() instanceof Optional<?> value) {
-
-                    if (value.isPresent()) {
-                        body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
-                                "Optional.of(" + mocked.getInitializer() + ");");
-                    } else {
-                        body.addStatement(param.getTypeAsString() + " " + nameAsString + " = Optional.empty();");
-                    }
-                }
-                else {
-                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-                    mockParameterFields(v, body, nameAsString);
-                }
+                cantMockFinalClass(param, v, cu);
                 return;
             }
         }
@@ -406,6 +392,28 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         mockParameterFields(v, body, nameAsString);
+    }
+
+    private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
+        String nameAsString = param.getNameAsString();
+        BlockStmt body = getBody(testMethod);
+        Type t = param.getType();
+
+        String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t);
+        Variable mocked = Reflect.variableFactory(fullClassName);
+        if (v.getValue() instanceof Optional<?> value) {
+
+            if (value.isPresent()) {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                        "Optional.of(" + mocked.getInitializer() + ");");
+            } else {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = Optional.empty();");
+            }
+        }
+        else {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+            mockParameterFields(v, body, nameAsString);
+        }
     }
 
     private static void mockParameterFields(Variable v, BlockStmt body, String nameAsString) {
