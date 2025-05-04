@@ -10,8 +10,10 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -324,7 +326,7 @@ public class UnitTestGenerator extends TestGenerator {
                     case "Long" -> v.setInitializer("0L");
                     case "Double" -> v.setInitializer("0.0");
                     case "Float" -> v.setInitializer("0.0f");
-                    case "Boolean" -> v.setInitializer("false");
+                    case "boolean", "Boolean" -> v.setInitializer("false");
                     case "Character" -> v.setInitializer("'\\0'");
                     case "Byte" -> v.setInitializer("(byte)0");
                     case "Short" -> v.setInitializer("(short)0");
@@ -484,6 +486,15 @@ public class UnitTestGenerator extends TestGenerator {
                     ));
                 }
             });
+        }
+        else if (expr instanceof AssignExpr assignExpr) {
+            Expression target = assignExpr.getTarget();
+            Expression value = assignExpr.getValue();
+            if (target instanceof NameExpr nameExpr) {
+                VariableInitializationModifier modifier = new VariableInitializationModifier(
+                        nameExpr.getNameAsString(), value);
+                testMethod.accept(modifier, null);
+            }
         }
     }
 

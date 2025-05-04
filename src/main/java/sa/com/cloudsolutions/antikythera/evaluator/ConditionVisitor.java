@@ -22,18 +22,16 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
     @Override
     public void visit(IfStmt stmt, LineOfCode parent) {
         LineOfCode lineOfCode = new LineOfCode(stmt);
+        lineOfCode.setParent(parent);
         if (canMatchParameters(lineOfCode.getMethodDeclaration(), stmt.getCondition())) {
-
-            lineOfCode.setParent(parent);
             Branching.add(lineOfCode);
-
-            // Visit the "then" branch
-            stmt.getThenStmt().accept(this, lineOfCode);
-
-            // Visit the "else" branch if it exists
-            stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
         }
 
+        // Visit the "then" branch
+        stmt.getThenStmt().accept(this, lineOfCode);
+
+        // Visit the "else" branch if it exists
+        stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
     }
 
     @Override
