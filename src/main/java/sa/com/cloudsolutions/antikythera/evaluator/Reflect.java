@@ -479,6 +479,7 @@ public class Reflect {
                 methods.add(m);
             }
         }
+
         return methods;
     }
 
@@ -569,6 +570,7 @@ public class Reflect {
     }
 
     public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        // First check direct method lookup
         Method method = Reflect.findMethod(clazz, reflectionArguments);
         if (method != null) return method;
 
@@ -576,6 +578,12 @@ public class Reflect {
         for (Class<?> iface : clazz.getInterfaces()) {
             method = Reflect.findMethod(iface, reflectionArguments);
             if (method != null) return method;
+
+            // Try super-interfaces
+            for (Class<?> superIface : iface.getInterfaces()) {
+                method = findAccessibleMethod(superIface, reflectionArguments);
+                if (method != null) return method;
+            }
         }
 
         // Search superclass if no interface method found

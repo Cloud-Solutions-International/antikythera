@@ -813,10 +813,13 @@ public class AbstractCompiler {
          */
         try {
             Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
+
             ReflectionArguments reflectionArguments = new ReflectionArguments(
-                    methodCall.getMethodName(), new Object[]{}, methodCall.getArgumentTypesAsClasses()
+                    methodCall.getMethodName(),
+                    methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
+                    methodCall.getArgumentTypesAsClasses()
             );
-            Method method = Reflect.findMethod(clazz, reflectionArguments);
+            Method method = Reflect.findAccessibleMethod(clazz, reflectionArguments);
             if (method != null) {
                 Callable callable = new Callable(method, methodCall);
                 callable.setFoundInClass(clazz);
