@@ -281,8 +281,8 @@ public class MockingRegistry {
         );
 
         // If it's a generic Mockito.any() call, add casting
-        if (mce.getNameAsString().equals("any")) {
-            return  new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
+        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
+            return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
         }
         return mce;
     }

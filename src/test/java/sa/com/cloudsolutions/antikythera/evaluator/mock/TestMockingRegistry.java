@@ -67,7 +67,8 @@ class TestMockingRegistry extends TestHelper {
             "Double,     anyDouble",
             "boolean,    anyBoolean",
             "Boolean,    anyBoolean",
-            "Object,     any"
+            "Object,     any",
+            "UnknownType, any"
     })
     void fakeArgumentsCreatesCorrectMatchers(String parameterType, String expectedMatcher) {
         // Setup
@@ -82,7 +83,7 @@ class TestMockingRegistry extends TestHelper {
 
         // Verify
         assertEquals(1, args.size());
-        if (expectedMatcher.equals("any")) {
+        if (parameterType.equals("UnknownType")) {
             assertInstanceOf(CastExpr.class, args.getFirst().orElseThrow());
         }
         else {

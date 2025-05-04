@@ -499,12 +499,6 @@ public class UnitTestGenerator extends TestGenerator {
             } else {
                 methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(callable.getMethod()));
             }
-
-            for (Expression arg : methodCall.getArguments()) {
-                if (arg instanceof CastExpr castExpr) {
-                    System.out.println("bada");
-                }
-            }
         }
     }
 
