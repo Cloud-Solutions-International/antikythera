@@ -580,6 +580,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     }
                 }
             }
+            else {
+                fields.put(variableDeclarator.getNameAsString(), v);
+                return;
+            }
         }
         super.setupField(field, variableDeclarator);
     }
