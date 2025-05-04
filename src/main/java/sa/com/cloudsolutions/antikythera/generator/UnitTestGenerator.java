@@ -263,18 +263,22 @@ public class UnitTestGenerator extends TestGenerator {
                 if (mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
                     return true;
                 }
-                for (Expression e : argMethod.getArguments()) {
-                    if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
-                        String fullName = AbstractCompiler.findFullyQualifiedName(
-                                compilationUnitUnderTest, ct.asString());
-                        if (fullName != null) {
-                            TestGenerator.addDependency(fullName);
-                        }
-                    }
-                }
+                addImportsForCasting(argMethod);
             }
         }
         return false;
+    }
+
+    private void addImportsForCasting(MethodCallExpr argMethod) {
+        for (Expression e : argMethod.getArguments()) {
+            if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
+                String fullName = AbstractCompiler.findFullyQualifiedName(
+                        compilationUnitUnderTest, ct.asString());
+                if (fullName != null) {
+                    TestGenerator.addDependency(fullName);
+                }
+            }
+        }
     }
 
     private boolean mockedByBaseTestClass(Expression arg) {
