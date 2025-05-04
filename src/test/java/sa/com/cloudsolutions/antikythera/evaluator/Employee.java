@@ -28,6 +28,7 @@ public class Employee implements Serializable {
         }
     }
 
+    @SuppressWarnings("unused")
     public void simpleAccess() {
         System.out.println(p.getName());
         System.out.println(p.getAddress());
@@ -35,14 +36,17 @@ public class Employee implements Serializable {
         System.out.println(p.getAddress());
     }
 
+    @SuppressWarnings("unused")
     public void publicAccess() {
         System.out.println(p.name);
     }
 
+    @SuppressWarnings("unused")
     public void thisAccess() {
         System.out.println(this.p.getName());
     }
 
+    @SuppressWarnings("unused")
     public void chained() {
         System.out.println(p.name.toUpperCase().contains("horn"));
     }

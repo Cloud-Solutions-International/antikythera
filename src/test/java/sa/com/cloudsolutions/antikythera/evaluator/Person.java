@@ -6,6 +6,10 @@ public class Person implements IPerson {
     private String address;
     private String phone;
     private String email;
+    /**
+     * Dont' add getters and setters for this field.
+     * It's being tested by adding an annotation
+     */
     private int age;
 
     public Person(String name) {
