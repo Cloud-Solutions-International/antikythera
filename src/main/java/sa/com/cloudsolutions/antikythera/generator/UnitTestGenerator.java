@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -18,6 +19,7 @@ import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.ArrayType;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,21 +242,36 @@ public class UnitTestGenerator extends TestGenerator {
      */
     private void addWhens() {
         for (Expression expr : whenThen) {
-            if (expr instanceof MethodCallExpr mce) {
-                Optional<Expression> scope = mce.getScope();
-                if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped) {
-
-                    Optional<Expression> arg = scoped.getArguments().getFirst();
-                    if (arg.isPresent() && baseTestClass != null
-                            && arg.get() instanceof MethodCallExpr argMethod
-                            && mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
-                        continue;
-                    }
-                }
+            if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce)) {
+                continue;
             }
             getBody(testMethod).addStatement(expr);
         }
         whenThen.clear();
+    }
+
+    private boolean skipWhenUsage(MethodCallExpr mce) {
+        Optional<Expression> scope = mce.getScope();
+        if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped) {
+
+            Optional<Expression> arg = scoped.getArguments().getFirst();
+            if (arg.isPresent() && baseTestClass != null
+                    && arg.get() instanceof MethodCallExpr argMethod) {
+                if (mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
+                    return true;
+                }
+                for (Expression e : argMethod.getArguments()) {
+                    if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
+                        String fullName = AbstractCompiler.findFullyQualifiedName(
+                                compilationUnitUnderTest, ct.asString());
+                        if (fullName != null) {
+                            TestGenerator.addDependency(fullName);
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private boolean mockedByBaseTestClass(Expression arg) {
@@ -481,6 +498,12 @@ public class UnitTestGenerator extends TestGenerator {
                 methodCall.setArguments(MockingRegistry.fakeArguments(callable.asMethodDeclaration()));
             } else {
                 methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(callable.getMethod()));
+            }
+
+            for (Expression arg : methodCall.getArguments()) {
+                if (arg instanceof CastExpr castExpr) {
+                    System.out.println("bada");
+                }
             }
         }
     }
