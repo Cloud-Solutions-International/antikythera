@@ -365,7 +365,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void mockWithMockito(Parameter param, Variable v) {
+    void mockWithMockito(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();

@@ -77,10 +77,14 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
                 Statement thenStmt = ifStmt.getThenStmt();
                 Optional<Statement> elseStmt = ifStmt.getElseStmt();
 
-                if (isNodeInStatement(current, thenStmt)) {
-                    conditions.add(ifStmt.getCondition());
-                } else if (elseStmt.isPresent() && isNodeInStatement(current, elseStmt.get())) {
-                    conditions.add(BinaryOps.negateCondition(ifStmt.getCondition()));
+                // Check if this conditional is registered in Branching
+                LineOfCode lineOfCode = Branching.get(ifStmt.hashCode());
+                if (lineOfCode != null) {
+                    if (isNodeInStatement(current, thenStmt)) {
+                        conditions.add(ifStmt.getCondition());
+                    } else if (elseStmt.isPresent() && isNodeInStatement(current, elseStmt.get())) {
+                        conditions.add(BinaryOps.negateCondition(ifStmt.getCondition()));
+                    }
                 }
             }
 
