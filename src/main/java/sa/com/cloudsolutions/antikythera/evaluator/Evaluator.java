@@ -1227,7 +1227,7 @@ public class Evaluator {
     }
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
-    Variable identifyFieldDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+    Variable identifyVariableDeclarations(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
         if (MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
             return MockingRegistry.mockIt(variable);
         } else {
@@ -1805,7 +1805,7 @@ public class Evaluator {
                     return;
                 }
             }
-            Variable v = identifyFieldDeclarations(variableDeclarator);
+            Variable v = identifyVariableDeclarations(variableDeclarator);
             if (v != null) {
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {

@@ -445,8 +445,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
-    public Variable identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
-        Variable v = super.identifyFieldDeclarations(field);
+    public Variable identifyVariableDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
+        Variable v = super.identifyVariableDeclarations(field);
         detectRepository(field);
         return v;
     }
