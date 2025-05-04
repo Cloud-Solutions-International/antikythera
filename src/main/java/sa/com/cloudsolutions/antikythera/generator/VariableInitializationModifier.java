@@ -15,7 +15,6 @@ public class VariableInitializationModifier extends ModifierVisitor<Void> {
 
     private final String variableName;
     private final Expression newInitialization;
-    private boolean variableFoundAndReplaced = false; // Track if the variable was found and replaced
 
     /**
      * Constructor for VariableInitializationModifier.
@@ -38,28 +37,25 @@ public class VariableInitializationModifier extends ModifierVisitor<Void> {
     public Visitable visit(MethodDeclaration method, Void arg) {
         super.visit(method, arg); // Ensure we visit child nodes
 
-        // Reset the flag at the beginning of each method visit
-        variableFoundAndReplaced = false;
+        replaceInitializer(method, variableName, newInitialization);
+        return method;
+    }
 
+    private void replaceInitializer(MethodDeclaration method, String name, Expression initialization) {
         for (int i = 0; i < method.getBody().get().getStatements().size(); i++) {
             if (method.getBody().get().getStatements().get(i).isExpressionStmt()) {
                 ExpressionStmt exprStmt = (ExpressionStmt) method.getBody().get().getStatements().get(i);
                 if (exprStmt.getExpression().isVariableDeclarationExpr()) {
                     VariableDeclarationExpr varDeclExpr = exprStmt.getExpression().asVariableDeclarationExpr();
                     for (VariableDeclarator varDeclarator : varDeclExpr.getVariables()) {
-                        if (varDeclarator.getName().getIdentifier().equals(variableName)) {
+                        if (varDeclarator.getName().getIdentifier().equals(name)) {
                             // Variable found!  Replace the initializer.
-                            varDeclarator.setInitializer(newInitialization);
-                            variableFoundAndReplaced = true;
+                            varDeclarator.setInitializer(initialization);
                             break; // Exit the inner loop
                         }
                     }
                 }
             }
-            if(variableFoundAndReplaced){
-                break; // Exit the outer loop, no need to search further in this method
-            }
         }
-        return method;
     }
 }

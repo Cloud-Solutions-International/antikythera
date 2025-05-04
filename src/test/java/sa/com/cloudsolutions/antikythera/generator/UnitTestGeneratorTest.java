@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.BeforeAll;
@@ -305,23 +306,22 @@ class VariableInitializationModifierTest {
     }
 
     @Test
-    void shouldModifyFirstOccurrenceOnly() {
+    void shouldModifyConstructors() {
         String code = """
             public void testMethod() {
                 int target = 1;
                 String other = "middle";
-                int target = 3;
+                Person p = new Person("Hornblower");
             }
             """;
-        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
-        IntegerLiteralExpr newValue = new IntegerLiteralExpr("42");
 
-        VariableInitializationModifier modifier = new VariableInitializationModifier("target", newValue);
+        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
+        Expression newValue = StaticJavaParser.parseExpression("Person.createPerson(\"Horatio\")");
+
+        VariableInitializationModifier modifier = new VariableInitializationModifier("p", newValue);
         MethodDeclaration result = (MethodDeclaration) modifier.visit(method, null);
 
         String modifiedCode = result.toString();
-        assertTrue(modifiedCode.contains("int target = 42"));
-        assertTrue(modifiedCode.contains("int target = 3"));
-        assertEquals(1, modifiedCode.split("42").length - 1);
+        assertTrue(modifiedCode.contains("Person p = Person.createPerson(\"Horatio\")"));
     }
 }
