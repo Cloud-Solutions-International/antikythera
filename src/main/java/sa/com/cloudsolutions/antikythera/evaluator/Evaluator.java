@@ -616,7 +616,7 @@ public class Evaluator {
     }
 
     /**
-     * Create an object using reflection
+     * Create an object using reflection or an evaluator
      *
      * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
      *                           We recursively fetch it's parent until we reach the start of the block. This is
@@ -1277,7 +1277,7 @@ public class Evaluator {
             if (fqn != null) {
                 return resolveNonPrimitiveVariable(fqn, variable, t);
             }
-            return setupPrimitiveOrBoxedVariable(variable, t);
+            return resolvePrimitiveOrBoxedVariable(variable, t);
         } else {
             for (ImportWrapper imp : imports) {
                 String resolvedClass = imp.getNameAsString();
@@ -1301,13 +1301,13 @@ public class Evaluator {
             if (compilationUnit != null) {
                 return resolveVariableRepresentedByCode(variable, resolvedClass);
             } else {
-                return setupPrimitiveOrBoxedVariable(variable, t);
+                return resolvePrimitiveOrBoxedVariable(variable, t);
             }
         }
         return null;
     }
 
-    protected Variable setupPrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
+    protected Variable resolvePrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {

@@ -1,9 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -24,6 +28,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.IOException;
@@ -122,7 +127,14 @@ public class ControlFlowEvaluator extends Evaluator {
                         return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
                     }
                     if (v.getValue() instanceof Map<?,?>) {
-                        return StaticJavaParser.parseExpression(String.format("Map.of(%s)", resolved.getInitializer()));
+                        if (typeArgs.size() == 1) {
+                            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+                        }
+                        VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
+                        Variable resolved2 = resolveVariableDeclaration(vdecl2);
+                        return StaticJavaParser.parseExpression(
+                                String.format("Map.of(%s, %s)",
+                                        resolved.getInitializer(), resolved2.getInitializer()));
                     }
 
                 } catch (ReflectiveOperationException|IOException e) {
@@ -371,12 +383,35 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     @Override
-    protected Variable setupPrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
+    protected Variable resolvePrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
-            return super.setupPrimitiveOrBoxedVariable(variable, t);
+            return super.resolvePrimitiveOrBoxedVariable(variable, t);
         }
 
         return Reflect.variableFactory(t.asString());
+    }
+
+    @Override
+    Variable resolveVariableRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+        TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, resolvedClass).orElseThrow();
+        if (type instanceof ClassOrInterfaceDeclaration cdecl) {
+            MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
+            Variable v = new Variable(eval);
+
+            List<ConstructorDeclaration> constructors = cdecl.findAll(ConstructorDeclaration.class);
+            boolean defaultAvailable = constructors.stream()
+                    .anyMatch(constructor -> constructor.getParameters().isEmpty());
+            if (constructors.isEmpty() ||  defaultAvailable) {
+                v.setInitializer(new ObjectCreationExpr());
+            }
+            else {
+                v.setInitializer(StaticJavaParser.parseExpression("Mockito.mock(" + resolvedClass + ".class)"));
+            }
+            return v;
+        }
+
+        return super.resolveVariableRepresentedByCode(variable, resolvedClass);
     }
 }
