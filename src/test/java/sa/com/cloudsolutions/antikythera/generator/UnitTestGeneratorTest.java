@@ -6,6 +6,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
@@ -19,6 +20,7 @@ import org.mockito.Mockito;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -243,6 +245,20 @@ class UnitTestGeneratorMoreTests {
         AbstractCompiler.preProcess();
     }
 
+    @Test
+    void testMockWithMockito() {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
+        unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("printMap")).orElseThrow();
+        unitTestGenerator.methodUnderTest = md;
+        unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        Parameter param = md.getParameter(0);
+        unitTestGenerator.mockWithMockito(param, new Variable("hello"));
+
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito"));
+    }
     /**
      * The base class should be added to the class under test.
      */
