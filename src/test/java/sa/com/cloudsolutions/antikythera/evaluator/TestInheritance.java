@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,8 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestInheritance extends TestHelper {
@@ -37,5 +41,23 @@ class TestInheritance extends TestHelper {
         assertEquals(6, evaluator.getFields().size());
         assertEquals(0, evaluator.getFields().get("id").getValue());
         assertNull(evaluator.getFields().get("name").getValue());
+    }
+
+    @Test
+    void testGetterSetterAnnotation() throws ReflectiveOperationException {
+        evaluator.getCompilationUnit().getType(0).addAnnotation("Getter");
+        evaluator.getCompilationUnit().getType(0).addAnnotation("Setter");
+
+        MethodCallExpr mce = new MethodCallExpr("getAge");
+        Variable v = evaluator.evaluateExpression(mce);
+        assertNotNull(v);
+        assertEquals(0, v.getValue());
+
+        MethodCallExpr setter = new MethodCallExpr("setAge").addArgument(new IntegerLiteralExpr("1"));
+        evaluator.evaluateExpression(setter);
+
+        v = evaluator.evaluateExpression(mce);
+        assertNotNull(v);
+        assertEquals(1, v.getValue());
     }
 }

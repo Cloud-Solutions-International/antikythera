@@ -53,6 +53,10 @@ class TestConditionVisitor {
     void testCollectConditionsUpToMethod() {
         md = cu.findFirst(MethodDeclaration.class,
                 f -> f.getNameAsString().equals("multiVariate")).orElseThrow();
+
+        ConditionVisitor visitor = new ConditionVisitor();
+        md.accept(visitor, null);
+
         md.accept(new VoidVisitorAdapter<Void>() {
                       @Override
                       public void visit(IfStmt n, Void arg) {
@@ -72,6 +76,11 @@ class TestConditionVisitor {
     void testCollectConditionsUpToMethodAgain() {
         md = cu.findFirst(MethodDeclaration.class,
                 f -> f.getNameAsString().equals("multiVariateDeep")).orElseThrow();
+
+
+        ConditionVisitor visitor = new ConditionVisitor();
+        md.accept(visitor, null);
+
         md.accept(new VoidVisitorAdapter<Void>() {
                       @Override
                       public void visit(IfStmt n, Void arg) {

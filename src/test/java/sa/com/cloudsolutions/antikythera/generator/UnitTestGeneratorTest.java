@@ -1,11 +1,16 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +20,9 @@ import org.mockito.Mockito;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -231,6 +239,9 @@ class UnitTestGeneratorTest {
 }
 
 class UnitTestGeneratorMoreTests {
+    CompilationUnit cu;
+    UnitTestGenerator unitTestGenerator;
+
 
     @BeforeAll
     static void beforeClass() throws IOException {
@@ -239,6 +250,48 @@ class UnitTestGeneratorMoreTests {
         AbstractCompiler.preProcess();
     }
 
+    @BeforeEach
+    void setUp() {
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+        unitTestGenerator = new UnitTestGenerator(cu);
+        unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
+    }
+
+    private MethodDeclaration setupMethod(String name) {
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals(name)).orElseThrow();
+        unitTestGenerator.methodUnderTest = md;
+        unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        return md;
+    }
+
+    @Test
+    void testMockWithMockito1() {
+        MethodDeclaration md = setupMethod("printMap");
+        Parameter param = md.getParameter(0);
+        unitTestGenerator.mockWithMockito(param, new Variable("hello"));
+
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito"));
+    }
+
+    @Test
+    void mockFields() {
+        setupMethod("main");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);
+        unitTestGenerator.mockParameterFields(new Variable(eval),  "bada");
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"));
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getAge()).thenReturn(0);"));
+    }
+
+    @Test
+    void testMockWithMockito2() {
+        MethodDeclaration md = setupMethod("main");
+        Parameter param = md.getParameter(0);
+        unitTestGenerator.mockWithMockito(param, new Variable("hello"));
+
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+    }
     /**
      * The base class should be added to the class under test.
      */
@@ -246,14 +299,14 @@ class UnitTestGeneratorMoreTests {
     void testAddingBaseClassToTestClass() {
         CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.generator.DummyBase");
         assertNotNull(base);
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
-        assertNotNull(cu);
+        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
+        assertNotNull(compilationUnit);
 
-        ClassOrInterfaceDeclaration classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
-        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
+        ClassOrInterfaceDeclaration classUnderTest = compilationUnit.getType(0).asClassOrInterfaceDeclaration();
+        UnitTestGenerator utg = new UnitTestGenerator(compilationUnit);
 
         assertTrue(classUnderTest.getExtendedTypes().isEmpty());
-        CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
+        CompilationUnit testCu = utg.getCompilationUnit();
         assertNotNull(testCu);
         TypeDeclaration<?> publicType = AbstractCompiler.getPublicType(testCu);
         assertNotNull(publicType);
@@ -261,5 +314,59 @@ class UnitTestGeneratorMoreTests {
         assertTrue(publicType.asClassOrInterfaceDeclaration().getExtendedTypes()
                 .stream()
                 .anyMatch(t -> t.asString().equals("sa.com.cloudsolutions.antikythera.generator.DummyBase")));
+    }
+}
+
+
+class VariableInitializationModifierTest {
+
+    @Test
+    void shouldModifySimpleVariableInitialization() {
+        String code = """
+            public void testMethod() {
+                String test = "old";
+                int other = 5;
+            }
+            """;
+        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
+        StringLiteralExpr newValue = new StringLiteralExpr("new");
+        UnitTestGenerator.replaceInitializer(method, "test", newValue);
+
+        assertTrue(method.toString().contains("String test = \"new\""));
+        assertTrue(method.toString().contains("int other = 5"));
+    }
+
+    @Test
+    void shouldNotModifyWhenVariableNotFound() {
+        String code = """
+            public void testMethod() {
+                String existingVar = "old";
+            }
+            """;
+        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
+        IntegerLiteralExpr newValue = new IntegerLiteralExpr("42");
+
+        UnitTestGenerator.replaceInitializer(method, "nonexistentVar", newValue);
+
+        assertEquals(method.toString(), method.toString());
+    }
+
+    @Test
+    void shouldModifyConstructors() {
+        String code = """
+            public void testMethod() {
+                int target = 1;
+                String other = "middle";
+                Person p = new Person("Hornblower");
+            }
+            """;
+
+        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
+        Expression newValue = StaticJavaParser.parseExpression("Person.createPerson(\"Horatio\")");
+
+        UnitTestGenerator.replaceInitializer(method, "p", newValue);
+
+        String modifiedCode = method.toString();
+        assertTrue(modifiedCode.contains("Person p = Person.createPerson(\"Horatio\")"));
     }
 }

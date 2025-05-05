@@ -270,7 +270,7 @@ public class Conditional {
 
     @SuppressWarnings("unused")
     public void multiVariateDeep(int a, int b) {
-        if (a == 0) { // o
+        if (a == 0) { // 0
             System.out.println("A0!");
             if (b == 0) { // 1
                 System.out.println("B0!");

@@ -395,6 +395,13 @@ public class AbstractCompiler {
         return false;
     }
 
+    public static String findFullyQualifiedName(CompilationUnit cu, Type t) {
+        if (t instanceof ClassOrInterfaceType ctype) {
+            return findFullyQualifiedName(cu, ctype.getNameAsString());
+        }
+        return findFullyQualifiedName(cu, t.asString());
+    }
+
     /**
      * Finds the fully qualified classname given the short name of a class.
      *
@@ -421,6 +428,12 @@ public class AbstractCompiler {
             return cls.getName();
         }
         return null;
+    }
+    public static TypeWrapper findType(CompilationUnit cu, Type type) {
+        if (type instanceof ClassOrInterfaceType ctype) {
+            return findType(cu, ctype.getNameAsString());
+        }
+        return findType(cu, type.asString());
     }
 
     public static TypeWrapper findType(CompilationUnit cu, String className) {
@@ -794,7 +807,10 @@ public class AbstractCompiler {
                 } else {
                     ImportWrapper wrapper = findImport(cdecl.findCompilationUnit().orElseThrow(), extended.getNameAsString());
                     if (wrapper != null && wrapper.isExternal()) {
-                        return findCallableInBinaryCode(wrapper, methodCall);
+                        Optional<Callable> c = findCallableInBinaryCode(wrapper, methodCall);
+                        if (c.isPresent()) {
+                            return c;
+                        }
                     }
                 }
             }
@@ -810,10 +826,13 @@ public class AbstractCompiler {
          */
         try {
             Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
+
             ReflectionArguments reflectionArguments = new ReflectionArguments(
-                    methodCall.getMethodName(), new Object[]{}, methodCall.getArgumentTypesAsClasses()
+                    methodCall.getMethodName(),
+                    methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
+                    methodCall.getArgumentTypesAsClasses()
             );
-            Method method = Reflect.findMethod(clazz, reflectionArguments);
+            Method method = Reflect.findAccessibleMethod(clazz, reflectionArguments);
             if (method != null) {
                 Callable callable = new Callable(method, methodCall);
                 callable.setFoundInClass(clazz);
@@ -930,7 +949,7 @@ public class AbstractCompiler {
     }
 
     public static boolean isFinalClass(Type t, CompilationUnit compilationUnit) {
-        String fullClassName = AbstractCompiler.findFullyQualifiedName(compilationUnit, t.asString());
+        String fullClassName = AbstractCompiler.findFullyQualifiedName(compilationUnit, t);
 
         if (fullClassName != null) {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullClassName);

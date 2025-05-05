@@ -1067,35 +1067,11 @@ public class Evaluator {
     }
 
     private Variable executeGettersOrSetters(MCEWrapper mceWrapper, ClassOrInterfaceDeclaration classOrInterfaceDeclaration) {
-        String methodName = mceWrapper.getMethodName();
-        if (classOrInterfaceDeclaration.getAnnotationByName("Data").isPresent() ||
-                classOrInterfaceDeclaration.getAnnotationByName("Getter").isPresent()) {
-            if (methodName.startsWith("get")) {
-                String field = ClassProcessor.classToInstanceName(
-                        methodName.replace("get", "")
-                );
+        return handleLombokAccessors(classOrInterfaceDeclaration, mceWrapper.getMethodName());
+    }
 
-                return fields.get(field);
-            }
-            if (methodName.startsWith("is")) {
-                String field = ClassProcessor.classToInstanceName(
-                        methodName.replace("is", "")
-                );
-                return fields.get(field);
-            }
-        }
-        if ((classOrInterfaceDeclaration.getAnnotationByName("Data").isPresent() ||
-                classOrInterfaceDeclaration.getAnnotationByName("Setter").isPresent())
-                && methodName.startsWith("set")) {
-            String field = ClassProcessor.classToInstanceName(
-                    methodName.replace("set", "")
-            );
-            Variable va = AntikytheraRunTime.pop();
-            fields.put(field, va);
-            return new Variable(null);
-        }
-
-        return null;
+    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) {
+        return handleLombokAccessors(c, methodCall.getNameAsString());
     }
 
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
@@ -1170,24 +1146,26 @@ public class Evaluator {
         return null;
     }
 
-    Variable executeViaDataAnnotation(ClassOrInterfaceDeclaration c, MethodCallExpr methodCall) {
-        if (methodCall.getNameAsString().startsWith("get") && (
-                c.getAnnotationByName("Data").isPresent()
-                        || c.getAnnotationByName("Getter").isPresent())) {
-            String field = ClassProcessor.classToInstanceName(
-                    methodCall.getNameAsString().replace("get", "")
-            );
-            return new Variable(getValue(methodCall, field).getValue());
+    private Variable handleLombokAccessors(ClassOrInterfaceDeclaration classDecl, String methodName) {
+        boolean hasData = classDecl.getAnnotationByName("Data").isPresent();
+        boolean hasGetter = hasData || classDecl.getAnnotationByName("Getter").isPresent();
+        boolean hasSetter = hasData || classDecl.getAnnotationByName("Setter").isPresent();
+
+        if (methodName.startsWith("get") && hasGetter) {
+            String field = ClassProcessor.classToInstanceName(methodName.replace("get", ""));
+            return fields.get(field);
         }
-        if (methodCall.getNameAsString().startsWith("set") && (
-                c.getAnnotationByName("Data").isPresent()
-                        || c.getAnnotationByName("Setter").isPresent())) {
-            String field = ClassProcessor.classToInstanceName(
-                    methodCall.getNameAsString().replace("set", "")
-            );
+
+        if (methodName.startsWith("is") && hasGetter) {
+            String field = ClassProcessor.classToInstanceName(methodName.replace("is", ""));
+            return fields.get(field);
+        }
+
+        if (methodName.startsWith("set") && hasSetter) {
+            String field = ClassProcessor.classToInstanceName(methodName.replace("set", ""));
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
-            return new Variable(getValue(methodCall, field).getValue());
+            return new Variable(null);
         }
 
         return null;

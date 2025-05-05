@@ -1,9 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
@@ -265,8 +267,8 @@ public class MockingRegistry {
         };
     }
 
-    public static MethodCallExpr createMockitoArgument(String typeName) {
-        return new MethodCallExpr(
+    public static Expression createMockitoArgument(String typeName) {
+        MethodCallExpr mce = new MethodCallExpr(
                 new NameExpr(MOCKITO),
                 switch (typeName) {
                     case "String" -> "anyString";
@@ -277,5 +279,11 @@ public class MockingRegistry {
                     default -> "any";
                 }
         );
+
+        // If it's a generic Mockito.any() call, add casting
+        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
+            return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
+        }
+        return mce;
     }
 }

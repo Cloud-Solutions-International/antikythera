@@ -20,6 +20,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -194,6 +195,22 @@ class TestMockingEvaluator {
         assertNotNull(v);
         assertNotNull(v.getValue());
         assertInstanceOf(Evaluator.class, v.getValue());
+    }
+
+
+    @Test
+    void testSearchFakeData() throws ReflectiveOperationException {
+        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
+        SpringEvaluator eval = EvaluatorFactory.create(
+                "sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+
+        MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("searchFakeData")).orElseThrow();
+
+        Variable v = eval.executeMethod(md);
+        assertNotNull(v);
+        assertNotNull(v.getValue());
+        assertInstanceOf(ArrayList.class, v.getValue());
     }
 
 }

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
@@ -11,13 +12,17 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ArrayType;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,21 +245,40 @@ public class UnitTestGenerator extends TestGenerator {
      */
     private void addWhens() {
         for (Expression expr : whenThen) {
-            if (expr instanceof MethodCallExpr mce) {
-                Optional<Expression> scope = mce.getScope();
-                if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped) {
-
-                    Optional<Expression> arg = scoped.getArguments().getFirst();
-                    if (arg.isPresent() && baseTestClass != null
-                            && arg.get() instanceof MethodCallExpr argMethod
-                            && mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
-                        continue;
-                    }
-                }
+            if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce)) {
+                continue;
             }
             getBody(testMethod).addStatement(expr);
         }
         whenThen.clear();
+    }
+
+    private boolean skipWhenUsage(MethodCallExpr mce) {
+        Optional<Expression> scope = mce.getScope();
+        if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped) {
+
+            Optional<Expression> arg = scoped.getArguments().getFirst();
+            if (arg.isPresent() && baseTestClass != null
+                    && arg.get() instanceof MethodCallExpr argMethod) {
+                if (mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
+                    return true;
+                }
+                addImportsForCasting(argMethod);
+            }
+        }
+        return false;
+    }
+
+    private void addImportsForCasting(MethodCallExpr argMethod) {
+        for (Expression e : argMethod.getArguments()) {
+            if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
+                String fullName = AbstractCompiler.findFullyQualifiedName(
+                        compilationUnitUnderTest, ct.asString());
+                if (fullName != null) {
+                    TestGenerator.addDependency(fullName);
+                }
+            }
+        }
     }
 
     private boolean mockedByBaseTestClass(Expression arg) {
@@ -365,7 +389,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void mockWithMockito(Parameter param, Variable v) {
+    void mockWithMockito(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
@@ -375,14 +399,11 @@ public class UnitTestGenerator extends TestGenerator {
             if (t instanceof ArrayType) {
                 Variable mocked = Reflect.variableFactory(t.asString());
                 body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-                mockParameterFields(v, body, nameAsString);
+                mockParameterFields(v, nameAsString);
                 return;
             }
             if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
-                String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t.asString());
-                Variable mocked = Reflect.variableFactory(fullClassName);
-                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-                mockParameterFields(v, body, nameAsString);
+                cantMockFinalClass(param, v, cu);
                 return;
             }
         }
@@ -394,10 +415,33 @@ public class UnitTestGenerator extends TestGenerator {
                     " = Mockito.mock(" + param.getTypeAsString() + ".class);");
         }
 
-        mockParameterFields(v, body, nameAsString);
+        mockParameterFields(v, nameAsString);
     }
 
-    private static void mockParameterFields(Variable v, BlockStmt body, String nameAsString) {
+    private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
+        String nameAsString = param.getNameAsString();
+        BlockStmt body = getBody(testMethod);
+        Type t = param.getType();
+
+        String fullClassName = AbstractCompiler.findFullyQualifiedName(cu, t);
+        Variable mocked = Reflect.variableFactory(fullClassName);
+        if (v.getValue() instanceof Optional<?> value) {
+
+            if (value.isPresent()) {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                        "Optional.of(" + mocked.getInitializer() + ");");
+            } else {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = Optional.empty();");
+            }
+        }
+        else {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+            mockParameterFields(v, nameAsString);
+        }
+    }
+
+    void mockParameterFields(Variable v, String nameAsString) {
+        BlockStmt body = getBody(testMethod);
         if (v.getValue() instanceof Evaluator eval) {
             for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
                 if (entry.getValue().getValue() != null && entry.getValue().getType() != null
@@ -491,9 +535,7 @@ public class UnitTestGenerator extends TestGenerator {
             Expression target = assignExpr.getTarget();
             Expression value = assignExpr.getValue();
             if (target instanceof NameExpr nameExpr) {
-                VariableInitializationModifier modifier = new VariableInitializationModifier(
-                        nameExpr.getNameAsString(), value);
-                testMethod.accept(modifier, null);
+                replaceInitializer(testMethod, nameExpr.getNameAsString(), value);
             }
         }
     }
@@ -643,5 +685,20 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void save() throws IOException {
         Antikythera.getInstance().writeFile(filePath, gen.toString());
+    }
+
+    static void replaceInitializer(MethodDeclaration method, String name, Expression initialization) {
+        method.getBody().ifPresent(body ->{
+            NodeList<Statement> statements = method.getBody().get().getStatements();
+            for (Statement statement : statements) {
+                if (statement instanceof ExpressionStmt exprStmt && exprStmt.getExpression() instanceof VariableDeclarationExpr varDeclExpr) {
+                    for (VariableDeclarator varDeclarator : varDeclExpr.getVariables()) {
+                        if (varDeclarator.getName().getIdentifier().equals(name)) {
+                            varDeclarator.setInitializer(initialization);
+                        }
+                    }
+                }
+            }
+        });
     }
 }
