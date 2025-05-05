@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -29,18 +30,17 @@ class DepSolverTest extends TestHelper {
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
-        AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+        DepSolver.reset();
     }
 
     @BeforeEach
-    void each() throws Exception {
+    void each() {
         depSolver = DepSolver.createSolver();
-        depSolver.reset();
+        DepSolver.reset();
 
-        PersonCompiler p = new PersonCompiler();
-        cu = p.getCompilationUnit();
-        sourceClass = p.getCompilationUnit().getClassByName("Person").orElseThrow();
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        sourceClass = cu.getType(0).asClassOrInterfaceDeclaration();
         node = Graph.createGraphNode(sourceClass); // Use the Graph.createGraphNode method to create GraphNode
 
     }
@@ -106,12 +106,5 @@ class DepSolverTest extends TestHelper {
         assertEquals(1, m.getParameters().size());
         assertEquals("String", m.getParameter(0).getTypeAsString());
         assertTrue(Graph.getDependencies().containsKey("sa.com.cloudsolutions.antikythera.evaluator.IPerson"));
-    }
-
-    static class PersonCompiler extends AbstractCompiler {
-        protected PersonCompiler() throws IOException {
-            File file = new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Person.java");
-            cu = getJavaParser().parse(file).getResult().get();
-        }
     }
 }

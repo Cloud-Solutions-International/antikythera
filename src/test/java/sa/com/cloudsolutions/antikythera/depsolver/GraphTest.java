@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class GraphTest {
     @BeforeAll
     static void setup() throws IOException {
+        DepSolver.reset();
         Settings.loadConfigMap();
         AbstractCompiler.reset();
     }
@@ -35,7 +36,7 @@ class GraphTest {
         assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
         assertNotNull(gn.getDestination());
 
-        assertEquals(21, Graph.getNodes().size());
+        assertEquals(1, Graph.getNodes().size());
     }
 
     @Test
