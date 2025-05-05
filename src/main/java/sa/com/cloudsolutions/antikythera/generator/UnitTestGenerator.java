@@ -370,7 +370,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void mockWithEvaluator(Parameter param, Variable v) {
+     void mockWithEvaluator(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
         if (v != null && v.getInitializer() != null) {
             getBody(testMethod).addStatement(param.getTypeAsString() + " " + nameAsString + " = " + v.getInitializer() + ";");
