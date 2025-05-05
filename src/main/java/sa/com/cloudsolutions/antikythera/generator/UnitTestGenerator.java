@@ -440,7 +440,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void mockParameterFields(Variable v, String nameAsString) {
+    void mockParameterFields(Variable v, String nameAsString) {
         BlockStmt body = getBody(testMethod);
         if (v.getValue() instanceof Evaluator eval) {
             for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {

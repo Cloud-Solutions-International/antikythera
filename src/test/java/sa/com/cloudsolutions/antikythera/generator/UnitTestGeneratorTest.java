@@ -22,6 +22,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -238,6 +239,9 @@ class UnitTestGeneratorTest {
 }
 
 class UnitTestGeneratorMoreTests {
+    CompilationUnit cu;
+    UnitTestGenerator unitTestGenerator;
+
 
     @BeforeAll
     static void beforeClass() throws IOException {
@@ -246,15 +250,24 @@ class UnitTestGeneratorMoreTests {
         AbstractCompiler.preProcess();
     }
 
-    @Test
-    void testMockWithMockito1() {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
-        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
+    @BeforeEach
+    void setUp() {
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+        unitTestGenerator = new UnitTestGenerator(cu);
         unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
+    }
+
+    private MethodDeclaration setupMethod(String name) {
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("printMap")).orElseThrow();
+                m -> m.getNameAsString().equals(name)).orElseThrow();
         unitTestGenerator.methodUnderTest = md;
         unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        return md;
+    }
+
+    @Test
+    void testMockWithMockito1() {
+        MethodDeclaration md = setupMethod("printMap");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
@@ -262,14 +275,18 @@ class UnitTestGeneratorMoreTests {
     }
 
     @Test
+    void mockFields() {
+        setupMethod("main");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);
+        unitTestGenerator.mockParameterFields(new Variable(eval),  "bada");
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"));
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getAge()).thenReturn(0);"));
+    }
+
+    @Test
     void testMockWithMockito2() {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
-        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
-        unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("main")).orElseThrow();
-        unitTestGenerator.methodUnderTest = md;
-        unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        MethodDeclaration md = setupMethod("main");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
@@ -282,14 +299,14 @@ class UnitTestGeneratorMoreTests {
     void testAddingBaseClassToTestClass() {
         CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.generator.DummyBase");
         assertNotNull(base);
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
-        assertNotNull(cu);
+        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
+        assertNotNull(compilationUnit);
 
-        ClassOrInterfaceDeclaration classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
-        UnitTestGenerator unitTestGenerator = new UnitTestGenerator(cu);
+        ClassOrInterfaceDeclaration classUnderTest = compilationUnit.getType(0).asClassOrInterfaceDeclaration();
+        UnitTestGenerator utg = new UnitTestGenerator(compilationUnit);
 
         assertTrue(classUnderTest.getExtendedTypes().isEmpty());
-        CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
+        CompilationUnit testCu = utg.getCompilationUnit();
         assertNotNull(testCu);
         TypeDeclaration<?> publicType = AbstractCompiler.getPublicType(testCu);
         assertNotNull(publicType);
