@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,7 +28,7 @@ import java.util.Set;
  * <p>Generate (and print) truth tables for given conditionals</p>
  *
  * Comparisons involving Object.equals() are tricky. The range of values to assign to the variable
- * depends on the argument to the `equals` method. Obviously when the scope is null `null.equals`
+ * depends on the argument to the `equals` method. Obviously, when the scope is null `null.equals`
  * leads to Null Pointer Exceptions, so workarounds will have to be used.
  *
  * The values assigned may have its domain in Strings, Boolean or any other objects. This
@@ -36,6 +37,7 @@ import java.util.Set;
 public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
     public static final String EQUALS_CALL = "equals";
+    public static final String IS_EMPTY = "isEmpty";
     /**
      * The condition that this truth table is for
      */
@@ -230,10 +232,9 @@ public class TruthTable {
             }
 
             for (Expression constraintExpr : constraint.getValue()) {
-                if (constraintExpr instanceof BinaryExpr binaryExpr) {
-                    if (!satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
-                        return false;
-                    }
+                if (constraintExpr instanceof BinaryExpr binaryExpr &&
+                            !satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
+                    return false;
                 }
             }
         }
@@ -350,27 +351,23 @@ public class TruthTable {
     }
 
     private void adjustDomain() {
-        // First handle the regular domain adjustment
-        boolean allDefaultDomain = true;
-        for(Pair<Object, Object> p : variables.values()) {
-            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
-                allDefaultDomain = false;
-                break;
-            }
-        }
-
-        if (allDefaultDomain) {
+        if (isDefaultDomain()) {
             int maxLiteral = findMaxIntegerLiteral();
             if (maxLiteral > 1) {
                 variables.replaceAll((e, v) -> new Pair<>(0, maxLiteral));
             } else {
-                for(Expression e : variables.keySet()) {
-                    variables.put(e, new Pair<>(0, Math.max(1, variables.size() - 1)));
+                for(Map.Entry<Expression, Pair<Object, Object>> entry : variables.entrySet()) {
+                    Pair<Object, Object> value = entry.getValue();
+                    if (value.a instanceof Number || value.b instanceof Number) {
+                        variables.put(entry.getKey(), new Pair<>(0, Math.max(1, variables.size() - 1)));
+                    }
                 }
             }
         }
+        adjustDomainBasedOnConstraints();
+    }
 
-        // Then handle constraints
+    private void adjustDomainBasedOnConstraints() {
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
             for (Expression constraintExpr : constraint.getValue()) {
@@ -379,6 +376,18 @@ public class TruthTable {
                 }
             }
         }
+    }
+
+    private boolean isDefaultDomain() {
+        for(Pair<Object, Object> p : variables.values()) {
+            if (p.a instanceof Collection<?> || p.b instanceof Collection<?> || p.a instanceof Map<?,?> || p.b instanceof Map<?,?>) {
+                continue;
+            }
+            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void adjustDomainForConstraint(Expression variable, BinaryExpr constraint) {
@@ -431,8 +440,8 @@ public class TruthTable {
 
     private int findMaxIntegerLiteral() {
         int maxValue = 1;
-        for (Expression condition : conditions) {
-            if (condition instanceof BinaryExpr binaryExpr) {
+        for (Expression expr : conditions) {
+            if (expr instanceof BinaryExpr binaryExpr) {
                 if (isInequality(binaryExpr)) {
                     // Check both sides for integer literals
                     if (binaryExpr.getLeft().isIntegerLiteralExpr()) {
@@ -444,7 +453,7 @@ public class TruthTable {
                         maxValue = Math.max(maxValue, value + 1);
                     }
                 }
-            } else if (condition instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
+            } else if (expr instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
                 // Check equals method arguments for integer literals
                 if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
                     int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
@@ -633,8 +642,22 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
     }
 
     private Object evaluateMethodCall(MethodCallExpr condition, Map<Expression, Object> truthValues) {
-        if (condition.toString().contains(EQUALS_CALL)) {
-            Expression scope = condition.getScope().orElse(null);
+        String methodName = condition.getNameAsString();
+        Expression scope = condition.getScope().orElse(null);
+
+        if (IS_EMPTY.equals(methodName)) {
+            Object scopeValue = truthValues.get(scope);
+            if (scopeValue == null) {
+                return true; // null collections are considered empty for the moment
+            }
+            if (scopeValue instanceof Collection<?> collection) {
+                return collection.isEmpty();
+            }
+            if (scopeValue instanceof Map<?, ?> map) {
+                return map.isEmpty();
+            }
+            return false; // non-collection objects are not empty
+        } else if (EQUALS_CALL.equals(methodName)) {
             Object scopeValue = truthValues.get(scope);
             Expression argument = condition.getArgument(0);
 
@@ -871,20 +894,26 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
 
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (!m.getNameAsString().equals(EQUALS_CALL)) {
+            if (m.getNameAsString().equals(IS_EMPTY)) {
+                Optional<Expression> scope = m.getScope();
+                if (scope.isPresent()) {
+                    // For isEmpty(), we want to consider both empty and non-empty collections
+                    List<?> emptyList = new ArrayList<>();
+                    List<Integer> nonEmptyList = new ArrayList<>();
+                    nonEmptyList.add(1);
+                    collector.put(scope.get(), new Pair<>(emptyList, nonEmptyList));
+                }
+            } else if (!m.getNameAsString().equals(EQUALS_CALL)) {
                 Optional<Node> parent = m.getParentNode();
-
-                 if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
+                if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
                     if (b.getLeft().equals(m)) {
                         findDomain(m, collector, b.getRight());
-                    }
-                    else {
+                    } else {
                         findDomain(m, collector, b.getLeft());
                     }
-                 }
-                 else {
-                     collector.put(m, new Pair<>(true, false));
-                 }
+                } else {
+                    collector.put(m, new Pair<>(true, false));
+                }
             }
             super.visit(m, collector);
         }

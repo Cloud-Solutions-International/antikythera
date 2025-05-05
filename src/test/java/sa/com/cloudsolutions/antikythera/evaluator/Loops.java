@@ -3,6 +3,8 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import java.util.List;
 
 public class Loops {
+    int[] numberArray = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
     public static void main(String[] args) {
         Loops loops = new Loops();
         loops.forLoop();
@@ -65,16 +67,16 @@ public class Loops {
 
     @SuppressWarnings("unused")
     private void forEachLoop() {
-        int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        for (int number : numbers) {
+
+        for (int number : numberArray) {
             System.out.println(number);
         }
     }
 
     @SuppressWarnings("unused")
     private void forEachLoopWithBreak() {
-        int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10};
-        for (int number : numbers) {
+        int[] numbers2 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10};
+        for (int number : numbers2) {
             if(number == 10) {
                 break;
             }
@@ -84,9 +86,8 @@ public class Loops {
 
     @SuppressWarnings("unused")
     private void oldFashionsForEachArray() {
-        int[] numbers = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        for (int i = 0 ; i < numbers.length ; i++) {
-            int number = numbers[i];
+        for (int i = 0; i < numberArray.length ; i++) {
+            int number = numberArray[i];
             System.out.println(number);
         }
     }
@@ -103,16 +104,18 @@ public class Loops {
         numbers.forEach(x -> System.out.println(x));
     }
 
+    @SuppressWarnings("unused")
     private void forEach3() {
         List<Integer> numbers = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         forEach4(numbers);
     }
 
+    @SuppressWarnings({"unused", "java:S1612"})
     private void forEach4(List<Integer> numbers) {
         numbers.forEach(x -> System.out.println(x));
     }
 
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"unused", "java:S1612"})
     private void forEach5() {
         List<Integer> numbers = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         numbers.forEach(x -> { System.out.println(x); });

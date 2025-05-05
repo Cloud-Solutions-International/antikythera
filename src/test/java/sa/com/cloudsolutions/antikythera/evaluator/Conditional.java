@@ -1,25 +1,32 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 public class Conditional {
+    @SuppressWarnings("unused")
     public void conditional1(Person person) {
         if (person.getName() != null) {
-            System.out.print(person.getName());
+            System.out.print(person.getName() +"!");
         }
         else {
-            System.out.print("The name is null");
+            System.out.print("The name is null!");
         }
     }
 
     @SuppressWarnings("unused")
     public void conditional2(Person person) {
         if (person.getName() == null) {
-            System.out.print("The name is null");
+            System.out.print("The name is null!");
         }
         else {
-            System.out.print(person.getName());
+            System.out.print(person.getName() + "!");
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional3(Person person) {
         if (person.getId() == 0) {
             System.out.print("ZERO!");
@@ -29,6 +36,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional4(Person person) {
         if (person.getId() < 0) {
             System.out.print("Negative!");
@@ -57,6 +65,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional6(double a) {
         if (a == 1.0) {
             System.out.print("One!");
@@ -72,6 +81,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional7(Long a) {
         if (a == 1) {
             System.out.print("One!");
@@ -87,6 +97,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void conditional8(String a) {
         if (a.equals("1")) {
             System.out.print("One!");
@@ -102,6 +113,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void smallDiff(Double a) {
         if (a > 1.1) {
             System.out.print("Nearly 2!");
@@ -111,6 +123,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void booleanWorks(Boolean b) {
         if(b) {
             System.out.print("True!");
@@ -120,6 +133,7 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
     public void switchCase1(int a) {
         switch(a) {
             case 1:
@@ -136,6 +150,69 @@ public class Conditional {
         }
     }
 
+    @SuppressWarnings("unused")
+    public void emptiness1(List<Integer> list) {
+        if (list.isEmpty()) {
+            System.out.print("List is empty!");
+        }
+        else {
+            System.out.print("List is not empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness2(List<Integer> list) {
+        if (list == null || list.isEmpty()) {
+            System.out.print("List is empty!");
+        }
+        else {
+            System.out.print("List is not empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness3(List<Integer> list) {
+        if (list != null && !list.isEmpty()) {
+            System.out.print("List is not empty!");
+        }
+        else {
+            System.out.print("List is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness4(Set<Integer> set) {
+        if (set != null && !set.isEmpty()) {
+            System.out.print("Set is not empty!");
+        }
+        else {
+            System.out.print("Set is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void emptiness5(Map<Integer, Integer> map) {
+        if (map != null && !map.isEmpty()) {
+            System.out.print("Map is not empty!");
+        }
+        else {
+            System.out.print("Map is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public static void printMap(Map<Integer, Person> map) {
+        if (map != null && !map.isEmpty()) {
+            for (Map.Entry<Integer, Person> entry : map.entrySet()) {
+                System.out.print("Key: " + entry.getKey() + " -> Value: " + entry.getValue());
+            }
+        }
+        else {
+            System.out.print("Map is empty!");
+        }
+    }
+
+    @SuppressWarnings("unused")
     public String nested(int a) {
         if (a >= 0) {
             if (a == 0) {
@@ -148,6 +225,32 @@ public class Conditional {
         return "Negative";
     }
 
+    @SuppressWarnings("unused")
+    public String ternary1(String a) {
+        return null == a ? "It is null!" : "It is not null!";
+    }
+
+    @SuppressWarnings("unused")
+    public String ternary2(String a) {
+        return a == null ? "It is null!" : "It is not null!";
+    }
+
+    @SuppressWarnings("unused")
+    public void ternary3(String a) {
+        System.out.println(a == null ? "It is null!" : "It is not null!");
+    }
+
+    @SuppressWarnings("unused")
+    public void ternary4(int a) {
+        System.out.println(a == 1 || a == 2 ? "Small!" : "Big!");
+    }
+
+    @SuppressWarnings("unused")
+    public void ternary5(boolean a) {
+        System.out.println(a ? "True!" : "False!");
+    }
+
+    @SuppressWarnings("unused")
     public void multiVariate(int a, int b) {
         if (a == 0) {
             if (b == 0) {
@@ -198,9 +301,11 @@ public class Conditional {
 
     public static void main(String[] args) {
         Person p = new Person("Hello");
-        Conditional c = new Conditional();
-        c.conditional1(p);
-        p.setName(null);
-        c.conditional1(p);
+        p.setId(1);
+
+        Map<Integer, Person> map = new HashMap<>();
+        map.put(1, p);
+        printMap(map);
+
     }
 }

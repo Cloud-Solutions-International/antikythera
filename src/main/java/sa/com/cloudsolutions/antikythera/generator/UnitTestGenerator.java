@@ -10,8 +10,10 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -22,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
@@ -274,37 +277,9 @@ public class UnitTestGenerator extends TestGenerator {
                 injectMocks(c);
             } else {
                 instanceName = ClassProcessor.classToInstanceName(c.getNameAsString());
-                instantiateClass(c, instanceName);
+                getBody(testMethod).addStatement(ArgumentGenerator.instantiateClass(c, instanceName));
             }
         });
-    }
-
-    void instantiateClass(ClassOrInterfaceDeclaration classUnderTest, String instanceName) {
-
-        ConstructorDeclaration matched = null;
-        String className = classUnderTest.getNameAsString();
-
-        for (ConstructorDeclaration cd : classUnderTest.findAll(ConstructorDeclaration.class)) {
-            if (matched == null) {
-                matched = cd;
-            }
-            if (matched.getParameters().size() > cd.getParameters().size()) {
-                matched = cd;
-            }
-        }
-        if (matched != null) {
-            StringBuilder b = new StringBuilder(className + " " + instanceName + " " + " = new " + className + "(");
-            for (int i = 0; i < matched.getParameters().size(); i++) {
-                b.append("null");
-                if (i < matched.getParameters().size() - 1) {
-                    b.append(", ");
-                }
-            }
-            b.append(");");
-            getBody(testMethod).addStatement(b.toString());
-        } else {
-            getBody(testMethod).addStatement(className + " " + instanceName + " = new " + className + "();");
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -351,7 +326,7 @@ public class UnitTestGenerator extends TestGenerator {
                     case "Long" -> v.setInitializer("0L");
                     case "Double" -> v.setInitializer("0.0");
                     case "Float" -> v.setInitializer("0.0f");
-                    case "Boolean" -> v.setInitializer("false");
+                    case "boolean", "Boolean" -> v.setInitializer("false");
                     case "Character" -> v.setInitializer("'\\0'");
                     case "Byte" -> v.setInitializer("(byte)0");
                     case "Short" -> v.setInitializer("(short)0");
@@ -382,7 +357,7 @@ public class UnitTestGenerator extends TestGenerator {
             CompilationUnit cu = Graph.getDependencies().get(fullName);
             if (cu != null) {
                 AbstractCompiler.getMatchingType(cu, t.asString()).ifPresentOrElse(type ->
-                                instantiateClass(type.asClassOrInterfaceDeclaration(), nameAsString)
+                                getBody(testMethod).addStatement(ArgumentGenerator.instantiateClass(type.asClassOrInterfaceDeclaration(), nameAsString))
                         , () -> {
                             throw new AntikytheraException("Could not find matching type " + fullName);
                         });
@@ -511,6 +486,15 @@ public class UnitTestGenerator extends TestGenerator {
                     ));
                 }
             });
+        }
+        else if (expr instanceof AssignExpr assignExpr) {
+            Expression target = assignExpr.getTarget();
+            Expression value = assignExpr.getValue();
+            if (target instanceof NameExpr nameExpr) {
+                VariableInitializationModifier modifier = new VariableInitializationModifier(
+                        nameExpr.getNameAsString(), value);
+                testMethod.accept(modifier, null);
+            }
         }
     }
 

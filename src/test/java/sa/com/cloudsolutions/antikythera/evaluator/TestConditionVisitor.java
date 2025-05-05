@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestIfConditionVisitor {
+class TestConditionVisitor {
 
     private CompilationUnit cu;
     private MethodDeclaration md;
@@ -44,7 +44,7 @@ class TestIfConditionVisitor {
     @CsvSource({"conditional1, 1","conditional4, 2", "cannotControl, 0"})
     void testBranchingCount(String name, int count) {
         md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals(name)).orElseThrow();
-        IfConditionVisitor visitor = new IfConditionVisitor();
+        ConditionVisitor visitor = new ConditionVisitor();
         md.accept(visitor, null);
         assertEquals(count, Branching.size(md));
     }
@@ -57,7 +57,7 @@ class TestIfConditionVisitor {
                       @Override
                       public void visit(IfStmt n, Void arg) {
                           super.visit(n, arg);
-                          List<Expression> conditions = IfConditionVisitor.collectConditionsUpToMethod(n);
+                          List<Expression> conditions = ConditionVisitor.collectConditionsUpToMethod(n);
                           if (n.getCondition().toString().equals("a == 0")) {
                               assertEquals(0, conditions.size());
                           } else {
@@ -76,7 +76,7 @@ class TestIfConditionVisitor {
                       @Override
                       public void visit(IfStmt n, Void arg) {
                           super.visit(n, arg);
-                          List<Expression> conditions = IfConditionVisitor.collectConditionsUpToMethod(n);
+                          List<Expression> conditions = ConditionVisitor.collectConditionsUpToMethod(n);
                           if (n.getCondition().toString().equals("a == 0")) {
                               assertEquals(0, conditions.size());
                           } else if (n.getCondition().toString().equals("b == 1")) {
@@ -93,7 +93,7 @@ class TestIfConditionVisitor {
     void testGraph() {
         md = cu.findFirst(MethodDeclaration.class,
                 f -> f.getNameAsString().equals("multiVariateDeep")).orElseThrow();
-        md.accept(new IfConditionVisitor(), null);
+        md.accept(new ConditionVisitor(), null);
         List<LineOfCode> lines = new ArrayList<>(Branching.get(md));
         assertEquals(4, lines.size());
 

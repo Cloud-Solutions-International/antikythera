@@ -40,6 +40,10 @@ public class BinaryOps {
             return new Variable(Boolean.TRUE);
         }
 
+        if (leftVal == null) {
+            return new Variable(Boolean.FALSE);
+        }
+
         if (leftVal instanceof Number && rightVal instanceof Number) {
             return new Variable(NumericComparator.compare(leftVal, rightVal) == 0);
         }
@@ -66,7 +70,6 @@ public class BinaryOps {
 
         return new UnaryExpr(condition, UnaryExpr.Operator.LOGICAL_COMPLEMENT);
     }
-
 
     public static Expression getCombinedCondition(List<Expression> conditions) {
         if (conditions.isEmpty()) {

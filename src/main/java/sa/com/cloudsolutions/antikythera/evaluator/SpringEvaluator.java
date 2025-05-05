@@ -80,7 +80,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     private MethodDeclaration currentMethod;
     private boolean onTest;
-    private LineOfCode currentConditional;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -173,7 +172,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private static void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
+    private void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
         if (!assignExpr.getTarget().toString().equals(p.getNameAsString())) {
             return;
         }
@@ -195,7 +194,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
                 yield value;
             }
-            default -> value;
+            default -> {
+                try {
+                    yield evaluateExpression(value).getValue();
+                } catch (ReflectiveOperationException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
         };
         va.setValue(result);
     }
@@ -262,7 +267,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         Branching.clear();
         AntikytheraRunTime.reset();
 
-        md.accept(new IfConditionVisitor(), null);
+        md.accept(new ConditionVisitor(), null);
     }
 
     @Override
@@ -290,9 +295,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         );
 
         if (currentConditional != null ) {
-            if (currentConditional.getStatement() instanceof IfStmt ifStmt) {
-                boolean nextState = currentConditional.isFalsePath();
-                setupIfCondition(ifStmt, nextState);
+            if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
+                setupIfCondition();
             }
             applyPreconditions(p, va);
         }
@@ -316,6 +320,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
                 parameterAssignment(p, assignExpr, va);
+                va.setInitializer(assignExpr);
             }
         }
     }
@@ -440,8 +445,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
-    public Variable identifyFieldDeclarations(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
-        Variable v = super.identifyFieldDeclarations(field);
+    public Variable resolveVariableDeclaration(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
+        Variable v = super.resolveVariableDeclaration(field);
         detectRepository(field);
         return v;
     }
@@ -509,7 +514,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 if (MockingRegistry.isMockTarget(resolvedClass)) {
                     try {
                         v = MockingRegistry.mockIt(variable);
-                    } catch (ClassNotFoundException e) {
+                    } catch (ReflectiveOperationException e) {
                         throw new AntikytheraException(e);
                     }
                 } else if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
@@ -575,6 +580,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     }
                 }
             }
+            else {
+                fields.put(variableDeclarator.getNameAsString(), v);
+                return;
+            }
         }
         super.setupField(field, variableDeclarator);
     }
@@ -626,15 +635,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     /**
      * Set up an if condition so that it will evaluate to true or false in future executions.
-     *
-     * @param ifStmt  the if statement to mess with
-     * @param state the desired state.
      */
-    void setupIfCondition(IfStmt ifStmt, boolean state) {
-        List<Expression> collectedConditions = IfConditionVisitor.collectConditionsUpToMethod(ifStmt);
+    void setupIfCondition() {
+        boolean state = currentConditional.isFalsePath();
+
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(currentConditional.getStatement());
         TruthTable tt = new TruthTable();
 
-        for(Expression cond : collectedConditions) {
+        for (Expression cond : collectedConditions) {
             if (cond.isBinaryExpr()) {
                 BinaryExpr bin = cond.asBinaryExpr();
                 if (bin.getLeft().isNameExpr()) {
@@ -643,7 +651,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         }
 
-        collectedConditions.add(ifStmt.getCondition());
+        collectedConditions.add(currentConditional.getConditionalExpression());
         tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
         tt.generateTruthTable();
 
@@ -653,12 +661,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
                 if (entry.getKey().isMethodCallExpr()) {
-                    setupConditionThroughMethodCalls(ifStmt, entry);
+                    setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                 } else if (entry.getKey().isNameExpr()) {
-                    setupConditionThroughAssignment(ifStmt, entry);
+                    setupConditionThroughAssignment(currentConditional.getStatement(), entry);
                 }
             }
         }
+
     }
 
     /**
@@ -692,7 +701,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private Variable processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
         if (stmt.getExpression().isVariableDeclarationExpr()) {
             VariableDeclarationExpr vdecl = stmt.getExpression().asVariableDeclarationExpr();
-            VariableDeclarator v = vdecl.getVariable(0);
 
             Type elementType = vdecl.getElementType();
             if (elementType.isClassOrInterfaceType()) {

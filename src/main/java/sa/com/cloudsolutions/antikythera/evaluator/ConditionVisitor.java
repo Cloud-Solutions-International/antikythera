@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
@@ -16,30 +17,37 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-public class IfConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
+public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
     @Override
     public void visit(IfStmt stmt, LineOfCode parent) {
-        if (canMatchParameters(stmt)) {
-            LineOfCode lineOfCode = new LineOfCode(stmt);
+        LineOfCode lineOfCode = new LineOfCode(stmt);
+        lineOfCode.setParent(parent);
+        if (canMatchParameters(lineOfCode.getMethodDeclaration(), stmt.getCondition())) {
+            Branching.add(lineOfCode);
+        }
+
+        // Visit the "then" branch
+        stmt.getThenStmt().accept(this, lineOfCode);
+
+        // Visit the "else" branch if it exists
+        stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
+    }
+
+    @Override
+    public void visit(ConditionalExpr expr, LineOfCode parent) {
+        LineOfCode lineOfCode = new LineOfCode(expr.getCondition());
+        if (canMatchParameters(lineOfCode.getMethodDeclaration(), expr.getCondition())) {
             lineOfCode.setParent(parent);
             Branching.add(lineOfCode);
-
-            // Visit the "then" branch
-            stmt.getThenStmt().accept(this, lineOfCode);
-
-            // Visit the "else" branch if it exists
-            stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private boolean canMatchParameters(IfStmt stmt) {
-        MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
+    private boolean canMatchParameters(MethodDeclaration md, Expression condition) {
         NameCollector nameCollector = new NameCollector();
 
         Set<String> names = nameCollector.getNames();
-        stmt.getCondition().accept(nameCollector, null);
+        condition.accept(nameCollector, null);
 
         for (String name : names) {
             for (Parameter p : md.getParameters()) {

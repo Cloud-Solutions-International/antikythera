@@ -1,7 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -10,6 +16,7 @@ import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
@@ -17,18 +24,22 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 
 public class ControlFlowEvaluator extends Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
+    protected LineOfCode currentConditional;
 
     public ControlFlowEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -52,7 +63,7 @@ public class ControlFlowEvaluator extends Evaluator {
                     }
                 }
                 /*
-                 * We tried to match the name of the variable with the name of the parameter but
+                 * We tried to match the name of the variable with the name of the parameter, but
                  * a match could not be found. So it is not possible to force branching by
                  * assigning values to a parameter in a conditional
                  */
@@ -73,8 +84,7 @@ public class ControlFlowEvaluator extends Evaluator {
         if (v.getType() instanceof PrimitiveType) {
             valueExpr = Reflect.createLiteralExpression(entry.getValue());
         } else {
-            valueExpr = entry.getValue() == null ? new NullLiteralExpr()
-                    : new StringLiteralExpr(entry.getValue().toString());
+            valueExpr = setupConditionForNonPrimitive(entry, v);
         }
 
         return new AssignExpr(
@@ -82,6 +92,60 @@ public class ControlFlowEvaluator extends Evaluator {
                 valueExpr,
                 AssignExpr.Operator.ASSIGN
         );
+    }
+
+    private Expression setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
+        if (entry.getValue() instanceof List<?> list) {
+            if (list.isEmpty()) {
+                if (v.getValue() instanceof List<?>) {
+                    return StaticJavaParser.parseExpression("List.of()");
+                } else if (v.getValue() instanceof Set<?>) {
+                    return StaticJavaParser.parseExpression("Set.of()");
+                } else if (v.getValue() instanceof Map<?,?>) {
+                    return StaticJavaParser.parseExpression("Map.of()");
+                }
+            }
+            else if(entry.getKey() instanceof NameExpr name) {
+                return setupNonEmptyCollections(v, name);
+            }
+        }
+        return entry.getValue() == null ? new NullLiteralExpr()
+                        : new StringLiteralExpr(entry.getValue().toString());
+    }
+
+    private Expression setupNonEmptyCollections(Variable v, NameExpr name) {
+        Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
+        Type type = param.getType();
+        NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        if (typeArgs.isEmpty()) {
+            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        }
+        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
+
+        try {
+            Variable resolved = resolveVariableDeclaration(vdecl);
+
+            if (v.getValue() instanceof List<?>) {
+                return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
+            }
+            if (v.getValue() instanceof Set<?>) {
+                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
+            }
+            if (v.getValue() instanceof Map<?,?>) {
+                if (typeArgs.size() == 1) {
+                    typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+                }
+                VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
+                Variable resolved2 = resolveVariableDeclaration(vdecl2);
+                return StaticJavaParser.parseExpression(
+                        String.format("Map.of(%s, %s)",
+                                resolved.getInitializer(), resolved2.getInitializer()));
+            }
+
+        } catch (ReflectiveOperationException|IOException e) {
+            throw new AntikytheraException(e);
+        }
+        return null;
     }
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
@@ -255,7 +319,7 @@ public class ControlFlowEvaluator extends Evaluator {
             String argName = methodCall.getArgument(i).toString();
 
             if (expr instanceof MethodCallExpr methodExpr) {
-                // Replace parameter references in method scope
+                // Replace parameter references in the method scope
                 Optional<Expression> scope = methodExpr.getScope();
                 if (scope.isPresent() && scope.get() instanceof NameExpr scopeName
                         && scopeName.getNameAsString().equals(paramName)) {
@@ -318,5 +382,31 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
             }
         }
+    }
+
+    @Override
+    protected Variable resolvePrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
+        Optional<Expression> init = variable.getInitializer();
+        if (init.isPresent()) {
+            return super.resolvePrimitiveOrBoxedVariable(variable, t);
+        }
+
+        return Reflect.variableFactory(t.asString());
+    }
+
+    @Override
+    Variable resolveVariableRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
+        TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, resolvedClass).orElseThrow();
+        if (type instanceof ClassOrInterfaceDeclaration cdecl) {
+            MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
+            Variable v = new Variable(eval);
+            String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
+            String[] parts = init.split("=");
+            v.setInitializer(StaticJavaParser.parseExpression(parts[1]));
+            return v;
+        }
+
+        return super.resolveVariableRepresentedByCode(variable, resolvedClass);
     }
 }

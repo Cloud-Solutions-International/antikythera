@@ -228,7 +228,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
             Type x = t.getTypeArguments().orElse(new NodeList<>()).getFirst().orElse(null);
             if (x instanceof ClassOrInterfaceType ciType) {
-                TypeWrapper wrapper = AbstractCompiler.findType(ciType.findCompilationUnit().orElse(null), t.getNameAsString());
+                TypeWrapper wrapper = AbstractCompiler.findType(cdecl.findCompilationUnit().orElse(null), ciType.getNameAsString());
                 if (wrapper != null) {
                     if (wrapper.getType() != null) {
                         // Type is available as source code, use Evaluator

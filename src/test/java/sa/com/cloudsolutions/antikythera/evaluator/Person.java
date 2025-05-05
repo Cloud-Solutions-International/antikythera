@@ -56,4 +56,30 @@ public class Person implements IPerson {
     public void setId(String id) {
         this.setId(Integer.parseInt(id));
     }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+    @SuppressWarnings("unused")
+    public String getPhone() {
+        return phone;
+    }
+
+    @SuppressWarnings("unused")
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    @SuppressWarnings("unused")
+    public String getEmail() {
+        return email;
+    }
+
+    @SuppressWarnings("unused")
+    public void setEmail(String email) {
+        this.email = email;
+
+    }
+
 }

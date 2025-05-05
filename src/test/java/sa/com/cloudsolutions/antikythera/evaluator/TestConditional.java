@@ -51,12 +51,16 @@ class TestConditional extends TestHelper {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("conditional1")).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Hello", outContent.toString());
+        assertEquals("Hello!", outContent.toString());
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional1, The name is nullT", "conditional2, TThe name is null",
-            "conditional3, 1ZERO!",
+    @CsvSource({"conditional1, The name is null!Antikythera!", "conditional2, Antikythera!The name is null!",
+            "conditional3, 1ZERO!", "emptiness1, List is not empty!List is empty!",
+            "emptiness2, List is not empty!List is empty!",
+            "emptiness3, List is empty!List is not empty!",
+            "emptiness4, Set is empty!Set is not empty!",
+            "emptiness5, Map is empty!Map is not empty!"
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -70,7 +74,8 @@ class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"conditional4, ZERO!Positive!ZERO!Negative!", "conditional5, ZERO!Three!Three!Two!Two!One!",
             "conditional6, ZERO!Three!Three!Two!Two!One!","conditional7, ZERO!Three!Three!Two!Two!One!",
-            "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!", "booleanWorks, False!True!"
+            "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!",
+            "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -174,6 +179,45 @@ class TestConditional extends TestHelper {
         assertEquals("Bee!Zero!Zero!Aargh!Antikythera!Bee!",s.replaceAll("\\n",""));
     }
 
+
+    @ParameterizedTest
+    @CsvSource({
+            "ternary1, test,  It is not null!",
+            "ternary1, null,  It is null!",
+            "ternary2, test,  It is not null!",
+            "ternary2, null,  It is null!"
+    })
+    void testTernary(String name, String arg , String value) throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+
+        if (arg.equals("null")) {
+            AntikytheraRunTime.push(new Variable(null));
+        }
+        else {
+            AntikytheraRunTime.push(new Variable(arg));
+        }
+        Variable v = evaluator.executeMethod(method);
+        assertEquals(v.getValue(), value);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
+            "ternary5, False!True!"
+    })
+    void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+
+
+        evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals(result,s.replaceAll("\\n",""));
+    }
 }
 
 class TestConditionalWithOptional extends TestHelper {

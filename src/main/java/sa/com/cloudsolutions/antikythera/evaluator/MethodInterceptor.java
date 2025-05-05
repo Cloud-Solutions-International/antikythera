@@ -4,6 +4,9 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.Origin;
 import net.bytebuddy.implementation.bind.annotation.RuntimeType;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
 
@@ -37,6 +40,12 @@ public class MethodInterceptor {
 
     @RuntimeType
     public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+        Callable callable = new Callable(method, null);
+        MockingCall mc = MockingRegistry.getThen(method.getDeclaringClass().getName(), callable);
+        if (mc != null) {
+            return mc.getVariable().getValue();
+        }
+
         if (wrappedClass != null) {
             try {
                 Method targetMethod = wrappedClass.getMethod(method.getName(), method.getParameterTypes());
