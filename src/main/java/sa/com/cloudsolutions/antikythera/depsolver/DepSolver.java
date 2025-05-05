@@ -381,7 +381,7 @@ public class DepSolver {
         }
     }
 
-    public void reset() {
+    public static void reset() {
          stack.clear();
          names.clear();
          Graph.getDependencies().clear();
