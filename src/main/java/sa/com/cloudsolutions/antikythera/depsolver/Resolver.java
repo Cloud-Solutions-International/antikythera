@@ -30,7 +30,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
@@ -58,23 +57,19 @@ public class Resolver {
 
             FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
             if (f != null) {
-                try {
-                    node.addField(f);
-                    Type t = f.getElementType();
-                    String fqname = AbstractCompiler.findFullyQualifiedName(
-                            node.getCompilationUnit(), t.asClassOrInterfaceType().getNameAsString()
-                    );
-                    if (fqname != null) {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                        if (cu != null) {
-                            TypeDeclaration<?> p = AbstractCompiler.getPublicType(cu);
-                            if (p != null) {
-                                return Graph.createGraphNode(p);
-                            }
+                node.addField(f);
+                Type t = f.getElementType();
+                String fqname = AbstractCompiler.findFullyQualifiedName(
+                        node.getCompilationUnit(), t.asClassOrInterfaceType().getNameAsString()
+                );
+                if (fqname != null) {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
+                    if (cu != null) {
+                        TypeDeclaration<?> p = AbstractCompiler.getPublicType(cu);
+                        if (p != null) {
+                            return Graph.createGraphNode(p);
                         }
                     }
-                } catch (AntikytheraException e) {
-                    throw new GeneratorException(e);
                 }
             }
         }
@@ -98,22 +93,19 @@ public class Resolver {
             );
             if (imp2 != null) {
                 node.getDestination().addImport(imp2.getImport());
-                try {
-                    if(imp2.getType() != null) {
-                        Graph.createGraphNode(imp2.getType());
+
+                if(imp2.getType() != null) {
+                    Graph.createGraphNode(imp2.getType());
+                }
+                if(imp2.getField() != null) {
+                    Graph.createGraphNode(imp2.getField());
+                }
+                else {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                    if (cu != null) {
+                        AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
+                                .ifPresent(t -> createFieldNode(value, t));
                     }
-                    if(imp2.getField() != null) {
-                        Graph.createGraphNode(imp2.getField());
-                    }
-                    else {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                        if (cu != null) {
-                            AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
-                                    .ifPresent(t -> createFieldNode(value, t));
-                        }
-                    }
-                } catch (AntikytheraException e) {
-                    throw new GeneratorException(e);
                 }
             }
             else {
@@ -482,8 +474,6 @@ public class Resolver {
         } else if (expr.isClassExpr()) {
             ClassExpr ce = expr.asClassExpr();
             ImportUtils.addImport(node, ce.getType().asString());
-        } else {
-            // seems other types dont need special handling they are caught else where
         }
     }
 
