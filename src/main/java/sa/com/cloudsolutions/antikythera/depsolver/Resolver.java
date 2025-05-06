@@ -16,6 +16,7 @@ import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
+import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
@@ -182,11 +183,7 @@ public class Resolver {
     }
 
     private static void resolveNameExpression(GraphNode node, Expression value)  {
-        try {
-            resolveNameExpr(node, value, new NodeList<>());
-        } catch (AntikytheraException e) {
-            throw new DepsolverException(e);
-        }
+         resolveNameExpr(node, value.asNameExpr(), new NodeList<>());
     }
 
     public static Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae,
@@ -434,7 +431,7 @@ public class Resolver {
 
     static void processExpression(GraphNode node, Expression expr, NodeList<Type> types)  {
         if (expr.isNameExpr()) {
-            resolveNameExpr(node, expr, types);
+            resolveNameExpr(node, expr.asNameExpr(), types);
         }
         else if (expr.isLiteralExpr()) {
             types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
@@ -454,16 +451,16 @@ public class Resolver {
         else if (expr.isConditionalExpr()) {
             ConditionalExpr ce = expr.asConditionalExpr();
             if (ce.getThenExpr().isNameExpr()) {
-                resolveNameExpr(node, ce.getThenExpr(), types);
+                resolveNameExpr(node, ce.getThenExpr().asNameExpr(), types);
             }
             if (ce.getElseExpr().isNameExpr()) {
-                resolveNameExpr(node, ce.getElseExpr(), types);
+                resolveNameExpr(node, ce.getElseExpr().asNameExpr(), types);
             }
         }
         else if (expr.isArrayAccessExpr()) {
             ArrayAccessExpr aae = expr.asArrayAccessExpr();
             if (aae.getName().isNameExpr()) {
-                resolveNameExpr(node, aae.getName(), types);
+                resolveNameExpr(node, aae.getName().asNameExpr(), types);
                 types.getLast().ifPresent(t -> {
                     if (t.isArrayType()) {
                         Type at = types.removeLast();
@@ -507,9 +504,9 @@ public class Resolver {
         }
     }
 
-    static void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) {
-        if (arg instanceof MethodCallExpr argMethodCall) {
-            MCEWrapper wrap = resolveArgumentTypes(node, arg);
+    static void wrapCallable(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types) {
+        if (callExpression instanceof MethodCallExpr methodCallExpr) {
+            MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
             GraphNode gn = Resolver.chainedMethodCall(node, wrap);
             if (gn != null) {
                 if (gn.getNode() instanceof MethodDeclaration md) {
@@ -532,7 +529,7 @@ public class Resolver {
                             );
                         }
                     } else {
-                        Type t = lombokSolver(argMethodCall, cid, gn);
+                        Type t = lombokSolver(methodCallExpr, cid, gn);
                         if (t != null) {
                             types.add(t);
                         }
@@ -612,14 +609,21 @@ public class Resolver {
         return null;
     }
 
-    static void resolveNameExpr(GraphNode node, Expression arg, NodeList<Type> types) {
-        Type t = DepSolver.getNames().get(arg.asNameExpr().getNameAsString());
+    /**
+     * Resolves the given name expression.
+     * Operates via side effects.
+     * @param node the node within which the expression is being resolved
+     * @param nameExpression the name expression to resolve
+     * @param types the resolved type will be adaed to this list.
+     */
+    static void resolveNameExpr(GraphNode node, NameExpr nameExpression, NodeList<Type> types) {
+        Type t = DepSolver.getNames().get(nameExpression.getNameAsString());
         if (t != null) {
             types.add(t);
         }
         else {
 
-            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(arg.asNameExpr().getNameAsString());
+            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(nameExpression.getNameAsString());
             if (fd.isPresent()) {
                 node.addField(fd.get());
                 Type field = fd.get().getElementType();
@@ -633,7 +637,7 @@ public class Resolver {
                 }
             }
             else {
-                ImportUtils.addImport(node, arg.asNameExpr().getNameAsString());
+                ImportUtils.addImport(node, nameExpression.getNameAsString());
             }
         }
     }

@@ -574,7 +574,7 @@ public class DepSolver {
                 initializer.accept(new Visitor(), node);
             }
             else if(initializer.isNameExpr()) {
-                Resolver.resolveNameExpr(node, initializer, new NodeList<>());
+                Resolver.resolveNameExpr(node, initializer.asNameExpr(), new NodeList<>());
             }
         }
     }
