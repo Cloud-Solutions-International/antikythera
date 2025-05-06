@@ -139,7 +139,6 @@ public class Resolver {
         }
     }
 
-
     static void resolveNormalAnnotationExpr(GraphNode node, NormalAnnotationExpr n) {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
@@ -175,10 +174,19 @@ public class Resolver {
         else if (left.isNameExpr()) {
             resolveNameExpression(node, left);
         }
+        else if (left.isBinaryExpr()) {
+            resolveBinaryExpr(node, left);
+        }
 
         Expression right = value.asBinaryExpr().getRight();
         if (right.isFieldAccessExpr()) {
             Resolver.resolveField(node, right.asFieldAccessExpr());
+        }
+        else if(right.isNameExpr()) {
+            resolveNameExpression(node, right);
+        }
+        else if (right.isBinaryExpr()) {
+            resolveBinaryExpr(node, right);
         }
     }
 
