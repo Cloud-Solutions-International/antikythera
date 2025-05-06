@@ -17,4 +17,10 @@ public class FakeService {
         FakeSpecification spec = new FakeSpecification();
         return fakeRepository.findAll(spec);
     }
+
+    @SuppressWarnings("unused")
+    public List<FakeEntity> searchFakeDataWithCriteria(FakeSearchModel searchModel) {
+        CrazySpecification<FakeEntity> spec = new CrazySpecification<>();
+        return fakeRepository.findAll(spec.searchOrderDetails(searchModel));
+    }
 }
