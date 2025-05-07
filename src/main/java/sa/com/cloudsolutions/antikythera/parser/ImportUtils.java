@@ -41,30 +41,26 @@ public class ImportUtils {
 
     public static GraphNode addImport(GraphNode node, String name) {
         GraphNode returnValue = null;
-        try {
-            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), name);
-            if (imp != null) {
-                node.getDestination().addImport(imp.getImport());
-                if (imp.getType() != null) {
-                    returnValue = Graph.createGraphNode(imp.getType());
-                }
-                if (imp.getField() != null) {
-                    Graph.createGraphNode(imp.getField());
-                } else if (imp.getImport().isAsterisk() && !imp.isExternal()) {
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
-                    if (cu != null) {
-                        AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
-                    }
-                }
-            } else {
-                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), name);
+        if (imp != null) {
+            node.getDestination().addImport(imp.getImport());
+            if (imp.getType() != null) {
+                returnValue = Graph.createGraphNode(imp.getType());
+            }
+            if (imp.getField() != null) {
+                Graph.createGraphNode(imp.getField());
+            } else if (imp.getImport().isAsterisk() && !imp.isExternal()) {
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                 if (cu != null) {
                     AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
                 }
             }
-        } catch (AntikytheraException e) {
-            throw new DepsolverException(e);
+        } else {
+            String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
+            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
+            if (cu != null) {
+                AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
+            }
         }
         return returnValue;
     }

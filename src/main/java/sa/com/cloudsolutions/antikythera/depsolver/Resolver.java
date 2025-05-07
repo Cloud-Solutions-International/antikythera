@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -29,6 +30,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
@@ -53,21 +55,22 @@ public class Resolver {
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
         if (decl != null) {
+            if (decl.isEnumDeclaration()) {
+                for (EnumConstantDeclaration ecd : decl.asEnumDeclaration().getEntries()) {
+                    if (ecd.getNameAsString().equals(value.getNameAsString())) {
+                        node.addEnumConstant(ecd);
+                        break;
+                    }
+                }
+            }
+            else {
+                FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
+                if (f != null) {
+                    node.addField(f);
+                    TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), f.getElementType());
 
-            FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
-            if (f != null) {
-                node.addField(f);
-                Type t = f.getElementType();
-                String fqname = AbstractCompiler.findFullyQualifiedName(
-                        node.getCompilationUnit(), t.asClassOrInterfaceType().getNameAsString()
-                );
-                if (fqname != null) {
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                    if (cu != null) {
-                        TypeDeclaration<?> p = AbstractCompiler.getPublicType(cu);
-                        if (p != null) {
-                            return Graph.createGraphNode(p);
-                        }
+                    if (wrapper != null && wrapper.getType() != null) {
+                        return Graph.createGraphNode(wrapper.getType());
                     }
                 }
             }

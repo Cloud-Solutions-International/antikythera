@@ -1,10 +1,13 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.stmt.Statement;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,6 +114,22 @@ class ResolverTest extends TestHelper {
         String s = resolved.toString();
         assertTrue(s.contains("com.fasterxml.jackson.databind.ObjectMapper"));
         assertTrue(s.contains("objectMapper = new ObjectMapper()"));
+    }
 
+    @Test
+    void testMethodReference() {
+        init("sa.com.cloudsolutions.antikythera.evaluator.Functional");
+
+        Statement stmt = sourceClass.getMethodsByName("people1")
+                .getFirst().getBody().orElseThrow().getStatement(0);
+
+        Expression expr = stmt.asExpressionStmt().getExpression()
+                .asVariableDeclarationExpr().getVariable(0).getInitializer().orElseThrow();
+        Resolver.processExpression(node, expr, new NodeList<>());
+
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        assertNotNull(resolved);
+        String s = resolved.toString();
+        assertTrue(s.contains("getPerson"));
     }
 }

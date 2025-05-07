@@ -5,17 +5,20 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
@@ -69,7 +72,7 @@ public class GraphNode {
 
     /**
      * Creates a new GraphNode
-     * However it will not really be ready for use until you call the buildNode method
+     * However, it will not really be ready for use until you call the buildNode method
      * @param node an AST Node
      */
     private GraphNode(Node node) {
@@ -382,8 +385,31 @@ public class GraphNode {
         return b.toString();
     }
 
-    public void addField(FieldDeclaration fieldDeclaration)  {
+    public void addEnumConstant(EnumConstantDeclaration enumConstant) {
+        if (typeDeclaration.isEnumDeclaration()) {
+            EnumDeclaration ed = typeDeclaration.asEnumDeclaration();
+            for (EnumConstantDeclaration ecd : ed.getEntries()) {
+                if (ecd.getNameAsString().equals(enumConstant.getNameAsString())) {
+                    return;
+                }
+            }
+            if (enumConstant.getArguments().isNonEmpty()) {
+                Class<?>[] paramTypes = new Class<?>[enumConstant.getArguments().size()];
 
+                for (int i = 0 ; i < paramTypes.length ; i++) {
+                    Expression arg = enumConstant.getArguments().get(i);
+                    if (arg.isLiteralExpr()) {
+                        paramTypes[i] = Reflect.literalExpressionToTypeString(arg.asStringLiteralExpr());
+                    }
+                }
+
+                enclosingType.getConstructorByParameterTypes(paramTypes).ifPresent(Graph::createGraphNode);
+            }
+            ed.addEntry(enumConstant.clone());
+        }
+    }
+
+    public void addField(FieldDeclaration fieldDeclaration)  {
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
