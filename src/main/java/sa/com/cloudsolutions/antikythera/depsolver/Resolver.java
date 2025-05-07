@@ -166,7 +166,6 @@ public class Resolver {
         }
     }
 
-
     static void resolveBinaryExpr(GraphNode node, Expression value) {
         Expression left = value.asBinaryExpr().getLeft();
         if (left.isFieldAccessExpr()) {
@@ -242,14 +241,11 @@ public class Resolver {
         return Optional.empty();
     }
 
-
     static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td)  {
         if (td != null) {
             td.getFieldByName(fae.getNameAsString()).ifPresent(Graph::createGraphNode);
         }
     }
-
-
 
     public static GraphNode resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) {
         final FieldAccessExpr fae = expr.asFieldAccessExpr();
@@ -338,7 +334,10 @@ public class Resolver {
             Expression expr = iterator.next().getExpression();
             if (expr.isFieldAccessExpr()) {
                 FieldAccessExpr fieldAccessExpr = expr.asFieldAccessExpr();
-                gn = Resolver.resolveField(gn, fieldAccessExpr);
+                GraphNode tmp = Resolver.resolveField(gn, fieldAccessExpr);
+                if (tmp != null || !gn.getEnclosingType().isEnumDeclaration()) {
+                    gn = tmp;
+                }
             }
             else if (expr.isMethodCallExpr()) {
                 gn = copyMethod(resolveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
