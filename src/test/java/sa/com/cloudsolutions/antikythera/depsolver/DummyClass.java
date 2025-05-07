@@ -5,5 +5,8 @@ public class DummyClass {
     private static final String SUFFIX = "suffix";
 
     @DummyAnnotation(value = PREFIX + " " + SUFFIX)
-    public void exampleMethod() {}
+    public void binaryAnnotation() {}
+
+    @DummyAnnotation(value=PREFIX)
+    public void annotationWIthField() {}
 }

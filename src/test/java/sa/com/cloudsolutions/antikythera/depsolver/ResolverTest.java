@@ -53,7 +53,7 @@ public class ResolverTest extends TestHelper {
         node = Graph.createGraphNode(sourceClass); // Use the Graph.createGraphNode method to create GraphNode
 
         AnnotationExpr ann = sourceClass
-                .getMethodsByName("exampleMethod").getFirst()
+                .getMethodsByName("binaryAnnotation").getFirst()
                 .getAnnotationByName("DummyAnnotation").orElseThrow();
         Resolver.resolveNormalAnnotationExpr(node, ann.asNormalAnnotationExpr());
         CompilationUnit cu = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
@@ -64,6 +64,29 @@ public class ResolverTest extends TestHelper {
         assertTrue(s.contains("PREFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
         assertTrue(s.contains("SUFFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
 
+    }
+
+
+    @Test
+    void testAnnotationWithField() {
+        depSolver = DepSolver.createSolver();
+        DepSolver.reset();
+
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        sourceClass = cu.getType(0).asClassOrInterfaceDeclaration();
+        node = Graph.createGraphNode(sourceClass); // Use the Graph.createGraphNode method to create GraphNode
+
+        AnnotationExpr ann = sourceClass
+                .getMethodsByName("annotationWIthField").getFirst()
+                .getAnnotationByName("DummyAnnotation").orElseThrow();
+        Resolver.resolveNormalAnnotationExpr(node, ann.asNormalAnnotationExpr());
+        CompilationUnit cu = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        assertNotNull(cu);
+        String s = cu.toString();
+        assertFalse(s.contains("DummyAnnotation"),
+                "The annotation visitor is not invoked so annotation should not be present");
+        assertTrue(s.contains("PREFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
+        assertFalse(s.contains("SUFFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
     }
 
 }
