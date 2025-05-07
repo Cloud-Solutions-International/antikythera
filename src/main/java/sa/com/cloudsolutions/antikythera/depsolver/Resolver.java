@@ -88,35 +88,34 @@ public class Resolver {
      */
     public static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
-        if (scope.isNameExpr()) {
-
-            ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                    scope.asNameExpr().getNameAsString()
-            );
-            if (imp2 != null) {
-                node.getDestination().addImport(imp2.getImport());
-
-                if(imp2.getType() != null) {
-                    Graph.createGraphNode(imp2.getType());
-                }
-                if(imp2.getField() != null) {
-                    Graph.createGraphNode(imp2.getField());
-                }
-                else {
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                    if (cu != null) {
-                        AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
-                                .ifPresent(t -> createFieldNode(value, t));
-                    }
-                }
-            }
-            else {
-                return Resolver.resolveThisFieldAccess(node, value);
-            }
-        }
-        else if (scope.isThisExpr()) {
+        if (scope.isThisExpr()) {
             return  Resolver.resolveThisFieldAccess(node, value);
         }
+
+        ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                scope.asNameExpr().getNameAsString()
+        );
+        if (imp2 != null) {
+            node.getDestination().addImport(imp2.getImport());
+
+            if(imp2.getType() != null) {
+                Graph.createGraphNode(imp2.getType());
+            }
+            if(imp2.getField() != null) {
+                Graph.createGraphNode(imp2.getField());
+            }
+            else {
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                if (cu != null) {
+                    AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
+                            .ifPresent(t -> createFieldNode(value, t));
+                }
+            }
+        }
+        else {
+            return Resolver.resolveThisFieldAccess(node, value);
+        }
+
         return null;
     }
 
@@ -466,19 +465,23 @@ public class Resolver {
             }
         }
         else if (expr.isArrayAccessExpr()) {
-            ArrayAccessExpr aae = expr.asArrayAccessExpr();
-            if (aae.getName().isNameExpr()) {
-                resolveNameExpr(node, aae.getName().asNameExpr(), types);
-                types.getLast().ifPresent(t -> {
-                    if (t.isArrayType()) {
-                        Type at = types.removeLast();
-                        types.add(at.asArrayType().getComponentType());
-                    }
-                });
-            }
+            resolveArrayAccessExpr(node, expr, types);
         } else if (expr.isClassExpr()) {
             ClassExpr ce = expr.asClassExpr();
             ImportUtils.addImport(node, ce.getType().asString());
+        }
+    }
+
+    private static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
+        ArrayAccessExpr aae = expr.asArrayAccessExpr();
+        if (aae.getName().isNameExpr()) {
+            resolveNameExpr(node, aae.getName().asNameExpr(), types);
+            types.getLast().ifPresent(t -> {
+                if (t.isArrayType()) {
+                    Type at = types.removeLast();
+                    types.add(at.asArrayType().getComponentType());
+                }
+            });
         }
     }
 
@@ -622,7 +625,7 @@ public class Resolver {
      * Operates via side effects.
      * @param node the node within which the expression is being resolved
      * @param nameExpression the name expression to resolve
-     * @param types the resolved type will be adaed to this list.
+     * @param types the resolved type will be added to this list.
      */
     static void resolveNameExpr(GraphNode node, NameExpr nameExpression, NodeList<Type> types) {
         Type t = DepSolver.getNames().get(nameExpression.getNameAsString());
