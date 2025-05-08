@@ -92,24 +92,28 @@ public class Resolver {
             return  Resolver.resolveThisFieldAccess(node, value);
         }
 
-        ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                scope.asNameExpr().getNameAsString()
-        );
-        if (imp2 != null) {
-            node.getDestination().addImport(imp2.getImport());
+        if (scope.isNameExpr()) {
+            ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
+                    scope.asNameExpr().getNameAsString()
+            );
+            if (imp2 != null) {
+                node.getDestination().addImport(imp2.getImport());
 
-            if(imp2.getType() != null) {
-                Graph.createGraphNode(imp2.getType());
-            }
-            if(imp2.getField() != null) {
-                Graph.createGraphNode(imp2.getField());
+                if (imp2.getType() != null) {
+                    Graph.createGraphNode(imp2.getType());
+                }
+                if (imp2.getField() != null) {
+                    Graph.createGraphNode(imp2.getField());
+                } else {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                    if (cu != null) {
+                        AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
+                                .ifPresent(t -> createFieldNode(value, t));
+                    }
+                }
             }
             else {
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                if (cu != null) {
-                    AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
-                            .ifPresent(t -> createFieldNode(value, t));
-                }
+                return Resolver.resolveThisFieldAccess(node, value);
             }
         }
         else {
