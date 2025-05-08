@@ -27,28 +27,4 @@ public class SpecificationTest {
         DepSolver.reset();
     }
 
-    @Test
-    void testSpecification() {
-        DepSolver depSolver = DepSolver.createSolver();
-        DepSolver.reset();
-
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.FakeService");
-        TypeDeclaration<?> t = cu.getType(0).asClassOrInterfaceDeclaration();
-        GraphNode node = Graph.createGraphNode(t.asClassOrInterfaceDeclaration().findFirst(
-                MethodDeclaration.class, md -> md.getNameAsString().equals("searchFakeDataWithCriteria")
-        ).orElseThrow()); // Use the Graph.createGraphNode method to create GraphNode
-
-        depSolver.dfs();
-        Map<String, CompilationUnit> a = Graph.getDependencies();
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeService"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeSearchModel"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification"));
-
-        CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification");
-        ClassOrInterfaceDeclaration cst = cs.getType(0).asClassOrInterfaceDeclaration().asClassOrInterfaceDeclaration();
-        assertEquals(1, cst.findAll(MethodDeclaration.class).size());
-
-    }
 }

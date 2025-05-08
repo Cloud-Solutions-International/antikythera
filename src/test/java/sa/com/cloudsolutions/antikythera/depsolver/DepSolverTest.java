@@ -1,9 +1,14 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.stmt.Statement;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +20,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,15 +44,22 @@ class DepSolverTest extends TestHelper {
     void each() {
         depSolver = DepSolver.createSolver();
         DepSolver.reset();
+    }
 
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Person");
+    @AfterAll
+    static void afterAll() {
+        AntikytheraRunTime.resetAll();
+    }
+
+    private void postSetup(String name) {
+        cu = AntikytheraRunTime.getCompilationUnit(name);
         sourceClass = cu.getType(0).asClassOrInterfaceDeclaration();
         node = Graph.createGraphNode(sourceClass); // Use the Graph.createGraphNode method to create GraphNode
-
     }
 
     @Test
     void testFieldSearchAddsFieldToClass() throws AntikytheraException {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
         FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
@@ -58,6 +71,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsAnnotations() throws AntikytheraException {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
         FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
         field.addAnnotation("Deprecated");
@@ -72,6 +86,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsImports() throws AntikytheraException {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
         FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
@@ -86,6 +101,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testMethodSearch() throws AntikytheraException {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
         MethodDeclaration md = sourceClass.getMethodsByName("getName").getFirst();
         node.setNode(md);
 
@@ -97,6 +113,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testSetter() throws AntikytheraException {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
         MethodDeclaration md = sourceClass.getMethodsByName("setId").get(1);
         node.setNode(md);
 
@@ -106,5 +123,35 @@ class DepSolverTest extends TestHelper {
         assertEquals(1, m.getParameters().size());
         assertEquals("String", m.getParameter(0).getTypeAsString());
         assertTrue(Graph.getDependencies().containsKey("sa.com.cloudsolutions.antikythera.evaluator.IPerson"));
+    }
+
+    @Test
+    void testMethodReference() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Functional");
+        Graph.createGraphNode(sourceClass.getMethodsByName("people1").getFirst());
+        depSolver.dfs();
+
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        assertNotNull(resolved);
+        String s = resolved.toString();
+        assertTrue(s.contains("getName"));
+    }
+
+
+    @Test
+    void testSpecification() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.FakeService");
+        depSolver.dfs();
+        Map<String, CompilationUnit> a = Graph.getDependencies();
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeService"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeSearchModel"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification"));
+
+        CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification");
+        ClassOrInterfaceDeclaration cst = cs.getType(0).asClassOrInterfaceDeclaration().asClassOrInterfaceDeclaration();
+        assertEquals(1, cst.findAll(MethodDeclaration.class).size());
+
     }
 }
