@@ -141,6 +141,10 @@ class DepSolverTest extends TestHelper {
     @Test
     void testSpecification() {
         postSetup("sa.com.cloudsolutions.antikythera.evaluator.FakeService");
+        Graph.createGraphNode(
+                node.getEnclosingType().asClassOrInterfaceDeclaration()
+                        .getMethodsByName("searchFakeDataWithCriteria").get(0));
+
         depSolver.dfs();
         Map<String, CompilationUnit> a = Graph.getDependencies();
         assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeService"));
