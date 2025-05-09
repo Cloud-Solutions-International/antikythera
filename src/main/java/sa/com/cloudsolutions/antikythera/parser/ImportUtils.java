@@ -10,12 +10,17 @@ import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
+import java.util.Optional;
+
 public class ImportUtils {
     private ImportUtils() {}
 
     public static GraphNode addImport(GraphNode node, Expression expr) {
         if (expr.isNameExpr()) {
             return ImportUtils.addImport(node, expr.asNameExpr().getNameAsString());
+        }
+        else if (expr.isObjectCreationExpr()) {
+            return ImportUtils.addImport(node, expr.asObjectCreationExpr().getType());
         }
         return null;
     }
@@ -25,7 +30,7 @@ public class ImportUtils {
         TypeWrapper wrapper = AbstractCompiler.findType(compilationUnit, type);
         if (wrapper != null) {
             String packageName = compilationUnit.getPackageDeclaration().isPresent()
-                    ? compilationUnit.getPackageDeclaration().get().getNameAsString() : "";
+                    ? compilationUnit.getPackageDeclaration().orElseThrow().getNameAsString() : "";
 
             if (wrapper.getType() != null) {
                 GraphNode n = Graph.createGraphNode(wrapper.getType());
@@ -68,7 +73,10 @@ public class ImportUtils {
             String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
             if (cu != null) {
-                AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
+                Optional<TypeDeclaration<?>> mathcing = AbstractCompiler.getMatchingType(cu, name);
+                if (mathcing.isPresent()) {
+                    return (Graph.createGraphNode(mathcing.get()));
+                }
             }
         }
         return returnValue;

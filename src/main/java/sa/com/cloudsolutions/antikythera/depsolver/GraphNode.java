@@ -272,7 +272,7 @@ public class GraphNode {
      * being eventually added.
      * @param typeArg an AST type argument which may or may not contain parameterized types
      */
-    public void processTypeArgument(Type typeArg) {
+    public GraphNode processTypeArgument(Type typeArg) {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
             if (ctype.getTypeArguments().isPresent()) {
@@ -283,10 +283,9 @@ public class GraphNode {
             if (ctype.getScope().isPresent()) {
                 ImportUtils.addImport(this, ctype.getScope().orElseThrow());
             }
-            ImportUtils.addImport(this, ctype.getNameAsString());
-        } else {
-            ImportUtils.addImport(this, typeArg);
+            return ImportUtils.addImport(this, ctype.getNameAsString());
         }
+        return ImportUtils.addImport(this, typeArg);
     }
 
     public boolean isVisited() {

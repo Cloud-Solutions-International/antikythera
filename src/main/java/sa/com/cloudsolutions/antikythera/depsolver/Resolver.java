@@ -359,14 +359,12 @@ public class Resolver {
             Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
             if (fd.isPresent()) {
-                gn = findFieldNode(gn, fd.get());
+                return findFieldNode(gn, fd.get());
             }
-            else {
-                gn = ImportUtils.addImport(gn, nameExpr);
-            }
+            gn = ImportUtils.addImport(gn, nameExpr);
         }
         else {
-            gn.processTypeArgument(t);
+            return gn.processTypeArgument(t);
         }
         return gn;
     }

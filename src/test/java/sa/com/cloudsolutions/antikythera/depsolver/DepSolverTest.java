@@ -1,13 +1,9 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.stmt.Statement;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -155,7 +151,8 @@ class DepSolverTest extends TestHelper {
 
         CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification");
         ClassOrInterfaceDeclaration cst = cs.getType(0).asClassOrInterfaceDeclaration().asClassOrInterfaceDeclaration();
-        assertEquals(1, cst.findAll(MethodDeclaration.class).size());
+        assertEquals(2, cst.findAll(MethodDeclaration.class).size(),
+                "Should be two with the inner method");
 
     }
 }
