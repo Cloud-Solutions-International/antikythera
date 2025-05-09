@@ -55,7 +55,7 @@ class GraphNodeTest  {
         FieldDeclaration vdecl = gn.getEnclosingType().findFirst(FieldDeclaration.class,
             fd -> fd.toString().contains("itsComplicated")).orElseThrow();
 
-        gn.addTypeArguments(vdecl.getElementType().asClassOrInterfaceType());
+        gn.processTypeArgument(vdecl.getElementType().asClassOrInterfaceType());
         assertEquals(2, gn.getDestination().getImports().size());
     }
 
@@ -75,7 +75,7 @@ class GraphNodeTest  {
         FieldDeclaration vdecl = gn.getEnclosingType().findFirst(FieldDeclaration.class,
                 fd -> fd.toString().contains("text")).orElseThrow();
 
-        gn.addTypeArguments(vdecl.getElementType().asClassOrInterfaceType());
+        gn.processTypeArgument(vdecl.getElementType().asClassOrInterfaceType());
         assertEquals(0, gn.getDestination().getImports().size());
     }
 }

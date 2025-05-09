@@ -138,14 +138,14 @@ public class DepSolver {
             Type returnType = md.getType();
             String returns = md.getTypeAsString();
             if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                node.addTypeArguments(returnType.asClassOrInterfaceType());
+                node.processTypeArgument(returnType.asClassOrInterfaceType());
             }
 
 
             // Handle generic type parameters
             for (TypeParameter typeParameter : md.getTypeParameters()) {
                 for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
-                    node.addTypeArguments(bound);
+                    node.processTypeArgument(bound);
                 }
             }
 
@@ -413,12 +413,12 @@ public class DepSolver {
 
                 names.put(vd.getNameAsString(), vd.getType());
                 if (vd.getType().isClassOrInterfaceType()) {
-                    node.addTypeArguments(vd.getType().asClassOrInterfaceType());
+                    node.processTypeArgument(vd.getType().asClassOrInterfaceType());
                 }
                 else if (vd.getType().isArrayType()) {
                     Type t = vd.getType().asArrayType().getComponentType();
                     if (t.isClassOrInterfaceType()) {
-                        node.addTypeArguments(t.asClassOrInterfaceType());
+                        node.processTypeArgument(t.asClassOrInterfaceType());
                     }
                 }
 
@@ -442,7 +442,7 @@ public class DepSolver {
     private List<ImportWrapper> solveType(Type vd, GraphNode node)  {
         if (vd.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = vd.asClassOrInterfaceType();
-            node.addTypeArguments(ctype);
+            node.processTypeArgument(ctype);
         } else {
             ImportUtils.addImport(node, vd);
         }

@@ -178,7 +178,7 @@ public class GraphNode {
                 if (cdecl.getImplementedTypes().isEmpty()) {
                     for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
                         cdecl.addImplementedType(ifc.clone());
-                        addTypeArguments(ifc);
+                        processTypeArgument(ifc);
                     }
                 }
             }
@@ -208,7 +208,7 @@ public class GraphNode {
                         }
                     }
 
-                    addTypeArguments(ifc);
+                    processTypeArgument(ifc);
                 }
             }
         }
@@ -249,7 +249,7 @@ public class GraphNode {
                 if (type.isClassOrInterfaceType()) {
                     ClassOrInterfaceType ct = type.asClassOrInterfaceType();
                     if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
-                        addTypeArguments(ct);
+                        processTypeArgument(ct);
                     }
                 }
             }
@@ -269,22 +269,13 @@ public class GraphNode {
 
     /**
      * Adds the type arguments to the graph.
+     * We are dealing with parameterized types. things like Map<String, Integer> or List<String>
      * Will make recursive calls to the searchType method which will result in the imports
      * being eventually added.
-     * @param ifc interface or class
+     * @param typeArg an AST type argument which may or may not contain parameterized types
      */
 
-    public void addTypeArguments(ClassOrInterfaceType ifc) {
-        Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
-        if (typeArguments.isPresent()) {
-            for (Type typeArg : typeArguments.get()) {
-                processTypeArgument(typeArg);
-            }
-        }
-        ImportUtils.addImport(this, ifc);
-    }
-
-    private void processTypeArgument(Type typeArg) {
+    public void processTypeArgument(Type typeArg) {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
             if (ctype.getTypeArguments().isPresent()) {
@@ -416,7 +407,7 @@ public class GraphNode {
             typeDeclaration.addMember(fieldDeclaration.clone());
 
             if (variable.getType().isClassOrInterfaceType()) {
-                addTypeArguments(variable.getType().asClassOrInterfaceType());
+                processTypeArgument(variable.getType().asClassOrInterfaceType());
 
                 if(variable.getType().asClassOrInterfaceType().getScope().isPresent()){
                     ClassOrInterfaceType scp = variable.getType().asClassOrInterfaceType().getScope().get();
