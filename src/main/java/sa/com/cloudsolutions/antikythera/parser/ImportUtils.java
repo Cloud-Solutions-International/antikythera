@@ -36,7 +36,7 @@ public class ImportUtils {
                 GraphNode n = Graph.createGraphNode(wrapper.getType());
                 if (!packageName.equals(
                         findPackage(wrapper.getType())) && !packageName.isEmpty()) {
-                    node.getDestination().addImport(packageName);
+                    node.getDestination().addImport(n.getTypeDeclaration().getFullyQualifiedName().orElseThrow());
                 }
                 return n;
             }

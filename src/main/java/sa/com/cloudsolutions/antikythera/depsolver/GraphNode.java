@@ -261,8 +261,8 @@ public class GraphNode {
     private void processClassAnnotations()  {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
+            ann.accept(new AnnotationVisitor(), this);
         }
-        enclosingType.accept(new AnnotationVisitor(), this);
     }
 
     /**
