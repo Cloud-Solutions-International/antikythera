@@ -377,7 +377,7 @@ public class Resolver {
             for (AnnotationExpr ann : field.getAnnotations()) {
                 ImportUtils.addImport(gn, ann.getNameAsString());
             }
-            gn.processTypeArgument(field.getElementType());
+            return gn.processTypeArgument(field.getElementType());
         }
         return gn;
     }
@@ -486,6 +486,7 @@ public class Resolver {
         }
     }
 
+    @SuppressWarnings("unchecked")
     static void wrapCallable(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types) {
         if (callExpression instanceof MethodCallExpr methodCallExpr) {
             MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
