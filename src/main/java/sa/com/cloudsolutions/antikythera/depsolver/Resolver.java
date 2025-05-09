@@ -368,24 +368,7 @@ public class Resolver {
             }
         }
         else {
-            if (t.isClassOrInterfaceType()) {
-                ClassOrInterfaceType ct = t.asClassOrInterfaceType();
-                Optional<NodeList<Type>> types = ct.getTypeArguments();
-                if (types.isPresent()) {
-                    for (Type type : types.get()) {
-                        GraphNode n = ImportUtils.addImport(gn, type);
-                        if (n != null) {
-                            gn = n;
-                        }
-                    }
-                }
-                else {
-                    gn = ImportUtils.addImport(gn, t.asString());
-                }
-            }
-            else {
-                gn = ImportUtils.addImport(gn, t.asString());
-            }
+            gn.processTypeArgument(t);
         }
         return gn;
     }
