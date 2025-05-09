@@ -318,8 +318,8 @@ public class Resolver {
             } else {
                 GraphNode gn = evaluateScopeChain(node, chain);
                 if (gn != null) {
-                    copyMethod(mceWrapper, gn);
-                    return gn;
+                    GraphNode result = copyMethod(mceWrapper, gn);
+                    return createNodeForReturnType(node, result, gn);
                 }
             }
         }
@@ -327,6 +327,16 @@ public class Resolver {
             return ImportUtils.addImport(node, oce.getType());
         }
         return null;
+    }
+
+    private static GraphNode createNodeForReturnType(GraphNode node, GraphNode result, GraphNode gn) {
+        if (result != null && result.getNode() instanceof MethodDeclaration md) {
+            Type t = md.getType();
+            if (!t.isVoidType()) {
+                return ImportUtils.addImport(node, t);
+            }
+        }
+        return gn;
     }
 
     static GraphNode evaluateScopeChain(GraphNode node, ScopeChain chain) throws AntikytheraException {
@@ -574,15 +584,6 @@ public class Resolver {
                         node.getDestination().addImport(imp.getImport());
                         if (imp.getMethodDeclaration() != null) {
                             Graph.createGraphNode(imp.getMethodDeclaration());
-                        }
-                    }
-                    else {
-                        // desperate measure hack
-                        // todo remove this
-                        for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
-                            if (method.getParameters().size() == mce.getArguments().size()) {
-                                Graph.createGraphNode(method);
-                            }
                         }
                     }
                 }
