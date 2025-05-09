@@ -554,42 +554,43 @@ public class Resolver {
     @SuppressWarnings("unchecked")
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
-        if (cdecl != null) {
-            Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
-                    mceWrapper, cdecl
-            );
+        if (cdecl == null) {
+            return null;
+        }
 
-            if (md.isPresent() && md.get().isMethodDeclaration()) {
-                MethodDeclaration method = md.get().asMethodDeclaration();
-                for (Type ex : method.getThrownExceptions()) {
-                    ImportUtils.addImport(node, ex);
+        Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
+                mceWrapper, cdecl
+        );
+
+        if (md.isPresent() && md.get().isMethodDeclaration()) {
+            MethodDeclaration method = md.get().asMethodDeclaration();
+            for (Type ex : method.getThrownExceptions()) {
+                ImportUtils.addImport(node, ex);
+            }
+
+            if (method.isAbstract()) {
+                Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
+
+                if (!parent.get().isInterface()) {
+                    AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
+                            .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
                 }
-
-                if (method.isAbstract()) {
-                    Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
-
-                    if (!parent.get().isInterface()) {
-                        AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
-                                .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
-                    }
-                }
-                return Graph.createGraphNode(method);
-            } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
-                Type t = lombokSolver(mce, decl, node);
-                if (t != null && t.isClassOrInterfaceType()) {
-                    return ImportUtils.addImport(node, t);
-                } else {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                        if (imp.getMethodDeclaration() != null) {
-                            Graph.createGraphNode(imp.getMethodDeclaration());
-                        }
+            }
+            return Graph.createGraphNode(method);
+        } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
+            Type t = lombokSolver(mce, decl, node);
+            if (t != null && t.isClassOrInterfaceType()) {
+                return ImportUtils.addImport(node, t);
+            } else {
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp.getImport());
+                    if (imp.getMethodDeclaration() != null) {
+                        Graph.createGraphNode(imp.getMethodDeclaration());
                     }
                 }
             }
         }
-
         return null;
     }
 

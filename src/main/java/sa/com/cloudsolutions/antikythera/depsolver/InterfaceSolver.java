@@ -62,10 +62,12 @@ public class InterfaceSolver extends AbstractCompiler {
             String interfaceName = AbstractCompiler.findFullyQualifiedName(cu, iface.getNameAsString());
             if (interfaceName != null) {
                 /*
-                 * The interfaceName variable represents an interface that has been implemented by the
-                 * cdecl class. The call to addImplementation will result in record being created that
-                 * cdecl is an implementation of the interface. Thus when ever @Autowired is encountered
-                 * we can make use of one of the implementing classes.
+                 * The interfaceName variable represents an interface that has been implemented by
+                 * the class declaration represented by the cdecl variable. Calling the
+                 * addImplementation method will result in a record being created that cdecl is an
+                 * implementation of the interface.
+                 * This allows us to substitute the concrete class whenever we encounter an
+                 * @Autowired type
                  */
                 AntikytheraRunTime.addImplementation(interfaceName, t.getFullyQualifiedName().get());
                 /*
