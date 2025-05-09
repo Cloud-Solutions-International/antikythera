@@ -23,7 +23,6 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -346,17 +345,16 @@ public class Resolver {
                 gn = copyMethod(resolveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
             }
             else if (expr.isNameExpr()) {
-                gn = evaluateNameExpr(expr, gn);
+                gn = evaluateNameExpr(expr.asNameExpr(), gn);
             }
         }
 
         return gn;
     }
 
-    static GraphNode evaluateNameExpr(Expression expr, GraphNode gn) throws AntikytheraException {
-        NameExpr nameExpr = expr.asNameExpr();
+    static GraphNode evaluateNameExpr(NameExpr nameExpr, GraphNode gn) throws AntikytheraException {
         TypeDeclaration<?> cdecl = gn.getEnclosingType();
-        Type t = DepSolver.getNames().get(expr.toString());
+        Type t = DepSolver.getNames().get(nameExpr.toString());
         if (t == null) {
             Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
@@ -364,7 +362,7 @@ public class Resolver {
                 gn = findFieldNode(gn, fd.get());
             }
             else {
-                gn = ImportUtils.addImport(gn, nameExpr.getName().toString());
+                gn = ImportUtils.addImport(gn, nameExpr);
             }
         }
         else {
@@ -443,7 +441,7 @@ public class Resolver {
             resolveArrayAccessExpr(node, expr, types);
         } else if (expr.isClassExpr()) {
             ClassExpr ce = expr.asClassExpr();
-            ImportUtils.addImport(node, ce.getType().asString());
+            ImportUtils.addImport(node, ce.getType());
         }
     }
 
@@ -465,7 +463,7 @@ public class Resolver {
         MethodReferenceExpr mre = arg.asMethodReferenceExpr();
         Expression scope = mre.getScope();
         if (scope.isNameExpr()) {
-            ImportUtils.addImport(node, scope.asNameExpr().getNameAsString());
+            ImportUtils.addImport(node, scope.asNameExpr());
         }
         else if (scope.isThisExpr()) {
             for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
@@ -555,7 +553,7 @@ public class Resolver {
             if (md.isPresent() && md.get().isMethodDeclaration()) {
                 MethodDeclaration method = md.get().asMethodDeclaration();
                 for (Type ex : method.getThrownExceptions()) {
-                    ImportUtils.addImport(node, ex.asString());
+                    ImportUtils.addImport(node, ex);
                 }
 
                 if (method.isAbstract()) {
@@ -570,7 +568,7 @@ public class Resolver {
             } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
                 Type t = lombokSolver(mce, decl, node);
                 if (t != null && t.isClassOrInterfaceType()) {
-                    return ImportUtils.addImport(node, t.asClassOrInterfaceType().getNameAsString());
+                    return ImportUtils.addImport(node, t);
                 } else {
                     ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
                     if (imp != null) {
@@ -624,20 +622,6 @@ public class Resolver {
             }
             else {
                 ImportUtils.addImport(node, nameExpression.getNameAsString());
-            }
-        }
-    }
-
-    public static void resolveReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
-        TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-        Expression expression = returnStmt.getExpression().orElse(null);
-        if (expression != null && from != null && expression.isObjectCreationExpr()) {
-            ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-            if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
-                    // todo finish this off
-                    //solveTypeDependencies(from, typeArg);
-                }
             }
         }
     }

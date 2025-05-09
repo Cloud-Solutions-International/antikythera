@@ -258,7 +258,6 @@ public class GraphNode {
         }
     }
 
-
     private void processClassAnnotations()  {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
@@ -273,7 +272,6 @@ public class GraphNode {
      * being eventually added.
      * @param typeArg an AST type argument which may or may not contain parameterized types
      */
-
     public void processTypeArgument(Type typeArg) {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
@@ -283,7 +281,7 @@ public class GraphNode {
                 }
             }
             if (ctype.getScope().isPresent()) {
-                ImportUtils.addImport(this, ctype.getScope().get().getNameAsString());
+                ImportUtils.addImport(this, ctype.getScope().orElseThrow());
             }
             ImportUtils.addImport(this, ctype.getNameAsString());
         } else {
@@ -414,7 +412,7 @@ public class GraphNode {
                 }
             }
             else {
-                ImportUtils.addImport(this, variable.getTypeAsString());
+                ImportUtils.addImport(this, variable.getType());
             }
         }
         DepSolver.initializeField(fieldDeclaration, this);

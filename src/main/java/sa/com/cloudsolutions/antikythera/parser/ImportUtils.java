@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
@@ -81,11 +82,9 @@ public class ImportUtils {
     }
 
     public static String findPackage(TypeDeclaration<?> t) {
-        if (t.findCompilationUnit().isPresent()) {
-            if(t.findCompilationUnit().get().getPackageDeclaration().isPresent()) {
-                return t.findCompilationUnit().get().getPackageDeclaration().get().getNameAsString();
-            }
-        }
-        return "";
+        return t.findCompilationUnit()
+                .flatMap(CompilationUnit::getPackageDeclaration)
+                .map(NodeWithName::getNameAsString)
+                .orElse("");
     }
 }

@@ -422,11 +422,7 @@ public class DepSolver {
                     }
                 }
 
-                vd.getInitializer().ifPresent(init -> {
-                    if (init.isNameExpr()) {
-                        ImportUtils.addImport(node, init.asNameExpr().getNameAsString());
-                    }
-                });
+                vd.getInitializer().ifPresent(init -> ImportUtils.addImport(node, init));
             }
             super.visit(n, node);
         }
