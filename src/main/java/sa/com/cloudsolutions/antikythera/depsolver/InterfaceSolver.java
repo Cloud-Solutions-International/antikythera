@@ -39,25 +39,23 @@ public class InterfaceSolver extends AbstractCompiler {
         for (TypeDeclaration<?> t : cu.getTypes()) {
             if (t.isClassOrInterfaceDeclaration() && t.getFullyQualifiedName().isPresent()) {
                 ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-
-                solveInterfaces(t, cdecl);
-
-                solveExtends(t, cdecl);
+                solveInterfaces(cdecl);
+                solveExtends(cdecl);
             }
         }
         return b;
     }
 
-    private void solveExtends(TypeDeclaration<?> t, ClassOrInterfaceDeclaration cdecl) {
+    private void solveExtends(ClassOrInterfaceDeclaration cdecl) {
         for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
             String parentName = AbstractCompiler.findFullyQualifiedName(cu, parent.getNameAsString());
             if (parentName != null) {
-                AntikytheraRunTime.addSubClass(parentName, t.getFullyQualifiedName().get());
+                AntikytheraRunTime.addSubClass(parentName, cdecl.getFullyQualifiedName().orElseThrow());
             }
         }
     }
 
-    private void solveInterfaces(TypeDeclaration<?> t, ClassOrInterfaceDeclaration cdecl) {
+    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl) {
         for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
             String interfaceName = AbstractCompiler.findFullyQualifiedName(cu, iface.getNameAsString());
             if (interfaceName != null) {
@@ -69,7 +67,7 @@ public class InterfaceSolver extends AbstractCompiler {
                  * This allows us to substitute the concrete class whenever we encounter an
                  * @Autowired type
                  */
-                AntikytheraRunTime.addImplementation(interfaceName, t.getFullyQualifiedName().get());
+                AntikytheraRunTime.addImplementation(interfaceName, cdecl.getFullyQualifiedName().orElseThrow());
                 /*
                  * Some interfaces have their own parent interface and this class will have to be
                  * identified as an implementation of that parent as well.
@@ -79,10 +77,11 @@ public class InterfaceSolver extends AbstractCompiler {
                     for (TypeDeclaration<?> ifaceType : interfaceCu.getTypes()) {
                         if (ifaceType.isClassOrInterfaceDeclaration()) {
                             ClassOrInterfaceDeclaration ifaceDecl = ifaceType.asClassOrInterfaceDeclaration();
+                            solveInterfaces(ifaceDecl);
                             for (ClassOrInterfaceType parent : ifaceDecl.getExtendedTypes()) {
                                 String parentName = AbstractCompiler.findFullyQualifiedName(interfaceCu, parent.getNameAsString());
                                 if (parentName != null) {
-                                    AntikytheraRunTime.addImplementation(parentName, t.getFullyQualifiedName().get());
+                                    AntikytheraRunTime.addImplementation(parentName, cdecl.getFullyQualifiedName().orElseThrow());
                                 }
                             }
                         }
