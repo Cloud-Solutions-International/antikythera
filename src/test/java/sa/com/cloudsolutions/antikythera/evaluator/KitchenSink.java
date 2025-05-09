@@ -34,4 +34,9 @@ public class KitchenSink {
                 return null;
         }
     }
+
+    public void print(IPerson person) {
+        System.out.println("Person name: " + person.getName());
+    }
+
 }

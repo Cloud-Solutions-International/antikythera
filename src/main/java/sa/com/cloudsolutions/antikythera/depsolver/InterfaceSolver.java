@@ -72,7 +72,7 @@ public class InterfaceSolver extends AbstractCompiler {
                 AntikytheraRunTime.addImplementation(interfaceName, t.getFullyQualifiedName().get());
                 /*
                  * Some interfaces have their own parent interface and this class will have to be
-                 * identified as an implement of that parent as well.
+                 * identified as an implementation of that parent as well.
                  */
                 CompilationUnit interfaceCu = AntikytheraRunTime.getCompilationUnit(interfaceName);
                 if (interfaceCu != null) {
