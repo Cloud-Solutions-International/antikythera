@@ -10,6 +10,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 public class ImportUtils {
     private ImportUtils() {}
@@ -22,20 +23,30 @@ public class ImportUtils {
     }
 
     public static GraphNode addImport(GraphNode node, Type type) {
-        if (type.isClassOrInterfaceType()) {
-            ClassOrInterfaceType ct = type.asClassOrInterfaceType();
-            GraphNode n = ImportUtils.addImport(node, ct.getNameAsString());
-            if (n == null) {
-                // possibly an inner class
-                node.getEnclosingType().findFirst(TypeDeclaration.class,
-                        td -> td.getNameAsString().equals(ct.getNameAsString()))
-                        .ifPresent(Graph::createGraphNode
-                );
+        CompilationUnit compilationUnit = node.getCompilationUnit();
+        TypeWrapper wrapper = AbstractCompiler.findType(compilationUnit, type);
+        if (wrapper != null) {
+            String packageName = compilationUnit.getPackageDeclaration().isPresent()
+                    ? compilationUnit.getPackageDeclaration().get().getNameAsString() : "";
+
+            if (wrapper.getType() != null) {
+                GraphNode n = Graph.createGraphNode(wrapper.getType());
+                if (!packageName.equals(
+                        findPackage(wrapper.getType())) && !packageName.isEmpty()) {
+                    node.getDestination().addImport(packageName);
+                }
+                return n;
+            }
+            else {
+                String importFrom = findPackage(wrapper.getCls());
+                if (!importFrom.equals(packageName)
+                        && !importFrom.equals("java.lang")
+                        && !packageName.isEmpty()) {
+                    node.getDestination().addImport(wrapper.getCls().getName());
+                }
             }
         }
-        else {
-            ImportUtils.addImport(node, type.toString());
-        }
+
         return null;
     }
 
@@ -63,5 +74,21 @@ public class ImportUtils {
             }
         }
         return returnValue;
+    }
+
+    public static String findPackage(Class<?> clazz) {
+        if (clazz.getPackage() != null) {
+            return clazz.getPackage().getName();
+        }
+        return "";
+    }
+
+    public static String findPackage(TypeDeclaration<?> t) {
+        if (t.findCompilationUnit().isPresent()) {
+            if(t.findCompilationUnit().get().getPackageDeclaration().isPresent()) {
+                return t.findCompilationUnit().get().getPackageDeclaration().get().getNameAsString();
+            }
+        }
+        return "";
     }
 }
