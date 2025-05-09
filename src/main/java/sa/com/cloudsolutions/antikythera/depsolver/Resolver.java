@@ -381,19 +381,7 @@ public class Resolver {
             for (AnnotationExpr ann : field.getAnnotations()) {
                 ImportUtils.addImport(gn, ann.getNameAsString());
             }
-
-            Type elementType = field.getElementType();
-            if (elementType.isClassOrInterfaceType()) {
-                Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
-                if (types.isPresent()) {
-                    for (Type type : types.get()) {
-                        ImportUtils.addImport(gn, type);
-                    }
-                }
-                gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
-            } else {
-                gn = ImportUtils.addImport(gn, elementType);
-            }
+            gn.processTypeArgument(field.getElementType());
         }
         return gn;
     }
