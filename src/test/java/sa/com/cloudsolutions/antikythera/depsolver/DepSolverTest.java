@@ -4,6 +4,9 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,6 +44,7 @@ class DepSolverTest extends TestHelper {
     void each() {
         depSolver = DepSolver.createSolver();
         DepSolver.reset();
+
     }
 
     @AfterAll
@@ -155,4 +160,67 @@ class DepSolverTest extends TestHelper {
                 "Should be two with the inner method");
 
     }
+
+    @Test
+    void testAnnotationBinary() {
+        postSetup("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+
+        AnnotationExpr ann = sourceClass
+                .getMethodsByName("binaryAnnotation").getFirst()
+                .getAnnotationByName("DummyAnnotation").orElseThrow();
+        Resolver.resolveNormalAnnotationExpr(node, ann.asNormalAnnotationExpr());
+
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        assertNotNull(resolved);
+        String s = resolved.toString();
+        assertFalse(s.contains("DummyAnnotation"),
+                "The annotation visitor is not invoked so annotation should not be present");
+        assertTrue(s.contains("PREFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
+        assertTrue(s.contains("SUFFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
+    }
+
+
+    @Test
+    void testAnnotationWithField() {
+        postSetup("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+
+        AnnotationExpr ann = sourceClass
+                .getMethodsByName("annotationWIthField").getFirst()
+                .getAnnotationByName("DummyAnnotation").orElseThrow();
+        Resolver.resolveNormalAnnotationExpr(node, ann.asNormalAnnotationExpr());
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        assertNotNull(resolved);
+        String s = resolved.toString();
+        assertFalse(s.contains("DummyAnnotation"),
+                "The annotation visitor is not invoked so annotation should not be present");
+        assertTrue(s.contains("PREFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
+        assertFalse(s.contains("SUFFIX"),"Direct call to resolveNormalAnnotationExpr keeps PRE field");
+    }
+
+    @Test
+    void testThisAccess1() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        // create a new FieldAccessExpression with this.
+        FieldAccessExpr fieldAccessExpr = new FieldAccessExpr(new NameExpr("this"), "p");
+        Resolver.resolveField(node, fieldAccessExpr);
+
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        assertNotNull(resolved);
+        String s = resolved.toString();
+        assertTrue(s.contains("Hornblower"));
+    }
+
+    @Test
+    void testThisAccess2() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        // create a new FieldAccessExpression with this.
+        FieldAccessExpr fieldAccessExpr = new FieldAccessExpr(new NameExpr("this"), "objectMapper");
+        Resolver.resolveField(node, fieldAccessExpr);
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        assertNotNull(resolved);
+        String s = resolved.toString();
+        assertTrue(s.contains("com.fasterxml.jackson.databind.ObjectMapper"));
+        assertTrue(s.contains("objectMapper = new ObjectMapper()"));
+    }
+
 }
