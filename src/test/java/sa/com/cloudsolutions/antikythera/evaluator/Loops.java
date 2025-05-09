@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import java.io.File;
 import java.util.List;
 
 public class Loops {
