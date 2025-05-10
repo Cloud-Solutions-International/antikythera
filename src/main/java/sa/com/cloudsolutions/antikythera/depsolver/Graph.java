@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.comments.JavadocComment;
 
@@ -51,7 +52,16 @@ public class Graph {
 
                         CompilationUnit destination = dependencies.get(fqn);
                         g.setDestination(destination);
-                        g.setTypeDeclaration(destination.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow());
+                        Optional<ClassOrInterfaceDeclaration> classDecl = destination.findFirst(ClassOrInterfaceDeclaration.class);
+                        if (classDecl.isPresent()) {
+                            g.setTypeDeclaration(classDecl.orElseThrow());
+                        }
+                        else if (destination.findFirst(EnumDeclaration.class).isPresent()) {
+                            g.setTypeDeclaration(destination.findFirst(EnumDeclaration.class).orElseThrow());
+                        }
+                        else {
+                            throw new IllegalStateException("Cannot find class declaration in " + destination);
+                        }
                     }
                 }
                 else {
@@ -98,6 +108,9 @@ public class Graph {
                 g.setDestination(new CompilationUnit());
                 if (cdecl.isAnnotationDeclaration()) {
                     target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
+                } else if (cdecl.isEnumDeclaration()) {
+                    target = g.getDestination().addEnum(cdecl.getNameAsString());
+                    target.setModifiers(cdecl.getModifiers());
                 } else {
                     target = g.getDestination().addClass(cdecl.getNameAsString());
                     target.setModifiers(cdecl.getModifiers());

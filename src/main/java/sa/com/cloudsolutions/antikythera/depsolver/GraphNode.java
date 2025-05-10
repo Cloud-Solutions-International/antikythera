@@ -2,20 +2,22 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
@@ -69,7 +71,7 @@ public class GraphNode {
 
     /**
      * Creates a new GraphNode
-     * However it will not really be ready for use until you call the buildNode method
+     * However, it will not really be ready for use until you call the buildNode method
      * @param node an AST Node
      */
     private GraphNode(Node node) {
@@ -175,7 +177,7 @@ public class GraphNode {
                 if (cdecl.getImplementedTypes().isEmpty()) {
                     for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
                         cdecl.addImplementedType(ifc.clone());
-                        addTypeArguments(ifc);
+                        processTypeArgument(ifc);
                     }
                 }
             }
@@ -205,7 +207,7 @@ public class GraphNode {
                         }
                     }
 
-                    addTypeArguments(ifc);
+                    processTypeArgument(ifc);
                 }
             }
         }
@@ -246,7 +248,7 @@ public class GraphNode {
                 if (type.isClassOrInterfaceType()) {
                     ClassOrInterfaceType ct = type.asClassOrInterfaceType();
                     if (!(ct.isBoxedType() || ct.isPrimitiveType())) {
-                        addTypeArguments(ct);
+                        processTypeArgument(ct);
                     }
                 }
             }
@@ -256,32 +258,21 @@ public class GraphNode {
         }
     }
 
-
     private void processClassAnnotations()  {
         for (AnnotationExpr ann : enclosingType.getAnnotations()) {
             typeDeclaration.addAnnotation(ann);
+            ann.accept(new AnnotationVisitor(), this);
         }
-        enclosingType.accept(new AnnotationVisitor(), this);
     }
 
     /**
      * Adds the type arguments to the graph.
+     * We are dealing with parameterized types. things like Map<String, Integer> or List<String>
      * Will make recursive calls to the searchType method which will result in the imports
      * being eventually added.
-     * @param ifc interface or class
+     * @param typeArg an AST type argument which may or may not contain parameterized types
      */
-
-    public void addTypeArguments(ClassOrInterfaceType ifc) {
-        Optional<NodeList<Type>> typeArguments = ifc.getTypeArguments();
-        if (typeArguments.isPresent()) {
-            for (Type typeArg : typeArguments.get()) {
-                processTypeArgument(typeArg);
-            }
-        }
-        ImportUtils.addImport(this, ifc);
-    }
-
-    private void processTypeArgument(Type typeArg) {
+    public GraphNode processTypeArgument(Type typeArg) {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
             if (ctype.getTypeArguments().isPresent()) {
@@ -290,12 +281,11 @@ public class GraphNode {
                 }
             }
             if (ctype.getScope().isPresent()) {
-                ImportUtils.addImport(this, ctype.getScope().get().getNameAsString());
+                ImportUtils.addImport(this, ctype.getScope().orElseThrow());
             }
-            ImportUtils.addImport(this, ctype.getNameAsString());
-        } else {
-            ImportUtils.addImport(this, typeArg);
+            return ImportUtils.addImport(this, ctype.getNameAsString());
         }
+        return ImportUtils.addImport(this, typeArg);
     }
 
     public boolean isVisited() {
@@ -382,15 +372,38 @@ public class GraphNode {
         return b.toString();
     }
 
-    public void addField(FieldDeclaration fieldDeclaration)  {
+    public void addEnumConstant(EnumConstantDeclaration enumConstant) {
+        if (typeDeclaration.isEnumDeclaration()) {
+            EnumDeclaration ed = typeDeclaration.asEnumDeclaration();
+            for (EnumConstantDeclaration ecd : ed.getEntries()) {
+                if (ecd.getNameAsString().equals(enumConstant.getNameAsString())) {
+                    return;
+                }
+            }
+            if (enumConstant.getArguments().isNonEmpty()) {
+                Class<?>[] paramTypes = new Class<?>[enumConstant.getArguments().size()];
 
+                for (int i = 0 ; i < paramTypes.length ; i++) {
+                    Expression arg = enumConstant.getArguments().get(i);
+                    if (arg.isLiteralExpr()) {
+                        paramTypes[i] = Reflect.literalExpressionToTypeString(arg.asStringLiteralExpr());
+                    }
+                }
+
+                enclosingType.getConstructorByParameterTypes(paramTypes).ifPresent(Graph::createGraphNode);
+            }
+            ed.addEntry(enumConstant.clone());
+        }
+    }
+
+    public void addField(FieldDeclaration fieldDeclaration)  {
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);
         if(typeDeclaration.getFieldByName(variable.getNameAsString()).isEmpty()) {
             typeDeclaration.addMember(fieldDeclaration.clone());
 
             if (variable.getType().isClassOrInterfaceType()) {
-                addTypeArguments(variable.getType().asClassOrInterfaceType());
+                processTypeArgument(variable.getType().asClassOrInterfaceType());
 
                 if(variable.getType().asClassOrInterfaceType().getScope().isPresent()){
                     ClassOrInterfaceType scp = variable.getType().asClassOrInterfaceType().getScope().get();
@@ -398,7 +411,7 @@ public class GraphNode {
                 }
             }
             else {
-                ImportUtils.addImport(this, variable.getTypeAsString());
+                ImportUtils.addImport(this, variable.getType());
             }
         }
         DepSolver.initializeField(fieldDeclaration, this);

@@ -8,6 +8,7 @@ import com.github.javaparser.ast.expr.CharLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -618,6 +619,25 @@ public class Reflect {
             superclass = superclass.getSuperclass();
         }
 
+        return null;
+    }
+
+    public static Class<?> literalExpressionToTypeString(LiteralExpr lit) {
+        if (lit.isBooleanLiteralExpr()) {
+            return boolean.class;
+        } else if (lit.isCharLiteralExpr()) {
+            return char.class;
+        } else if (lit.isDoubleLiteralExpr()) {
+            return double.class;
+        } else if (lit.isIntegerLiteralExpr()) {
+            return int.class;
+        } else if (lit.isLongLiteralExpr()) {
+            return long.class;
+        } else if (lit.isNullLiteralExpr()) {
+            return null;
+        } else if (lit.isStringLiteralExpr()) {
+            return java.lang.String.class;
+        }
         return null;
     }
 

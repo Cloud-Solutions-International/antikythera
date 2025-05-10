@@ -16,6 +16,7 @@ public class Loops {
         }
     }
 
+    @SuppressWarnings("unused")
     private void forLoopWithBreak() {
         for (int i = 0; i < 20; ++i) {
             if (i == 10) {
@@ -25,6 +26,7 @@ public class Loops {
         }
     }
 
+    @SuppressWarnings("unused")
     private String forLoopWithReturn() {
         for (int i = 0; i < 20; ++i) {
             if (i == 10) {

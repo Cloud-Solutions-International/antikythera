@@ -370,21 +370,22 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void mockWithEvaluator(Parameter param, Variable v) {
+     void mockWithEvaluator(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
         if (v != null && v.getInitializer() != null) {
             getBody(testMethod).addStatement(param.getTypeAsString() + " " + nameAsString + " = " + v.getInitializer() + ";");
         }
         Type t = param.getType();
-        String fullName = AbstractCompiler.findFullyQualifiedName(compilationUnitUnderTest, t.asString());
-        if (fullName != null) {
-            CompilationUnit cu = Graph.getDependencies().get(fullName);
-            if (cu != null) {
-                AbstractCompiler.getMatchingType(cu, t.asString()).ifPresentOrElse(type ->
-                                getBody(testMethod).addStatement(ArgumentGenerator.instantiateClass(type.asClassOrInterfaceDeclaration(), nameAsString))
-                        , () -> {
-                            throw new AntikytheraException("Could not find matching type " + fullName);
-                        });
+        TypeWrapper wrapper = AbstractCompiler.findType(compilationUnitUnderTest, t);
+
+        if (wrapper != null) {
+            if (wrapper.getType() != null) {
+                getBody(testMethod).addStatement(
+                        ArgumentGenerator.instantiateClass(wrapper.getType().asClassOrInterfaceDeclaration(),
+                                nameAsString));
+            }
+            else {
+                throw new UnsupportedOperationException("Not yet implemented");
             }
         }
     }

@@ -8,8 +8,10 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InterfaceSolverTest {
     @BeforeAll
@@ -21,7 +23,7 @@ class InterfaceSolverTest {
     void testSerialiazble() throws IOException {
         InterfaceSolver solver = new InterfaceSolver();
         solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
-        assertEquals(2, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
+        assertEquals(3, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
 
     }
 
@@ -30,7 +32,14 @@ class InterfaceSolverTest {
         InterfaceSolver solver = new InterfaceSolver();
         solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Hello.java"));
         assertEquals(1, AntikytheraRunTime.findImplementations("java.lang.Cloneable").size());
+    }
 
+    @Test
+    void testDeep() throws IOException {
+        AbstractCompiler.preProcess();
+        Set<String> impl = AntikytheraRunTime.findImplementations("sa.com.cloudsolutions.antikythera.evaluator.IPerson");
+        assertEquals(2, impl.size());
+        assertTrue(impl.contains("sa.com.cloudsolutions.antikythera.evaluator.Contact"));
     }
 }
 

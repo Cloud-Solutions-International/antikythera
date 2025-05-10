@@ -11,6 +11,8 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -285,12 +287,26 @@ class UnitTestGeneratorMoreTests {
     }
 
     @Test
+    void mockWithEvaluator() {
+        MethodDeclaration md = setupMethod("switchCase1");
+        Type t = new ClassOrInterfaceType().setName("Person");
+        Parameter p = new Parameter(t, "person");
+        md.getParameters().add(p);
+
+        Variable v = new Variable("bada");
+        unitTestGenerator.mockWithEvaluator(p, v);
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Person"));
+
+    }
+
+    @Test
     void testMockWithMockito2() {
         MethodDeclaration md = setupMethod("main");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        assertTrue(unitTestGenerator.testMethod.toString().contains("String[] args = new String[] { \"Antikythera\" };"));
     }
     /**
      * The base class should be added to the class under test.

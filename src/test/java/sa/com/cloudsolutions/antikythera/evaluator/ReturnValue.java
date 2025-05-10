@@ -5,6 +5,7 @@ import java.io.Serializable;
 public class ReturnValue implements Serializable {
     private int number = 10;
 
+    @SuppressWarnings("unused")
     public void printName() {
         System.out.println(getName());
     }
@@ -13,6 +14,7 @@ public class ReturnValue implements Serializable {
         return "John";
     }
 
+    @SuppressWarnings("unused")
     public void printNumberField() {
         System.out.println(getNumber());
     }
@@ -21,6 +23,7 @@ public class ReturnValue implements Serializable {
         return number;
     }
 
+    @SuppressWarnings("unused")
     public int returnConditionally() {
         if (number == 10) {
             return 10;
@@ -32,6 +35,7 @@ public class ReturnValue implements Serializable {
         return 11;
     }
 
+    @SuppressWarnings("unused")
     public int deepReturn() {
         if (number == 10) {
             number += 2;

@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -22,15 +23,13 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.exception.DepsolverException;
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
@@ -55,26 +54,23 @@ public class Resolver {
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
         if (decl != null) {
-
-            FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
-            if (f != null) {
-                try {
-                    node.addField(f);
-                    Type t = f.getElementType();
-                    String fqname = AbstractCompiler.findFullyQualifiedName(
-                            node.getCompilationUnit(), t.asClassOrInterfaceType().getNameAsString()
-                    );
-                    if (fqname != null) {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqname);
-                        if (cu != null) {
-                            TypeDeclaration<?> p = AbstractCompiler.getPublicType(cu);
-                            if (p != null) {
-                                return Graph.createGraphNode(p);
-                            }
-                        }
+            if (decl.isEnumDeclaration()) {
+                for (EnumConstantDeclaration ecd : decl.asEnumDeclaration().getEntries()) {
+                    if (ecd.getNameAsString().equals(value.getNameAsString())) {
+                        node.addEnumConstant(ecd);
+                        break;
                     }
-                } catch (AntikytheraException e) {
-                    throw new GeneratorException(e);
+                }
+            }
+            else {
+                FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
+                if (f != null) {
+                    node.addField(f);
+                    TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), f.getElementType());
+
+                    if (wrapper != null && wrapper.getType() != null) {
+                        return Graph.createGraphNode(wrapper.getType());
+                    }
                 }
             }
         }
@@ -91,38 +87,38 @@ public class Resolver {
      */
     public static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
-        if (scope.isNameExpr()) {
+        if (scope.isThisExpr()) {
+            return  Resolver.resolveThisFieldAccess(node, value);
+        }
 
+        if (scope.isNameExpr()) {
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
                     scope.asNameExpr().getNameAsString()
             );
             if (imp2 != null) {
                 node.getDestination().addImport(imp2.getImport());
-                try {
-                    if(imp2.getType() != null) {
-                        Graph.createGraphNode(imp2.getType());
+
+                if (imp2.getType() != null) {
+                    Graph.createGraphNode(imp2.getType());
+                }
+                if (imp2.getField() != null) {
+                    Graph.createGraphNode(imp2.getField());
+                } else {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
+                    if (cu != null) {
+                        AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
+                                .ifPresent(t -> createFieldNode(value, t));
                     }
-                    if(imp2.getField() != null) {
-                        Graph.createGraphNode(imp2.getField());
-                    }
-                    else {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp2.getNameAsString());
-                        if (cu != null) {
-                            AbstractCompiler.getMatchingType(cu, scope.asNameExpr().getNameAsString())
-                                    .ifPresent(t -> createFieldNode(value, t));
-                        }
-                    }
-                } catch (AntikytheraException e) {
-                    throw new GeneratorException(e);
                 }
             }
             else {
                 return Resolver.resolveThisFieldAccess(node, value);
             }
         }
-        else if (scope.isThisExpr()) {
-            return  Resolver.resolveThisFieldAccess(node, value);
+        else {
+            return Resolver.resolveThisFieldAccess(node, value);
         }
+
         return null;
     }
 
@@ -145,7 +141,6 @@ public class Resolver {
             }
         }
     }
-
 
     static void resolveNormalAnnotationExpr(GraphNode node, NormalAnnotationExpr n) {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
@@ -173,7 +168,6 @@ public class Resolver {
         }
     }
 
-
     static void resolveBinaryExpr(GraphNode node, Expression value) {
         Expression left = value.asBinaryExpr().getLeft();
         if (left.isFieldAccessExpr()) {
@@ -182,19 +176,24 @@ public class Resolver {
         else if (left.isNameExpr()) {
             resolveNameExpression(node, left);
         }
+        else if (left.isBinaryExpr()) {
+            resolveBinaryExpr(node, left);
+        }
 
         Expression right = value.asBinaryExpr().getRight();
         if (right.isFieldAccessExpr()) {
             Resolver.resolveField(node, right.asFieldAccessExpr());
         }
+        else if(right.isNameExpr()) {
+            resolveNameExpression(node, right);
+        }
+        else if (right.isBinaryExpr()) {
+            resolveBinaryExpr(node, right);
+        }
     }
 
     private static void resolveNameExpression(GraphNode node, Expression value)  {
-        try {
-            resolveNameExpr(node, value, new NodeList<>());
-        } catch (AntikytheraException e) {
-            throw new DepsolverException(e);
-        }
+         resolveNameExpr(node, value.asNameExpr(), new NodeList<>());
     }
 
     public static Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae,
@@ -244,14 +243,11 @@ public class Resolver {
         return Optional.empty();
     }
 
-
     static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td)  {
         if (td != null) {
             td.getFieldByName(fae.getNameAsString()).ifPresent(Graph::createGraphNode);
         }
     }
-
-
 
     public static GraphNode resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) {
         final FieldAccessExpr fae = expr.asFieldAccessExpr();
@@ -322,8 +318,8 @@ public class Resolver {
             } else {
                 GraphNode gn = evaluateScopeChain(node, chain);
                 if (gn != null) {
-                    copyMethod(mceWrapper, gn);
-                    return gn;
+                    GraphNode result = copyMethod(mceWrapper, gn);
+                    return createNodeForReturnType(node, result, gn);
                 }
             }
         }
@@ -333,6 +329,16 @@ public class Resolver {
         return null;
     }
 
+    private static GraphNode createNodeForReturnType(GraphNode node, GraphNode result, GraphNode gn) {
+        if (result != null && result.getNode() instanceof MethodDeclaration md) {
+            Type t = md.getType();
+            if (!t.isVoidType()) {
+                return ImportUtils.addImport(node, t);
+            }
+        }
+        return gn;
+    }
+
     static GraphNode evaluateScopeChain(GraphNode node, ScopeChain chain) throws AntikytheraException {
         GraphNode gn = node;
         Iterator<Scope> iterator = chain.getChain().reversed().iterator();
@@ -340,52 +346,35 @@ public class Resolver {
             Expression expr = iterator.next().getExpression();
             if (expr.isFieldAccessExpr()) {
                 FieldAccessExpr fieldAccessExpr = expr.asFieldAccessExpr();
-                gn = Resolver.resolveField(gn, fieldAccessExpr);
+                GraphNode tmp = Resolver.resolveField(gn, fieldAccessExpr);
+                if (tmp != null || !gn.getEnclosingType().isEnumDeclaration()) {
+                    gn = tmp;
+                }
             }
             else if (expr.isMethodCallExpr()) {
                 gn = copyMethod(resolveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
             }
             else if (expr.isNameExpr()) {
-                gn = evaluateNameExpr(expr, gn);
+                gn = evaluateNameExpr(expr.asNameExpr(), gn);
             }
         }
 
         return gn;
     }
 
-    static GraphNode evaluateNameExpr(Expression expr, GraphNode gn) throws AntikytheraException {
-        NameExpr nameExpr = expr.asNameExpr();
+    static GraphNode evaluateNameExpr(NameExpr nameExpr, GraphNode gn) throws AntikytheraException {
         TypeDeclaration<?> cdecl = gn.getEnclosingType();
-        Type t = DepSolver.getNames().get(expr.toString());
+        Type t = DepSolver.getNames().get(nameExpr.toString());
         if (t == null) {
             Optional<FieldDeclaration> fd = cdecl.getFieldByName(nameExpr.getNameAsString());
 
             if (fd.isPresent()) {
-                gn = findFieldNode(gn, fd.get());
+                return findFieldNode(gn, fd.get());
             }
-            else {
-                gn = ImportUtils.addImport(gn, nameExpr.getName().toString());
-            }
+            gn = ImportUtils.addImport(gn, nameExpr);
         }
         else {
-            if (t.isClassOrInterfaceType()) {
-                ClassOrInterfaceType ct = t.asClassOrInterfaceType();
-                Optional<NodeList<Type>> types = ct.getTypeArguments();
-                if (types.isPresent()) {
-                    for (Type type : types.get()) {
-                        GraphNode n = ImportUtils.addImport(gn, type);
-                        if (n != null) {
-                            gn = n;
-                        }
-                    }
-                }
-                else {
-                    gn = ImportUtils.addImport(gn, t.asString());
-                }
-            }
-            else {
-                gn = ImportUtils.addImport(gn, t.asString());
-            }
+            return gn.processTypeArgument(t);
         }
         return gn;
     }
@@ -398,19 +387,7 @@ public class Resolver {
             for (AnnotationExpr ann : field.getAnnotations()) {
                 ImportUtils.addImport(gn, ann.getNameAsString());
             }
-
-            Type elementType = field.getElementType();
-            if (elementType.isClassOrInterfaceType()) {
-                Optional<NodeList<Type>> types = elementType.asClassOrInterfaceType().getTypeArguments();
-                if (types.isPresent()) {
-                    for (Type type : types.get()) {
-                        ImportUtils.addImport(gn, type);
-                    }
-                }
-                gn = ImportUtils.addImport(gn, elementType.asClassOrInterfaceType().getName().toString());
-            } else {
-                gn = ImportUtils.addImport(gn, elementType);
-            }
+            return gn.processTypeArgument(field.getElementType());
         }
         return gn;
     }
@@ -442,7 +419,7 @@ public class Resolver {
 
     static void processExpression(GraphNode node, Expression expr, NodeList<Type> types)  {
         if (expr.isNameExpr()) {
-            resolveNameExpr(node, expr, types);
+            resolveNameExpr(node, expr.asNameExpr(), types);
         }
         else if (expr.isLiteralExpr()) {
             types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
@@ -462,28 +439,30 @@ public class Resolver {
         else if (expr.isConditionalExpr()) {
             ConditionalExpr ce = expr.asConditionalExpr();
             if (ce.getThenExpr().isNameExpr()) {
-                resolveNameExpr(node, ce.getThenExpr(), types);
+                resolveNameExpr(node, ce.getThenExpr().asNameExpr(), types);
             }
             if (ce.getElseExpr().isNameExpr()) {
-                resolveNameExpr(node, ce.getElseExpr(), types);
+                resolveNameExpr(node, ce.getElseExpr().asNameExpr(), types);
             }
         }
         else if (expr.isArrayAccessExpr()) {
-            ArrayAccessExpr aae = expr.asArrayAccessExpr();
-            if (aae.getName().isNameExpr()) {
-                resolveNameExpr(node, aae.getName(), types);
-                types.getLast().ifPresent(t -> {
-                    if (t.isArrayType()) {
-                        Type at = types.removeLast();
-                        types.add(at.asArrayType().getComponentType());
-                    }
-                });
-            }
+            resolveArrayAccessExpr(node, expr, types);
         } else if (expr.isClassExpr()) {
             ClassExpr ce = expr.asClassExpr();
-            ImportUtils.addImport(node, ce.getType().asString());
-        } else {
-            // seems other types dont need special handling they are caught else where
+            ImportUtils.addImport(node, ce.getType());
+        }
+    }
+
+    private static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
+        ArrayAccessExpr aae = expr.asArrayAccessExpr();
+        if (aae.getName().isNameExpr()) {
+            resolveNameExpr(node, aae.getName().asNameExpr(), types);
+            types.getLast().ifPresent(t -> {
+                if (t.isArrayType()) {
+                    Type at = types.removeLast();
+                    types.add(at.asArrayType().getComponentType());
+                }
+            });
         }
     }
 
@@ -492,7 +471,7 @@ public class Resolver {
         MethodReferenceExpr mre = arg.asMethodReferenceExpr();
         Expression scope = mre.getScope();
         if (scope.isNameExpr()) {
-            ImportUtils.addImport(node, scope.asNameExpr().getNameAsString());
+            ImportUtils.addImport(node, scope.asNameExpr());
         }
         else if (scope.isThisExpr()) {
             for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
@@ -517,9 +496,10 @@ public class Resolver {
         }
     }
 
-    static void wrapCallable(GraphNode node, NodeWithArguments<?> arg, NodeList<Type> types) {
-        if (arg instanceof MethodCallExpr argMethodCall) {
-            MCEWrapper wrap = resolveArgumentTypes(node, arg);
+    @SuppressWarnings("unchecked")
+    static void wrapCallable(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types) {
+        if (callExpression instanceof MethodCallExpr methodCallExpr) {
+            MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
             GraphNode gn = Resolver.chainedMethodCall(node, wrap);
             if (gn != null) {
                 if (gn.getNode() instanceof MethodDeclaration md) {
@@ -542,7 +522,7 @@ public class Resolver {
                             );
                         }
                     } else {
-                        Type t = lombokSolver(argMethodCall, cid, gn);
+                        Type t = lombokSolver(methodCallExpr, cid, gn);
                         if (t != null) {
                             types.add(t);
                         }
@@ -574,62 +554,61 @@ public class Resolver {
     @SuppressWarnings("unchecked")
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
-        if (cdecl != null) {
-            Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
-                    mceWrapper, cdecl
-            );
+        if (cdecl == null) {
+            return null;
+        }
 
-            if (md.isPresent() && md.get().isMethodDeclaration()) {
-                MethodDeclaration method = md.get().asMethodDeclaration();
-                for (Type ex : method.getThrownExceptions()) {
-                    ImportUtils.addImport(node, ex.asString());
+        Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
+                mceWrapper, cdecl
+        );
+
+        if (md.isPresent() && md.get().isMethodDeclaration()) {
+            MethodDeclaration method = md.get().asMethodDeclaration();
+            for (Type ex : method.getThrownExceptions()) {
+                ImportUtils.addImport(node, ex);
+            }
+
+            if (method.isAbstract()) {
+                Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
+
+                if (!parent.get().isInterface()) {
+                    AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
+                            .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
                 }
-
-                if (method.isAbstract()) {
-                    Optional<ClassOrInterfaceDeclaration> parent = method.findAncestor(ClassOrInterfaceDeclaration.class);
-
-                    if (!parent.get().isInterface()) {
-                        AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
-                                .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
-                    }
-                }
-                return Graph.createGraphNode(method);
-            } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
-                Type t = lombokSolver(mce, decl, node);
-                if (t != null && t.isClassOrInterfaceType()) {
-                    return ImportUtils.addImport(node, t.asClassOrInterfaceType().getNameAsString());
-                } else {
-                    ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
-                    if (imp != null) {
-                        node.getDestination().addImport(imp.getImport());
-                        if (imp.getMethodDeclaration() != null) {
-                            Graph.createGraphNode(imp.getMethodDeclaration());
-                        }
-                    }
-                    else {
-                        // desperate measure hack
-                        // todo remove this
-                        for (MethodDeclaration method : decl.getMethodsByName(mce.getNameAsString())) {
-                            if (method.getParameters().size() == mce.getArguments().size()) {
-                                Graph.createGraphNode(method);
-                            }
-                        }
+            }
+            return Graph.createGraphNode(method);
+        } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
+            Type t = lombokSolver(mce, decl, node);
+            if (t != null && t.isClassOrInterfaceType()) {
+                return ImportUtils.addImport(node, t);
+            } else {
+                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
+                if (imp != null) {
+                    node.getDestination().addImport(imp.getImport());
+                    if (imp.getMethodDeclaration() != null) {
+                        Graph.createGraphNode(imp.getMethodDeclaration());
                     }
                 }
             }
         }
-
         return null;
     }
 
-    static void resolveNameExpr(GraphNode node, Expression arg, NodeList<Type> types) {
-        Type t = DepSolver.getNames().get(arg.asNameExpr().getNameAsString());
+    /**
+     * Resolves the given name expression.
+     * Operates via side effects.
+     * @param node the node within which the expression is being resolved
+     * @param nameExpression the name expression to resolve
+     * @param types the resolved type will be added to this list.
+     */
+    static void resolveNameExpr(GraphNode node, NameExpr nameExpression, NodeList<Type> types) {
+        Type t = DepSolver.getNames().get(nameExpression.getNameAsString());
         if (t != null) {
             types.add(t);
         }
         else {
 
-            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(arg.asNameExpr().getNameAsString());
+            Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(nameExpression.getNameAsString());
             if (fd.isPresent()) {
                 node.addField(fd.get());
                 Type field = fd.get().getElementType();
@@ -643,21 +622,7 @@ public class Resolver {
                 }
             }
             else {
-                ImportUtils.addImport(node, arg.asNameExpr().getNameAsString());
-            }
-        }
-    }
-
-    public static void resolveReturnType(ReturnStmt returnStmt, MethodDeclaration md) {
-        TypeDeclaration<?> from = md.findAncestor(ClassOrInterfaceDeclaration.class).orElse(null);
-        Expression expression = returnStmt.getExpression().orElse(null);
-        if (expression != null && from != null && expression.isObjectCreationExpr()) {
-            ObjectCreationExpr objectCreationExpr = expression.asObjectCreationExpr();
-            if (objectCreationExpr.getType().asString().contains("ResponseEntity")) {
-                for (Type typeArg : objectCreationExpr.getType().getTypeArguments().orElse(new NodeList<>())) {
-                    // todo finish this off
-                    //solveTypeDependencies(from, typeArg);
-                }
+                ImportUtils.addImport(node, nameExpression.getNameAsString());
             }
         }
     }
