@@ -120,6 +120,12 @@ public class ControlFlowEvaluator extends Evaluator {
                         : new StringLiteralExpr(entry.getValue().toString());
     }
 
+    /**
+     * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
+     * @param v represents the type of collection or map that we need
+     * @param name the name of the variable
+     * @return an expression that can be used to set up the condition
+     */
     private Expression setupNonEmptyCollections(Variable v, NameExpr name) {
         Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
         Type type = param.getType();
@@ -131,6 +137,9 @@ public class ControlFlowEvaluator extends Evaluator {
 
         try {
             Variable resolved = resolveVariableDeclaration(vdecl);
+            if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
+                resolved = Reflect.variableFactory(resolved.getType().asString());
+            }
 
             if (v.getValue() instanceof List<?>) {
                 return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
