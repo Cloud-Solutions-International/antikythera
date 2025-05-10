@@ -418,7 +418,6 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
-        gen.addImport("java.util.Optional");
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
@@ -627,6 +626,7 @@ public class UnitTestGenerator extends TestGenerator {
         gen.addImport("org.junit.jupiter.api.BeforeEach");
         gen.addImport("org.mockito.Mock");
         gen.addImport("org.mockito.Mockito");
+        gen.addImport("java.util.Optional");
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
