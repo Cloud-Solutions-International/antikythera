@@ -398,7 +398,7 @@ public class ControlFlowEvaluator extends Evaluator {
             return super.resolvePrimitiveOrBoxedVariable(variable, t);
         }
 
-        return Reflect.variableFactory(t.asString());
+        return new Variable(t);
     }
 
     @Override
