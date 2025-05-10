@@ -60,7 +60,7 @@ public class UnitTestGenerator extends TestGenerator {
     private final Consumer<Expression> applyPrecondition;
     private boolean autoWired;
     private String instanceName;
-    private static CompilationUnit baseTestClass;
+    private CompilationUnit baseTestClass;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -185,7 +185,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param baseClassName the name of the base class.
      */
-    static void loadPredefinedBaseClassForTest(String baseClassName) {
+     void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("main", "test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
@@ -471,7 +471,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    static void applyRegistryCondition(MockingCall result) {
+    void applyRegistryCondition(MockingCall result) {
         if (result.getVariable().getValue() instanceof Optional<?>) {
             applyPreconditionsForOptionals(result);
         }
@@ -482,7 +482,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    static void applyPreconditionsForOptionals(MockingCall result) {
+    void applyPreconditionsForOptionals(MockingCall result) {
         if (result.getVariable().getValue() instanceof Optional<?> value) {
             Callable callable = result.getCallable();
             MethodCallExpr methodCall;
@@ -503,7 +503,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private static MethodCallExpr applyPreconditionForOptionalPresent(MockingCall result, Object value, Callable callable) {
+    private MethodCallExpr applyPreconditionForOptionalPresent(MockingCall result, Object value, Callable callable) {
         MethodCallExpr methodCall;
         if (value instanceof Evaluator eval) {
             if (baseTestClass != null) {
