@@ -24,6 +24,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -223,4 +224,20 @@ class DepSolverTest extends TestHelper {
         assertTrue(s.contains("objectMapper = new ObjectMapper()"));
     }
 
+    @Test
+    void testFindInterfaceImplementations() throws AntikytheraException {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.IPerson");
+        assertTrue(sourceClass.isInterface(), "Test should use an interface");
+
+        MethodDeclaration method = sourceClass.getMethodsByName("getName").getFirst();
+        depSolver.methodSearch(Graph.createGraphNode(method));
+
+        Map<String, CompilationUnit> deps = Graph.getDependencies();
+        assertTrue(deps.containsKey("sa.com.cloudsolutions.antikythera.evaluator.Person"),
+                "Should find Person implementation");
+
+        GraphNode top = depSolver.peek();
+        assertNotNull(top);
+        assertInstanceOf(MethodDeclaration.class, top.getNode());
+    }
 }

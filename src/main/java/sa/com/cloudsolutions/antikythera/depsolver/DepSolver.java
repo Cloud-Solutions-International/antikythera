@@ -107,7 +107,7 @@ public class DepSolver {
          * The second search we will check if the node is a method, here we will check all the
          * parameters in the method call as well as the return type.
          *
-         * Thirdly it will do the same sort of thing for constructors.
+         * Thirdly, it will do the same sort of thing for constructors.
          */
         while (! stack.isEmpty()) {
             GraphNode node = stack.pollLast();
@@ -123,10 +123,10 @@ public class DepSolver {
     }
 
     /**
-     * Check if he node is a method and add it to the class.
+     * Check if the node is a method and add it to the class.
      *
      * The return type, all the locals declared inside the method and arguments are searchable.
-     * There maybe decorators for the method or some of the arguments. Seperate graph nodes will
+     * There maybe decorators for the method or some of the arguments. Separate graph nodes will
      * be created for all of these things and pushed onto the stack.
      *
      * @param node A graph node that represents a method in the code.
@@ -604,5 +604,16 @@ public class DepSolver {
 
     public static Map<String, Type> getNames() {
         return names;
+    }
+
+    /**
+     * Only for testing. Don't use for anything else
+     * @return the element at the top of the stack.
+     */
+    public GraphNode peek() {
+        if (stack.isEmpty()) {
+            return null;
+        }
+        return stack.peek();
     }
 }
