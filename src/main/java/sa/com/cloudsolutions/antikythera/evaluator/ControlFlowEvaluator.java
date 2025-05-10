@@ -45,6 +45,13 @@ public class ControlFlowEvaluator extends Evaluator {
         super(context);
     }
 
+    /**
+     * Controls the branch that a conditional expression takes through parameter assignment
+     * @param stmt the statement that contains branching
+     * @param entry an entry from the truth table which contains values to be assigned.
+     * @return an optional expression that can be used to set up the condition empty if all
+     *      the conditions cannot be met.
+     */
     @SuppressWarnings("unchecked")
     Optional<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
