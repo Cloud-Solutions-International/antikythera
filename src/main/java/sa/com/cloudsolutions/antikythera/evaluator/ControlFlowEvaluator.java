@@ -153,6 +153,10 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
                 VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
                 Variable resolved2 = resolveVariableDeclaration(vdecl2);
+                if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
+                    resolved2 = Reflect.variableFactory(resolved2.getType().asString());
+                }
+
                 return StaticJavaParser.parseExpression(
                         String.format("Map.of(%s, %s)",
                                 resolved.getInitializer(), resolved2.getInitializer()));
