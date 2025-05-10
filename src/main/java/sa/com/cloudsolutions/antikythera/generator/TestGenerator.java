@@ -41,32 +41,27 @@ public abstract class TestGenerator {
     protected List<Precondition> preConditions;
 
     static List<Expression> whenThen = new ArrayList<>();
-    static Set<String> dependencies = new HashSet<>();
 
+    /**
+     * Static set of imports to allow MockingRegistry to make updates.
+     */
+    static Set<String> imports = new HashSet<>();
 
     protected TestGenerator(CompilationUnit cu) {
 
         this.compilationUnitUnderTest = cu;
     }
 
-    public static void clearWhenThen() {
-        whenThen.clear();
-    }
-
     public static void addWhenThen(Expression expr) {
         whenThen.add(expr);
     }
 
-    public static List<Expression> getWhenThen() {
-        return whenThen;
+    public static void addImport(String s) {
+        imports.add(s);
     }
 
-    public static void addDependency(String s) {
-        dependencies.add(s);
-    }
-
-    public static Set<String> getDependencies() {
-        return dependencies;
+    public static Set<String> getImports() {
+        return imports;
     }
 
     protected String createTestName(MethodDeclaration md) {

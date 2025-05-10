@@ -235,7 +235,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void addDependencies() {
-        for (String s : TestGenerator.getDependencies()) {
+        for (String s : TestGenerator.getImports()) {
             gen.addImport(s);
         }
     }
@@ -275,7 +275,7 @@ public class UnitTestGenerator extends TestGenerator {
                 String fullName = AbstractCompiler.findFullyQualifiedName(
                         compilationUnitUnderTest, ct.asString());
                 if (fullName != null) {
-                    TestGenerator.addDependency(fullName);
+                    TestGenerator.addImport(fullName);
                 }
             }
         }
