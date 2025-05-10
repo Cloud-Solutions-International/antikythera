@@ -348,9 +348,9 @@ public class GraphNode {
 
     @Override
     public String toString() {
-        StringBuilder b = new StringBuilder();
-        if(compilationUnit != null && compilationUnit.getPackageDeclaration().isPresent()) {
-            b.append(compilationUnit.getPackageDeclaration().get().getNameAsString());
+        final StringBuilder b = new StringBuilder();
+        if(compilationUnit != null ) {
+            compilationUnit.getPackageDeclaration().ifPresent(pd -> b.append(pd.getNameAsString()));
         }
         b.append(".");
         if(enclosingType != null) {
@@ -386,7 +386,7 @@ public class GraphNode {
                 for (int i = 0 ; i < paramTypes.length ; i++) {
                     Expression arg = enumConstant.getArguments().get(i);
                     if (arg.isLiteralExpr()) {
-                        paramTypes[i] = Reflect.literalExpressionToTypeString(arg.asStringLiteralExpr());
+                        paramTypes[i] = Reflect.literalExpressionToTypeString(arg.asLiteralExpr());
                     }
                 }
 
