@@ -232,25 +232,30 @@ public class ControlFlowEvaluator extends Evaluator {
         if (mce.getScope().isPresent()) {
             Variable scopeVar = getValue(stmt, mce.getScope().orElseThrow().toString());
             if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
-                Variable field = evaluator.fields.get(
-                        ClassProcessor.classToInstanceName(name.substring(3)));
-                if (field != null) {
-                    if (field.getClazz() != null) {
-                        Variable v = Reflect.variableFactory(field.getClazz().getName());
-                        if (v != null) {
-                            value = v.getInitializer().toString();
-                        }
-                    }
-                    else if (field.getType() != null) {
-                        Variable v = Reflect.variableFactory(field.getType().asString());
-                        if (v != null) {
-                            value = v.getInitializer().toString();
-                        }
-                    }
-                }
+                value = findSuitableNotNullValue(name, evaluator, value);
             }
         }
         setter.addArgument(value);
+    }
+
+    private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
+        Variable field = evaluator.fields.get(
+                ClassProcessor.classToInstanceName(name.substring(3)));
+        if (field != null) {
+            if (field.getClazz() != null) {
+                Variable v = Reflect.variableFactory(field.getClazz().getName());
+                if (v != null) {
+                    value = v.getInitializer().toString();
+                }
+            }
+            else if (field.getType() != null) {
+                Variable v = Reflect.variableFactory(field.getType().asString());
+                if (v != null) {
+                    value = v.getInitializer().toString();
+                }
+            }
+        }
+        return value;
     }
 
     private void addPreCondition(Statement statement, Expression expr) {
