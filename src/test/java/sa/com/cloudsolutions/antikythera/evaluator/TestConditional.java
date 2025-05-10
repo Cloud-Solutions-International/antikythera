@@ -55,7 +55,7 @@ class TestConditional extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional1, The name is null!Antikythera!", "conditional2, Antikythera!The name is null!",
+    @CsvSource({"conditional1, The name is null!T!", "conditional2, T!The name is null!",
             "conditional3, 1ZERO!", "emptiness1, List is not empty!List is empty!",
             "emptiness2, List is not empty!List is empty!",
             "emptiness3, List is empty!List is not empty!",
