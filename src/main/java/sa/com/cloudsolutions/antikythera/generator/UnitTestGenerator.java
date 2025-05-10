@@ -272,10 +272,8 @@ public class UnitTestGenerator extends TestGenerator {
     private void addImportsForCasting(MethodCallExpr argMethod) {
         for (Expression e : argMethod.getArguments()) {
             if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
-                String fullName = AbstractCompiler.findFullyQualifiedName(
-                        compilationUnitUnderTest, ct.asString());
-                if (fullName != null) {
-                    TestGenerator.addImport(fullName);
+                for (ImportWrapper iw : AbstractCompiler.findImport(compilationUnitUnderTest, ct)) {
+                    TestGenerator.addImport(iw.getNameAsString());
                 }
             }
         }
@@ -309,7 +307,7 @@ public class UnitTestGenerator extends TestGenerator {
     @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
-        gen.addImport("org.mockito.InjectMocks");
+        addImport("org.mockito.InjectMocks");
 
         if (!autoWired) {
             for (FieldDeclaration fd : testClass.getFields()) {
@@ -420,6 +418,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
+        gen.addImport("java.util.Optional");
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
@@ -556,7 +555,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void addClassImports(Type t) {
         for (ImportWrapper wrapper : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
-            gen.addImport(wrapper.getImport());
+            addImport(wrapper.getImport().getNameAsString());
         }
     }
 

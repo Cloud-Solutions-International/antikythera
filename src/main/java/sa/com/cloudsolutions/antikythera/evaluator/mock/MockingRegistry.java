@@ -278,7 +278,8 @@ public class MockingRegistry {
                     default -> "any";
                 }
         );
-
+        mce.setScope(new NameExpr(MOCKITO));
+        TestGenerator.addImport(MOCKITO);
         // If it's a generic Mockito.any() call, add casting
         if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
