@@ -442,16 +442,13 @@ public class DepSolver {
                 for (ClassOrInterfaceType cdecl : node.getEnclosingType().asClassOrInterfaceDeclaration().getExtendedTypes()) {
                     String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), cdecl.getNameAsString());
                     if (fullyQualifiedName != null) {
-                        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                        if (cu != null) {
-                            AbstractCompiler.getMatchingType(cu, cdecl.getNameAsString()).ifPresent(cid -> {
-                                for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
-                                    if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
-                                        Graph.createGraphNode(constructorDeclaration);
-                                    }
+                        AntikytheraRunTime.getTypeDeclaration(fullyQualifiedName).ifPresent(cid -> {
+                            for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
+                                if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
+                                    Graph.createGraphNode(constructorDeclaration);
                                 }
-                            });
-                        }
+                            }
+                        });
                     }
                 }
             }

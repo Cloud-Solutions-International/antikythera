@@ -600,22 +600,17 @@ public class AbstractCompiler {
                 /*
                  * the last part of the import matches the class name
                  */
-                ImportWrapper wrapper = new ImportWrapper(imp);
+                final ImportWrapper wrapper = new ImportWrapper(imp);
                 if (!imp.isStatic()) {
-                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString());
-                    if (target != null) {
-                        TypeDeclaration<?> p = getMatchingType(target, importName.getIdentifier()).orElse(null);
+                    AntikytheraRunTime.getTypeDeclaration(imp.getNameAsString()).ifPresent(p -> {
                         wrapper.setExternal(false);
-                        setTypeAndField(className, p, wrapper, target);
-                    }
-
+                        setTypeAndField(className, p, wrapper);
+                    });
                 } else if (importName.getQualifier().isPresent()) {
-                    CompilationUnit target = AntikytheraRunTime.getCompilationUnit(importName.getQualifier().get().toString());
-                    if (target != null) {
-                        TypeDeclaration<?> p = getPublicType(target);
-                        setTypeAndField(className, p, wrapper, target);
+                    AntikytheraRunTime.getTypeDeclaration(importName.getQualifier().orElseThrow().toString()).ifPresent(p -> {
                         wrapper.setExternal(false);
-                    }
+                        setTypeAndField(className, p, wrapper);
+                    });
                 }
                 return wrapper;
             }
@@ -624,15 +619,12 @@ public class AbstractCompiler {
         return null;
     }
 
-    private static void setTypeAndField(String className, TypeDeclaration<?> p, ImportWrapper wrapper, CompilationUnit target) {
-        if (p != null) {
-            wrapper.setType(p);
-        }
-
-        target.findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(className))
+    private static void setTypeAndField(String className, TypeDeclaration<?> p, ImportWrapper wrapper) {
+        wrapper.setType(p);
+        p.findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(className))
                 .ifPresent(wrapper::setField);
 
-        target.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals(className))
+        p.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals(className))
                 .ifPresent(wrapper::setMethodDeclaration);
     }
 

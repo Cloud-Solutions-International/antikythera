@@ -71,12 +71,9 @@ public class ImportUtils {
             }
         } else {
             String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), name);
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-            if (cu != null) {
-                Optional<TypeDeclaration<?>> mathcing = AbstractCompiler.getMatchingType(cu, name);
-                if (mathcing.isPresent()) {
-                    return (Graph.createGraphNode(mathcing.get()));
-                }
+            Optional<TypeDeclaration<?>> matching = AntikytheraRunTime.getTypeDeclaration(fullyQualifiedName);
+            if (matching.isPresent()) {
+                return (Graph.createGraphNode(matching.get()));
             }
         }
         return returnValue;
