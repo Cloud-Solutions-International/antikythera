@@ -166,18 +166,14 @@ public class DepSolver {
 
     private static void findImplementations(GraphNode node, MethodDeclaration md)  {
         ClassOrInterfaceDeclaration cdecl = node.getEnclosingType().asClassOrInterfaceDeclaration();
-        for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().get())) {
-            CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(t);
-            if (cu != null) {
-                TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
-                if (td != null) {
-                    for (MethodDeclaration m : td.getMethodsByName(md.getNameAsString())) {
-                        if (m.getParameters().size() == md.getParameters().size()) {
-                            Graph.createGraphNode(m);
-                        }
+        for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().orElseThrow())) {
+            AntikytheraRunTime.getTypeDeclaration(t).ifPresent(td -> {
+                for (MethodDeclaration m : td.getMethodsByName(md.getNameAsString())) {
+                    if (m.getParameters().size() == md.getParameters().size()) {
+                        Graph.createGraphNode(m);
                     }
                 }
-            }
+            });
         }
     }
 
@@ -188,16 +184,13 @@ public class DepSolver {
             for(ClassOrInterfaceType parent : cdecl.getImplementedTypes()) {
                 String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), parent.getNameAsString());
                 if (fqName != null) {
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqName);
-                    if (cu != null) {
-                        AbstractCompiler.getMatchingType(cu, parent.getNameAsString()).ifPresent(parentType -> {
-                            for (MethodDeclaration pmd : parentType.getMethodsByName(md.getNameAsString())) {
-                                if(pmd.getParameters().size() == md.getParameters().size()) {
-                                    Graph.createGraphNode(pmd);
-                                }
+                    AntikytheraRunTime.getTypeDeclaration(fqName).ifPresent(parentType -> {
+                        for (MethodDeclaration pmd : parentType.getMethodsByName(md.getNameAsString())) {
+                            if(pmd.getParameters().size() == md.getParameters().size()) {
+                                Graph.createGraphNode(pmd);
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
         }
@@ -244,17 +237,13 @@ public class DepSolver {
     }
 
     private static void addOverRide(CallableDeclaration<?> cd, String s)  {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(s);
-        if (cu != null) {
-            TypeDeclaration<?> parent = cu.findFirst(TypeDeclaration.class, td -> td.isPublic()).orElse(null);
-            if (parent != null) {
-                for (MethodDeclaration md : parent.getMethodsByName(cd.getNameAsString())) {
-                    if (md.getParameters().size() == cd.getParameters().size()) {
-                        Graph.createGraphNode(md);
-                    }
+        AntikytheraRunTime.getTypeDeclaration(s).ifPresent(parent -> {
+            for (MethodDeclaration md : parent.getMethodsByName(cd.getNameAsString())) {
+                if (md.getParameters().size() == cd.getParameters().size()) {
+                    Graph.createGraphNode(md);
                 }
             }
-        }
+        });
     }
 
     /**
