@@ -60,7 +60,7 @@ public class UnitTestGenerator extends TestGenerator {
     private final Consumer<Expression> applyPrecondition;
     private boolean autoWired;
     private String instanceName;
-    private CompilationUnit baseTestClass;
+    private static CompilationUnit baseTestClass;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -185,7 +185,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param baseClassName the name of the base class.
      */
-    void loadPredefinedBaseClassForTest(String baseClassName) {
+    static void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("main", "test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
@@ -487,15 +487,7 @@ public class UnitTestGenerator extends TestGenerator {
             Callable callable = result.getCallable();
             MethodCallExpr methodCall;
             if (value.isPresent()) {
-                Object o = value.get();
-                if (o instanceof Evaluator eval) {
-                    Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() +   "())");
-                    methodCall = MockingRegistry.buildMockitoWhen(
-                            callable.getNameAsString(), opt, result.getVariableName());
-                }
-                else {
-                    throw new IllegalStateException("Not implemented yet");
-                }
+                methodCall = applyPreconditionForOptionalPresent(result, value.get(), callable);
             }
             else {
                 // create an expression that represents Optional.empty()
@@ -509,6 +501,27 @@ public class UnitTestGenerator extends TestGenerator {
                 methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(callable.getMethod()));
             }
         }
+    }
+
+    private static MethodCallExpr applyPreconditionForOptionalPresent(MockingCall result, Object value, Callable callable) {
+        MethodCallExpr methodCall;
+        if (value instanceof Evaluator eval) {
+            if (baseTestClass != null) {
+                String mock = String.format("Mockito.mock(%s.class, new DefaultObjectAnswer())",eval.getClassName());
+                Expression opt = StaticJavaParser.parseExpression("Optional.of(" + mock +   ")");
+                methodCall = MockingRegistry.buildMockitoWhen(
+                        callable.getNameAsString(), opt, result.getVariableName());
+            }
+            else {
+                Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() + "())");
+                methodCall = MockingRegistry.buildMockitoWhen(
+                        callable.getNameAsString(), opt, result.getVariableName());
+            }
+        }
+        else {
+            throw new IllegalStateException("Not implemented yet");
+        }
+        return methodCall;
     }
 
     private void applyPreconditionWithEvaluator(Expression expr) {
