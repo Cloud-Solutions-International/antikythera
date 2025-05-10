@@ -234,10 +234,18 @@ public class ControlFlowEvaluator extends Evaluator {
             if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
                 Variable field = evaluator.fields.get(
                         ClassProcessor.classToInstanceName(name.substring(3)));
-                if (field != null && field.getClazz() != null) {
-                    Variable v = Reflect.variableFactory(field.getClazz().getName());
-                    if (v != null) {
-                        value = v.getInitializer().toString();
+                if (field != null) {
+                    if (field.getClazz() != null) {
+                        Variable v = Reflect.variableFactory(field.getClazz().getName());
+                        if (v != null) {
+                            value = v.getInitializer().toString();
+                        }
+                    }
+                    else if (field.getType() != null) {
+                        Variable v = Reflect.variableFactory(field.getType().asString());
+                        if (v != null) {
+                            value = v.getInitializer().toString();
+                        }
                     }
                 }
             }
