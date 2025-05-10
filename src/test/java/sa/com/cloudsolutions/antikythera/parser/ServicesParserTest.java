@@ -40,7 +40,7 @@ class ServicesParserTest {
                 }
             }
         """);
-        AntikytheraRunTime.addClass("TestService", cu);
+        AntikytheraRunTime.addCompilationUnit("TestService", cu);
 
         ServicesParser parser = new ServicesParser("TestService");
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class).get();
@@ -60,7 +60,7 @@ class ServicesParserTest {
                 public void method3() {}
             }
         """);
-        AntikytheraRunTime.addClass("TestService", cu);
+        AntikytheraRunTime.addCompilationUnit("TestService", cu);
 
         ServicesParser parser = new ServicesParser("TestService");
         assertDoesNotThrow(() -> parser.start());
@@ -74,7 +74,7 @@ class ServicesParserTest {
                 public void otherMethod() {}
             }
         """);
-        AntikytheraRunTime.addClass("TestService", cu);
+        AntikytheraRunTime.addCompilationUnit("TestService", cu);
 
         ServicesParser parser = new ServicesParser("TestService");
         assertDoesNotThrow(() -> parser.start("targetMethod"));

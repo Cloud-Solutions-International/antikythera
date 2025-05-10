@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -177,7 +176,7 @@ class TestEvaluatorWithFinches extends TestHelper {
                 }
                 """;
         CompilationUnit cu = StaticJavaParser.parse(cls);
-        AntikytheraRunTime.addClass("TestClass", cu);
+        AntikytheraRunTime.addCompilationUnit("TestClass", cu);
 
         Finch.clear();
         Evaluator eval = EvaluatorFactory.create("TestClass", Evaluator.class);

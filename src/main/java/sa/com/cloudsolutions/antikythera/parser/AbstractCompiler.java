@@ -231,7 +231,7 @@ public class AbstractCompiler {
     private void cache(CompilationUnit cu) {
         for (TypeDeclaration<?> type : findContainedTypes(cu)) {
             type.getFullyQualifiedName().ifPresent(
-                    cname -> AntikytheraRunTime.addClass(cname, cu)
+                    cname -> AntikytheraRunTime.addCompilationUnit(cname, cu)
             );
         }
     }

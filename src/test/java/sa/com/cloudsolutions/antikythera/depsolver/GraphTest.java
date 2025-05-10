@@ -64,7 +64,7 @@ class GraphTest {
     class PersonCompiler extends AbstractCompiler {
         protected PersonCompiler() throws IOException, AntikytheraException {
             cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Person.java")).getResult().get();
-            AntikytheraRunTime.addClass("sa.com.cloudsolutions.antikythera.evaluator.IPerson",
+            AntikytheraRunTime.addCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.IPerson",
                 getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/IPerson.java")).getResult().get());
         }
     }

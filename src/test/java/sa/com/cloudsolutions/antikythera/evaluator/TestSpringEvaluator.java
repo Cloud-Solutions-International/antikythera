@@ -192,7 +192,7 @@ class TestSpringEvaluator {
                 """;
 
         CompilationUnit cu = StaticJavaParser.parse(testClass);
-        AntikytheraRunTime.addClass("TestClass", cu);
+        AntikytheraRunTime.addCompilationUnit("TestClass", cu);
         SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
         evaluator.setCompilationUnit(cu);
 
