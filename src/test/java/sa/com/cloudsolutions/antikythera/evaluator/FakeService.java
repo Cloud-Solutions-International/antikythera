@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import java.util.List;
+import java.util.Optional;
 
 public class FakeService {
     @Autowired
@@ -22,5 +23,26 @@ public class FakeService {
     public List<FakeEntity> searchFakeDataWithCriteria(FakeSearchModel searchModel) {
         CrazySpecification<FakeEntity> spec = new CrazySpecification<>();
         return fakeRepository.findAll(spec.searchOrderDetails(searchModel));
+    }
+
+    @SuppressWarnings("unused")
+    public void searchByName(String name) {
+        List<FakeEntity> fakeEntities = fakeRepository.findAllByName(name);
+        if (fakeEntities.isEmpty()) {
+            System.out.println("No matches!");
+        }
+        else {
+            System.out.println("Found " + fakeEntities.size() + " matches!");
+        }
+    }
+
+    public void findById(Integer id) {
+        Optional<FakeEntity> fakeEntity = fakeRepository.findById(id);
+        if (fakeEntity.isPresent()) {
+            System.out.print("Found!");
+        }
+        else {
+            System.out.print("Not Found!");
+        }
     }
 }
