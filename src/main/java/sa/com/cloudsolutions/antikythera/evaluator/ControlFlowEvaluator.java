@@ -27,6 +27,8 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -442,4 +444,19 @@ public class ControlFlowEvaluator extends Evaluator {
 
         return super.resolveVariableRepresentedByCode(variable, resolvedClass);
     }
+
+
+    @Override
+    Variable handleOptionals(Scope sc) throws ReflectiveOperationException {
+        if (sc.getExpression().isMethodCallExpr()) {
+            MCEWrapper wrapper = sc.getMCEWrapper();
+            Callable callable = wrapper.getMatchingCallable();
+
+            if (callable.isMethodDeclaration()) {
+                return handleOptionalsHelper(sc);
+            }
+        }
+        return null;
+    }
+
 }

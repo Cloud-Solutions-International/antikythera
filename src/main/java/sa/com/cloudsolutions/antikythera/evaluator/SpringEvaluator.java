@@ -484,7 +484,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     /**
-     * Finally create the tests by calling each of the test generators.
+     * Finally, create the tests by calling each of the test generators.
      * There maybe multiple test generators, one of unit tests, one of API tests aec.
      *
      * @param response the response from the controller
@@ -778,8 +778,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-
-
     public void setOnTest(boolean b) {
         onTest = b;
     }
@@ -812,19 +810,5 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             gen.setArgumentGenerator(argumentGenerator);
         }
     }
-
-    @Override
-    Variable handleOptionals(Scope sc) throws ReflectiveOperationException {
-        if (sc.getExpression().isMethodCallExpr()) {
-            MCEWrapper wrapper = sc.getMCEWrapper();
-            Callable callable = wrapper.getMatchingCallable();
-
-            if (callable.isMethodDeclaration()) {
-                return handleOptionalsHelper(sc);
-            }
-        }
-        return null;
-    }
-
 }
 
