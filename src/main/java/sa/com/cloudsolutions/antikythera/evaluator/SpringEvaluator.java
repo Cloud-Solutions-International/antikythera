@@ -111,6 +111,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         String shortName = t.getNameAsString();
         List<TypeWrapper> wrappers =  AbstractCompiler.findFullyQualifiedTypeName(variable);
+        if (wrappers.isEmpty()) {
+            return;
+        }
+
         String className = wrappers.getLast().getFullyQualifiedName();
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
