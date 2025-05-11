@@ -273,10 +273,38 @@ public class UnitTestGenerator extends TestGenerator {
     private void addImportsForCasting(MethodCallExpr argMethod) {
         for (Expression e : argMethod.getArguments()) {
             if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
-                for (ImportWrapper iw : AbstractCompiler.findImport(compilationUnitUnderTest, ct)) {
-                    TestGenerator.addImport(iw.getImport());
+                List<ImportWrapper> imports = AbstractCompiler.findImport(compilationUnitUnderTest, ct);
+                if (imports.isEmpty()) {
+                    solveCastingProblems(ct);
+                }
+                else {
+                    for (ImportWrapper iw : imports) {
+                        TestGenerator.addImport(iw.getImport());
+                    }
                 }
             }
+        }
+    }
+
+    private static void solveCastingProblems(ClassOrInterfaceType ct) {
+        /* We are mocking a variable, but the code may not have been written with an
+         * interface as the type of the variable. For example, Antikythere might be
+         * using Set<Long> while in the application under test, they may have used
+         * LinkedHashSet<Long> instead. So we will be unable to find the required
+         * imports from the CompilationUnit.
+         */
+        String typeName = ct.getNameAsString();
+        if (typeName.startsWith("Set") || typeName.startsWith("java.util.Set")) {
+            TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
+        }
+        else if (typeName.startsWith("List") || typeName.startsWith("java.util.List")) {
+            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+        }
+        else if (typeName.startsWith("Map") || typeName.startsWith("java.util.Map")) {
+            TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
+        }
+        else {
+            logger.warn("Unable to find import for: {}", ct.getNameAsString());
         }
     }
 
