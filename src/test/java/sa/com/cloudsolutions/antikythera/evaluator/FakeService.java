@@ -36,6 +36,7 @@ public class FakeService {
         }
     }
 
+    @SuppressWarnings("unused")
     public void findById(Integer id) {
         Optional<FakeEntity> fakeEntity = fakeRepository.findById(id);
         if (fakeEntity.isPresent()) {

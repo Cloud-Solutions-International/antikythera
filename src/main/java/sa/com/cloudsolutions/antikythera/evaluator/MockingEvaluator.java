@@ -288,8 +288,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             AntikytheraRunTime.pop();
         }
 
-        Variable v = (l == null) ? repositoryFullPath(sc, stmt, methodCall, collectionTypeName)
-                : repositoryEmptyPath(sc, l, collectionTypeName);
+        Variable v = (l == null) ? repositoryFullPath(sc, stmt, collectionTypeName)
+                : repositoryEmptyPath(collectionTypeName);
         MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
         then.setVariableName(variableName);
 
@@ -297,11 +297,11 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return v;
     }
 
-    private Variable repositoryEmptyPath(Scope sc, LineOfCode l, String collectionTypeName) {
+    private Variable repositoryEmptyPath(String collectionTypeName) {
         return Reflect.variableFactory(collectionTypeName);
     }
 
-    private Variable repositoryFullPath(Scope sc, Statement stmt, MethodCallExpr methodCall, String collectionTypeName) {
+    private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
         l.setPathTaken(LineOfCode.TRUE_PATH);
         Branching.add(l);
@@ -317,5 +317,4 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
         return v;
     }
-
 }
