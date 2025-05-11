@@ -9,6 +9,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -302,9 +303,19 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable repositoryFullPath(Scope sc, Statement stmt, MethodCallExpr methodCall, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
+        l.setPathTaken(LineOfCode.TRUE_PATH);
         Branching.add(l);
 
-        return Reflect.variableFactory(collectionTypeName);
+        Type type = sc.getMCEWrapper()
+                .getMatchingCallable().getCallableDeclaration()
+                .asMethodDeclaration().getType();
+        NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        if (typeArgs.isEmpty()) {
+            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        }
+        Variable v =  Reflect.variableFactory(collectionTypeName);
+        l.addPrecondition(new Precondition(setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"))));
+        return v;
     }
 
 }

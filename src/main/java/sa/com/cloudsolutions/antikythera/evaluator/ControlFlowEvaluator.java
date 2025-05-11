@@ -135,8 +135,12 @@ public class ControlFlowEvaluator extends Evaluator {
         if (typeArgs.isEmpty()) {
             typeArgs.add(new ClassOrInterfaceType().setName("Object"));
         }
-        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
 
+        return setupNonEmptyCollection(typeArgs, v, name);
+    }
+
+    protected Expression setupNonEmptyCollection(NodeList<Type> typeArgs, Variable v, NameExpr name) {
+        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
         try {
             Variable resolved = resolveVariableDeclaration(vdecl);
             if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
