@@ -640,6 +640,13 @@ public class UnitTestGenerator extends TestGenerator {
         before.setBody(beforeBody);
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
         before.setJavadocComment("Author : Antikythera");
+
+        if (baseTestClass != null) {
+            baseTestClass.findFirst(MethodDeclaration.class,
+                    md -> md.getNameAsString().equals("setUpBase"))
+                    .ifPresent(md -> beforeBody.addStatement("setUpBase();"));
+        }
+
         for (TypeDeclaration<?> t : gen.getTypes()) {
             if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("setUp")).isEmpty()) {
                 t.addMember(before);
