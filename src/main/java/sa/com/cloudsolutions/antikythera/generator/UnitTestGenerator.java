@@ -270,6 +270,10 @@ public class UnitTestGenerator extends TestGenerator {
         return false;
     }
 
+    /**
+     * Mockito.any() calls often need casting to avoid ambiguity
+     * @param argMethod a method call that may contain mocks
+     */
     private void addImportsForCasting(MethodCallExpr argMethod) {
         for (Expression e : argMethod.getArguments()) {
             if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
@@ -321,6 +325,9 @@ public class UnitTestGenerator extends TestGenerator {
         return false;
     }
 
+    /**
+     * Creates an instance of the class under test
+     */
     @SuppressWarnings("unchecked")
     void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
