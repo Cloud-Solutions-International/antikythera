@@ -1,24 +1,24 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.nodeTypes.NodeWithName;
 
 public class TypeWrapper {
     TypeDeclaration<?> type;
-    Class<?> cls;
+    Class<?> clazz;
 
     public TypeWrapper(TypeDeclaration<?> type) {
         this.type = type;
     }
 
     public TypeWrapper(Class<?> cls) {
-        this.cls = cls;
+        this.clazz = cls;
     }
 
     public TypeWrapper() {
 
     }
 
+    @SuppressWarnings("java:S1452")
     public TypeDeclaration<?> getType() {
         return type;
     }
@@ -27,11 +27,18 @@ public class TypeWrapper {
         this.type = type;
     }
 
-    public Class<?> getCls() {
-        return cls;
+    public Class<?> getClazz() {
+        return clazz;
     }
 
-    public void setCls(Class<?> cls) {
-        this.cls = cls;
+    public void setClass(Class<?> cls) {
+        this.clazz = cls;
+    }
+
+    public String getFullyQualifiedName() {
+        if (clazz == null) {
+            return type.getFullyQualifiedName().orElseThrow();
+        }
+        return clazz.getName();
     }
 }

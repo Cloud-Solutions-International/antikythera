@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -23,6 +24,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -173,7 +175,8 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        MockingRegistry.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(variable));
+        List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
 
         SpringEvaluator evaluator = EvaluatorFactory.create(sample, SpringEvaluator.class);
         assertNotNull(evaluator.autoWire(variable, PERSON_REPO));

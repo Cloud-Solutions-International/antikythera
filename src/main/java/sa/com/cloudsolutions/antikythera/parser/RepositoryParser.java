@@ -368,8 +368,8 @@ public class RepositoryParser extends ClassProcessor {
             if (entity.getType() != null) {
                 return getNameFromType(entity, table);
             }
-            else if (entity.getCls() != null){
-                Class<?> cls = entity.getCls();
+            else if (entity.getClazz() != null){
+                Class<?> cls = entity.getClazz();
                 for (Annotation ann : cls.getAnnotations()) {
                     if (ann instanceof javax.persistence.Table t) {
                         table = t.name();

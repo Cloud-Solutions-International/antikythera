@@ -29,6 +29,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
@@ -89,7 +90,9 @@ public class MockingRegistry {
      * @throws ClassNotFoundException if the class cannot be found
      */
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
-        String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findFullyQualifiedTypeName(variable);
+
+        String fqn = resolvedTypes.getLast().getFullyQualifiedName();
         Variable v;
         if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
             Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);

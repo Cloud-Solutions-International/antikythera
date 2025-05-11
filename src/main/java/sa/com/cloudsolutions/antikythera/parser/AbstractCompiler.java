@@ -191,12 +191,27 @@ public class AbstractCompiler {
     }
 
 
-    public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
+    public static List<TypeWrapper> findFullyQualifiedTypeName(VariableDeclarator variable) {
         Optional<CompilationUnit> cu = variable.findCompilationUnit();
         if (cu.isPresent()) {
-            return findFullyQualifiedName(cu.get(), variable.getType().asString());
+            if (variable.getType().isClassOrInterfaceType()) {
+                ClassOrInterfaceType type = variable.getType().asClassOrInterfaceType();
+                if (type.getTypeArguments().isPresent()) {
+                    List<TypeWrapper> typeWrappers = new ArrayList<>();
+                    List<Type> args = type.getTypeArguments().orElseThrow();
+                    for (Type arg : args) {
+                        typeWrappers.add(findType(cu.get(), arg));
+                    }
+                    typeWrappers.add(findType(cu.get(), type.getNameAsString()));
+                    return typeWrappers;
+                }
+            }
+            TypeWrapper type = findType(cu.get(), variable.getType());
+            if (type != null) {
+                return List.of(type);
+            }
         }
-        return null;
+        return List.of();
     }
 
     /**
@@ -423,7 +438,7 @@ public class AbstractCompiler {
             return p.getFullyQualifiedName().orElse(
                     cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("") + "." + p.getName());
         }
-        Class<?> cls = wrapper.getCls();
+        Class<?> cls = wrapper.getClazz();
         if (cls != null) {
             return cls.getName();
         }

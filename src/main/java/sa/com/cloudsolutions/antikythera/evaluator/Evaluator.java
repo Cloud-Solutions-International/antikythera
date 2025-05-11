@@ -84,7 +84,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-
+import java.util.stream.Collectors;
 
 
 /**
@@ -634,8 +634,8 @@ public class Evaluator {
         if (wrapper.getType() != null) {
             return createUsingEvaluator(wrapper.getType(), oce);
         }
-        if (wrapper.getCls() != null) {
-            return createUsingReflection(wrapper.getCls(), oce);
+        if (wrapper.getClazz() != null) {
+            return createUsingReflection(wrapper.getClazz(), oce);
         }
         return null;
     }
@@ -961,7 +961,7 @@ public class Evaluator {
                  */
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, expr.getNameAsString());
                 if (wrapper != null) {
-                    Class<?> clazz = wrapper.getCls();
+                    Class<?> clazz = wrapper.getClazz();
                     if (clazz != null) {
                         v = new Variable(clazz);
                         v.setClazz(clazz);
@@ -1205,14 +1205,24 @@ public class Evaluator {
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        if (MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(variable))) {
-            return MockingRegistry.mockIt(variable);
-        } else {
-            if (variable.getType().isClassOrInterfaceType()) {
-                return resolveNonPrimitiveVariable(variable);
-            } else {
-                return resolvePrimitiveVariable(variable);
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        if (resolvedTypes.size() == 1) {
+            if (MockingRegistry.isMockTarget(resolvedTypes.getFirst().getFullyQualifiedName())) {
+                return MockingRegistry.mockIt(variable);
             }
+        }
+        else {
+            String joinedNames = resolvedTypes.stream()
+                    .map(TypeWrapper::getFullyQualifiedName)
+                    .collect(Collectors.joining(":"));
+            if (MockingRegistry.isMockTarget(joinedNames)) {
+                return MockingRegistry.mockIt(variable);
+            }
+        }
+        if (variable.getType().isClassOrInterfaceType()) {
+            return resolveNonPrimitiveVariable(variable);
+        } else {
+            return resolvePrimitiveVariable(variable);
         }
     }
 
@@ -1724,7 +1734,7 @@ public class Evaluator {
         if (decl != null) {
             return e.getClass().getName().equals(decl.getFullyQualifiedName().orElse(null));
         }
-        return wrapper.getCls().isAssignableFrom(e.getClass());
+        return wrapper.getClazz().isAssignableFrom(e.getClass());
     }
 
     Variable executeReturnStatement(Statement stmt) throws ReflectiveOperationException {

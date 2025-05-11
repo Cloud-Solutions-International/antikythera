@@ -39,6 +39,7 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -109,8 +110,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         String shortName = t.getNameAsString();
-
-        String className = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> wrappers =  AbstractCompiler.findFullyQualifiedTypeName(variable);
+        String className = wrappers.getLast().getFullyQualifiedName();
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName).orElse(null);
@@ -544,7 +545,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
-        Evaluator eval = MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
+        List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+        Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
