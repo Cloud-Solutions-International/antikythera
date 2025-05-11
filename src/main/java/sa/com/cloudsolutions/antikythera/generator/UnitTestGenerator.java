@@ -705,6 +705,9 @@ public class UnitTestGenerator extends TestGenerator {
                 .ifPresent(t -> {
                             for (FieldDeclaration fd : decl.getFields()) {
                                 List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+                                if (wrappers.isEmpty()) {
+                                    continue;
+                                }
                                 String fullyQualifiedTypeName = wrappers.getLast().getFullyQualifiedName();
                                 if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
                                     MockingRegistry.markAsMocked(fullyQualifiedTypeName);

@@ -1212,10 +1212,14 @@ public class Evaluator {
             }
         }
         else {
-            String joinedNames = resolvedTypes.stream()
-                    .map(TypeWrapper::getFullyQualifiedName)
-                    .collect(Collectors.joining(":"));
-            if (MockingRegistry.isMockTarget(joinedNames)) {
+            StringBuilder joinedNames = new StringBuilder();
+            for (int i = 0; i < resolvedTypes.size(); i++) {
+                joinedNames.append(resolvedTypes.get(i).getFullyQualifiedName());
+                if (i < resolvedTypes.size() - 1) {
+                    joinedNames.append(":");
+                }
+            }
+            if (MockingRegistry.isMockTarget(joinedNames.toString())) {
                 return MockingRegistry.mockIt(variable);
             }
         }

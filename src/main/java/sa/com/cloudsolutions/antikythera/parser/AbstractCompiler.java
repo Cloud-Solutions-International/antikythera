@@ -496,15 +496,10 @@ public class AbstractCompiler {
         }
 
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
-        String fileName = packageName + "." + className;
-        if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
-            CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(fileName);
-            if (compilationUnit != null) {
-                Optional<TypeDeclaration<?>> match = AbstractCompiler.getMatchingType(compilationUnit, fileName);
-                if (match.isPresent()) {
-                    return new TypeWrapper(match.get());
-                }
-            }
+        String tentativeName = packageName.isEmpty() ? className : packageName + "." + className;
+        Optional<TypeDeclaration<?>> t = AntikytheraRunTime.getTypeDeclaration(tentativeName);
+        if (t.isPresent()) {
+            return new TypeWrapper(t.get());
         }
 
         try {
@@ -526,7 +521,7 @@ public class AbstractCompiler {
         }
 
         try {
-            return new TypeWrapper(Class.forName(packageName + className));
+            return new TypeWrapper(Class.forName(tentativeName));
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package.
