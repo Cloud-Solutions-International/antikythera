@@ -27,6 +27,12 @@ import java.util.Set;
 
 public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
+
+    /**
+     * Maintain stats of the controllers and methods parsed
+     */
+    private final static Stats stats = new Stats();
+
     Set<MethodDeclaration> methods = new java.util.HashSet<>();
     CompilationUnit cu;
     String cls;

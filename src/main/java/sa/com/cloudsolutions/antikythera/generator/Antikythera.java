@@ -10,6 +10,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.MavenHelper;
 import sa.com.cloudsolutions.antikythera.parser.RestControllerParser;
 import sa.com.cloudsolutions.antikythera.parser.ServicesParser;
+import sa.com.cloudsolutions.antikythera.parser.Stats;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -77,7 +78,7 @@ public class Antikythera {
         Antikythera antk = Antikythera.getInstance();
         antk.preProcess();
         antk.generateApiTests();
-        RestControllerParser.Stats stats = RestControllerParser.getStats();
+        Stats stats = RestControllerParser.getStats();
 
         logger.info("Processed {} controllers", stats.getControllers());
         logger.info("Processed {} methods", stats.getMethods());

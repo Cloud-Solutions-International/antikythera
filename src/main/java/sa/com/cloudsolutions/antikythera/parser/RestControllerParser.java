@@ -38,10 +38,7 @@ public class RestControllerParser extends DepsolvingParser {
     /**
      * Maintain stats of the controllers and methods parsed
      */
-    private static Stats stats = new Stats();
-
-    File current;
-    private SpringEvaluator evaluator;
+    private final static Stats stats = new Stats();
 
     /**
      * Creates a new RestControllerParser
@@ -135,7 +132,7 @@ public class RestControllerParser extends DepsolvingParser {
             }
         }
 
-        private void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+        protected void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
             evaluator.setArgumentGenerator(gen);
             evaluator.reset();
             Branching.clear();
@@ -203,25 +200,4 @@ public class RestControllerParser extends DepsolvingParser {
         return stats;
     }
 
-    public static class Stats {
-        int controllers;
-        int methods;
-        int tests = 0;
-
-        public int getControllers() {
-            return controllers;
-        }
-
-        public int getMethods() {
-            return methods;
-        }
-
-        public void setTests(int tests) {
-            this.tests = tests;
-        }
-
-        public int getTests() {
-            return tests;
-        }
-    }
 }
