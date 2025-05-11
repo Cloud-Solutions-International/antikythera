@@ -222,8 +222,8 @@ public class UnitTestGenerator extends TestGenerator {
         mockArguments();
         applyPreconditions();
         addWhens();
-        addDependencies();
         String invocation = invokeMethod();
+        addDependencies();
 
         if (response.getException() == null) {
             getBody(testMethod).addStatement(invocation);
@@ -564,8 +564,12 @@ public class UnitTestGenerator extends TestGenerator {
         Type t = methodUnderTest.getType();
         if (t != null && !t.toString().equals("void")) {
             b.append(t.asString()).append(" resp = ");
+            for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
+                gen.addImport(imp.getImport());
+            }
         }
-        b.append(instanceName + "." + methodUnderTest.getNameAsString() + "(");
+
+        b.append(instanceName).append(".").append(methodUnderTest.getNameAsString()).append("(");
         for (int i = 0; i < methodUnderTest.getParameters().size(); i++) {
             b.append(methodUnderTest.getParameter(i).getNameAsString());
             if (i < methodUnderTest.getParameters().size() - 1) {

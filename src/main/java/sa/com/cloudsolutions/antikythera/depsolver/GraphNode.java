@@ -275,11 +275,11 @@ public class GraphNode {
     public GraphNode processTypeArgument(Type typeArg) {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
-            if (ctype.getTypeArguments().isPresent()) {
+            ctype.getTypeArguments().ifPresent(types ->{
                 for (Type t : ctype.getTypeArguments().get()) {
                     processTypeArgument(t);
                 }
-            }
+            });
             if (ctype.getScope().isPresent()) {
                 ImportUtils.addImport(this, ctype.getScope().orElseThrow());
             }

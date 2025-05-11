@@ -13,7 +13,7 @@ public class ImportWrapper {
     private FieldDeclaration fieldDeclaration;
     private MethodDeclaration methodDeclaration;
     /**
-     * If the import is a wild card import this will represent the actual full import classname
+     * If the import is a wild card, this will represent the actual full import classname
      */
     private ImportDeclaration simplified;
 
@@ -47,6 +47,7 @@ public class ImportWrapper {
         this.type = type;
     }
 
+    @SuppressWarnings("java:S1452")
     public TypeDeclaration<?> getType() {
         return type;
     }
