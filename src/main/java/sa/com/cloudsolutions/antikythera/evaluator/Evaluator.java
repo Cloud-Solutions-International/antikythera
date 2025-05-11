@@ -1491,7 +1491,7 @@ public class Evaluator {
             executeThrow(stmt);
         } else if (stmt.isReturnStmt()) {
             /*
-             * When returning we need to know if a value has been returned.
+             * Need to know if a value has been returned.
              */
             returnValue = executeReturnStatement(stmt);
 

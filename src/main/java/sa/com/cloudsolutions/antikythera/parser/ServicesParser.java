@@ -88,12 +88,7 @@ public class ServicesParser {
     }
 
     public void writeFiles() throws IOException {
-        if (stats.tests != 0) {
-            generator.save();
-        }
-        else {
-            logger.info("No tests generated");
-        }
+        generator.save();
     }
 
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
