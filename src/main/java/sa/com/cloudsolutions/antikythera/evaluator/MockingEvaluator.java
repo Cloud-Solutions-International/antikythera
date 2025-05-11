@@ -56,7 +56,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 ImportWrapper imp = imports.getLast();
                 String s = imp.getNameAsString();
                 if (s.endsWith("List") || s.endsWith("Collection") || s.endsWith("Set")) {
-
+                    return handleRepositoryCollectionHelper(sc, s);
                 }
             }
             return super.executeCallable(sc, callable);
@@ -273,7 +273,38 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
+    Variable optionalEmptyPath(Scope sc, LineOfCode l) {
         return new Variable(Optional.empty());
     }
+
+    @SuppressWarnings("unchecked")
+    Variable handleRepositoryCollectionHelper(Scope sc, String collectionTypeName) {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+
+        for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
+            AntikytheraRunTime.pop();
+        }
+
+        Variable v = (l == null) ? repositoryFullPath(sc, stmt, methodCall, collectionTypeName)
+                : repositoryEmptyPath(sc, l, collectionTypeName);
+        MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
+        then.setVariableName(variableName);
+
+        MockingRegistry.when(className, then);
+        return v;
+    }
+
+    private Variable repositoryEmptyPath(Scope sc, LineOfCode l, String collectionTypeName) {
+        return Reflect.variableFactory(collectionTypeName);
+    }
+
+    private Variable repositoryFullPath(Scope sc, Statement stmt, MethodCallExpr methodCall, String collectionTypeName) {
+        LineOfCode l = new LineOfCode(stmt);
+        Branching.add(l);
+
+        return Reflect.variableFactory(collectionTypeName);
+    }
+
 }

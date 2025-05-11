@@ -201,12 +201,12 @@ public class ControlFlowEvaluator extends Evaluator {
             }
 
             if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariable(stmt, entry, expr);
+                setupConditionalVariablesWithSetter(stmt, entry, expr);
             }
         }
     }
 
-    private void setupConditionalVariable(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
+    private void setupConditionalVariablesWithSetter(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
