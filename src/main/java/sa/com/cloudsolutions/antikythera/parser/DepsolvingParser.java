@@ -44,7 +44,7 @@ public abstract class DepsolvingParser {
             @Override
             public void visit(MethodDeclaration md, Void arg) {
                 /*
-                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
+                 * I would gladly do this without a visitor, but discovered a bug in findAll()
                  */
                 if (md.getNameAsString().equals(method)) {
                     evaluateMethod(md, new NullArgumentGenerator());

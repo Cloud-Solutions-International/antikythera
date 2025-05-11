@@ -31,7 +31,8 @@ public class ServicesParser {
     /**
      * Maintain stats of the controllers and methods parsed
      */
-    private final static Stats stats = new Stats();
+    private static final Stats stats = new Stats();
+    boolean testPrivates = Settings.getProperty("test_privates", Boolean.class).orElse(false);
 
     Set<MethodDeclaration> methods = new java.util.HashSet<>();
     CompilationUnit cu;
@@ -48,12 +49,16 @@ public class ServicesParser {
     }
 
     public void start() {
+
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
-                if (!md.isPrivate()) {
+                if (!md.isPrivate() || testPrivates) {
                     Graph.createGraphNode(md);
                     methods.add(md);
+                }
+                else {
+                    logger.debug("Skipping private method {}", md.getNameAsString());
                 }
             });
             solver.dfs();
@@ -65,7 +70,7 @@ public class ServicesParser {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
-                if (!md.isPrivate() && md.getNameAsString().equals(method)) {
+                if ((!md.isPrivate() || testPrivates ) && md.getNameAsString().equals(method)) {
                     Graph.createGraphNode(md);
                     methods.add(md);
                 }
@@ -77,12 +82,18 @@ public class ServicesParser {
 
     private void eval() {
         for (MethodDeclaration md : methods) {
+            stats.methods++;
             evaluateMethod(md, new DummyArgumentGenerator());
         }
     }
 
     public void writeFiles() throws IOException {
-        generator.save();
+        if (stats.tests != 0) {
+            generator.save();
+        }
+        else {
+            logger.info("No tests generated");
+        }
     }
 
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
