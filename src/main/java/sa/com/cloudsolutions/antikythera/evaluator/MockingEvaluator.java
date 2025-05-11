@@ -92,7 +92,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
             MethodCallExpr mce = StaticJavaParser.parseExpression(
                 String.format(
-                        "Mockito.when(%s.save(any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                        "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
                         variableName)
             );
             mockingCall.setExpression(mce);

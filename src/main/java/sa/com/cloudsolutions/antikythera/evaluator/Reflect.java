@@ -641,4 +641,15 @@ public class Reflect {
         return null;
     }
 
+    public static boolean isPrimitiveOrBoxed(Class<?> clazz) {
+        return primitiveToWrapper.containsKey(clazz) || wrapperToPrimitive.containsKey(clazz);
+    }
+
+    public static boolean isPrimitiveOrBoxed(String type) {
+        try {
+            return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 }

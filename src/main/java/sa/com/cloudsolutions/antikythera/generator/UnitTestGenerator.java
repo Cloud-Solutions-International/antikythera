@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -185,7 +186,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param baseClassName the name of the base class.
      */
-    void loadPredefinedBaseClassForTest(String baseClassName) {
+     void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("main", "test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
@@ -222,8 +223,8 @@ public class UnitTestGenerator extends TestGenerator {
         mockArguments();
         applyPreconditions();
         addWhens();
-        addDependencies();
         String invocation = invokeMethod();
+        addDependencies();
 
         if (response.getException() == null) {
             getBody(testMethod).addStatement(invocation);
@@ -235,8 +236,8 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void addDependencies() {
-        for (String s : TestGenerator.getDependencies()) {
-            gen.addImport(s);
+        for (ImportDeclaration imp : TestGenerator.getImports()) {
+            gen.addImport(imp);
         }
     }
 
@@ -269,15 +270,45 @@ public class UnitTestGenerator extends TestGenerator {
         return false;
     }
 
+    /**
+     * Mockito.any() calls often need casting to avoid ambiguity
+     * @param argMethod a method call that may contain mocks
+     */
     private void addImportsForCasting(MethodCallExpr argMethod) {
         for (Expression e : argMethod.getArguments()) {
             if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
-                String fullName = AbstractCompiler.findFullyQualifiedName(
-                        compilationUnitUnderTest, ct.asString());
-                if (fullName != null) {
-                    TestGenerator.addDependency(fullName);
+                List<ImportWrapper> imports = AbstractCompiler.findImport(compilationUnitUnderTest, ct);
+                if (imports.isEmpty()) {
+                    solveCastingProblems(ct);
+                }
+                else {
+                    for (ImportWrapper iw : imports) {
+                        TestGenerator.addImport(iw.getImport());
+                    }
                 }
             }
+        }
+    }
+
+    private static void solveCastingProblems(ClassOrInterfaceType ct) {
+        /* We are mocking a variable, but the code may not have been written with an
+         * interface as the type of the variable. For example, Antikythere might be
+         * using Set<Long> while in the application under test, they may have used
+         * LinkedHashSet<Long> instead. So we will be unable to find the required
+         * imports from the CompilationUnit.
+         */
+        String typeName = ct.getNameAsString();
+        if (typeName.startsWith("Set") || typeName.startsWith("java.util.Set")) {
+            TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
+        }
+        else if (typeName.startsWith("List") || typeName.startsWith("java.util.List")) {
+            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+        }
+        else if (typeName.startsWith("Map") || typeName.startsWith("java.util.Map")) {
+            TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
+        }
+        else {
+            logger.warn("Unable to find import for: {}", ct.getNameAsString());
         }
     }
 
@@ -294,6 +325,9 @@ public class UnitTestGenerator extends TestGenerator {
         return false;
     }
 
+    /**
+     * Creates an instance of the class under test
+     */
     @SuppressWarnings("unchecked")
     void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
@@ -309,7 +343,7 @@ public class UnitTestGenerator extends TestGenerator {
     @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
-        gen.addImport("org.mockito.InjectMocks");
+        addImport(new ImportDeclaration("org.mockito.InjectMocks", false, false));
 
         if (!autoWired) {
             for (FieldDeclaration fd : testClass.getFields()) {
@@ -471,7 +505,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    static void applyRegistryCondition(MockingCall result) {
+    void applyRegistryCondition(MockingCall result) {
         if (result.getVariable().getValue() instanceof Optional<?>) {
             applyPreconditionsForOptionals(result);
         }
@@ -482,20 +516,12 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    static void applyPreconditionsForOptionals(MockingCall result) {
+    void applyPreconditionsForOptionals(MockingCall result) {
         if (result.getVariable().getValue() instanceof Optional<?> value) {
             Callable callable = result.getCallable();
             MethodCallExpr methodCall;
             if (value.isPresent()) {
-                Object o = value.get();
-                if (o instanceof Evaluator eval) {
-                    Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() +   "())");
-                    methodCall = MockingRegistry.buildMockitoWhen(
-                            callable.getNameAsString(), opt, result.getVariableName());
-                }
-                else {
-                    throw new IllegalStateException("Not implemented yet");
-                }
+                methodCall = applyPreconditionForOptionalPresent(result, value.get(), callable);
             }
             else {
                 // create an expression that represents Optional.empty()
@@ -509,6 +535,27 @@ public class UnitTestGenerator extends TestGenerator {
                 methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(callable.getMethod()));
             }
         }
+    }
+
+    private MethodCallExpr applyPreconditionForOptionalPresent(MockingCall result, Object value, Callable callable) {
+        MethodCallExpr methodCall;
+        if (value instanceof Evaluator eval) {
+            if (baseTestClass != null) {
+                String mock = String.format("Mockito.mock(%s.class, new DefaultObjectAnswer())",eval.getClassName());
+                Expression opt = StaticJavaParser.parseExpression("Optional.of(" + mock +   ")");
+                methodCall = MockingRegistry.buildMockitoWhen(
+                        callable.getNameAsString(), opt, result.getVariableName());
+            }
+            else {
+                Expression opt = StaticJavaParser.parseExpression("Optional.of(new " + eval.getClassName() + "())");
+                methodCall = MockingRegistry.buildMockitoWhen(
+                        callable.getNameAsString(), opt, result.getVariableName());
+            }
+        }
+        else {
+            throw new IllegalStateException("Not implemented yet");
+        }
+        return methodCall;
     }
 
     private void applyPreconditionWithEvaluator(Expression expr) {
@@ -543,7 +590,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void addClassImports(Type t) {
         for (ImportWrapper wrapper : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
-            gen.addImport(wrapper.getImport());
+            addImport(wrapper.getImport());
         }
     }
 
@@ -553,8 +600,12 @@ public class UnitTestGenerator extends TestGenerator {
         Type t = methodUnderTest.getType();
         if (t != null && !t.toString().equals("void")) {
             b.append(t.asString()).append(" resp = ");
+            for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
+                gen.addImport(imp.getImport());
+            }
         }
-        b.append(instanceName + "." + methodUnderTest.getNameAsString() + "(");
+
+        b.append(instanceName).append(".").append(methodUnderTest.getNameAsString()).append("(");
         for (int i = 0; i < methodUnderTest.getParameters().size(); i++) {
             b.append(methodUnderTest.getParameter(i).getNameAsString());
             if (i < methodUnderTest.getParameters().size() - 1) {
@@ -596,6 +647,13 @@ public class UnitTestGenerator extends TestGenerator {
         before.setBody(beforeBody);
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
         before.setJavadocComment("Author : Antikythera");
+
+        if (baseTestClass != null) {
+            baseTestClass.findFirst(MethodDeclaration.class,
+                    md -> md.getNameAsString().equals("setUpBase"))
+                    .ifPresent(md -> beforeBody.addStatement("setUpBase();"));
+        }
+
         for (TypeDeclaration<?> t : gen.getTypes()) {
             if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("setUp")).isEmpty()) {
                 t.addMember(before);
@@ -615,6 +673,7 @@ public class UnitTestGenerator extends TestGenerator {
         gen.addImport("org.junit.jupiter.api.BeforeEach");
         gen.addImport("org.mockito.Mock");
         gen.addImport("org.mockito.Mockito");
+        gen.addImport("java.util.Optional");
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();

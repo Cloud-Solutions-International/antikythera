@@ -27,6 +27,13 @@ import java.util.Set;
 
 public class ServicesParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
+
+    /**
+     * Maintain stats of the controllers and methods parsed
+     */
+    private static final Stats stats = new Stats();
+    boolean testPrivates = Settings.getProperty("test_privates", Boolean.class).orElse(false);
+
     Set<MethodDeclaration> methods = new java.util.HashSet<>();
     CompilationUnit cu;
     String cls;
@@ -42,12 +49,16 @@ public class ServicesParser {
     }
 
     public void start() {
+
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
-                if (!md.isPrivate()) {
+                if (!md.isPrivate() || testPrivates) {
                     Graph.createGraphNode(md);
                     methods.add(md);
+                }
+                else {
+                    logger.debug("Skipping private method {}", md.getNameAsString());
                 }
             });
             solver.dfs();
@@ -59,7 +70,7 @@ public class ServicesParser {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
             DepSolver solver = DepSolver.createSolver();
             decl.findAll(MethodDeclaration.class).forEach(md -> {
-                if (!md.isPrivate() && md.getNameAsString().equals(method)) {
+                if ((!md.isPrivate() || testPrivates ) && md.getNameAsString().equals(method)) {
                     Graph.createGraphNode(md);
                     methods.add(md);
                 }
@@ -71,6 +82,7 @@ public class ServicesParser {
 
     private void eval() {
         for (MethodDeclaration md : methods) {
+            stats.methods++;
             evaluateMethod(md, new DummyArgumentGenerator());
         }
     }

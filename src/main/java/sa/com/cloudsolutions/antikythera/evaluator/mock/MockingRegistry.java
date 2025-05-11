@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
-import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -208,42 +208,42 @@ public class MockingRegistry {
 
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" -> {
-                TestGenerator.addDependency("java.util.ArrayList");
+                TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("ArrayList"))
                         .setArguments(new NodeList<>());
             }
 
             case "Map", "java.util.Map", "java.util.HashMap" -> {
-                TestGenerator.addDependency("java.util.HashMap");
+                TestGenerator.addImport(new ImportDeclaration("java.util.HashMap", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashMap"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.TreeMap" -> {
-                TestGenerator.addDependency("java.util.TreeMap");
+                TestGenerator.addImport(new ImportDeclaration("java.util.TreeMap", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("TreeMap"))
                         .setArguments(new NodeList<>());
             }
 
             case "Set", "java.util.Set", "java.util.HashSet" -> {
-                TestGenerator.addDependency("java.util.HashSet");
+                TestGenerator.addImport(new ImportDeclaration("java.util.HashSet", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashSet"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.TreeSet" -> {
-                TestGenerator.addDependency("java.util.TreeSet");
+                TestGenerator.addImport(new ImportDeclaration("java.util.TreeSet", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("TreeSet"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.Optional" -> {
-                TestGenerator.addDependency("java.util.Optional");
+                TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
                 yield new MethodCallExpr(
                         new NameExpr("Optional"),
                         "empty"
@@ -279,7 +279,8 @@ public class MockingRegistry {
                     default -> "any";
                 }
         );
-
+        mce.setScope(new NameExpr(MOCKITO));
+        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
         // If it's a generic Mockito.any() call, add casting
         if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);

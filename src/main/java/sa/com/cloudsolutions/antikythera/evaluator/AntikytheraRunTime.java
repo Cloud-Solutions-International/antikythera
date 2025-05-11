@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -20,9 +21,11 @@ import java.util.TreeMap;
  */
 public class AntikytheraRunTime {
     /**
-     * Keeps track of all the classes that we have compiled
+     * Keeps track of all the compilation units that we have compiled
      */
-    private static final Map<String, ClassInfo> resolved = new HashMap<>();
+    private static final Map<String, CompilationUnit> resolved = new HashMap<>();
+
+    private static final Map<String, ClassInfo> resolvedTypes = new HashMap<>();
     /**
      * <p>We are not using a stack data structure here, but a Deque. This is because Deque is a
      * double-ended queue, which can be used as a stack. It is more efficient than a Stack ADT.
@@ -59,30 +62,46 @@ public class AntikytheraRunTime {
     private AntikytheraRunTime() {}
 
     public static CompilationUnit getCompilationUnit(String cls) {
-        ClassInfo info = resolved.get(cls);
-        if (info != null) {
-            return info.getCu();
-        }
-        return null;
+        return resolved.get(cls);
     }
 
-    public static void addClass(String className, CompilationUnit cu) {
-        ClassInfo classInfo = ClassInfo.factory(className, cu);
-        resolved.put(className, classInfo);
+    public static void addCompilationUnit(String className, CompilationUnit cu) {
+        for(TypeDeclaration<?> type : cu.getTypes()) {
+            ClassInfo classInfo = new ClassInfo();
+            classInfo.className = type.getFullyQualifiedName().orElseThrow();
+            classInfo.cu = cu;
+            classInfo.typeDeclaration = type;
+
+            if(type.isAnnotationPresent("Service")) {
+                classInfo.serviceClass = true;
+            } else if(type.isAnnotationPresent("RestController")
+                    || type.isAnnotationPresent("Controller")) {
+                classInfo.controllerClass = true;
+            } else if(type.isAnnotationPresent("Component")) {
+                classInfo.componentClass = true;
+            }
+
+            if(type.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
+                classInfo.isInterface = cdecl.isInterface();
+            }
+            resolvedTypes.put(classInfo.getClassName(),classInfo);
+        }
+        resolved.put(className, cu);
     }
 
     public static boolean isServiceClass(String className) {
-        ClassInfo classInfo = resolved.get(className);
+        ClassInfo classInfo = resolvedTypes.get(className);
         return classInfo != null && classInfo.serviceClass;
     }
 
     public static boolean isControllerClass(String className) {
-        ClassInfo classInfo = resolved.get(className);
+        ClassInfo classInfo = resolvedTypes.get(className);
         return classInfo != null && classInfo.controllerClass;
     }
 
     public static boolean isComponentClass(String className) {
-        ClassInfo classInfo = resolved.get(className);
+        ClassInfo classInfo = resolvedTypes.get(className);
         return classInfo != null && classInfo.componentClass;
     }
 
@@ -107,8 +126,15 @@ public class AntikytheraRunTime {
     }
 
     public static boolean isInterface(String name) {
-        ClassInfo classInfo = resolved.get(name);
+        ClassInfo classInfo = resolvedTypes.get(name);
         return classInfo != null && classInfo.isInterface;
+    }
+
+    @SuppressWarnings("java:S1452")
+    public static Optional<TypeDeclaration<?>> getTypeDeclaration(String className) {
+        ClassInfo type = resolvedTypes.get(className);
+        return Optional.ofNullable(type)
+                .map(t -> t.typeDeclaration);
     }
 
     static class ClassInfo {
@@ -118,33 +144,9 @@ public class AntikytheraRunTime {
         private boolean controllerClass;
         private boolean componentClass;
         private boolean isInterface;
+        private TypeDeclaration<?> typeDeclaration;
+
         protected ClassInfo() {}
-
-        public static ClassInfo factory(String className, CompilationUnit cu) {
-            ClassInfo classInfo = new ClassInfo();
-            classInfo.className = className;
-            classInfo.cu = cu;
-
-            cu.getPrimaryType();
-            for(TypeDeclaration<?> type : cu.getTypes()) {
-                if(type.isPublic()) {
-                    if(type.isAnnotationPresent("Service")) {
-                        classInfo.serviceClass = true;
-                    } else if(type.isAnnotationPresent("RestController")
-                                || type.isAnnotationPresent("Controller")) {
-                        classInfo.controllerClass = true;
-                    } else if(type.isAnnotationPresent("Component")) {
-                        classInfo.componentClass = true;
-                    }
-
-                    if(type.isClassOrInterfaceDeclaration()) {
-                        ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
-                        classInfo.isInterface = cdecl.isInterface();
-                    }
-                }
-            }
-            return classInfo;
-        }
 
         public String getClassName() {
             return className;
@@ -186,15 +188,6 @@ public class AntikytheraRunTime {
 
     public static Variable getAutoWire(String className) {
         return autowired.get(className);
-    }
-
-    public static Map<String, CompilationUnit> getResolvedClasses() {
-        // iterate through the resolved map and return the classnames and the compilation units as a map
-        Map<String, CompilationUnit> resolvedClasses = new HashMap<>();
-        for (Map.Entry<String, ClassInfo> entry : resolved.entrySet()) {
-            resolvedClasses.put(entry.getKey(), entry.getValue().cu);
-        }
-        return resolvedClasses;
     }
 
     public static Variable getStaticVariable(String fqn, String field) {

@@ -8,11 +8,13 @@ import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 
 import java.io.IOException;
 
 public abstract class DepsolvingParser {
     CompilationUnit cu;
+    protected SpringEvaluator evaluator;
 
     public void start() throws IOException {
         for(TypeDeclaration<?> decl : cu.getTypes()) {
@@ -42,7 +44,7 @@ public abstract class DepsolvingParser {
             @Override
             public void visit(MethodDeclaration md, Void arg) {
                 /*
-                 * I would gladly do this iwthout a visitor, but discovered a bug in findAll()
+                 * I would gladly do this without a visitor, but discovered a bug in findAll()
                  */
                 if (md.getNameAsString().equals(method)) {
                     evaluateMethod(md, new NullArgumentGenerator());
@@ -52,6 +54,7 @@ public abstract class DepsolvingParser {
         }, null);
 
     }
+
 
     public abstract void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen);
 

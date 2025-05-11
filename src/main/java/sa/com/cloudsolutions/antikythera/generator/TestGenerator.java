@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -41,32 +42,27 @@ public abstract class TestGenerator {
     protected List<Precondition> preConditions;
 
     static List<Expression> whenThen = new ArrayList<>();
-    static Set<String> dependencies = new HashSet<>();
 
+    /**
+     * Static set of imports to allow MockingRegistry to make updates.
+     */
+    static Set<ImportDeclaration> imports = new HashSet<>();
 
     protected TestGenerator(CompilationUnit cu) {
 
         this.compilationUnitUnderTest = cu;
     }
 
-    public static void clearWhenThen() {
-        whenThen.clear();
-    }
-
     public static void addWhenThen(Expression expr) {
         whenThen.add(expr);
     }
 
-    public static List<Expression> getWhenThen() {
-        return whenThen;
+    public static void addImport(ImportDeclaration s) {
+        imports.add(s);
     }
 
-    public static void addDependency(String s) {
-        dependencies.add(s);
-    }
-
-    public static Set<String> getDependencies() {
-        return dependencies;
+    public static Set<ImportDeclaration> getImports() {
+        return imports;
     }
 
     protected String createTestName(MethodDeclaration md) {

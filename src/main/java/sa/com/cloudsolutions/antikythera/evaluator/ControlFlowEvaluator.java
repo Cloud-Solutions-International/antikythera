@@ -45,6 +45,13 @@ public class ControlFlowEvaluator extends Evaluator {
         super(context);
     }
 
+    /**
+     * Controls the branch that a conditional expression takes through parameter assignment
+     * @param stmt the statement that contains branching
+     * @param entry an entry from the truth table which contains values to be assigned.
+     * @return an optional expression that can be used to set up the condition empty if all
+     *      the conditions cannot be met.
+     */
     @SuppressWarnings("unchecked")
     Optional<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
@@ -113,6 +120,12 @@ public class ControlFlowEvaluator extends Evaluator {
                         : new StringLiteralExpr(entry.getValue().toString());
     }
 
+    /**
+     * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
+     * @param v represents the type of collection or map that we need
+     * @param name the name of the variable
+     * @return an expression that can be used to set up the condition
+     */
     private Expression setupNonEmptyCollections(Variable v, NameExpr name) {
         Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
         Type type = param.getType();
@@ -124,6 +137,9 @@ public class ControlFlowEvaluator extends Evaluator {
 
         try {
             Variable resolved = resolveVariableDeclaration(vdecl);
+            if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
+                resolved = Reflect.variableFactory(resolved.getType().asString());
+            }
 
             if (v.getValue() instanceof List<?>) {
                 return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
@@ -137,6 +153,10 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
                 VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
                 Variable resolved2 = resolveVariableDeclaration(vdecl2);
+                if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
+                    resolved2 = Reflect.variableFactory(resolved2.getType().asString());
+                }
+
                 return StaticJavaParser.parseExpression(
                         String.format("Map.of(%s, %s)",
                                 resolved.getInitializer(), resolved2.getInitializer()));
@@ -212,17 +232,30 @@ public class ControlFlowEvaluator extends Evaluator {
         if (mce.getScope().isPresent()) {
             Variable scopeVar = getValue(stmt, mce.getScope().orElseThrow().toString());
             if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
-                Variable field = evaluator.fields.get(
-                        ClassProcessor.classToInstanceName(name.substring(3)));
-                if (field != null && field.getClazz() != null) {
-                    Variable v = Reflect.variableFactory(field.getClazz().getName());
-                    if (v != null) {
-                        value = v.getInitializer().toString();
-                    }
-                }
+                value = findSuitableNotNullValue(name, evaluator, value);
             }
         }
         setter.addArgument(value);
+    }
+
+    private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
+        Variable field = evaluator.fields.get(
+                ClassProcessor.classToInstanceName(name.substring(3)));
+        if (field != null) {
+            if (field.getClazz() != null) {
+                Variable v = Reflect.variableFactory(field.getClazz().getName());
+                if (v != null) {
+                    value = v.getInitializer().toString();
+                }
+            }
+            else if (field.getType() != null) {
+                Variable v = Reflect.variableFactory(field.getType().asString());
+                if (v != null) {
+                    value = v.getInitializer().toString();
+                }
+            }
+        }
+        return value;
     }
 
     private void addPreCondition(Statement statement, Expression expr) {
@@ -391,7 +424,7 @@ public class ControlFlowEvaluator extends Evaluator {
             return super.resolvePrimitiveOrBoxedVariable(variable, t);
         }
 
-        return Reflect.variableFactory(t.asString());
+        return new Variable(t);
     }
 
     @Override

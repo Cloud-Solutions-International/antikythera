@@ -48,6 +48,7 @@ class UnitTestGeneratorTest {
     private UnitTestGenerator unitTestGenerator;
     private ClassOrInterfaceDeclaration classUnderTest;
     private ArgumentGenerator argumentGenerator;
+    private CompilationUnit cu;
 
     @BeforeAll
     static void beforeClass() throws IOException {
@@ -58,7 +59,7 @@ class UnitTestGeneratorTest {
 
     @BeforeEach
     void setUp() {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
         assertNotNull(cu);
         classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
 
@@ -200,8 +201,8 @@ class UnitTestGeneratorTest {
         MockingCall emptyOptionalCall = new MockingCall(callable, emptyOptionalVar);
         emptyOptionalCall.setVariableName("mockString");
 
-        // Apply preconditions for the empty Optional
-        UnitTestGenerator.applyPreconditionsForOptionals(emptyOptionalCall);
+        UnitTestGenerator ug = new UnitTestGenerator(cu);
+        ug.applyPreconditionsForOptionals(emptyOptionalCall);
 
         // Verify that the whenThen list contains an expression for Optional.empty()
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing empty Optional");
@@ -227,7 +228,7 @@ class UnitTestGeneratorTest {
         evaluatorOptionalCall.setVariableName("mockString2");
 
         // Apply preconditions for the Optional with Evaluator
-        UnitTestGenerator.applyPreconditionsForOptionals(evaluatorOptionalCall);
+        ug.applyPreconditionsForOptionals(evaluatorOptionalCall);
 
         // Verify that mockEvaluator.getClassName() was called
         Mockito.verify(mockEvaluator).getClassName();
