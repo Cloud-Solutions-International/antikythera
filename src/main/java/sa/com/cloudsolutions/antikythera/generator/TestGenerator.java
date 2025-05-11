@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -45,7 +46,7 @@ public abstract class TestGenerator {
     /**
      * Static set of imports to allow MockingRegistry to make updates.
      */
-    static Set<String> imports = new HashSet<>();
+    static Set<ImportDeclaration> imports = new HashSet<>();
 
     protected TestGenerator(CompilationUnit cu) {
 
@@ -56,11 +57,11 @@ public abstract class TestGenerator {
         whenThen.add(expr);
     }
 
-    public static void addImport(String s) {
+    public static void addImport(ImportDeclaration s) {
         imports.add(s);
     }
 
-    public static Set<String> getImports() {
+    public static Set<ImportDeclaration> getImports() {
         return imports;
     }
 

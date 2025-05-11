@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -235,8 +236,8 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void addDependencies() {
-        for (String s : TestGenerator.getImports()) {
-            gen.addImport(s);
+        for (ImportDeclaration imp : TestGenerator.getImports()) {
+            gen.addImport(imp);
         }
     }
 
@@ -273,7 +274,7 @@ public class UnitTestGenerator extends TestGenerator {
         for (Expression e : argMethod.getArguments()) {
             if (e instanceof CastExpr cast && cast.getType() instanceof ClassOrInterfaceType ct) {
                 for (ImportWrapper iw : AbstractCompiler.findImport(compilationUnitUnderTest, ct)) {
-                    TestGenerator.addImport(iw.getNameAsString());
+                    TestGenerator.addImport(iw.getImport());
                 }
             }
         }
@@ -307,7 +308,7 @@ public class UnitTestGenerator extends TestGenerator {
     @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
-        addImport("org.mockito.InjectMocks");
+        addImport(new ImportDeclaration("org.mockito.InjectMocks", false, false));
 
         if (!autoWired) {
             for (FieldDeclaration fd : testClass.getFields()) {
@@ -554,7 +555,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void addClassImports(Type t) {
         for (ImportWrapper wrapper : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
-            addImport(wrapper.getImport().getNameAsString());
+            addImport(wrapper.getImport());
         }
     }
 
