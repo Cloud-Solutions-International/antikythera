@@ -84,7 +84,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 
 /**
@@ -471,9 +470,8 @@ public class Evaluator {
             } else if (v.getValue() != null && v.getValue().getClass().isArray()) {
                 if (fae.getNameAsString().equals("length")) {
                     return new Variable(Array.getLength(v.getValue()));
-                } else {
-                    logger.warn("Array field access {} not supported", fae.getNameAsString());
                 }
+                logger.warn("Array field access {} not supported", fae.getNameAsString());
             }
         }
         logger.warn("Could not resolve {} for field access", fae.getScope());
