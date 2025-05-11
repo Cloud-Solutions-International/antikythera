@@ -314,7 +314,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             typeArgs.add(new ClassOrInterfaceType().setName("Object"));
         }
         Variable v =  Reflect.variableFactory(collectionTypeName);
-        l.addPrecondition(new Precondition(setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"))));
+        setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
         return v;
     }
 

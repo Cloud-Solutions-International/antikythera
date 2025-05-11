@@ -38,7 +38,7 @@ public class TestRepository extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"searchByName, No Matches!", "findById, Found!Not Found!"})
+    @CsvSource({"searchByName, Found 1 matches!No Matches!", "findById, Found!Not Found!"})
     void testSearchByName(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 

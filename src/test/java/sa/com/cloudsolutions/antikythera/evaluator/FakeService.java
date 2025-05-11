@@ -29,10 +29,10 @@ public class FakeService {
     public void searchByName(String name) {
         List<FakeEntity> fakeEntities = fakeRepository.findAllByName(name);
         if (fakeEntities.isEmpty()) {
-            System.out.println("No matches!");
+            System.out.print("No Matches!");
         }
         else {
-            System.out.println("Found " + fakeEntities.size() + " matches!");
+            System.out.print("Found " + fakeEntities.size() + " matches!");
         }
     }
 

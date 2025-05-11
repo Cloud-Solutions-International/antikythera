@@ -31,6 +31,7 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -147,10 +148,14 @@ public class ControlFlowEvaluator extends Evaluator {
                 resolved = Reflect.variableFactory(resolved.getType().asString());
             }
 
-            if (v.getValue() instanceof List<?>) {
+            if (v.getValue() instanceof List<?> list) {
+                Method m = List.class.getMethod("add", Object.class);
+                m.invoke(list, resolved.getValue());
                 return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
             }
-            if (v.getValue() instanceof Set<?>) {
+            if (v.getValue() instanceof Set<?> set) {
+                Method m = Set.class.getMethod("add", Object.class);
+                m.invoke(set, resolved.getValue());
                 return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
             }
             if (v.getValue() instanceof Map<?,?>) {
