@@ -17,6 +17,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -48,6 +49,16 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
         if (callable.isMethodDeclaration()) {
+            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+                MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
+                Type t = md.getType();
+                List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+                ImportWrapper imp = imports.getLast();
+                String s = imp.getNameAsString();
+                if (s.endsWith("List") || s.endsWith("Collection") || s.endsWith("Set")) {
+
+                }
+            }
             return super.executeCallable(sc, callable);
         }
         else {

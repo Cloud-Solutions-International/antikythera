@@ -38,7 +38,7 @@ public class RestControllerParser extends DepsolvingParser {
     /**
      * Maintain stats of the controllers and methods parsed
      */
-    private final static Stats stats = new Stats();
+    private static final Stats stats = new Stats();
 
     /**
      * Creates a new RestControllerParser

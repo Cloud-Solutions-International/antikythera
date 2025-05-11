@@ -1075,7 +1075,6 @@ public class Evaluator {
     }
 
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
-
         if (callable.isMethodDeclaration()) {
             MethodDeclaration methodDeclaration = callable.asMethodDeclaration();
             Type returnType = methodDeclaration.getType();
