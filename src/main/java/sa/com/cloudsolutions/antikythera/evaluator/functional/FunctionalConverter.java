@@ -15,10 +15,10 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
@@ -50,7 +50,7 @@ public class FunctionalConverter {
         }
 
         LambdaExpr lambda = new LambdaExpr(parameters, body);
-        lambda.setParentNode(methodRef.getParentNode().get());
+        lambda.setParentNode(methodRef.getParentNode().orElseThrow());
         return lambda;
     }
 
@@ -63,8 +63,10 @@ public class FunctionalConverter {
                 pos = i;
             }
         }
-        if (outerScope.getValue() instanceof Evaluator eval) {
-
+        if (outerScope.getValue() instanceof Evaluator) {
+            /*
+             * Deletion candidate
+             */
         }
         else {
             Class<?> clazz = outerScope.getClazz();
@@ -97,21 +99,19 @@ public class FunctionalConverter {
                 call.addArgument(new NameExpr("arg"));
             }
             else {
-                call.setScope(new NameExpr("arg"));
                 CompilationUnit cu = methodRef.findCompilationUnit().orElseThrow();
-                String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeExpr.toString());
-                if (fqn != null) {
-                    CompilationUnit typeCu = AntikytheraRunTime.getCompilationUnit(fqn);
-                    if (typeCu != null) {
-                        Optional<MethodDeclaration> md = typeCu.findFirst(MethodDeclaration.class,
-                                m -> m.getNameAsString().equals(methodRef.getIdentifier()));
-                        if (md.isPresent()) {
-                            for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
-                                call.addArgument(new NameExpr("arg" + i));
-                            }
+                TypeWrapper typeWrapper = AbstractCompiler.findType(cu,typeExpr.toString());
+
+                if (typeWrapper != null && typeWrapper.getType() != null) {
+                    Optional<MethodDeclaration> md = typeWrapper.getType().findFirst(MethodDeclaration.class,
+                            m -> m.getNameAsString().equals(methodRef.getIdentifier()));
+                    if (md.isPresent()) {
+                        for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
+                            call.addArgument(new NameExpr("arg" + i));
                         }
                     }
                 }
+                call.setScope(new NameExpr("arg"));
             }
         }
         return call;
