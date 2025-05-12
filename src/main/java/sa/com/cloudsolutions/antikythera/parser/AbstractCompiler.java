@@ -90,8 +90,6 @@ public class AbstractCompiler {
     protected CompilationUnit cu;
     protected String className;
 
-    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
-
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
             setupParser();
@@ -816,55 +814,43 @@ public class AbstractCompiler {
     }
 
     private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl) {
+        Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+        if (compilationUnit.isEmpty()) {
+            return Optional.empty();
+        }
 
         for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-            Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
-            if (compilationUnit.isPresent()) {
-                String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                if (cu != null) {
-                    TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString()).orElse(null);
+            TypeWrapper wrapper = findType(compilationUnit.get(), extended);
+            if (wrapper != null) {
+                TypeDeclaration<?> p = wrapper.getType();
+                if (p != null) {
                     Optional<Callable> method = findCallableDeclaration(methodCall, p);
                     if (method.isPresent()) {
                         return method;
                     }
                 } else {
-                    ImportWrapper wrapper = findImport(cdecl.findCompilationUnit().orElseThrow(), extended.getNameAsString());
-                    if (wrapper != null && wrapper.isExternal()) {
-                        Optional<Callable> c = findCallableInBinaryCode(wrapper, methodCall);
-                        if (c.isPresent()) {
-                            return c;
-                        }
+                    Optional<Callable> c = findCallableInBinaryCode(wrapper.getClazz(), methodCall);
+                    if (c.isPresent()) {
+                        return c;
                     }
                 }
             }
         }
 
-        return Optional.empty();
+        return findCallableInBinaryCode(Object.class, methodCall);
     }
 
-    private static Optional<Callable> findCallableInBinaryCode(ImportWrapper wrapper, MCEWrapper methodCall) {
-        /*
-         * the extended type is not in the same compilation unit, we will have to
-         * load the class and try to find the method in it.
-         */
-        try {
-            Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
-
-            ReflectionArguments reflectionArguments = new ReflectionArguments(
-                    methodCall.getMethodName(),
-                    methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
-                    methodCall.getArgumentTypesAsClasses()
-            );
-            Method method = Reflect.findAccessibleMethod(clazz, reflectionArguments);
-            if (method != null) {
-                Callable callable = new Callable(method, methodCall);
-                callable.setFoundInClass(clazz);
-                return Optional.of(callable);
-            }
-        } catch (ClassNotFoundException e) {
-            // can ignore this one
-            logger.warn(e.getMessage());
+    private static Optional<Callable> findCallableInBinaryCode(Class<?> clazz, MCEWrapper methodCall) {
+        ReflectionArguments reflectionArguments = new ReflectionArguments(
+                methodCall.getMethodName(),
+                methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
+                methodCall.getArgumentTypesAsClasses()
+        );
+        Method method = Reflect.findAccessibleMethod(clazz, reflectionArguments);
+        if (method != null) {
+            Callable callable = new Callable(method, methodCall);
+            callable.setFoundInClass(clazz);
+            return Optional.of(callable);
         }
         return Optional.empty();
     }
