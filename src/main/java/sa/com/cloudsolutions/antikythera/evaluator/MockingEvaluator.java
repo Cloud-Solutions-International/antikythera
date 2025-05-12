@@ -5,8 +5,10 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
@@ -64,11 +66,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
                 MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
                 Type t = md.getType();
-                List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
-                ImportWrapper imp = imports.getLast();
-                String s = imp.getNameAsString();
-                if (s.endsWith("List") || s.endsWith("Collection") || s.endsWith("Set")) {
-                    return handleRepositoryCollectionHelper(sc, s);
+                if (!t.isPrimitiveType() && !t.isVoidType()) {
+                    List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+                    ImportWrapper imp = imports.getLast();
+                    String s = imp.getNameAsString();
+                    if (s.endsWith("List") || s.endsWith("Collection") || s.endsWith("Set")) {
+                        return handleRepositoryCollectionHelper(sc, s);
+                    }
                 }
             }
             return super.executeCallable(sc, callable);
@@ -327,5 +331,12 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Variable v =  Reflect.variableFactory(collectionTypeName);
         setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
         return v;
+    }
+
+    @Override
+    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
+        /*
+         * no need to bother with setting up fields when you are in the mocking evaluator
+         */
     }
 }
