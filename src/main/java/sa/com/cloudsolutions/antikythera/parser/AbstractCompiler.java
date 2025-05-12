@@ -191,27 +191,43 @@ public class AbstractCompiler {
     }
 
 
-    public static List<TypeWrapper> findTypesInVariable(VariableDeclarator variable) {
+    /**
+     * Finds the types required to fully represent the given variable
+     * @param variable a Node representing either a VariableDeclarator or a Parameter
+     * @return a list of TypeWrappers representing all the types that make up this particular
+     *      variable. An empty list will be returned when type resolution has failed.
+     *      A single item list means this variable does not use generics.
+     */
+    public static List<TypeWrapper> findTypesInVariable(Node variable) {
         Optional<CompilationUnit> cu = variable.findCompilationUnit();
-        if (cu.isPresent()) {
-            if (variable.getType().isClassOrInterfaceType()) {
-                ClassOrInterfaceType type = variable.getType().asClassOrInterfaceType();
-                if (type.getTypeArguments().isPresent()) {
-                    List<TypeWrapper> typeWrappers = new ArrayList<>();
-                    List<Type> args = type.getTypeArguments().orElseThrow();
-                    for (Type arg : args) {
-                        typeWrappers.add(findType(cu.get(), arg));
-                    }
-                    typeWrappers.add(findType(cu.get(), type.getNameAsString()));
-                    return typeWrappers;
+        if (cu.isEmpty()) {
+            return List.of();
+        }
+
+        Type type;
+        if (variable instanceof VariableDeclarator v) {
+            type = v.getType();
+        } else if (variable instanceof Parameter parameter) {
+            type = parameter.getType();
+        } else {
+            return List.of();
+        }
+
+        if (type.isClassOrInterfaceType()) {
+            ClassOrInterfaceType classType = type.asClassOrInterfaceType();
+            if (classType.getTypeArguments().isPresent()) {
+                List<TypeWrapper> typeWrappers = new ArrayList<>();
+                List<Type> args = classType.getTypeArguments().orElseThrow();
+                for (Type arg : args) {
+                    typeWrappers.add(findType(cu.get(), arg));
                 }
-            }
-            TypeWrapper type = findType(cu.get(), variable.getType());
-            if (type != null) {
-                return List.of(type);
+                typeWrappers.add(findType(cu.get(), classType.getNameAsString()));
+                return typeWrappers;
             }
         }
-        return List.of();
+
+        TypeWrapper foundType = findType(cu.get(), type);
+        return foundType != null ? List.of(foundType) : List.of();
     }
 
     /**

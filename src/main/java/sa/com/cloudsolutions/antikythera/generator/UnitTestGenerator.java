@@ -53,6 +53,14 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+/**
+ * Unit test generator.
+ *
+ * The responsibility of deciding what should be mocked and what should not be mocked lies here.
+ * Each class that is marked as autowired will be considered a candidate for mocking. These will
+ * be registered in the mocking registry.
+ */
+
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
     public static final String TEST_NAME_SUFFIX = "AKTest";
@@ -701,51 +709,69 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectAutowiring(CompilationUnit cu, TypeDeclaration<?> decl) {
-        gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX))
-                .ifPresent(t -> {
-                            for (FieldDeclaration fd : decl.getFields()) {
-                                List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                                if (wrappers.isEmpty()) {
-                                    continue;
-                                }
-                                String fullyQualifiedTypeName = wrappers.getLast().getFullyQualifiedName();
-                                if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
-                                    MockingRegistry.markAsMocked(fullyQualifiedTypeName);
-                                    FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                                    field.addAnnotation("Mock");
-                                    ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
-                                    if (wrapper != null) {
-                                        gen.addImport(wrapper.getImport());
-                                    }
-                                }
-                            }
-                        }
-                );
+        Optional<ClassOrInterfaceDeclaration> suite = findSuite(decl);
+        if (suite.isEmpty()) {
+            return;
+        }
+        detectAutoWiringHelper(cu, decl, suite.get());
+    }
+
+    private void detectAutoWiringHelper(CompilationUnit cu, TypeDeclaration<?> decl, ClassOrInterfaceDeclaration t) {
+        for (FieldDeclaration fd : decl.getFields()) {
+            List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
+            if (wrappers.isEmpty()) {
+                continue;
+            }
+            String fullyQualifiedTypeName = wrappers.getLast().getFullyQualifiedName();
+            if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
+                MockingRegistry.markAsMocked(fullyQualifiedTypeName);
+                FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                field.addAnnotation("Mock");
+                ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+                if (wrapper != null) {
+                    gen.addImport(wrapper.getImport());
+                }
+            }
+        }
     }
 
     private void detectConstructorInjection(CompilationUnit cu, TypeDeclaration<?> decl) {
-        gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX))
-                .ifPresent(t -> {
-                            for (ConstructorDeclaration constructor : decl.getConstructors()) {
-                                // Process constructor parameters as autowired fields
-                                for (Parameter param : constructor.getParameters()) {
-                                    String paramType = param.getTypeAsString();
-                                    String paramName = param.getNameAsString();
-                                    String fullyQualifiedType = AbstractCompiler.findFullyQualifiedName(cu, paramType);
+        Optional<ClassOrInterfaceDeclaration> suite = findSuite(decl);
+        if (suite.isEmpty()) {
+            return;
+        }
 
-                                    if (!MockingRegistry.isMockTarget(fullyQualifiedType)) {
-                                        MockingRegistry.markAsMocked(fullyQualifiedType);
-                                        FieldDeclaration field = t.addField(param.getType(), paramName);
-                                        field.addAnnotation("Mock");
-                                        ImportWrapper wrapper = AbstractCompiler.findImport(cu, paramType);
-                                        if (wrapper != null) {
-                                            gen.addImport(wrapper.getImport());
-                                        }
-                                    }
-                                }
-                            }
+        detectConstructorInjectionHelper(cu, decl, suite.get());
+    }
+
+    private void detectConstructorInjectionHelper(CompilationUnit cu, TypeDeclaration<?> decl, ClassOrInterfaceDeclaration suite) {
+        for (ConstructorDeclaration constructor : decl.getConstructors()) {
+            // Process constructor parameters as autowired fields
+            for (Parameter param : constructor.getParameters()) {
+                List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(param);
+                String registryKey = MockingRegistry.generateRegistryKey(wrappers);
+                String paramName = param.getNameAsString();
+
+                if (!MockingRegistry.isMockTarget(registryKey)) {
+                    MockingRegistry.markAsMocked(registryKey);
+                    FieldDeclaration field = suite.addField(param.getType(), paramName);
+                    field.addAnnotation("Mock");
+
+                    for (TypeWrapper wrapper : wrappers) {
+                        ImportWrapper imp = AbstractCompiler.findImport(cu, wrapper.getFullyQualifiedName());
+                        if (imp != null) {
+                            gen.addImport(imp.getImport());
                         }
-                );
+                    }
+                }
+            }
+        }
+    }
+
+    Optional<ClassOrInterfaceDeclaration> findSuite(TypeDeclaration<?> decl) {
+        return gen.findFirst(ClassOrInterfaceDeclaration.class,
+            t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX));
+
     }
 
     @Override
