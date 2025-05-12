@@ -35,6 +35,7 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,15 +105,31 @@ public class MockingRegistry {
      * @return a Variable representing the mocked object
      * @throws ClassNotFoundException if the class cannot be found
      */
+    @SuppressWarnings("unchecked")
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
 
-        String fqn = resolvedTypes.getLast().getFullyQualifiedName();
+        String fqn = resolvedTypes.getFirst().getFullyQualifiedName();
         Variable v;
         if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
-            Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
-            eval.setVariableName(variable.getNameAsString());
-            v = new Variable(eval);
+            if (resolvedTypes.size() == 1) {
+                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
+                eval.setVariableName(variable.getNameAsString());
+                v = new Variable(eval);
+            }
+            else {
+                String collection = resolvedTypes.getLast().getFullyQualifiedName();
+                Variable cv = Reflect.variableFactory(collection);
+                if (collection.equals("java.util.List") || collection.equals("java.util.Set")
+                        || collection.equals("java.util.Collection")) {
+                    Collection<Object> c = (Collection<Object>) cv.getValue();
+                    for (String implementation : AntikytheraRunTime.findImplementations(fqn)) {
+                        Evaluator eval = EvaluatorFactory.createLazily(implementation, MockingEvaluator.class);
+                        c.add(eval);
+                    }
+                }
+                return cv;
+            }
         }
         else {
             String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");

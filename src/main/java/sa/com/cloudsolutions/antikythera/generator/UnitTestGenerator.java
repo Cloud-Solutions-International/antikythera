@@ -109,7 +109,7 @@ public class UnitTestGenerator extends TestGenerator {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
                     fd.getAnnotationByName("Mock").isPresent()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                MockingRegistry.markAsMocked(MockingRegistry.generateRegistryKey(wrappers));
             }
         }
 
@@ -676,7 +676,7 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                MockingRegistry.markAsMocked(MockingRegistry.generateRegistryKey(wrappers));
             }
         }
 
@@ -723,9 +723,9 @@ public class UnitTestGenerator extends TestGenerator {
             if (wrappers.isEmpty()) {
                 continue;
             }
-            String fullyQualifiedTypeName = wrappers.getLast().getFullyQualifiedName();
-            if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
-                MockingRegistry.markAsMocked(fullyQualifiedTypeName);
+            String key = MockingRegistry.generateRegistryKey(wrappers);
+            if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(key)) {
+                MockingRegistry.markAsMocked(key);
                 FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                 field.addAnnotation("Mock");
                 ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
