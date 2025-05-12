@@ -47,6 +47,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -746,15 +747,17 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void detectConstructorInjectionHelper(CompilationUnit cu, TypeDeclaration<?> decl, ClassOrInterfaceDeclaration suite) {
         for (ConstructorDeclaration constructor : decl.getConstructors()) {
-            // Process constructor parameters as autowired fields
+            Map<String, String> paramToFieldMap = mapParamToFields(constructor);
+
             for (Parameter param : constructor.getParameters()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(param);
                 String registryKey = MockingRegistry.generateRegistryKey(wrappers);
                 String paramName = param.getNameAsString();
+                String fieldName = paramToFieldMap.getOrDefault(paramName, paramName);
 
-                if (!MockingRegistry.isMockTarget(registryKey)) {
+                if (!MockingRegistry.isMockTarget(registryKey) && suite.getFieldByName(fieldName).isEmpty()) {
                     MockingRegistry.markAsMocked(registryKey);
-                    FieldDeclaration field = suite.addField(param.getType(), paramName);
+                    FieldDeclaration field = suite.addField(param.getType(), fieldName);
                     field.addAnnotation("Mock");
 
                     for (TypeWrapper wrapper : wrappers) {
@@ -766,6 +769,22 @@ public class UnitTestGenerator extends TestGenerator {
                 }
             }
         }
+    }
+
+    private Map<String, String> mapParamToFields(ConstructorDeclaration constructor) {
+        Map<String, String> paramToFieldMap = new HashMap<>();
+
+        constructor.getBody().findAll(AssignExpr.class).forEach(assignExpr -> {
+            if (assignExpr.getTarget().isFieldAccessExpr()) {
+                String fieldName = assignExpr.getTarget().asFieldAccessExpr().getName().asString();
+                if (assignExpr.getValue().isNameExpr()) {
+                    String paramName = assignExpr.getValue().asNameExpr().getNameAsString();
+                    paramToFieldMap.put(paramName, fieldName);
+                }
+            }
+        });
+
+        return paramToFieldMap;
     }
 
     Optional<ClassOrInterfaceDeclaration> findSuite(TypeDeclaration<?> decl) {
