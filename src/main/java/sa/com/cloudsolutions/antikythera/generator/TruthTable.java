@@ -453,12 +453,12 @@ public class TruthTable {
                         maxValue = Math.max(maxValue, value + 1);
                     }
                 }
-            } else if (expr instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
+            } else if (expr instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL) &&
+                    !methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()
+            ) {
                 // Check equals method arguments for integer literals
-                if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
-                    int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
-                    maxValue = Math.max(maxValue, value + 1);
-                }
+                int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
+                maxValue = Math.max(maxValue, value + 1);
             }
         }
         return maxValue;

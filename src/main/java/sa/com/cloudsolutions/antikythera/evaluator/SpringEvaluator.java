@@ -277,6 +277,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     @Override
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
+        super.setupParameters(md);
         NodeList<Parameter> parameters = md.getParameters();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
@@ -292,12 +293,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param p the parameter in question.
      * @throws ReflectiveOperationException if a reflection operation fails
      */
-    @Override
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
-        Variable va = AntikytheraRunTime.pop();
-        md.getBody().ifPresent(body ->
-                setLocal(body, p.getNameAsString(), va)
-        );
+        Variable va = getValue(md.getBody().orElseThrow(), p.getNameAsString());
 
         if (currentConditional != null ) {
             if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
@@ -573,9 +570,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     @Override
     void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(field);
-
-        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, variableDeclarator.getTypeAsString());
-        if (resolvedClass != null) {
+        if (!wrappers.isEmpty()) {
+            String resolvedClass = wrappers.getFirst().getFullyQualifiedName();
             Variable v = autoWire(variableDeclarator, wrappers);
             if (v == null) {
                 /*
@@ -592,8 +588,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 fields.put(variableDeclarator.getNameAsString(), v);
                 return;
             }

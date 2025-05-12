@@ -1379,27 +1379,23 @@ public class Evaluator {
         return null;
     }
 
+
+    /**
+     * Copies the parameters from the stack into the local variable space of the method.
+     *
+     * @param md the method declaration into whose variable space this parameter will be copied
+     * @throws ReflectiveOperationException is not really thrown here, but the subclasses might.
+     */
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         NodeList<Parameter> parameters = md.getParameters();
 
         for (int i = parameters.size() - 1; i >= 0; i--) {
-            setupParameter(md, parameters.get(i));
+            Variable va = AntikytheraRunTime.pop();
+            Parameter p = parameters.get(i);
+            md.getBody().ifPresent(body ->
+                    setLocal(body, p.getNameAsString(), va)
+            );
         }
-    }
-
-    /**
-     * Copies a parameter from the stack into the local variable space of the method.
-     *
-     * @param md the method declaration into whose variable space this parameter will be copied
-     * @param p  the parameter in question.
-     * @throws ReflectiveOperationException is not really thrown here, but the subclasses might.
-     */
-    @SuppressWarnings("java:S1130")
-    void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
-        Variable va = AntikytheraRunTime.pop();
-        md.getBody().ifPresent(body ->
-                setLocal(body, p.getNameAsString(), va)
-        );
     }
 
     /**
