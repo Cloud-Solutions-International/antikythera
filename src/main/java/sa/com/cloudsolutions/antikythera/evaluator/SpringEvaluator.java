@@ -511,6 +511,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     Variable autoWire(VariableDeclarator variable, List<TypeWrapper> resolvedTypes) {
+        if (resolvedTypes.isEmpty()) {
+            throw new AntikytheraException("No types found for variable " + variable);
+        }
+
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {

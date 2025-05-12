@@ -3,9 +3,15 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Majority of the tests involving this class are in TestRepository and TestMockingEvaluator
+ */
 public class FakeService {
     @Autowired
     private FakeRepository fakeRepository;
+
+    @Autowired
+    List<IPerson> persons;
 
     @SuppressWarnings("unused")
     public Object saveFakeData() {
@@ -44,6 +50,13 @@ public class FakeService {
         }
         else {
             System.out.print("Not Found!");
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public void autoList() {
+        for (IPerson person : persons) {
+            System.out.print("Person: " + person.getClass());
         }
     }
 }

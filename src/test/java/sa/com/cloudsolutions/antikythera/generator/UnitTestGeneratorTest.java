@@ -253,14 +253,10 @@ class UnitTestGeneratorMoreTests {
         AbstractCompiler.preProcess();
     }
 
-    @BeforeEach
-    void setUp() {
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+    private MethodDeclaration setupMethod(String className, String name) {
+        cu = AntikytheraRunTime.getCompilationUnit(className);
         unitTestGenerator = new UnitTestGenerator(cu);
         unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
-    }
-
-    private MethodDeclaration setupMethod(String name) {
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals(name)).orElseThrow();
         unitTestGenerator.methodUnderTest = md;
@@ -270,7 +266,7 @@ class UnitTestGeneratorMoreTests {
 
     @Test
     void testMockWithMockito1() {
-        MethodDeclaration md = setupMethod("printMap");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","printMap");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
@@ -279,7 +275,7 @@ class UnitTestGeneratorMoreTests {
 
     @Test
     void mockFields() {
-        setupMethod("main");
+        setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);
         unitTestGenerator.mockParameterFields(new Variable(eval),  "bada");
@@ -289,7 +285,7 @@ class UnitTestGeneratorMoreTests {
 
     @Test
     void mockWithEvaluator() {
-        MethodDeclaration md = setupMethod("switchCase1");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","switchCase1");
         Type t = new ClassOrInterfaceType().setName("Person");
         Parameter p = new Parameter(t, "person");
         md.getParameters().add(p);
@@ -302,7 +298,7 @@ class UnitTestGeneratorMoreTests {
 
     @Test
     void testMockWithMockito2() {
-        MethodDeclaration md = setupMethod("main");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
