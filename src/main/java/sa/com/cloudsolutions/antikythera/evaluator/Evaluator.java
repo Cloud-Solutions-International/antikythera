@@ -944,7 +944,7 @@ public class Evaluator {
         };
     }
 
-    private Variable resolveExpression(NameExpr expr) {
+    protected Variable resolveExpression(NameExpr expr) {
         if (expr.getNameAsString().equals("System")) {
             Variable variable = new Variable(System.class);
             variable.setClazz(System.class);
@@ -974,12 +974,15 @@ public class Evaluator {
     }
 
     protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
-        Variable v;
-        Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
-        eval.setupFields();
-        eval.initializeFields();
-        v = new Variable(eval);
-        return v;
+        if (wrapper.getType() != null) {
+            Variable v;
+            Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
+            eval.setupFields();
+            eval.initializeFields();
+            v = new Variable(eval);
+            return v;
+        }
+        return null;
     }
 
     public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {

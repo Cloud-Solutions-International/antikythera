@@ -6,6 +6,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -164,10 +165,15 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
 
     @Override
     protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
-        if (wrapper.getType() == null) {
-            return new Variable(this);
+        if (wrapper.getType() != null) {
+            Variable v;
+            Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), Evaluator.class);
+            eval.setupFields();
+            eval.initializeFields();
+            v = new Variable(eval);
+            return v;
         }
-        return super.resolveExpressionHelper(wrapper);
+        return null;
     }
 
     @Override
@@ -178,5 +184,15 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
             return EvaluatorFactory.create(wrapper.getFullyQualifiedName(), enclosure);
         }
         return o;
+    }
+
+    @Override
+    protected Variable resolveExpression(NameExpr expr) {
+        Variable v = super.resolveExpression(expr);
+        if (v == null) {
+            TypeWrapper wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), expr.getNameAsString());
+            return resolveExpressionHelper(wrapper);
+        }
+        return v;
     }
 }
