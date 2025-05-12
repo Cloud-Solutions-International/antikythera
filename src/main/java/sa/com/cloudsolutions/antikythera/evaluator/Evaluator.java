@@ -925,7 +925,7 @@ public class Evaluator {
     }
 
     @SuppressWarnings("java:S106")
-    private Object findScopeType(String s) {
+    protected Object findScopeType(String s) {
         return switch (s) {
             case "System.out" -> System.out;
             case "System.err" -> System.err;

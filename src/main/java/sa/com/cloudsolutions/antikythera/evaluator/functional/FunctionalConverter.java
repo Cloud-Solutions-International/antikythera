@@ -106,12 +106,25 @@ public class FunctionalConverter {
                     Optional<MethodDeclaration> md = typeWrapper.getType().findFirst(MethodDeclaration.class,
                             m -> m.getNameAsString().equals(methodRef.getIdentifier()));
                     if (md.isPresent()) {
-                        for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
-                            call.addArgument(new NameExpr("arg" + i));
+                        if (md.get().isStatic()) {
+                            if (md.get().getParameters().size() == 1) {
+                                call.addArgument(new NameExpr("arg"));
+                            }
+                            else {
+                                for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
+                                    call.addArgument(new NameExpr("arg" + i));
+                                }
+                            }
+                            call.setScope(methodRef.getScope());
+                        }
+                        else {
+                            for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
+                                call.addArgument(new NameExpr("arg" + i));
+                            }
+                            call.setScope(new NameExpr("arg"));
                         }
                     }
                 }
-                call.setScope(new NameExpr("arg"));
             }
         }
         return call;

@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.Map;
 import java.util.Optional;
@@ -167,5 +168,15 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
             return new Variable(this);
         }
         return super.resolveExpressionHelper(wrapper);
+    }
+
+    @Override
+    protected Object findScopeType(String s) {
+        Object o = super.findScopeType(s);
+        if (o == null) {
+            TypeWrapper wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), s);
+            return EvaluatorFactory.create(wrapper.getFullyQualifiedName(), enclosure);
+        }
+        return o;
     }
 }

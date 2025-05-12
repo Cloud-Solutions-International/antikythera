@@ -111,6 +111,7 @@ public class Functional {
             .map(Functional::increment)
             .collect(Collectors.toList());
         incrementedNumbers.forEach(System.out::print);
+        System.out.println();
     }
 
     @SuppressWarnings("java:S1864")
@@ -120,6 +121,7 @@ public class Functional {
                 .map(i -> Functional.increment(i))
                 .collect(Collectors.toList());
         incrementedNumbers.forEach(System.out::print);
+        System.out.println();
     }
 
     private static int increment(int n) {
