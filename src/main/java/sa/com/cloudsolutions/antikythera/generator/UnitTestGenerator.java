@@ -723,9 +723,9 @@ public class UnitTestGenerator extends TestGenerator {
             if (wrappers.isEmpty()) {
                 continue;
             }
-            String fullyQualifiedTypeName = wrappers.getLast().getFullyQualifiedName();
-            if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(fullyQualifiedTypeName)) {
-                MockingRegistry.markAsMocked(fullyQualifiedTypeName);
+            String registryKey = MockingRegistry.generateRegistryKey(wrappers);
+            if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(registryKey)) {
+                MockingRegistry.markAsMocked(registryKey);
                 FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                 field.addAnnotation("Mock");
                 ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());

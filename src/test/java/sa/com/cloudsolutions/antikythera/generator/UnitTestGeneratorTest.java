@@ -35,6 +35,7 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -246,6 +247,10 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     CompilationUnit cu;
     UnitTestGenerator unitTestGenerator;
 
+    @BeforeEach
+    void setup() {
+        System.setOut(new PrintStream(outContent));
+    }
 
     @BeforeAll
     static void beforeClass() throws IOException {
@@ -275,8 +280,9 @@ class UnitTestGeneratorMoreTests extends TestHelper {
 
         Evaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
         evaluator.visit(md);
-        assertTrue("bada".equals(outContent.toString()));
-        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        assertTrue(outContent.toString().contains("Person: class sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator"));
+        assertTrue(unitTestGenerator.gen.toString().contains("@Mock()\n" +
+                "    List<IPerson> persons;"));
     }
 
     @Test

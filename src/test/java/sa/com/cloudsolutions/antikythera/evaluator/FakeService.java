@@ -55,6 +55,7 @@ public class FakeService {
 
     @SuppressWarnings("unused")
     public void autoList() {
+        System.out.println("VB");
         for (IPerson person : persons) {
             System.out.print("Person: " + person.getClass());
         }

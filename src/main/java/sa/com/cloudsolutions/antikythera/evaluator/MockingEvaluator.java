@@ -15,11 +15,13 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,12 +39,21 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     private Variable mockExecution(Method m, String returnType) {
-        Variable result = Reflect.variableFactory(returnType);
-        if (result != null) {
-            MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(m.getName(), returnType, variableName);
-            methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(m));
-
-            return result;
+        if (variableName != null) {
+            Variable result = Reflect.variableFactory(returnType);
+            if (result != null) {
+                MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(m.getName(), returnType, variableName);
+                methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(m));
+                return result;
+            }
+        }
+        if (m.getDeclaringClass().equals(Object.class)) {
+            try {
+                Object o = m.invoke(this);
+                return new Variable(o);
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
+            }
         }
         return null;
     }
