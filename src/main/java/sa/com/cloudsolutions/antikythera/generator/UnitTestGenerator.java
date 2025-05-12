@@ -99,7 +99,7 @@ public class UnitTestGenerator extends TestGenerator {
         for (FieldDeclaration fd : t.getFields()) {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
                     fd.getAnnotationByName("Mock").isPresent()) {
-                List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+                List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariables(fd.getVariable(0));
                 MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
             }
         }
@@ -666,7 +666,7 @@ public class UnitTestGenerator extends TestGenerator {
     public void mockFields() {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
-                List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+                List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariables(fd.getVariable(0));
                 MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
             }
         }
@@ -704,7 +704,7 @@ public class UnitTestGenerator extends TestGenerator {
         gen.findFirst(TypeDeclaration.class, t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX))
                 .ifPresent(t -> {
                             for (FieldDeclaration fd : decl.getFields()) {
-                                List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+                                List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariables(fd.getVariable(0));
                                 if (wrappers.isEmpty()) {
                                     continue;
                                 }

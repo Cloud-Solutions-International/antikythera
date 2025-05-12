@@ -110,7 +110,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         String shortName = t.getNameAsString();
-        List<TypeWrapper> wrappers =  AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> wrappers =  AbstractCompiler.findTypesInVariables(variable);
         if (wrappers.isEmpty()) {
             return;
         }
@@ -549,7 +549,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
-        List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0));
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariables(fd.getVariable(0));
         Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);

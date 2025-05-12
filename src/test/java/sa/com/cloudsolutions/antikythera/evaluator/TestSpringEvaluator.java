@@ -175,7 +175,7 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        List<TypeWrapper> wrappers = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariables(variable);
         MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
 
         SpringEvaluator evaluator = EvaluatorFactory.create(sample, SpringEvaluator.class);

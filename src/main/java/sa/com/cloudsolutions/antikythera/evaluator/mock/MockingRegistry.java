@@ -90,7 +90,7 @@ public class MockingRegistry {
      * @throws ClassNotFoundException if the class cannot be found
      */
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
-        List<TypeWrapper> resolvedTypes = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariables(variable);
 
         String fqn = resolvedTypes.getLast().getFullyQualifiedName();
         Variable v;

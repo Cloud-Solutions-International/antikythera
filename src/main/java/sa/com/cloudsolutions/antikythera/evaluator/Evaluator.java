@@ -1203,7 +1203,7 @@ public class Evaluator {
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        List<TypeWrapper> resolvedTypes = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariables(variable);
         if (resolvedTypes.size() == 1) {
             if (MockingRegistry.isMockTarget(resolvedTypes.getFirst().getFullyQualifiedName())) {
                 return MockingRegistry.mockIt(variable);
