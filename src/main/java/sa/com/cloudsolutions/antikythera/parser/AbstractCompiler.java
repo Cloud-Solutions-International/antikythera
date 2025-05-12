@@ -207,6 +207,8 @@ public class AbstractCompiler {
         Type type;
         if (variable instanceof VariableDeclarator v) {
             type = v.getType();
+        } else if (variable instanceof FieldDeclaration f) {
+            type = f.getElementType();
         } else if (variable instanceof Parameter parameter) {
             type = parameter.getType();
         } else {
