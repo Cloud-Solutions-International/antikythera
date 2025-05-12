@@ -104,6 +104,19 @@ public class Functional {
         System.out.println(ageToName);
     }
 
+    @SuppressWarnings("java:S1864")
+    private void staticMethodReference() {
+        List<Integer> shorty = List.of(1,2,3);
+        List<Integer> incrementedNumbers = shorty.stream()
+            .map(Functional::increment)
+            .collect(Collectors.toList());
+        incrementedNumbers.forEach(System.out::print);
+    }
+
+    private static int increment(int n) {
+        return n + 1;
+    }
+
     private void nestedStream() {
         numbers.forEach(n -> {
             int x = n;
@@ -132,6 +145,7 @@ public class Functional {
         f.people7();
         f.maps1();
         f.nestedStream();
+        f.staticMethodReference();
     }
 
 }
