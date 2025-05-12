@@ -23,8 +23,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -823,16 +821,12 @@ public class AbstractCompiler {
             TypeWrapper wrapper = findType(compilationUnit.get(), extended);
             if (wrapper != null) {
                 TypeDeclaration<?> p = wrapper.getType();
-                if (p != null) {
-                    Optional<Callable> method = findCallableDeclaration(methodCall, p);
-                    if (method.isPresent()) {
-                        return method;
-                    }
-                } else {
-                    Optional<Callable> c = findCallableInBinaryCode(wrapper.getClazz(), methodCall);
-                    if (c.isPresent()) {
-                        return c;
-                    }
+                Optional<Callable> method = (p != null)
+                        ? findCallableDeclaration(methodCall, p)
+                        : findCallableInBinaryCode(wrapper.getClazz(), methodCall);
+
+                if (method.isPresent()) {
+                    return method;
                 }
             }
         }
