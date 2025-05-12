@@ -510,22 +510,23 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         generators.add(generator);
     }
 
-    Variable autoWire(VariableDeclarator variable, String resolvedClass) {
+    Variable autoWire(VariableDeclarator variable, List<TypeWrapper> resolvedTypes) {
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
-            Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
+            String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+            Variable v = AntikytheraRunTime.getAutoWire(registryKey);
             if (v == null) {
-                if (MockingRegistry.isMockTarget(resolvedClass)) {
+                if (MockingRegistry.isMockTarget(registryKey)) {
                     try {
                         v = MockingRegistry.mockIt(variable);
                     } catch (ReflectiveOperationException e) {
                         throw new AntikytheraException(e);
                     }
-                } else if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
-                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
+                } else if (AntikytheraRunTime.getCompilationUnit(resolvedTypes.getLast().getFullyQualifiedName()) != null) {
+                    v = wireFromSourceCode(variable.getType(), resolvedTypes.getLast().getFullyQualifiedName(), fd);
                 } else {
-                    v = wireFromByteCode(resolvedClass);
+                    v = wireFromByteCode(resolvedTypes.getLast().getFullyQualifiedName());
                 }
             }
             fields.put(variable.getNameAsString(), v);
@@ -567,9 +568,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     @Override
     void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(field);
+
         String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, variableDeclarator.getTypeAsString());
         if (resolvedClass != null) {
-            Variable v = autoWire(variableDeclarator, resolvedClass);
+            Variable v = autoWire(variableDeclarator, wrappers);
             if (v == null) {
                 /*
                  * Try to substitute an implementation for the interface.
@@ -579,7 +582,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     String name = AbstractCompiler.findFullyQualifiedName(targetCu, variableDeclarator.getType().asString());
 
                     for (String impl : AntikytheraRunTime.findImplementations(name)) {
-                        v = autoWire(variableDeclarator, impl);
+                        v = autoWire(variableDeclarator, wrappers);
                         if (v != null) {
                             return;
                         }
