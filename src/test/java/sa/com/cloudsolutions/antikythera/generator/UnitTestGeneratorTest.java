@@ -9,7 +9,6 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -26,6 +25,8 @@ import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -206,7 +207,7 @@ class UnitTestGeneratorTest {
 
         // Verify that the whenThen list contains an expression for Optional.empty()
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing empty Optional");
-        String whenThenString = TestGenerator.whenThen.get(0).toString();
+        String whenThenString = TestGenerator.whenThen.getFirst().toString();
         assertTrue(whenThenString.contains("Optional.empty()"), 
                 "The whenThen expression should contain 'Optional.empty()' but was: " + whenThenString);
 
@@ -235,13 +236,13 @@ class UnitTestGeneratorTest {
 
         // Verify that the whenThen list contains an expression for Optional.of(new TestClass())
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing Optional with Evaluator");
-        whenThenString = TestGenerator.whenThen.get(0).toString();
+        whenThenString = TestGenerator.whenThen.getFirst().toString();
         assertTrue(whenThenString.contains("Optional.of(new TestClass())"), 
                 "The whenThen expression should contain 'Optional.of(new TestClass())' but was: " + whenThenString);
     }
 }
 
-class UnitTestGeneratorMoreTests {
+class UnitTestGeneratorMoreTests extends TestHelper {
     CompilationUnit cu;
     UnitTestGenerator unitTestGenerator;
 
@@ -261,7 +262,21 @@ class UnitTestGeneratorMoreTests {
                 m -> m.getNameAsString().equals(name)).orElseThrow();
         unitTestGenerator.methodUnderTest = md;
         unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        unitTestGenerator.setAsserter(new JunitAsserter());
         return md;
+    }
+
+    @Test
+    void testAutowiredCollection() throws ReflectiveOperationException {
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","autoList");
+
+        unitTestGenerator.setupImports();
+        unitTestGenerator.addBeforeClass();
+
+        Evaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator.visit(md);
+        assertTrue("bada".equals(outContent.toString()));
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito"));
     }
 
     @Test
@@ -347,21 +362,6 @@ class VariableInitializationModifierTest {
 
         assertTrue(method.toString().contains("String test = \"new\""));
         assertTrue(method.toString().contains("int other = 5"));
-    }
-
-    @Test
-    void shouldNotModifyWhenVariableNotFound() {
-        String code = """
-            public void testMethod() {
-                String existingVar = "old";
-            }
-            """;
-        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
-        IntegerLiteralExpr newValue = new IntegerLiteralExpr("42");
-
-        UnitTestGenerator.replaceInitializer(method, "nonexistentVar", newValue);
-
-        assertEquals(method.toString(), method.toString());
     }
 
     @Test

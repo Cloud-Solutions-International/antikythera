@@ -76,6 +76,7 @@ class TestConditional extends TestHelper {
             "conditional6, ZERO!Three!Three!Two!Two!One!","conditional7, ZERO!Three!Three!Two!Two!One!",
             "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!",
             "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
+            "animalFarm, Some animals are more equal!All animals are equal!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
