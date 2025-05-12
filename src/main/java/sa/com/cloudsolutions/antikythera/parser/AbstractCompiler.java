@@ -509,10 +509,10 @@ public class AbstractCompiler {
             }
         }
 
-        return detectedTypeWithClassLoaders(cu, className);
+        return detectTypeWithClassLoaders(cu, className);
     }
 
-    private static TypeWrapper detectedTypeWithClassLoaders(CompilationUnit cu, String className) {
+    private static TypeWrapper detectTypeWithClassLoaders(CompilationUnit cu, String className) {
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String tentativeName = packageName.isEmpty() ? className : packageName + "." + className;
         Optional<TypeDeclaration<?>> t = AntikytheraRunTime.getTypeDeclaration(tentativeName);
@@ -830,7 +830,9 @@ public class AbstractCompiler {
                 }
             }
         }
-
+        if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
+            return Optional.empty();
+        }
         return findCallableInBinaryCode(Object.class, methodCall);
     }
 

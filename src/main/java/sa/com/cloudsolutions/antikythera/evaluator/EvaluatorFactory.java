@@ -73,5 +73,13 @@ public class EvaluatorFactory {
         public Evaluator getEnclosure() {
             return enclosure;
         }
+
+        @Override
+        public String toString() {
+            if (className != null) {
+                return className;
+            }
+            return super.toString();
+        }
     }
 }
