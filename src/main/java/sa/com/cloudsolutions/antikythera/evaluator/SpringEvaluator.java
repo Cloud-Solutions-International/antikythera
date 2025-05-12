@@ -574,18 +574,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             String resolvedClass = wrappers.getFirst().getFullyQualifiedName();
             Variable v = autoWire(variableDeclarator, wrappers);
             if (v == null) {
-                /*
-                 * Try to substitute an implementation for the interface.
-                 */
-                CompilationUnit targetCu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                if (targetCu != null) {
-                    String name = AbstractCompiler.findFullyQualifiedName(targetCu, variableDeclarator.getType().asString());
-
-                    for (String impl : AntikytheraRunTime.findImplementations(name)) {
-                        v = autoWire(variableDeclarator, wrappers);
-                        if (v != null) {
-                            return;
-                        }
+                for (String impl : AntikytheraRunTime.findImplementations(resolvedClass)) {
+                    v = AntikytheraRunTime.getAutoWire(impl);
+                    if (v != null) {
+                        return;
                     }
                 }
             } else {
