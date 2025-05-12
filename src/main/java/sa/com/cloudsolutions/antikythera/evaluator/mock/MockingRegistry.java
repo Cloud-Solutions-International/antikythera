@@ -64,6 +64,21 @@ public class MockingRegistry {
         return mockedFields.containsKey(className);
     }
 
+    public static String generateRegistryKey(List<TypeWrapper> resolvedTypes) {
+        if (resolvedTypes.size() == 1) {
+            return resolvedTypes.getFirst().getFullyQualifiedName();
+        }
+
+        StringBuilder joinedNames = new StringBuilder();
+        for (int i = 0; i < resolvedTypes.size(); i++) {
+            joinedNames.append(resolvedTypes.get(i).getFullyQualifiedName());
+            if (i < resolvedTypes.size() - 1) {
+                joinedNames.append(":");
+            }
+        }
+        return joinedNames.toString();
+    }
+
     public static void reset() {
         mockedFields.clear();
     }
@@ -90,7 +105,7 @@ public class MockingRegistry {
      * @throws ClassNotFoundException if the class cannot be found
      */
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
-        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariables(variable);
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
 
         String fqn = resolvedTypes.getLast().getFullyQualifiedName();
         Variable v;

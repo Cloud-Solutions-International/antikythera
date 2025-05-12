@@ -1203,24 +1203,13 @@ public class Evaluator {
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
-        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariables(variable);
-        if (resolvedTypes.size() == 1) {
-            if (MockingRegistry.isMockTarget(resolvedTypes.getFirst().getFullyQualifiedName())) {
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
+        String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+
+        if (!registryKey.isEmpty() && MockingRegistry.isMockTarget(registryKey)) {
                 return MockingRegistry.mockIt(variable);
-            }
         }
-        else {
-            StringBuilder joinedNames = new StringBuilder();
-            for (int i = 0; i < resolvedTypes.size(); i++) {
-                joinedNames.append(resolvedTypes.get(i).getFullyQualifiedName());
-                if (i < resolvedTypes.size() - 1) {
-                    joinedNames.append(":");
-                }
-            }
-            if (MockingRegistry.isMockTarget(joinedNames.toString())) {
-                return MockingRegistry.mockIt(variable);
-            }
-        }
+
         if (variable.getType().isClassOrInterfaceType()) {
             return resolveNonPrimitiveVariable(variable);
         } else {

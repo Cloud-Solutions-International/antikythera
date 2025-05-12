@@ -191,7 +191,7 @@ public class AbstractCompiler {
     }
 
 
-    public static List<TypeWrapper> findTypesInVariables(VariableDeclarator variable) {
+    public static List<TypeWrapper> findTypesInVariable(VariableDeclarator variable) {
         Optional<CompilationUnit> cu = variable.findCompilationUnit();
         if (cu.isPresent()) {
             if (variable.getType().isClassOrInterfaceType()) {
