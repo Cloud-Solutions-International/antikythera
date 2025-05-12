@@ -742,29 +742,29 @@ public class UnitTestGenerator extends TestGenerator {
             return;
         }
 
-        detectConstructorInjectionHelper(cu, decl, suite.get());
+        ClassOrInterfaceDeclaration testClass = suite.get();
+        for (ConstructorDeclaration constructor : decl.getConstructors()) {
+            detectConstructorInjectionHelper(cu, testClass, constructor);
+        }
     }
 
-    private void detectConstructorInjectionHelper(CompilationUnit cu, TypeDeclaration<?> decl, ClassOrInterfaceDeclaration suite) {
-        for (ConstructorDeclaration constructor : decl.getConstructors()) {
-            Map<String, String> paramToFieldMap = mapParamToFields(constructor);
+    private void detectConstructorInjectionHelper(CompilationUnit cu, ClassOrInterfaceDeclaration suite, ConstructorDeclaration constructor) {
+        Map<String, String> paramToFieldMap = mapParamToFields(constructor);
+        for (Parameter param : constructor.getParameters()) {
+            List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(param);
+            String registryKey = MockingRegistry.generateRegistryKey(wrappers);
+            String paramName = param.getNameAsString();
+            String fieldName = paramToFieldMap.getOrDefault(paramName, paramName);
 
-            for (Parameter param : constructor.getParameters()) {
-                List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(param);
-                String registryKey = MockingRegistry.generateRegistryKey(wrappers);
-                String paramName = param.getNameAsString();
-                String fieldName = paramToFieldMap.getOrDefault(paramName, paramName);
+            if (!MockingRegistry.isMockTarget(registryKey) && suite.getFieldByName(fieldName).isEmpty()) {
+                MockingRegistry.markAsMocked(registryKey);
+                FieldDeclaration field = suite.addField(param.getType(), fieldName);
+                field.addAnnotation("Mock");
 
-                if (!MockingRegistry.isMockTarget(registryKey) && suite.getFieldByName(fieldName).isEmpty()) {
-                    MockingRegistry.markAsMocked(registryKey);
-                    FieldDeclaration field = suite.addField(param.getType(), fieldName);
-                    field.addAnnotation("Mock");
-
-                    for (TypeWrapper wrapper : wrappers) {
-                        ImportWrapper imp = AbstractCompiler.findImport(cu, wrapper.getFullyQualifiedName());
-                        if (imp != null) {
-                            gen.addImport(imp.getImport());
-                        }
+                for (TypeWrapper wrapper : wrappers) {
+                    ImportWrapper imp = AbstractCompiler.findImport(cu, wrapper.getFullyQualifiedName());
+                    if (imp != null) {
+                        gen.addImport(imp.getImport());
                     }
                 }
             }
