@@ -964,16 +964,22 @@ public class Evaluator {
                         v = new Variable(clazz);
                         v.setClazz(clazz);
                     } else {
-                        Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
-                        eval.setupFields();
-                        eval.initializeFields();
-                        v = new Variable(eval);
+                        v = resolveExpressionHelper(wrapper);
                     }
                 }
             }
 
             return v;
         }
+    }
+
+    protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
+        Variable v;
+        Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
+        eval.setupFields();
+        eval.initializeFields();
+        v = new Variable(eval);
+        return v;
     }
 
     public Variable evaluateMethodCall(Scope scope) throws ReflectiveOperationException {

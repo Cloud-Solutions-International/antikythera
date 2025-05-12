@@ -17,6 +17,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.util.Map;
 import java.util.Optional;
@@ -66,7 +67,6 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
 
         FPEvaluator<?> fp = createEvaluator(md);
         fp.enclosure = enclosure;
-
         fp.expr = lambda;
         Variable v = new Variable(fp);
         v.setType(fp.getType());
@@ -160,4 +160,12 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     }
 
     public abstract Type getType();
+
+    @Override
+    protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
+        if (wrapper.getType() == null) {
+            return new Variable(this);
+        }
+        return super.resolveExpressionHelper(wrapper);
+    }
 }

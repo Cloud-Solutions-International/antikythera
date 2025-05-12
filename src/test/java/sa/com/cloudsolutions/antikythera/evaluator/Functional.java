@@ -105,11 +105,20 @@ public class Functional {
     }
 
     @SuppressWarnings("java:S1864")
-    private void staticMethodReference() {
+    private void staticMethodReference1() {
         List<Integer> shorty = List.of(1,2,3);
         List<Integer> incrementedNumbers = shorty.stream()
             .map(Functional::increment)
             .collect(Collectors.toList());
+        incrementedNumbers.forEach(System.out::print);
+    }
+
+    @SuppressWarnings("java:S1864")
+    private void staticMethodReference2() {
+        List<Integer> shorty = List.of(1,2,3);
+        List<Integer> incrementedNumbers = shorty.stream()
+                .map(i -> Functional.increment(i))
+                .collect(Collectors.toList());
         incrementedNumbers.forEach(System.out::print);
     }
 
@@ -145,7 +154,7 @@ public class Functional {
         f.people7();
         f.maps1();
         f.nestedStream();
-        f.staticMethodReference();
+        f.staticMethodReference1();
     }
 
 }
