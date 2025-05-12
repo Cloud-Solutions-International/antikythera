@@ -495,6 +495,10 @@ public class AbstractCompiler {
             }
         }
 
+        return detectedTypeWithClassLoaders(cu, className);
+    }
+
+    private static TypeWrapper detectedTypeWithClassLoaders(CompilationUnit cu, String className) {
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String tentativeName = packageName.isEmpty() ? className : packageName + "." + className;
         Optional<TypeDeclaration<?>> t = AntikytheraRunTime.getTypeDeclaration(tentativeName);
