@@ -236,7 +236,7 @@ public class UnitTestGenerator extends TestGenerator {
         String invocation = invokeMethod();
 
         addDependencies();
-        setupImports();
+        setupAsserterImports();
 
         if (response.getException() == null) {
             getBody(testMethod).addStatement(invocation);
@@ -695,7 +695,6 @@ public class UnitTestGenerator extends TestGenerator {
         addImport(new ImportDeclaration("org.junit.jupiter.api.BeforeEach", false, false));
         addImport(new ImportDeclaration("org.mockito.Mock", false, false));
         addImport(new ImportDeclaration("org.mockito.Mockito", false, false));
-        addImport(new ImportDeclaration("java.util.Optional", false, false));
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
@@ -741,7 +740,7 @@ public class UnitTestGenerator extends TestGenerator {
                 field.addAnnotation("Mock");
                 ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
                 if (wrapper != null) {
-                    gen.addImport(wrapper.getImport());
+                    addImport(wrapper.getImport());
                 }
             }
         }
@@ -777,7 +776,7 @@ public class UnitTestGenerator extends TestGenerator {
             for (TypeWrapper wrapper : wrappers) {
                 ImportWrapper imp = AbstractCompiler.findImport(cu, wrapper.getFullyQualifiedName());
                 if (imp != null) {
-                    gen.addImport(imp.getImport());
+                    addImport(imp.getImport());
                 }
             }
         }

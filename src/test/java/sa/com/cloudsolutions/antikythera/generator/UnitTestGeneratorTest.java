@@ -279,7 +279,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     void testAutowiredCollection() throws ReflectiveOperationException {
         MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","autoList");
 
-        unitTestGenerator.setupImports();
+        unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
         Evaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);

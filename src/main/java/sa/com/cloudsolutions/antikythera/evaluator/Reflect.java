@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
@@ -23,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -322,6 +324,7 @@ public class Reflect {
                     expr.setArguments(NodeList.nodeList());
                 }
                 v.setInitializer(expr);
+                TestGenerator.addImport(new ImportDeclaration(typeName, false, false));
             }
         }
         if (v.getType() == null) {

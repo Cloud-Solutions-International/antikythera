@@ -162,7 +162,7 @@ public abstract class TestGenerator {
         this.asserter = asserter;
     }
 
-    public void setupImports() {
+    public void setupAsserterImports() {
         asserter.setupImports(gen);
     }
 

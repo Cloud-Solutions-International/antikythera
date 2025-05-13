@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -13,6 +14,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -25,6 +27,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -148,15 +151,19 @@ public class ControlFlowEvaluator extends Evaluator {
                 resolved = Reflect.variableFactory(resolved.getType().asString());
             }
 
+            Expression initializer = resolved.getInitializer();
+            if (initializer instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
+                TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
+            }
             if (v.getValue() instanceof List<?> list) {
                 Method m = List.class.getMethod("add", Object.class);
                 m.invoke(list, resolved.getValue());
-                return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
+                return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer));
             }
             if (v.getValue() instanceof Set<?> set) {
                 Method m = Set.class.getMethod("add", Object.class);
                 m.invoke(set, resolved.getValue());
-                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
+                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer));
             }
             if (v.getValue() instanceof Map<?,?>) {
                 if (typeArgs.size() == 1) {
@@ -170,7 +177,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
                 return StaticJavaParser.parseExpression(
                         String.format("Map.of(%s, %s)",
-                                resolved.getInitializer(), resolved2.getInitializer()));
+                                initializer, resolved2.getInitializer()));
             }
 
         } catch (ReflectiveOperationException|IOException e) {
