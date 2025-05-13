@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Majority of the tests involving this class are in TestRepository and TestMockingEvaluator
@@ -58,6 +59,19 @@ public class FakeService {
         System.out.println("VB");
         for (IPerson person : persons) {
             System.out.print("Person: " + person.getClass());
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public Integer castingHelper(List<Integer> l, Set<Integer> s) {
+        Optional<Integer> found = fakeRepository.findByListAndSet(l, s);
+        if (found.isPresent()) {
+            System.out.print("Found!");
+            return 1;
+        }
+        else {
+            System.out.print("Not found!");
+            return 0;
         }
     }
 }

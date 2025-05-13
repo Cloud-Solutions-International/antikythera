@@ -1,5 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -14,15 +17,18 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
@@ -260,11 +266,21 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         System.setOut(new PrintStream(outContent));
     }
 
+    @AfterEach
+    void after() {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.DEBUG);
+
+    }
+
     @BeforeAll
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+        AntikytheraRunTime.reset();
+        Branching.clear();
+        MockingRegistry.reset();
     }
 
     private MethodDeclaration setupMethod(String className, String name) {
@@ -277,6 +293,30 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
         unitTestGenerator.setAsserter(new JunitAsserter());
         return md;
+    }
+
+    @Test
+    void integrationTestCasting() throws ReflectiveOperationException {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
+
+
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","castingHelper");
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
+        unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
+
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator.setOnTest(true);
+        evaluator.addGenerator(unitTestGenerator);
+        evaluator.setArgumentGenerator(argumentGenerator);
+        evaluator.visit(md);
+        assertTrue(outContent.toString().contains("Found!Not found!"));
+        String s = unitTestGenerator.gen.toString();
+        assertTrue(s.contains("(List<Integer>)"));
+        assertTrue(s.contains("(Set<Integer>)"));
+        assertFalse(s.contains("Optional.empty()"));
     }
 
     @Test

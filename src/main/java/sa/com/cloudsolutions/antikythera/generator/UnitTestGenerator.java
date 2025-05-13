@@ -52,7 +52,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 /**
  * Unit test generator.
@@ -84,7 +83,7 @@ public class UnitTestGenerator extends TestGenerator {
         try {
             loadExisting(file);
         } catch (FileNotFoundException e) {
-            logger.warn("Could not find file: {}", filePath);
+            logger.debug("Could not find file: {}", filePath);
             createTestClass(className, packageDecl);
         }
     }
@@ -310,7 +309,7 @@ public class UnitTestGenerator extends TestGenerator {
             TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
         }
         else {
-            logger.warn("Unable to find import for: {}", ct.getNameAsString());
+            logger.debug("Unable to find import for: {}", ct.getNameAsString());
         }
     }
 
