@@ -25,6 +25,7 @@ import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 
@@ -301,9 +302,14 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         MethodCallExpr mce = new MethodCallExpr(methodCall.getNameAsString());
         methodCall.getScope().ifPresent(mce::setScope);
 
-        for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
+        List<Expression> args = new ArrayList<>();
+        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
             Variable v = AntikytheraRunTime.pop();
-            mce.addArgument(MockingRegistry.createMockitoArgument(v.getType().asString()));
+            args.add(MockingRegistry.createMockitoArgument(v.getType().asString()));
+        }
+
+        for (Expression e : args.reversed()) {
+            mce.addArgument(e);
         }
 
         Variable v = (l == null) ? repositoryFullPath(sc, stmt, collectionTypeName)
