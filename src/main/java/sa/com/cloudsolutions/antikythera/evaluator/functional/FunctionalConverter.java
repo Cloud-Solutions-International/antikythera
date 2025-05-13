@@ -103,27 +103,25 @@ public class FunctionalConverter {
                 TypeWrapper typeWrapper = AbstractCompiler.findType(cu,typeExpr.toString());
 
                 if (typeWrapper != null && typeWrapper.getType() != null) {
-                    Optional<MethodDeclaration> md = typeWrapper.getType().findFirst(MethodDeclaration.class,
-                            m -> m.getNameAsString().equals(methodRef.getIdentifier()));
-                    if (md.isPresent()) {
-                        if (md.get().isStatic()) {
-                            if (md.get().getParameters().size() == 1) {
-                                call.addArgument(new NameExpr("arg"));
-                            }
-                            else {
-                                for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
-                                    call.addArgument(new NameExpr("arg" + i));
-                                }
-                            }
-                            call.setScope(methodRef.getScope());
+                    MethodDeclaration md = typeWrapper.getType().getMethodsByName(methodRef.getIdentifier()).getFirst();
+                    if (md.isStatic()) {
+                        if (md.getParameters().size() == 1) {
+                            call.addArgument(new NameExpr("arg"));
                         }
                         else {
-                            for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
+                            for(int i = 0 ; i < md.getParameters().size() ; i++) {
                                 call.addArgument(new NameExpr("arg" + i));
                             }
-                            call.setScope(new NameExpr("arg"));
                         }
+                        call.setScope(methodRef.getScope());
                     }
+                    else {
+                        for(int i = 0 ; i < md.getParameters().size() ; i++) {
+                            call.addArgument(new NameExpr("arg" + i));
+                        }
+                        call.setScope(new NameExpr("arg"));
+                    }
+
                 }
             }
         }
