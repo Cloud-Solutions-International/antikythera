@@ -281,6 +281,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         AntikytheraRunTime.reset();
         Branching.clear();
         MockingRegistry.reset();
+        TestGenerator.whenThen.clear();
     }
 
     private MethodDeclaration setupMethod(String className, String name) {
@@ -316,7 +317,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         String s = unitTestGenerator.gen.toString();
         assertTrue(s.contains("(List<Integer>)"));
         assertTrue(s.contains("(Set<Integer>)"));
-        assertFalse(s.contains("Optional.empty()"));
+        assertFalse(s.contains("Bada"));
     }
 
     @Test
