@@ -686,6 +686,10 @@ public class Evaluator {
                 AntikytheraRunTime.push(variable);
             } else {
                 Variable variable = evaluateExpression(expr);
+                if (variable.getType() == null && variable.getValue() instanceof Evaluator eval) {
+                    variable.setType(AbstractCompiler.typeFromDeclaration(
+                            AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow()));
+                }
                 args.push(variable.getType());
                 AntikytheraRunTime.push(variable);
             }
@@ -1270,6 +1274,9 @@ public class Evaluator {
                 String resolvedClass = imp.getNameAsString();
                 Variable v = resolveNonPrimitiveVariable(resolvedClass, variable, t);
                 if (v != null) {
+                    if (v.getType() == null) {
+                        v.setType(t);
+                    }
                     return v;
                 }
             }

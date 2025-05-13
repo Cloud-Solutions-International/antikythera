@@ -977,4 +977,13 @@ public class AbstractCompiler {
         }
         return false;
     }
+
+    public static Type typeFromDeclaration(TypeDeclaration<?> typeDecl) {
+        return new ClassOrInterfaceType()
+            .setName(typeDecl.getNameAsString())
+            .setScope(typeDecl.getFullyQualifiedName()
+                .map(fqn -> new ClassOrInterfaceType().setName(
+                    fqn.substring(0, fqn.lastIndexOf('.'))))
+                .orElse(null));
+    }
 }

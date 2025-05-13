@@ -448,6 +448,7 @@ public class ControlFlowEvaluator extends Evaluator {
             String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
             String[] parts = init.split("=");
             v.setInitializer(StaticJavaParser.parseExpression(parts[1]));
+
             return v;
         }
 
