@@ -105,7 +105,6 @@ public class MockingRegistry {
      * @return a Variable representing the mocked object
      * @throws ClassNotFoundException if the class cannot be found
      */
-    @SuppressWarnings("unchecked")
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
 
@@ -118,17 +117,7 @@ public class MockingRegistry {
                 v = new Variable(eval);
             }
             else {
-                String collection = resolvedTypes.getLast().getFullyQualifiedName();
-                Variable cv = Reflect.variableFactory(collection);
-                if (collection.equals("java.util.List") || collection.equals("java.util.Set")
-                        || collection.equals("java.util.Collection")) {
-                    Collection<Object> c = (Collection<Object>) cv.getValue();
-                    for (String implementation : AntikytheraRunTime.findImplementations(fqn)) {
-                        Evaluator eval = EvaluatorFactory.createLazily(implementation, MockingEvaluator.class);
-                        c.add(eval);
-                    }
-                }
-                return cv;
+                return mockCollection(resolvedTypes, fqn);
             }
         }
         else {
@@ -142,6 +131,21 @@ public class MockingRegistry {
         }
         v.setType(variable.getType());
         return v;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Variable mockCollection(List<TypeWrapper> resolvedTypes, String fqn) {
+        String collection = resolvedTypes.getLast().getFullyQualifiedName();
+        Variable cv = Reflect.variableFactory(collection);
+        if (collection.equals("java.util.List") || collection.equals("java.util.Set")
+                || collection.equals("java.util.Collection")) {
+            Collection<Object> c = (Collection<Object>) cv.getValue();
+            for (String implementation : AntikytheraRunTime.findImplementations(fqn)) {
+                Evaluator eval = EvaluatorFactory.createLazily(implementation, MockingEvaluator.class);
+                c.add(eval);
+            }
+        }
+        return cv;
     }
 
     public static Variable createMockitoMockInstance(String className) throws ClassNotFoundException {

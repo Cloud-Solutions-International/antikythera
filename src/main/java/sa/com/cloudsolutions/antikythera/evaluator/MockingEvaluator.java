@@ -2,28 +2,29 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -299,8 +300,12 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
 
+        MethodCallExpr mce = new MethodCallExpr(methodCall.getNameAsString());
+        methodCall.getScope().ifPresent(mce::setScope);
+
         for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
-            AntikytheraRunTime.pop();
+            Variable v = AntikytheraRunTime.pop();
+            mce.addArgument(MockingRegistry.createMockitoArgument(v.getType().asString()));
         }
 
         Variable v = (l == null) ? repositoryFullPath(sc, stmt, collectionTypeName)
@@ -308,12 +313,28 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
         then.setVariableName(variableName);
 
+        Expression initializer = then.getVariable().getInitializer();
+        MethodCallExpr when = StaticJavaParser.parseExpression(
+                String.format(
+                        "Mockito.when(%s).thenReturn(%s)",
+                        mce, initializer)
+        );
+
+        then.setExpression(when);
+
         MockingRegistry.when(className, then);
         return v;
     }
 
     private Variable repositoryEmptyPath(String collectionTypeName) {
-        return Reflect.variableFactory(collectionTypeName);
+        Variable v = Reflect.variableFactory(collectionTypeName);
+        if (v != null && v.getInitializer() instanceof ObjectCreationExpr oce) {
+            String typeName = oce.getTypeAsString();
+            if (typeName.endsWith("ArrayList") || typeName.endsWith("LinkedList") || typeName.endsWith("List")) {
+                v.setInitializer(new MethodCallExpr("of").setScope(new NameExpr("List")));
+            }
+        }
+        return v;
     }
 
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
@@ -329,7 +350,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             typeArgs.add(new ClassOrInterfaceType().setName("Object"));
         }
         Variable v =  Reflect.variableFactory(collectionTypeName);
-        setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
+        Expression expr = setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
+        if (expr != null) {
+            v.setInitializer(expr);
+        }
         return v;
     }
 }

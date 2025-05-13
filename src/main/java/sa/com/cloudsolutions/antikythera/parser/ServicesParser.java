@@ -93,7 +93,6 @@ public class ServicesParser {
 
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
         generator = (UnitTestGenerator) Factory.create("unit", cu);
-        generator.setupImports();
         generator.addBeforeClass();
 
         evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);

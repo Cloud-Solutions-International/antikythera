@@ -235,7 +235,9 @@ public class UnitTestGenerator extends TestGenerator {
         applyPreconditions();
         addWhens();
         String invocation = invokeMethod();
+
         addDependencies();
+        setupImports();
 
         if (response.getException() == null) {
             getBody(testMethod).addStatement(invocation);
