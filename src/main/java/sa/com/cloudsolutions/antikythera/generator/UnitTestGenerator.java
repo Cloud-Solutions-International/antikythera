@@ -52,7 +52,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -66,8 +65,7 @@ public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
     public static final String TEST_NAME_SUFFIX = "AKTest";
     private final String filePath;
-    private final BiConsumer<Parameter, Variable> mocker;
-    private final Consumer<Expression> applyPrecondition;
+
     private boolean autoWired;
     private String instanceName;
     private CompilationUnit baseTestClass;
@@ -88,14 +86,6 @@ public class UnitTestGenerator extends TestGenerator {
         } catch (FileNotFoundException e) {
             logger.warn("Could not find file: {}", filePath);
             createTestClass(className, packageDecl);
-        }
-
-        if ("Evaluator".equals(Settings.getProperty(Settings.MOCK_WITH, String.class).orElse(""))) {
-            this.mocker = this::mockWithEvaluator;
-            this.applyPrecondition = this::applyPreconditionWithEvaluator;
-        } else {
-            this.mocker = this::mockWithMockito;
-            this.applyPrecondition = this::applyPreconditionWithMockito;
         }
     }
 
@@ -410,28 +400,8 @@ public class UnitTestGenerator extends TestGenerator {
                 addClassImports(paramType);
                 Variable value = argumentGenerator.getArguments().get(nameAsString);
                 if (value != null) {
-                    mocker.accept(param, value);
+                    mockWithMockito(param, value);
                 }
-            }
-        }
-    }
-
-     void mockWithEvaluator(Parameter param, Variable v) {
-        String nameAsString = param.getNameAsString();
-        if (v != null && v.getInitializer() != null) {
-            getBody(testMethod).addStatement(param.getTypeAsString() + " " + nameAsString + " = " + v.getInitializer() + ";");
-        }
-        Type t = param.getType();
-        TypeWrapper wrapper = AbstractCompiler.findType(compilationUnitUnderTest, t);
-
-        if (wrapper != null) {
-            if (wrapper.getType() != null) {
-                getBody(testMethod).addStatement(
-                        ArgumentGenerator.instantiateClass(wrapper.getType().asClassOrInterfaceDeclaration(),
-                                nameAsString));
-            }
-            else {
-                throw new UnsupportedOperationException("Not yet implemented");
             }
         }
     }
@@ -505,7 +475,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void applyPreconditions() {
+     void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
             if (! result.isFromSetup()) {
                 applyRegistryCondition(result);
@@ -513,7 +483,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         for (Precondition expr : preConditions) {
-            applyPrecondition.accept(expr.getExpression());
+            applyPreconditionWithMockito(expr.getExpression());
         }
     }
 
@@ -568,11 +538,6 @@ public class UnitTestGenerator extends TestGenerator {
             throw new IllegalStateException("Not implemented yet");
         }
         return methodCall;
-    }
-
-    private void applyPreconditionWithEvaluator(Expression expr) {
-        BlockStmt body = getBody(testMethod);
-        body.addStatement(expr);
     }
 
     private void applyPreconditionWithMockito(Expression expr) {

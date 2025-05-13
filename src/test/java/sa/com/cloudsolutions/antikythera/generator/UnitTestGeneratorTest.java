@@ -9,6 +9,8 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -25,6 +27,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -40,6 +43,7 @@ import java.lang.reflect.Method;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -316,9 +320,8 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         md.getParameters().add(p);
 
         Variable v = new Variable("bada");
-        unitTestGenerator.mockWithEvaluator(p, v);
+        unitTestGenerator.mockWithMockito(p, v);
         assertTrue(unitTestGenerator.testMethod.toString().contains("Person"));
-
     }
 
     @Test
@@ -330,6 +333,22 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         assertTrue(unitTestGenerator.testMethod.toString().contains("String[] args = new String[] { \"Antikythera\" };"));
     }
+
+    @Test
+    void testMockWithMockito3() {
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
+        Parameter param = md.getParameter(0);
+        unitTestGenerator.mockWithMockito(param, new Variable("hello"));
+        MethodCallExpr mce = new MethodCallExpr(new NameExpr("Bean"), "setName");
+        mce.addArgument("Shagrat");
+        unitTestGenerator.setPreConditions(List.of(new Precondition(mce)));
+
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Shagrat"));
+        unitTestGenerator.applyPreconditions();
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Shagrat"));
+
+    }
+
     /**
      * The base class should be added to the class under test.
      */
