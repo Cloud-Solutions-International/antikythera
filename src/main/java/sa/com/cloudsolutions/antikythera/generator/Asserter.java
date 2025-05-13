@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,4 +64,17 @@ public abstract class Asserter {
         return assertEquals(v.getValue().toString(), getterCall);
 
     }
+
+    public Expression assertEmpty(String variable) {
+        MethodCallExpr mce = new MethodCallExpr("assertTrue");
+        mce.addArgument(variable + ".isEmpty()");
+        return mce;
+    }
+
+    public Expression assertNotEmpty(String variable) {
+        MethodCallExpr mce = new MethodCallExpr("assertFalse");
+        mce.addArgument(variable + ".isEmpty()");
+        return mce;
+    }
+
 }

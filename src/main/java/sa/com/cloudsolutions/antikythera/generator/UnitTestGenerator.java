@@ -47,6 +47,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -225,7 +226,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public void createTests(MethodDeclaration md, MethodResponse response) {
+    public void     createTests(MethodDeclaration md, MethodResponse response) {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
@@ -302,7 +303,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     private static void solveCastingProblems(ClassOrInterfaceType ct) {
         /* We are mocking a variable, but the code may not have been written with an
-         * interface as the type of the variable. For example, Antikythere might be
+         * interface as the type of the variable. For example, Antikythera might be
          * using Set<Long> while in the application under test, they may have used
          * LinkedHashSet<Long> instead. So we will be unable to find the required
          * imports from the CompilationUnit.
@@ -631,8 +632,17 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         if (t != null) {
             addClassImports(t);
-            if (response.getBody() != null && response.getBody().getValue() != null) {
+            Variable result = response.getBody();
+            if (result != null && result.getValue() != null) {
                 body.addStatement(asserter.assertNotNull("resp"));
+                if (result.getValue() instanceof Collection<?> c) {
+                    if (c.isEmpty()) {
+                        body.addStatement(asserter.assertEmpty("resp"));
+                    }
+                    else {
+                        body.addStatement(asserter.assertNotEmpty("resp"));
+                    }
+                }
                 asserter.addFieldAsserts(response, body);
             } else {
                 body.addStatement(asserter.assertNull("resp"));
