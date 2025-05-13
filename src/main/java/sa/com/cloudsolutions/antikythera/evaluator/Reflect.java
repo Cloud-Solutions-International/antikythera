@@ -321,7 +321,7 @@ public class Reflect {
                 init.setScope(new NameExpr("List"));
                 v.setInitializer(init);
             }
-            case "java.util.Set", "java.util.Hashset" -> {
+            case "java.util.Set", "java.util.HashSet" -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("Set"));
                 v.setInitializer(init);

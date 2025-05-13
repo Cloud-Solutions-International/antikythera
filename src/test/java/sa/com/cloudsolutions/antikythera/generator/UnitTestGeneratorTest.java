@@ -318,6 +318,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         assertTrue(s.contains("(List<Integer>)"));
         assertTrue(s.contains("(Set<Integer>)"));
         assertFalse(s.contains("Bada"));
+        assertFalse(s.contains(" = Mockito.mock(Set.class);"));
     }
 
     @Test

@@ -307,6 +307,16 @@ public class MockingRegistry {
     }
 
     public static Expression createMockitoArgument(String typeName) {
+        MethodCallExpr mce = generateAnyExpression(typeName);
+        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
+        // If it's a generic Mockito.any() call, add casting
+        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
+            return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
+        }
+        return mce;
+    }
+
+    private static MethodCallExpr generateAnyExpression(String typeName) {
         MethodCallExpr mce = new MethodCallExpr(
                 new NameExpr(MOCKITO),
                 switch (typeName) {
@@ -319,11 +329,6 @@ public class MockingRegistry {
                 }
         );
         mce.setScope(new NameExpr(MOCKITO));
-        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
-        // If it's a generic Mockito.any() call, add casting
-        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
-            return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
-        }
         return mce;
     }
 }

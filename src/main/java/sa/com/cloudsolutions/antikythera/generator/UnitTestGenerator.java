@@ -409,28 +409,32 @@ public class UnitTestGenerator extends TestGenerator {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
-
-        if (param.findCompilationUnit().isPresent()) {
-            CompilationUnit cu = param.findCompilationUnit().orElseThrow();
-            if (t instanceof ArrayType) {
-                Variable mocked = Reflect.variableFactory(t.asString());
-                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-                mockParameterFields(v, nameAsString);
-                return;
+        if (v.getInitializer() != null) {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                    v.getInitializer() + ";");
+        }
+        else {
+            if (param.findCompilationUnit().isPresent()) {
+                CompilationUnit cu = param.findCompilationUnit().orElseThrow();
+                if (t instanceof ArrayType) {
+                    Variable mocked = Reflect.variableFactory(t.asString());
+                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                    mockParameterFields(v, nameAsString);
+                    return;
+                }
+                if (AbstractCompiler.isFinalClass(param.getType(), cu)) {
+                    cantMockFinalClass(param, v, cu);
+                    return;
+                }
             }
-            if ( AbstractCompiler.isFinalClass(param.getType(), cu)) {
-                cantMockFinalClass(param, v, cu);
-                return;
+            if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                        " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
+            } else {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                        " = Mockito.mock(" + param.getTypeAsString() + ".class);");
             }
         }
-        if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                    " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
-        } else {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                    " = Mockito.mock(" + param.getTypeAsString() + ".class);");
-        }
-
         mockParameterFields(v, nameAsString);
     }
 

@@ -111,10 +111,13 @@ public class ControlFlowEvaluator extends Evaluator {
         if (entry.getValue() instanceof List<?> list) {
             if (list.isEmpty()) {
                 if (v.getValue() instanceof List<?>) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
                     return StaticJavaParser.parseExpression("List.of()");
                 } else if (v.getValue() instanceof Set<?>) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
                     return StaticJavaParser.parseExpression("Set.of()");
                 } else if (v.getValue() instanceof Map<?,?>) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
                     return StaticJavaParser.parseExpression("Map.of()");
                 }
             }
@@ -158,11 +161,13 @@ public class ControlFlowEvaluator extends Evaluator {
             if (v.getValue() instanceof List<?> list) {
                 Method m = List.class.getMethod("add", Object.class);
                 m.invoke(list, resolved.getValue());
+                TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
                 return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer));
             }
             if (v.getValue() instanceof Set<?> set) {
                 Method m = Set.class.getMethod("add", Object.class);
                 m.invoke(set, resolved.getValue());
+                TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
                 return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer));
             }
             if (v.getValue() instanceof Map<?,?>) {
