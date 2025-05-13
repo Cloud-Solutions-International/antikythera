@@ -402,7 +402,7 @@ public class ControlFlowEvaluator extends Evaluator {
     void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         super.invokeReflectively(v, reflectionArguments);
 
-        if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals("java.util.Optional")) {
+        if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals(Reflect.JAVA_UTIL_OPTIONAL)) {
             Object[] finalArgs = reflectionArguments.getFinalArgs();
             if (finalArgs.length == 1 && reflectionArguments.getMethodName().equals("ofNullable")) {
                 handleOptionalOfNullable(reflectionArguments);

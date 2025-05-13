@@ -1095,7 +1095,7 @@ public class Evaluator {
             Type returnType = methodDeclaration.getType();
 
             if (returnType.asString().startsWith("Optional") ||
-                    returnType.asString().startsWith("java.util.Optional")) {
+                    returnType.asString().startsWith(Reflect.JAVA_UTIL_OPTIONAL)) {
                 return handleOptionals(sc);
             } else {
                 Variable v = executeMethod(methodDeclaration);

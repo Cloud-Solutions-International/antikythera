@@ -282,8 +282,8 @@ public class MockingRegistry {
                         .setArguments(new NodeList<>());
             }
 
-            case "java.util.Optional" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
+            case Reflect.JAVA_UTIL_OPTIONAL -> {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                 yield new MethodCallExpr(
                         new NameExpr("Optional"),
                         "empty"

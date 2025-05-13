@@ -103,7 +103,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
         else {
             if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
-                return mockRepositoryMethod(callable);
+                return mockRepositoryMethod(sc, callable);
             }
             return mockBinaryMethodExecution(sc, callable);
         }
@@ -133,31 +133,43 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return executeMethod(method);
     }
 
-    private Variable mockRepositoryMethod(Callable callable) {
+    private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-        List<Variable> variables = new ArrayList<>();
-        for (int i = 0 ; i < method.getParameters().length ; i++) {
-            variables.add(AntikytheraRunTime.pop());
-        }
 
         if (method.getName().equals("save")) {
-            MockingCall call = MockingRegistry.getThen(className, callable);
-            if (call != null) {
-                return call.getVariable();
-            }
-            MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
-            MethodCallExpr mce = StaticJavaParser.parseExpression(
-                String.format(
-                        "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
-                        variableName)
-            );
-            mockingCall.setExpression(mce);
-
-            MockingRegistry.when(className, mockingCall);
-            return variables.getFirst();
+            return mockRepositorySave(callable, method);
+        }
+        String returnType = method.getReturnType().getName();
+        if (collectionTypes.contains(returnType)) {
+            return handleRepositoryCollectionHelper(sc, returnType);
+        }
+        if (returnType.equals(Reflect.JAVA_UTIL_OPTIONAL)) {
+            return handleOptionals(sc);
         }
         return mockFromTypeArguments(
                 typeDeclaration.asClassOrInterfaceDeclaration().getExtendedTypes(0), method);
+    }
+
+    private Variable mockRepositorySave(Callable callable, Method method) {
+        List<Variable> variables = new ArrayList<>();
+        for (int i = 0; i < method.getParameters().length ; i++) {
+            variables.add(AntikytheraRunTime.pop());
+        }
+
+        MockingCall call = MockingRegistry.getThen(className, callable);
+        if (call != null) {
+            return call.getVariable();
+        }
+        MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
+        MethodCallExpr mce = StaticJavaParser.parseExpression(
+            String.format(
+                    "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                    variableName)
+        );
+        mockingCall.setExpression(mce);
+
+        MockingRegistry.when(className, mockingCall);
+        return variables.getFirst();
     }
 
     private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {
@@ -292,7 +304,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                         Evaluator typeEval = EvaluatorFactory.create(typeName, Evaluator.class);
                         typeEval.setupFields();
                         typeEval.initializeFields();
-                        TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
+                        TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                         return new Variable(Optional.of(typeEval));
                     } else {
                         Variable v = optionalByteBuddy(ciType.getNameAsString());
@@ -313,7 +325,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             MethodInterceptor interceptor = new MethodInterceptor(clazz);
             Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
             Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-            TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
+            TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
             return new Variable(Optional.of(instance));
         }
         return null;
