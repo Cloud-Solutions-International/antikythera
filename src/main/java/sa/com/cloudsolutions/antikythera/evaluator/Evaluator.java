@@ -338,7 +338,7 @@ public class Evaluator {
                 // Class not found as binary, check if available as source
                 CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
                 if (sourceCU != null) {
-                    Evaluator evaluator = EvaluatorFactory.create(fullyQualifiedName, Evaluator.class);
+                    Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
                     Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
                     Variable v = new Variable(dynamicClass);
