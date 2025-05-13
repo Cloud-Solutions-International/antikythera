@@ -152,7 +152,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         try {
             if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
-                Map<String, Variable> fields = evaluator.getFields();
+
 
                 for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
                     for (VariableDeclarator fieldVar : field.getVariables()) {
@@ -162,7 +162,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                 Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
                                 Variable v = new Variable(value);
                                 v.setType(fieldVar.getType());
-                                fields.put(fieldName, v);
+                                evaluator.setField(fieldName, v);
                             }
                         } catch (SQLException e) {
                             logger.warn(e.getMessage());

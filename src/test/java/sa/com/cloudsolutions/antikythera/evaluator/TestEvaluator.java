@@ -131,7 +131,7 @@ class TestEvaluator extends TestHelper {
     @Test
     void testResolveNonPrimitiveVariable()  {
 
-        Map<String, Variable> resolvedFields = evaluator.getFields();
+        Map<String, Variable> resolvedFields = evaluator.fields;
 
         assertNotNull(resolvedFields.get("stringList"));
         assertTrue(resolvedFields.get("stringList").getType().isClassOrInterfaceType());
@@ -181,7 +181,7 @@ class TestEvaluatorWithFinches extends TestHelper {
         Finch.clear();
         Evaluator eval = EvaluatorFactory.create("TestClass", Evaluator.class);
 
-        Variable v = eval.getFields().get("hello");
+        Variable v = eval.getField("hello");
         assertNotNull(v);
     }
 

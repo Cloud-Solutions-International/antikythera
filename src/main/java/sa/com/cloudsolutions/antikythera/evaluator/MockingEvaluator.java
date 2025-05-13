@@ -368,7 +368,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
-       // super.setupField(field, variableDeclarator);
+    protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
+        if (wrapper.getType() != null) {
+            Variable v;
+            Evaluator eval = EvaluatorFactory.createLazily(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+            v = new Variable(eval);
+            return v;
+        }
+        return null;
     }
 }

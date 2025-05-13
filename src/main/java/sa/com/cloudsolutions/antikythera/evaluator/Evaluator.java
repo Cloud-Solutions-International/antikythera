@@ -466,7 +466,7 @@ public class Evaluator {
         Variable v = evaluateExpression(fae.getScope());
         if (v != null) {
             if (v.getValue() instanceof Evaluator eval) {
-                return eval.getFields().get(fae.getNameAsString());
+                return eval.getField(fae.getNameAsString());
             } else if (v.getValue() != null && v.getValue().getClass().isArray()) {
                 if (fae.getNameAsString().equals("length")) {
                     return new Variable(Array.getLength(v.getValue()));
@@ -526,7 +526,7 @@ public class Evaluator {
 
             Object obj = variable.getValue();
             if (obj instanceof Evaluator eval) {
-                eval.getFields().put(fae.getNameAsString(), v);
+                eval.setField(fae.getNameAsString(), v);
             } else {
                 try {
                     Field field = obj.getClass().getDeclaredField(fieldName);
@@ -545,6 +545,10 @@ public class Evaluator {
         }
 
         return v;
+    }
+
+    public void setField(String nameAsString, Variable v) {
+        fields.put(nameAsString, v);
     }
 
     /**
@@ -645,6 +649,7 @@ public class Evaluator {
      */
     private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce) throws ReflectiveOperationException {
         if (match != null) {
+            /* needs eager creation */
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
             anonymousOverrides(match, oce);
             List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
@@ -940,6 +945,7 @@ public class Evaluator {
                 if (targetCu != null) {
                     Optional<TypeDeclaration<?>> typeDecl = AbstractCompiler.getMatchingType(targetCu, s);
                     if (typeDecl.isPresent()) {
+                        /* eagerly create an evaluator */
                         yield EvaluatorFactory.create(typeDecl.get().getFullyQualifiedName().orElse(null), this);
                     }
                 }
@@ -981,8 +987,6 @@ public class Evaluator {
         if (wrapper.getType() != null) {
             Variable v;
             Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), this);
-            eval.setupFields();
-            eval.initializeFields();
             v = new Variable(eval);
             return v;
         }
@@ -1307,13 +1311,18 @@ public class Evaluator {
         if (init.isPresent()) {
             v = evaluateExpression(init.get());
             if (v == null && init.get().isNameExpr()) {
+                /*
+                 * This path is usually taken when we are trying to initializer a field to have
+                 * a value defined in an external constant.
+                 */
                 NameExpr nameExpr = init.get().asNameExpr();
                 String name = nameExpr.getNameAsString();
 
                 ImportWrapper importWrapper = AbstractCompiler.findImport(cu, name);
                 if (importWrapper != null && importWrapper.getImport().isStatic()) {
-                    Evaluator eval = EvaluatorFactory.create(importWrapper.getType().getFullyQualifiedName().orElseThrow(), this);
-                    v = eval.getFields().get(name);
+                    Evaluator eval = EvaluatorFactory.create(
+                            importWrapper.getType().getFullyQualifiedName().orElseThrow(), Evaluator.class);
+                    v = eval.getField(name);
                 }
             }
         } else {
@@ -1362,8 +1371,8 @@ public class Evaluator {
         return v;
     }
 
-    public Map<String, Variable> getFields() {
-        return fields;
+    public Variable getField(String name) {
+        return fields.get(name);
     }
 
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {

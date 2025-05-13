@@ -85,13 +85,13 @@ class TestSpringEvaluator {
         ClassOrInterfaceType stringType = StaticJavaParser.parseClassOrInterfaceType("String");
         Variable typeVariable = new Variable("test");
         typeVariable.setType(stringType);
-        evaluator.getFields().put("testField", typeVariable);
+        evaluator.setField("testField", typeVariable);
         assertEquals("java.lang.String", evaluator.getFieldClass(nameExpr));
 
         // Test with a Variable containing an Evaluator
         SpringEvaluator innerEvaluator = EvaluatorFactory.create("TestInnerClass", SpringEvaluator.class);
         Variable evaluatorVariable = new Variable(innerEvaluator);
-        evaluator.getFields().put("evaluatorField", evaluatorVariable);
+        evaluator.setField("evaluatorField", evaluatorVariable);
         assertEquals("TestInnerClass", evaluator.getFieldClass(new NameExpr("evaluatorField")));
 
         // Test with MethodCallExpr

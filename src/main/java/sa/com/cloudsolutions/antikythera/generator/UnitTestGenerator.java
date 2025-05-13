@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
@@ -463,15 +464,18 @@ public class UnitTestGenerator extends TestGenerator {
     void mockParameterFields(Variable v, String nameAsString) {
         BlockStmt body = getBody(testMethod);
         if (v.getValue() instanceof Evaluator eval) {
-            for (Map.Entry<String,Variable> entry : eval.getFields().entrySet()) {
-                if (entry.getValue().getValue() != null && entry.getValue().getType() != null
-                        && entry.getValue().getType().isPrimitiveType()
-                        && !entry.getKey().equals("serialVersionUID")) {
+            TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
+            for (FieldDeclaration field : t.getFields()) {
+                String name = field.getVariable(0).getNameAsString();
+                Variable f = eval.getField(name);
+                if (f != null && f.getType() != null
+                        && f.getType().isPrimitiveType()
+                        && !name.equals("serialVersionUID")) {
 
-                    Object value = entry.getValue().getValue();
+                    Object value = f.getValue();
                     body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
                             nameAsString,
-                            ClassProcessor.instanceToClassName(entry.getKey()),
+                            ClassProcessor.instanceToClassName(name),
                             value instanceof Long ? value + "L" : value.toString()));
                 }
             }

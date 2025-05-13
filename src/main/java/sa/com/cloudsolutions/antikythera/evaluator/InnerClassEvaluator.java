@@ -29,7 +29,7 @@ public class InnerClassEvaluator extends Evaluator {
                     return v;
                 }
             }
-            return enclosure.getFields().get(name);
+            return enclosure.getField(name);
         }
         return v;
     }
