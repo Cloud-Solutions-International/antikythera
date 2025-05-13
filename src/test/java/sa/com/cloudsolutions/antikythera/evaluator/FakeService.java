@@ -74,4 +74,11 @@ public class FakeService {
             return 0;
         }
     }
+
+    @SuppressWarnings("unused")
+    public Integer findAll() {
+        List<FakeEntity> fakeEntities = fakeRepository.findAll();
+        System.out.print(fakeEntities.size() + "!");
+        return fakeEntities.size();
+    }
 }

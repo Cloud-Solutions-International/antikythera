@@ -322,6 +322,31 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     }
 
     @Test
+    void integrationTestFindAll() throws ReflectiveOperationException {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
+
+
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","findAll");
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
+        unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
+
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator.setOnTest(true);
+        evaluator.addGenerator(unitTestGenerator);
+        evaluator.setArgumentGenerator(argumentGenerator);
+        evaluator.visit(md);
+        assertTrue(outContent.toString().contains("0!1!"));
+        String s = unitTestGenerator.gen.toString();
+        assertTrue(s.contains("(List<Integer>)"));
+        assertTrue(s.contains("(Set<Integer>)"));
+        assertFalse(s.contains("Bada"));
+        assertFalse(s.contains(" = Mockito.mock(List.class);"));
+    }
+
+    @Test
     void testAutowiredCollection() throws ReflectiveOperationException {
         MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","autoList");
 

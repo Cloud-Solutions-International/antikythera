@@ -39,7 +39,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             "java.util.Set",
             "java.util.HashSet",
             "java.util.TreeSet",
-            "java.util.Iterable",
+            "java.lang.Iterable",
             "List",
             "ArrayList",
             "Collection",
@@ -172,25 +172,27 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return variables.getFirst();
     }
 
-    private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {
-        if (! typeDeclaration.isClassOrInterfaceDeclaration()) {
-            return null;
-        }
+    private Optional<ClassOrInterfaceType> findParentWithGenerics(Class<?> foundIn, Method method) {
+        if (typeDeclaration.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+            for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
+                if (parent.getTypeArguments().isPresent() &&
+                        (foundIn.getName().equals(parent.getName().asString())
+                                || foundIn.getSimpleName().equals(parent.getName().asString()))) {
 
-        ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
-        for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
-            if ( parent.getTypeArguments().isPresent() &&
-                    (foundIn.getName().equals(parent.getName().asString())
-                            || foundIn.getSimpleName().equals(parent.getName().asString()))) {
-
-                Variable v = mockFromTypeArguments(parent, method);
-                if (v != null) {
-                    return v;
+                    return Optional.of(parent);
                 }
             }
         }
+        return Optional.empty();
+    }
 
-        return null;
+    private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {
+        Optional<ClassOrInterfaceType> parent = findParentWithGenerics(foundIn, method);
+        return parent.map(
+                classOrInterfaceType -> mockFromTypeArguments(classOrInterfaceType, method))
+                .orElse(null);
+
     }
 
     private Variable mockFromTypeArguments(ClassOrInterfaceType parent, Method method) {
@@ -396,17 +398,25 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         l.setPathTaken(LineOfCode.TRUE_PATH);
         Branching.add(l);
 
-        Type type = sc.getMCEWrapper()
-                .getMatchingCallable().getCallableDeclaration()
-                .asMethodDeclaration().getType();
-        NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
-        if (typeArgs.isEmpty()) {
-            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        CallableDeclaration<?> callable = sc.getMCEWrapper().getMatchingCallable().getCallableDeclaration();
+        Variable v = Reflect.variableFactory(collectionTypeName);
+
+        if (callable != null) {
+            Type type = callable.asMethodDeclaration().getType();
+            NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+            if (typeArgs.isEmpty()) {
+                typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+            }
+
+            Expression expr = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
+            if (expr != null) {
+                v.setInitializer(expr);
+            }
         }
-        Variable v =  Reflect.variableFactory(collectionTypeName);
-        Expression expr = setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
-        if (expr != null) {
-            v.setInitializer(expr);
+        else {
+            Method m = sc.getMCEWrapper().getMatchingCallable().getMethod();
+
+            System.out.println("bada");
         }
         return v;
     }
