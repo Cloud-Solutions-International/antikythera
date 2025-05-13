@@ -59,6 +59,7 @@ public class Reflect {
     public static final String JAVA_LANG_LONG = "java.lang.Long";
     public static final String JAVA_LANG_STRING = "java.lang.String";
     public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
+    public static final String ARRAY_LIST = "java.util.ArrayList";
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -315,6 +316,16 @@ public class Reflect {
                     .addArgument(new StringLiteralExpr(initialValue.toString()));
                 v.setInitializer(mce);
             }
+            case "java.util.List", ARRAY_LIST -> {
+                MethodCallExpr init = new MethodCallExpr("of");
+                init.setScope(new NameExpr("List"));
+                v.setInitializer(init);
+            }
+            case "java.util.Set", "java.util.Hashset" -> {
+                MethodCallExpr init = new MethodCallExpr("of");
+                init.setScope(new NameExpr("Set"));
+                v.setInitializer(init);
+            }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName(typeName));
@@ -404,8 +415,8 @@ public class Reflect {
 
     private static Variable generateNonArrayVariable(String qualifiedName) {
         return switch (qualifiedName) {
-            case "List", "java.util.List", "java.util.ArrayList" ->
-                    createVariable(new ArrayList<>(), "java.util.ArrayList", null);
+            case "List", "java.util.List", ARRAY_LIST ->
+                    createVariable(new ArrayList<>(), ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", "java.util.Map", "java.util.HashMap" ->
                     createVariable(new HashMap<>(), "java.util.HashMap", null);

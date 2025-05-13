@@ -6,8 +6,10 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
@@ -338,6 +340,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (v != null && v.getInitializer() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
             if (typeName.endsWith("ArrayList") || typeName.endsWith("LinkedList") || typeName.endsWith("List")) {
+                TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
                 v.setInitializer(new MethodCallExpr("of").setScope(new NameExpr("List")));
             }
         }
@@ -362,5 +365,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             v.setInitializer(expr);
         }
         return v;
+    }
+
+    @Override
+    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
+       // super.setupField(field, variableDeclarator);
     }
 }
