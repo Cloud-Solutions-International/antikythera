@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -18,6 +19,7 @@ import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -25,7 +27,6 @@ import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 
@@ -263,6 +264,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                         Evaluator typeEval = EvaluatorFactory.create(typeName, Evaluator.class);
                         typeEval.setupFields();
                         typeEval.initializeFields();
+                        TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
                         return new Variable(Optional.of(typeEval));
                     } else {
                         Variable v = optionalByteBuddy(ciType.getNameAsString());
@@ -283,6 +285,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             MethodInterceptor interceptor = new MethodInterceptor(clazz);
             Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
             Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+            TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
             return new Variable(Optional.of(instance));
         }
         return null;
