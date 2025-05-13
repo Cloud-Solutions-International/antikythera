@@ -62,7 +62,6 @@ import java.util.function.Consumer;
  * Each class that is marked as autowired will be considered a candidate for mocking. These will
  * be registered in the mocking registry.
  */
-
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
     public static final String TEST_NAME_SUFFIX = "AKTest";
@@ -248,7 +247,7 @@ public class UnitTestGenerator extends TestGenerator {
         }
     }
 
-    private void addDependencies() {
+    void addDependencies() {
         for (ImportDeclaration imp : TestGenerator.getImports()) {
             gen.addImport(imp);
         }
@@ -614,7 +613,7 @@ public class UnitTestGenerator extends TestGenerator {
         if (t != null && !t.toString().equals("void")) {
             b.append(t.asString()).append(" resp = ");
             for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
-                gen.addImport(imp.getImport());
+                addImport(imp.getImport());
             }
         }
 
@@ -692,11 +691,11 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
 
-        gen.addImport("org.mockito.MockitoAnnotations");
-        gen.addImport("org.junit.jupiter.api.BeforeEach");
-        gen.addImport("org.mockito.Mock");
-        gen.addImport("org.mockito.Mockito");
-        gen.addImport("java.util.Optional");
+        addImport(new ImportDeclaration("org.mockito.MockitoAnnotations", false, false));
+        addImport(new ImportDeclaration("org.junit.jupiter.api.BeforeEach", false, false));
+        addImport(new ImportDeclaration("org.mockito.Mock", false, false));
+        addImport(new ImportDeclaration("org.mockito.Mockito", false, false));
+        addImport(new ImportDeclaration("java.util.Optional", false, false));
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();

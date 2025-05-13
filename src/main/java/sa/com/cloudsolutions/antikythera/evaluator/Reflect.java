@@ -153,7 +153,7 @@ public class Reflect {
                 }
             } else {
                 try {
-                    String className = arguments.get(0).calculateResolvedType().describe();
+                    String className = arguments.getFirst().calculateResolvedType().describe();
                     argumentTypes[i] = primitiveToWrapper(className);
                 } catch (UnsolvedSymbolException | IllegalStateException us) {
                     argumentTypes[i] = Object.class;

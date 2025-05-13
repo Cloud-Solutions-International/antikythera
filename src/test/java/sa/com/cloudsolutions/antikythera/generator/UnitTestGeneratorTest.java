@@ -120,6 +120,10 @@ class UnitTestGeneratorTest {
         assertTrue(mockedField.isPresent());
         assertTrue(mockedField.get().getAnnotationByName("Mock").isPresent(), "The field 'dummyRepository' should be annotated with @Mock.");
 
+        assertFalse(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mock")));
+
+        unitTestGenerator.addDependencies();
+
         assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mock")),
                 "The import for @Mock should be present.");
         assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mockito")),
