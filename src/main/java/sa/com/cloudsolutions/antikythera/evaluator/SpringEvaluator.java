@@ -177,11 +177,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
-        if (!assignExpr.getTarget().toString().equals(p.getNameAsString())) {
-            return;
-        }
-
+    private void parameterAssignment(AssignExpr assignExpr, Variable va) {
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> value instanceof NullLiteralExpr ? null : Integer.parseInt(value.toString());
@@ -314,15 +310,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne
+                if (mce.getScope().orElseThrow() instanceof NameExpr ne
                         && ne.getNameAsString().equals(p.getNameAsString())
                         && va.getValue() instanceof Evaluator eval) {
+
                     MCEWrapper wrapper = eval.wrapCallExpression(mce);
                     eval.executeLocalMethod(wrapper);
                 }
-            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
-                parameterAssignment(p, assignExpr, va);
-                va.setInitializer(assignExpr);
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr &&
+                assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+
+                    parameterAssignment(assignExpr, va);
+                    va.setInitializer(assignExpr);
             }
         }
     }
