@@ -6,10 +6,8 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
@@ -31,8 +29,25 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
+    private static Set<String> collectionTypes = Set.of(
+            "java.util.List",
+            "java.util.ArrayList",
+            "java.util.Collection",
+            "java.util.Set",
+            "java.util.HashSet",
+            "java.util.TreeSet",
+            "java.util.Iterable",
+            "List",
+            "ArrayList",
+            "Collection",
+            "Set",
+            "HashSet",
+            "TreeSet",
+            "Iterable"
+    );
 
     protected MockingEvaluator(EvaluatorFactory.Context context) {
         super(context);
@@ -43,6 +58,12 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return mockExecution(m,  m.getReturnType().getName());
     }
 
+    /**
+     * Pretend to execute a method
+     * @param m the method that we are supposed to execute
+     * @param returnType the return type that we should create an instance of
+     * @return a Variable that contains an instance of the returnType
+     */
     private Variable mockExecution(Method m, String returnType) {
         if (variableName != null) {
             Variable result = Reflect.variableFactory(returnType);
@@ -73,7 +94,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                     List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
                     ImportWrapper imp = imports.getLast();
                     String s = imp.getNameAsString();
-                    if (s.endsWith("List") || s.endsWith("Collection") || s.endsWith("Set")) {
+                    if (collectionTypes.contains(s)) {
                         return handleRepositoryCollectionHelper(sc, s);
                     }
                 }
@@ -81,6 +102,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return super.executeCallable(sc, callable);
         }
         else {
+            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+                return mockRepositoryMethod(callable);
+            }
             return mockBinaryMethodExecution(sc, callable);
         }
     }
@@ -98,10 +122,6 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 variables.add(AntikytheraRunTime.pop());
             }
 
-            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
-                return mockRepositoryMethod(callable, method, variables);
-            }
-
             Class<?> foundIn = callable.getFoundInClass();
             if (foundIn != null) {
                 Variable v = mockReturnFromBinaryParent(foundIn, method);
@@ -113,7 +133,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return executeMethod(method);
     }
 
-    private Variable mockRepositoryMethod(Callable callable, Method method, List<Variable> variables) {
+    private Variable mockRepositoryMethod(Callable callable) {
+        Method method = callable.getMethod();
+        List<Variable> variables = new ArrayList<>();
+        for (int i = 0 ; i < method.getParameters().length ; i++) {
+            variables.add(AntikytheraRunTime.pop());
+        }
+
         if (method.getName().equals("save")) {
             MockingCall call = MockingRegistry.getThen(className, callable);
             if (call != null) {
@@ -298,6 +324,12 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return new Variable(Optional.empty());
     }
 
+    /**
+     * Mock execution of a JPA Repository method that returns a collection
+     * @param sc the scope of the method call
+     * @param collectionTypeName something like java.util.Iterable or Set
+     * @return a Variable representing the mocked execution.
+     */
     @SuppressWarnings("unchecked")
     Variable handleRepositoryCollectionHelper(Scope sc, String collectionTypeName) {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
