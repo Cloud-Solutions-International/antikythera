@@ -1213,7 +1213,9 @@ public class Evaluator {
         if (operator.equals(BinaryExpr.Operator.OR) && (boolean) left.getValue()) {
             return new Variable(Boolean.TRUE);
         }
-
+        if (operator.equals(BinaryExpr.Operator.AND) && !((boolean) left.getValue())) {
+            return new Variable(Boolean.FALSE);
+        }
         Variable right = evaluateExpression(rightExpression);
         return BinaryOps.binaryOps(operator, leftExpression, rightExpression, left, right);
     }
