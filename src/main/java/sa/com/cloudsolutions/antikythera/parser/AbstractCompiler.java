@@ -837,16 +837,18 @@ public class AbstractCompiler {
     }
 
     private static Optional<Callable> findCallableInBinaryCode(Class<?> clazz, MCEWrapper methodCall) {
-        ReflectionArguments reflectionArguments = new ReflectionArguments(
-                methodCall.getMethodName(),
-                methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
-                methodCall.getArgumentTypesAsClasses()
-        );
-        Method method = Reflect.findAccessibleMethod(clazz, reflectionArguments);
-        if (method != null) {
-            Callable callable = new Callable(method, methodCall);
-            callable.setFoundInClass(clazz);
-            return Optional.of(callable);
+        if (!Reflect.getMethodsByName(clazz, methodCall.getMethodName()).isEmpty()) {
+            ReflectionArguments reflectionArguments = new ReflectionArguments(
+                    methodCall.getMethodName(),
+                    methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
+                    methodCall.getArgumentTypesAsClasses()
+            );
+            Method method = Reflect.findAccessibleMethod(clazz, reflectionArguments);
+            if (method != null) {
+                Callable callable = new Callable(method, methodCall);
+                callable.setFoundInClass(clazz);
+                return Optional.of(callable);
+            }
         }
         return Optional.empty();
     }
