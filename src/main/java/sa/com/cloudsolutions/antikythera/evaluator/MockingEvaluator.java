@@ -332,11 +332,4 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         setupNonEmptyCollection(typeArgs,v, new NameExpr("bada"));
         return v;
     }
-
-    @Override
-    void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
-        /*
-         * no need to bother with setting up fields when you are in the mocking evaluator
-         */
-    }
 }
