@@ -347,6 +347,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
             handleApplicationException(e);
         }
     }
@@ -600,7 +601,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
                         boolean isMocked = false;
                         String fieldName = getFieldName(expr.get());
-                        if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
+                        if (fieldName != null && getField(fieldName) != null && getField(fieldName).getType() != null) {
                             isMocked = MockingRegistry.isMockTarget(fieldClass);
                         }
                         if (!isMocked) {
@@ -759,7 +760,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     String getFieldClass(Expression expr) {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
-            Variable v = fields.get(name);
+            Variable v = getField(name);
             if (v != null) {
                 Type t = v.getType();
                 if (t != null) {

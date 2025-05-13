@@ -234,8 +234,8 @@ public class Evaluator {
      */
     public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
-        if (value == null && fields.get(name) != null) {
-            return fields.get(name);
+        if (value == null && getField(name) != null) {
+            return getField(name);
         }
         return value;
     }
@@ -1167,12 +1167,12 @@ public class Evaluator {
 
         if (methodName.startsWith("get") && hasGetter) {
             String field = ClassProcessor.classToInstanceName(methodName.replace("get", ""));
-            return fields.get(field);
+            return getField(field);
         }
 
         if (methodName.startsWith("is") && hasGetter) {
             String field = ClassProcessor.classToInstanceName(methodName.replace("is", ""));
-            return fields.get(field);
+            return getField(field);
         }
 
         if (methodName.startsWith("set") && hasSetter) {

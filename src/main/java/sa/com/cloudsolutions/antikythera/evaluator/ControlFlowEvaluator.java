@@ -262,7 +262,7 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
-        Variable field = evaluator.fields.get(
+        Variable field = evaluator.getField(
                 ClassProcessor.classToInstanceName(name.substring(3)));
         if (field != null) {
             if (field.getClazz() != null) {
@@ -455,7 +455,7 @@ public class ControlFlowEvaluator extends Evaluator {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
         TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, resolvedClass).orElseThrow();
         if (type instanceof ClassOrInterfaceDeclaration cdecl) {
-            MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
+            MockingEvaluator eval = EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class);
             Variable v = new Variable(eval);
             String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
             String[] parts = init.split("=");
