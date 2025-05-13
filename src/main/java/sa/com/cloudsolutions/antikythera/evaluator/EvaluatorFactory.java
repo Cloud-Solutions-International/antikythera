@@ -12,8 +12,9 @@ public class EvaluatorFactory {
 
     /**
      * Eagerly create an evaluator.
-     * When eager mode is used all the fields will be explored and evaluators will be created for
-     * all the fields that need one
+     * When eager mode is used, all the fields will be explored and evaluators will be created for
+     * all the fields that need one.
+     * This method delegates the work to the other create method.
      * @param className the name of the class for which we are creating an evaluator
      * @param enclosure another evaluator instance which encloses this evaluator. It maybe the
      *                  evaluator for the classes that holds a field, for example
@@ -51,6 +52,11 @@ public class EvaluatorFactory {
      * @return an evaluator instance.
      */
     private static <T extends Evaluator> T create(Context c, Class<T> evaluatorType) {
+        Evaluator autoWired = findAutoWire(c);
+        if (autoWired != null) {
+            return evaluatorType.cast(autoWired);
+        }
+
         Evaluator eval = createLazily(c, evaluatorType);
         if (eval.getCompilationUnit() != null) {
             eval.setupFields();
@@ -59,13 +65,23 @@ public class EvaluatorFactory {
         return evaluatorType.cast(eval);
     }
 
+    private static Evaluator findAutoWire(Context c) {
+        Variable v = AntikytheraRunTime.getAutoWire(c.getClassName());
+        if (v != null) {
+            if (v.getValue() instanceof Evaluator eval) {
+                return eval;
+            }
+            throw new AntikytheraException("Illegal state for auto wire.");
+        }
+        return null;
+    }
+
     /**
      * Lazily create an evaluator instance.
      * In lazy mode no evaluators will be immediately created for any fields that need it.
      * @param className the name of the class for which an evaluator is being created
      * @param evaluatorType  an instance of Evaluator or one of it's subclasses
      * @return an evaluator instance.
-     * @param <T>
      */
     public static <T extends Evaluator> T createLazily(String className, Class<T> evaluatorType) {
         Context c = new Context(className);
@@ -73,6 +89,11 @@ public class EvaluatorFactory {
     }
 
     public static <T extends Evaluator> T createLazily(Context c , Class<T> evaluatorType) {
+        Evaluator autoWired = findAutoWire(c);
+        if (autoWired != null) {
+            return evaluatorType.cast(autoWired);
+        }
+
         try {
             Constructor<T> constructor = evaluatorType.getDeclaredConstructor(Context.class);
             Evaluator eval = constructor.newInstance(c);

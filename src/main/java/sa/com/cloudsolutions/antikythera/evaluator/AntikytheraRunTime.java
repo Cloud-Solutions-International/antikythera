@@ -57,6 +57,11 @@ public class AntikytheraRunTime {
      */
     protected static final Map<String, Variable> autowired = new HashMap<>();
 
+    /**
+     * Keeps track of static variables.
+     * The fully qualified class name is the primary key. The values will be a map, where a field
+     * name will be the key and the variable will hold the value of the static field.
+     */
     protected static final Map<String, Map<String,Variable>> statics = new HashMap<>();
 
     private AntikytheraRunTime() {}

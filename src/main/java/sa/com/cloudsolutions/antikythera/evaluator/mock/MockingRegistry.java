@@ -44,6 +44,7 @@ import static org.mockito.Mockito.withSettings;
 
 /**
  * Keep track of all the types that are being mocked internally while evaluating expressions.
+ * Also supports the when/then type of mocking that you find in frameworks like mockito.
  */
 public class MockingRegistry {
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
