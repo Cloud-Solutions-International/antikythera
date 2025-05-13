@@ -1797,6 +1797,9 @@ public class Evaluator {
 
     void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
         try {
+            if (field.getAnnotationByName("OneToOne").isPresent()) {
+                return;
+            }
             if (field.isStatic()) {
                 Variable s = AntikytheraRunTime.getStaticVariable(getClassName(), variableDeclarator.getNameAsString());
                 if (s != null) {
