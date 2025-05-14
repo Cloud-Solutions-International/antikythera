@@ -1813,7 +1813,6 @@ public class Evaluator {
             if (v != null) {
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
-                    v.setStatic(true);
                     AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
                 }
             }

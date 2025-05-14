@@ -30,9 +30,8 @@ public class Variable {
 
     private List<Expression> initializer;
 
-    private boolean stat;
-
-    private static Random random = new Random();
+    @SuppressWarnings("java:S2245")
+    private static final Random random = new Random();
 
     /**
      * Create an object having the given value and java parser type.
@@ -89,10 +88,6 @@ public class Variable {
                 // can be silently ignored
             }
         }
-    }
-
-    public void setStatic(boolean s) {
-        this.stat = s;
     }
 
     @Override
