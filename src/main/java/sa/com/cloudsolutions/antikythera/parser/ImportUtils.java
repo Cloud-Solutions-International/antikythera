@@ -41,11 +41,11 @@ public class ImportUtils {
                 return n;
             }
             else {
-                String importFrom = findPackage(wrapper.getCls());
+                String importFrom = findPackage(wrapper.getClazz());
                 if (!importFrom.equals(packageName)
                         && !importFrom.equals("java.lang")
                         && !packageName.isEmpty()) {
-                    node.getDestination().addImport(wrapper.getCls().getName());
+                    node.getDestination().addImport(wrapper.getClazz().getName());
                 }
             }
         }

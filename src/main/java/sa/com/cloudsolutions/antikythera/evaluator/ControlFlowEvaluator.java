@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -13,6 +14,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -25,10 +27,14 @@ import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.Callable;
+import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,10 +111,13 @@ public class ControlFlowEvaluator extends Evaluator {
         if (entry.getValue() instanceof List<?> list) {
             if (list.isEmpty()) {
                 if (v.getValue() instanceof List<?>) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
                     return StaticJavaParser.parseExpression("List.of()");
                 } else if (v.getValue() instanceof Set<?>) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
                     return StaticJavaParser.parseExpression("Set.of()");
                 } else if (v.getValue() instanceof Map<?,?>) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
                     return StaticJavaParser.parseExpression("Map.of()");
                 }
             }
@@ -133,19 +142,33 @@ public class ControlFlowEvaluator extends Evaluator {
         if (typeArgs.isEmpty()) {
             typeArgs.add(new ClassOrInterfaceType().setName("Object"));
         }
-        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
 
+        return setupNonEmptyCollection(typeArgs, v, name);
+    }
+
+    protected Expression setupNonEmptyCollection(NodeList<Type> typeArgs, Variable v, NameExpr name) {
+        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
         try {
             Variable resolved = resolveVariableDeclaration(vdecl);
             if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
                 resolved = Reflect.variableFactory(resolved.getType().asString());
             }
 
-            if (v.getValue() instanceof List<?>) {
-                return StaticJavaParser.parseExpression(String.format("List.of(%s)", resolved.getInitializer()));
+            Expression initializer = resolved.getInitializer();
+            if (initializer instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
+                TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             }
-            if (v.getValue() instanceof Set<?>) {
-                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", resolved.getInitializer()));
+            if (v.getValue() instanceof List<?> list) {
+                Method m = List.class.getMethod("add", Object.class);
+                m.invoke(list, resolved.getValue());
+                TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+                return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer));
+            }
+            if (v.getValue() instanceof Set<?> set) {
+                Method m = Set.class.getMethod("add", Object.class);
+                m.invoke(set, resolved.getValue());
+                TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
+                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer));
             }
             if (v.getValue() instanceof Map<?,?>) {
                 if (typeArgs.size() == 1) {
@@ -159,7 +182,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
                 return StaticJavaParser.parseExpression(
                         String.format("Map.of(%s, %s)",
-                                resolved.getInitializer(), resolved2.getInitializer()));
+                                initializer, resolved2.getInitializer()));
             }
 
         } catch (ReflectiveOperationException|IOException e) {
@@ -199,12 +222,12 @@ public class ControlFlowEvaluator extends Evaluator {
             }
 
             if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariable(stmt, entry, expr);
+                setupConditionalVariablesWithSetter(stmt, entry, expr);
             }
         }
     }
 
-    private void setupConditionalVariable(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
+    private void setupConditionalVariablesWithSetter(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
@@ -239,7 +262,7 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
-        Variable field = evaluator.fields.get(
+        Variable field = evaluator.getField(
                 ClassProcessor.classToInstanceName(name.substring(3)));
         if (field != null) {
             if (field.getClazz() != null) {
@@ -379,7 +402,7 @@ public class ControlFlowEvaluator extends Evaluator {
     void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         super.invokeReflectively(v, reflectionArguments);
 
-        if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals("java.util.Optional")) {
+        if (v.getValue() instanceof Class<?> clazz && clazz.getName().equals(Reflect.JAVA_UTIL_OPTIONAL)) {
             Object[] finalArgs = reflectionArguments.getFinalArgs();
             if (finalArgs.length == 1 && reflectionArguments.getMethodName().equals("ofNullable")) {
                 handleOptionalOfNullable(reflectionArguments);
@@ -437,9 +460,25 @@ public class ControlFlowEvaluator extends Evaluator {
             String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
             String[] parts = init.split("=");
             v.setInitializer(StaticJavaParser.parseExpression(parts[1]));
+
             return v;
         }
 
         return super.resolveVariableRepresentedByCode(variable, resolvedClass);
     }
+
+
+    @Override
+    Variable handleOptionals(Scope sc) throws ReflectiveOperationException {
+        if (sc.getExpression().isMethodCallExpr()) {
+            MCEWrapper wrapper = sc.getMCEWrapper();
+            Callable callable = wrapper.getMatchingCallable();
+
+            if (callable.isMethodDeclaration()) {
+                return handleOptionalsHelper(sc);
+            }
+        }
+        return null;
+    }
+
 }

@@ -80,11 +80,11 @@ class ITDTOHandler {
 
         Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.dto.MediumDTO", Evaluator.class);
 
-        Variable v = eval.getFields().get("group");
+        Variable v = eval.getField("group");
         assertNotNull(v);
         assertEquals(1, v.getValue());
 
-        v = eval.getFields().get("number");
+        v = eval.getField("number");
         assertNotNull(v);
         assertEquals(17, v.getValue());
     }

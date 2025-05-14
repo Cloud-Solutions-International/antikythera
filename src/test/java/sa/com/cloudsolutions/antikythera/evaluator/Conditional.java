@@ -293,6 +293,16 @@ public class Conditional {
     }
 
     @SuppressWarnings("unused")
+    public void animalFarm(Person a, Person b) {
+        if (a.equals(b)) {
+            System.out.print("All animals are equal!");
+        }
+        else {
+            System.out.print("Some animals are more equal!");
+        }
+    }
+
+    @SuppressWarnings("unused")
     public void cannotControl(int a, double b, String c) {
         if (System.currentTimeMillis() == 10000) {
             System.out.println("This condition cannot be met");

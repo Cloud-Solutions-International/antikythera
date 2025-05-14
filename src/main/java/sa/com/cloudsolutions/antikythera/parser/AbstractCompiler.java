@@ -23,8 +23,6 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.UnknownType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
@@ -89,8 +87,6 @@ public class AbstractCompiler {
     protected static ClassLoader loader;
     protected CompilationUnit cu;
     protected String className;
-
-    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
@@ -191,12 +187,45 @@ public class AbstractCompiler {
     }
 
 
-    public static String findFullyQualifiedTypeName(VariableDeclarator variable) {
+    /**
+     * Finds the types required to fully represent the given variable
+     * @param variable a Node representing either a VariableDeclarator or a Parameter
+     * @return a list of TypeWrappers representing all the types that make up this particular
+     *      variable. An empty list will be returned when type resolution has failed.
+     *      A single item list means this variable does not use generics.
+     */
+    public static List<TypeWrapper> findTypesInVariable(Node variable) {
         Optional<CompilationUnit> cu = variable.findCompilationUnit();
-        if (cu.isPresent()) {
-            return findFullyQualifiedName(cu.get(), variable.getType().asString());
+        if (cu.isEmpty()) {
+            return List.of();
         }
-        return null;
+
+        Type type = switch (variable) {
+            case VariableDeclarator v -> v.getType();
+            case FieldDeclaration f -> f.getElementType();
+            case Parameter parameter -> parameter.getType();
+            default -> null;
+        };
+
+        if (type == null) {
+            return List.of();
+        }
+
+        if (type.isClassOrInterfaceType()) {
+            ClassOrInterfaceType classType = type.asClassOrInterfaceType();
+            if (classType.getTypeArguments().isPresent()) {
+                List<TypeWrapper> typeWrappers = new ArrayList<>();
+                List<Type> args = classType.getTypeArguments().orElseThrow();
+                for (Type arg : args) {
+                    typeWrappers.add(findType(cu.get(), arg));
+                }
+                typeWrappers.add(findType(cu.get(), classType.getNameAsString()));
+                return typeWrappers;
+            }
+        }
+
+        TypeWrapper foundType = findType(cu.get(), type);
+        return foundType != null ? List.of(foundType) : List.of();
     }
 
     /**
@@ -423,7 +452,7 @@ public class AbstractCompiler {
             return p.getFullyQualifiedName().orElse(
                     cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("") + "." + p.getName());
         }
-        Class<?> cls = wrapper.getCls();
+        Class<?> cls = wrapper.getClazz();
         if (cls != null) {
             return cls.getName();
         }
@@ -480,16 +509,15 @@ public class AbstractCompiler {
             }
         }
 
+        return detectTypeWithClassLoaders(cu, className);
+    }
+
+    private static TypeWrapper detectTypeWithClassLoaders(CompilationUnit cu, String className) {
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
-        String fileName = packageName + "." + className;
-        if (new File(Settings.getBasePath(), classToPath(fileName)).exists()) {
-            CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit(fileName);
-            if (compilationUnit != null) {
-                Optional<TypeDeclaration<?>> match = AbstractCompiler.getMatchingType(compilationUnit, fileName);
-                if (match.isPresent()) {
-                    return new TypeWrapper(match.get());
-                }
-            }
+        String tentativeName = packageName.isEmpty() ? className : packageName + "." + className;
+        Optional<TypeDeclaration<?>> t = AntikytheraRunTime.getTypeDeclaration(tentativeName);
+        if (t.isPresent()) {
+            return new TypeWrapper(t.get());
         }
 
         try {
@@ -511,7 +539,7 @@ public class AbstractCompiler {
         }
 
         try {
-            return new TypeWrapper(Class.forName(packageName + className));
+            return new TypeWrapper(Class.forName(tentativeName));
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package.
@@ -784,41 +812,32 @@ public class AbstractCompiler {
     }
 
     private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl) {
+        Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+        if (compilationUnit.isEmpty()) {
+            return Optional.empty();
+        }
 
         for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-            Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
-            if (compilationUnit.isPresent()) {
-                String fullName = findFullyQualifiedName(compilationUnit.get(), extended.getNameAsString());
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullName);
-                if (cu != null) {
-                    TypeDeclaration<?> p = getMatchingType(cu, extended.getNameAsString()).orElse(null);
-                    Optional<Callable> method = findCallableDeclaration(methodCall, p);
-                    if (method.isPresent()) {
-                        return method;
-                    }
-                } else {
-                    ImportWrapper wrapper = findImport(cdecl.findCompilationUnit().orElseThrow(), extended.getNameAsString());
-                    if (wrapper != null && wrapper.isExternal()) {
-                        Optional<Callable> c = findCallableInBinaryCode(wrapper, methodCall);
-                        if (c.isPresent()) {
-                            return c;
-                        }
-                    }
+            TypeWrapper wrapper = findType(compilationUnit.get(), extended);
+            if (wrapper != null) {
+                TypeDeclaration<?> p = wrapper.getType();
+                Optional<Callable> method = (p != null)
+                        ? findCallableDeclaration(methodCall, p)
+                        : findCallableInBinaryCode(wrapper.getClazz(), methodCall);
+
+                if (method.isPresent()) {
+                    return method;
                 }
             }
         }
-
-        return Optional.empty();
+        if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
+            return Optional.empty();
+        }
+        return findCallableInBinaryCode(Object.class, methodCall);
     }
 
-    private static Optional<Callable> findCallableInBinaryCode(ImportWrapper wrapper, MCEWrapper methodCall) {
-        /*
-         * the extended type is not in the same compilation unit, we will have to
-         * load the class and try to find the method in it.
-         */
-        try {
-            Class<?> clazz = AbstractCompiler.loadClass(wrapper.getNameAsString());
-
+    private static Optional<Callable> findCallableInBinaryCode(Class<?> clazz, MCEWrapper methodCall) {
+        if (!Reflect.getMethodsByName(clazz, methodCall.getMethodName()).isEmpty()) {
             ReflectionArguments reflectionArguments = new ReflectionArguments(
                     methodCall.getMethodName(),
                     methodCall.getMethodCallExpr().getArguments().toArray(new Object[0]),
@@ -830,9 +849,6 @@ public class AbstractCompiler {
                 callable.setFoundInClass(clazz);
                 return Optional.of(callable);
             }
-        } catch (ClassNotFoundException e) {
-            // can ignore this one
-            logger.warn(e.getMessage());
         }
         return Optional.empty();
     }
@@ -962,5 +978,14 @@ public class AbstractCompiler {
             }
         }
         return false;
+    }
+
+    public static Type typeFromDeclaration(TypeDeclaration<?> typeDecl) {
+        return new ClassOrInterfaceType()
+            .setName(typeDecl.getNameAsString())
+            .setScope(typeDecl.getFullyQualifiedName()
+                .map(fqn -> new ClassOrInterfaceType().setName(
+                    fqn.substring(0, fqn.lastIndexOf('.'))))
+                .orElse(null));
     }
 }

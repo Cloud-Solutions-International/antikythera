@@ -1,5 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -9,23 +12,30 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
+import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -34,10 +44,12 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -117,6 +129,10 @@ class UnitTestGeneratorTest {
         Optional<FieldDeclaration> mockedField = testClass.getFieldByName("personRepository");
         assertTrue(mockedField.isPresent());
         assertTrue(mockedField.get().getAnnotationByName("Mock").isPresent(), "The field 'dummyRepository' should be annotated with @Mock.");
+
+        assertFalse(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mock")));
+
+        unitTestGenerator.addDependencies();
 
         assertTrue(testCu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.mockito.Mock")),
                 "The import for @Mock should be present.");
@@ -206,7 +222,7 @@ class UnitTestGeneratorTest {
 
         // Verify that the whenThen list contains an expression for Optional.empty()
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing empty Optional");
-        String whenThenString = TestGenerator.whenThen.get(0).toString();
+        String whenThenString = TestGenerator.whenThen.getFirst().toString();
         assertTrue(whenThenString.contains("Optional.empty()"), 
                 "The whenThen expression should contain 'Optional.empty()' but was: " + whenThenString);
 
@@ -235,42 +251,117 @@ class UnitTestGeneratorTest {
 
         // Verify that the whenThen list contains an expression for Optional.of(new TestClass())
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing Optional with Evaluator");
-        whenThenString = TestGenerator.whenThen.get(0).toString();
+        whenThenString = TestGenerator.whenThen.getFirst().toString();
         assertTrue(whenThenString.contains("Optional.of(new TestClass())"), 
                 "The whenThen expression should contain 'Optional.of(new TestClass())' but was: " + whenThenString);
     }
 }
 
-class UnitTestGeneratorMoreTests {
+class UnitTestGeneratorMoreTests extends TestHelper {
     CompilationUnit cu;
     UnitTestGenerator unitTestGenerator;
 
+    @BeforeEach
+    void setup() {
+        System.setOut(new PrintStream(outContent));
+    }
+
+    @AfterEach
+    void after() {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.DEBUG);
+
+    }
 
     @BeforeAll
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+        AntikytheraRunTime.reset();
+        Branching.clear();
+        MockingRegistry.reset();
+        TestGenerator.whenThen.clear();
     }
 
-    @BeforeEach
-    void setUp() {
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+    private MethodDeclaration setupMethod(String className, String name) {
+        cu = AntikytheraRunTime.getCompilationUnit(className);
         unitTestGenerator = new UnitTestGenerator(cu);
         unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
-    }
-
-    private MethodDeclaration setupMethod(String name) {
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals(name)).orElseThrow();
         unitTestGenerator.methodUnderTest = md;
         unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
+        unitTestGenerator.setAsserter(new JunitAsserter());
         return md;
     }
 
     @Test
+    void integrationTestCasting() throws ReflectiveOperationException {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
+
+
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","castingHelper");
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
+        unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
+
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator.setOnTest(true);
+        evaluator.addGenerator(unitTestGenerator);
+        evaluator.setArgumentGenerator(argumentGenerator);
+        evaluator.visit(md);
+        assertTrue(outContent.toString().contains("Found!Not found!"));
+        String s = unitTestGenerator.gen.toString();
+        assertTrue(s.contains("(List<Integer>)"));
+        assertTrue(s.contains("(Set<Integer>)"));
+        assertFalse(s.contains("Bada"));
+        assertFalse(s.contains(" = Mockito.mock(Set.class);"));
+    }
+
+    @Test
+    void integrationTestFindAll() throws ReflectiveOperationException {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
+
+
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","findAll");
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
+        unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
+
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator.setOnTest(true);
+        evaluator.addGenerator(unitTestGenerator);
+        evaluator.setArgumentGenerator(argumentGenerator);
+        evaluator.visit(md);
+        assertTrue(outContent.toString().contains("1!0!"));
+        String s = unitTestGenerator.gen.toString();
+        assertTrue(s.contains("List.of(new FakeEntity())"));
+        assertTrue(s.contains("List.of()"));
+
+    }
+
+    @Test
+    void testAutowiredCollection() throws ReflectiveOperationException {
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","autoList");
+
+        unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
+
+        Evaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator.visit(md);
+        assertTrue(outContent.toString().contains("Person: class sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator"));
+        assertTrue(unitTestGenerator.gen.toString().contains("@Mock()\n" +
+                "    List<IPerson> persons;"));
+    }
+
+    @Test
     void testMockWithMockito1() {
-        MethodDeclaration md = setupMethod("printMap");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","printMap");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
@@ -279,7 +370,7 @@ class UnitTestGeneratorMoreTests {
 
     @Test
     void mockFields() {
-        setupMethod("main");
+        setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);
         unitTestGenerator.mockParameterFields(new Variable(eval),  "bada");
@@ -289,26 +380,41 @@ class UnitTestGeneratorMoreTests {
 
     @Test
     void mockWithEvaluator() {
-        MethodDeclaration md = setupMethod("switchCase1");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","switchCase1");
         Type t = new ClassOrInterfaceType().setName("Person");
         Parameter p = new Parameter(t, "person");
         md.getParameters().add(p);
 
         Variable v = new Variable("bada");
-        unitTestGenerator.mockWithEvaluator(p, v);
+        unitTestGenerator.mockWithMockito(p, v);
         assertTrue(unitTestGenerator.testMethod.toString().contains("Person"));
-
     }
 
     @Test
     void testMockWithMockito2() {
-        MethodDeclaration md = setupMethod("main");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         assertTrue(unitTestGenerator.testMethod.toString().contains("String[] args = new String[] { \"Antikythera\" };"));
     }
+
+    @Test
+    void testMockWithMockito3() {
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
+        Parameter param = md.getParameter(0);
+        unitTestGenerator.mockWithMockito(param, new Variable("hello"));
+        MethodCallExpr mce = new MethodCallExpr(new NameExpr("Bean"), "setName");
+        mce.addArgument("Shagrat");
+        unitTestGenerator.setPreConditions(List.of(new Precondition(mce)));
+
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Shagrat"));
+        unitTestGenerator.applyPreconditions();
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Shagrat"));
+
+    }
+
     /**
      * The base class should be added to the class under test.
      */
@@ -351,21 +457,6 @@ class VariableInitializationModifierTest {
 
         assertTrue(method.toString().contains("String test = \"new\""));
         assertTrue(method.toString().contains("int other = 5"));
-    }
-
-    @Test
-    void shouldNotModifyWhenVariableNotFound() {
-        String code = """
-            public void testMethod() {
-                String existingVar = "old";
-            }
-            """;
-        MethodDeclaration method = StaticJavaParser.parseMethodDeclaration(code);
-        IntegerLiteralExpr newValue = new IntegerLiteralExpr("42");
-
-        UnitTestGenerator.replaceInitializer(method, "nonexistentVar", newValue);
-
-        assertEquals(method.toString(), method.toString());
     }
 
     @Test

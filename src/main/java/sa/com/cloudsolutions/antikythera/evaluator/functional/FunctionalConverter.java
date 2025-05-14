@@ -15,14 +15,13 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
-import java.util.Optional;
 
 public class FunctionalConverter {
 
@@ -50,7 +49,7 @@ public class FunctionalConverter {
         }
 
         LambdaExpr lambda = new LambdaExpr(parameters, body);
-        lambda.setParentNode(methodRef.getParentNode().get());
+        lambda.setParentNode(methodRef.getParentNode().orElseThrow());
         return lambda;
     }
 
@@ -63,10 +62,7 @@ public class FunctionalConverter {
                 pos = i;
             }
         }
-        if (outerScope.getValue() instanceof Evaluator eval) {
-
-        }
-        else {
+        if ( !(outerScope.getValue() instanceof Evaluator)) {
             Class<?> clazz = outerScope.getClazz();
             for (Method m : Reflect.getMethodsByName(clazz, name)) {
                 if (m.getParameterCount() == mce.getArguments().size()) {
@@ -95,26 +91,40 @@ public class FunctionalConverter {
             if (typeExpr.toString().startsWith("System")) {
                 call.setScope(scope);
                 call.addArgument(new NameExpr("arg"));
+                return call;
             }
-            else {
-                call.setScope(new NameExpr("arg"));
-                CompilationUnit cu = methodRef.findCompilationUnit().orElseThrow();
-                String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeExpr.toString());
-                if (fqn != null) {
-                    CompilationUnit typeCu = AntikytheraRunTime.getCompilationUnit(fqn);
-                    if (typeCu != null) {
-                        Optional<MethodDeclaration> md = typeCu.findFirst(MethodDeclaration.class,
-                                m -> m.getNameAsString().equals(methodRef.getIdentifier()));
-                        if (md.isPresent()) {
-                            for(int i = 0 ; i < md.get().getParameters().size() ; i++) {
-                                call.addArgument(new NameExpr("arg" + i));
-                            }
-                        }
-                    }
-                }
-            }
+
+            createMethodCalleExpressionArguments(methodRef, typeExpr, call);
+
         }
         return call;
+    }
+
+    private static void createMethodCalleExpressionArguments(MethodReferenceExpr methodRef, TypeExpr typeExpr, MethodCallExpr call) {
+        CompilationUnit cu = methodRef.findCompilationUnit().orElseThrow();
+        TypeWrapper typeWrapper = AbstractCompiler.findType(cu, typeExpr.toString());
+
+        if (typeWrapper == null || typeWrapper.getType() == null){
+            return;
+        }
+        MethodDeclaration md = typeWrapper.getType().getMethodsByName(methodRef.getIdentifier()).getFirst();
+        if (md.isStatic()) {
+            if (md.getParameters().size() == 1) {
+                call.addArgument(new NameExpr("arg"));
+            }
+            else {
+                for(int i = 0 ; i < md.getParameters().size() ; i++) {
+                    call.addArgument(new NameExpr("arg" + i));
+                }
+            }
+            call.setScope(methodRef.getScope());
+        }
+        else {
+            for(int i = 0 ; i < md.getParameters().size() ; i++) {
+                call.addArgument(new NameExpr("arg" + i));
+            }
+            call.setScope(new NameExpr("arg"));
+        }
     }
 
     private static Method getFunctionalInterfaceMethod(Class<?> functionalInterface) {

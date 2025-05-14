@@ -69,8 +69,8 @@ public class MCEWrapper {
             if (cu != null) {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
                 if (wrapper != null) {
-                    if (wrapper.getCls() != null) {
-                        classes[i] = wrapper.getCls();
+                    if (wrapper.getClazz() != null) {
+                        classes[i] = wrapper.getClazz();
                     }
                     else {
                         MockingEvaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);

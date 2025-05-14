@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
@@ -23,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -57,6 +59,10 @@ public class Reflect {
     public static final String JAVA_LANG_LONG = "java.lang.Long";
     public static final String JAVA_LANG_STRING = "java.lang.String";
     public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
+    public static final String JAVA_UTIL_ARRAY_LIST = "java.util.ArrayList";
+    public static final String JAVA_UTIL_HASH_SET = "java.util.HashSet";
+    public static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
+    public static final String OPTIONAL = "Optional";
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -153,7 +159,7 @@ public class Reflect {
                 }
             } else {
                 try {
-                    String className = arguments.get(0).calculateResolvedType().describe();
+                    String className = arguments.getFirst().calculateResolvedType().describe();
                     argumentTypes[i] = primitiveToWrapper(className);
                 } catch (UnsolvedSymbolException | IllegalStateException us) {
                     argumentTypes[i] = Object.class;
@@ -313,6 +319,21 @@ public class Reflect {
                     .addArgument(new StringLiteralExpr(initialValue.toString()));
                 v.setInitializer(mce);
             }
+            case "java.util.List", JAVA_UTIL_ARRAY_LIST -> {
+                MethodCallExpr init = new MethodCallExpr("of");
+                init.setScope(new NameExpr("List"));
+                v.setInitializer(init);
+            }
+            case "java.util.Set", JAVA_UTIL_HASH_SET -> {
+                MethodCallExpr init = new MethodCallExpr("of");
+                init.setScope(new NameExpr("Set"));
+                v.setInitializer(init);
+            }
+            case JAVA_UTIL_OPTIONAL, OPTIONAL -> {
+                MethodCallExpr init = new MethodCallExpr("empty");
+                init.setScope(new NameExpr(OPTIONAL));
+                v.setInitializer(init);
+            }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName(typeName));
@@ -322,6 +343,7 @@ public class Reflect {
                     expr.setArguments(NodeList.nodeList());
                 }
                 v.setInitializer(expr);
+                TestGenerator.addImport(new ImportDeclaration(typeName, false, false));
             }
         }
         if (v.getType() == null) {
@@ -401,16 +423,16 @@ public class Reflect {
 
     private static Variable generateNonArrayVariable(String qualifiedName) {
         return switch (qualifiedName) {
-            case "List", "java.util.List", "java.util.ArrayList" ->
-                    createVariable(new ArrayList<>(), "java.util.ArrayList", null);
+            case "List", "java.util.List", JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
+                    createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", "java.util.Map", "java.util.HashMap" ->
                     createVariable(new HashMap<>(), "java.util.HashMap", null);
             case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
-            case "Set", "java.util.Set", "java.util.HashSet" ->
-                    createVariable(new HashSet<>(), "java.util.HashSet", null);
+            case "Set", "java.util.Set", JAVA_UTIL_HASH_SET ->
+                    createVariable(new HashSet<>(), JAVA_UTIL_HASH_SET, null);
             case "java.util.TreeSet" -> createVariable(new TreeSet<>(), "java.util.TreeSet", null);
-            case "java.util.Optional" -> createVariable(Optional.empty(), "java.util.Optional", null);
+            case JAVA_UTIL_OPTIONAL, OPTIONAL -> createVariable(Optional.empty(), JAVA_UTIL_OPTIONAL, null);
             case BOOLEAN, PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> createVariable(true, BOOLEAN, "true");
             case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE ->
                     createVariable(1.0, DOUBLE, "1.0");

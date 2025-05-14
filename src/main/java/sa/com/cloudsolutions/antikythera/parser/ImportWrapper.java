@@ -76,4 +76,12 @@ public class ImportWrapper {
     public ImportDeclaration getSimplified() {
         return simplified;
     }
+
+    @Override
+    public String toString() {
+        if (imp != null) {
+            return imp.toString();
+        }
+        return super.toString();
+    }
 }

@@ -453,12 +453,12 @@ public class TruthTable {
                         maxValue = Math.max(maxValue, value + 1);
                     }
                 }
-            } else if (expr instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL)) {
+            } else if (expr instanceof MethodCallExpr methodCall && methodCall.toString().contains(EQUALS_CALL) &&
+                    !methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()
+            ) {
                 // Check equals method arguments for integer literals
-                if (!methodCall.getArguments().isEmpty() && methodCall.getArgument(0).isIntegerLiteralExpr()) {
-                    int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
-                    maxValue = Math.max(maxValue, value + 1);
-                }
+                int value = Integer.parseInt(methodCall.getArgument(0).asIntegerLiteralExpr().getValue());
+                maxValue = Math.max(maxValue, value + 1);
             }
         }
         return maxValue;
@@ -646,35 +646,43 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         Expression scope = condition.getScope().orElse(null);
 
         if (IS_EMPTY.equals(methodName)) {
-            Object scopeValue = truthValues.get(scope);
-            if (scopeValue == null) {
-                return true; // null collections are considered empty for the moment
-            }
-            if (scopeValue instanceof Collection<?> collection) {
-                return collection.isEmpty();
-            }
-            if (scopeValue instanceof Map<?, ?> map) {
-                return map.isEmpty();
-            }
-            return false; // non-collection objects are not empty
+            return evaluateIsEmpty(truthValues, scope);
         } else if (EQUALS_CALL.equals(methodName)) {
-            Object scopeValue = truthValues.get(scope);
-            Expression argument = condition.getArgument(0);
-
-            if (argument.isLiteralExpr()) {
-                if (scopeValue == null) {
-                    return argument.isNullLiteralExpr();
-                }
-                return scopeValue.equals(getValue(argument, truthValues));
-            } else {
-                Object arg = truthValues.get(argument);
-                if (scopeValue == null) {
-                    return arg == null;
-                }
-                return scopeValue.equals(arg);
-            }
+            return evaluateIsEquals(condition, truthValues, scope);
         }
         return getValue(condition, truthValues);
+    }
+
+    private Object evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
+        Object scopeValue = truthValues.get(scope);
+        Expression argument = condition.getArgument(0);
+
+        if (argument.isLiteralExpr()) {
+            if (scopeValue == null) {
+                return argument.isNullLiteralExpr();
+            }
+            return scopeValue.equals(getValue(argument, truthValues));
+        } else {
+            Object arg = truthValues.get(argument);
+            if (scopeValue == null) {
+                return arg == null;
+            }
+            return scopeValue.equals(arg);
+        }
+    }
+
+    private static Object evaluateIsEmpty(Map<Expression, Object> truthValues, Expression scope) {
+        Object scopeValue = truthValues.get(scope);
+        if (scopeValue == null) {
+            return true;
+        }
+        if (scopeValue instanceof Collection<?> collection) {
+            return collection.isEmpty();
+        }
+        if (scopeValue instanceof Map<?, ?> map) {
+            return map.isEmpty();
+        }
+        return false;
     }
 
     /**

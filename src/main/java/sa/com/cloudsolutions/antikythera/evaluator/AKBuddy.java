@@ -86,8 +86,8 @@ public class AKBuddy {
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
                 TypeWrapper wrapper = AbstractCompiler.findType(eval.getCompilationUnit(), iface.getNameAsString());
-                if (wrapper != null && wrapper.getCls() != null) {
-                    builder = builder.implement(wrapper.getCls());
+                if (wrapper != null && wrapper.getClazz() != null) {
+                    builder = builder.implement(wrapper.getClazz());
                 }
             }
         }

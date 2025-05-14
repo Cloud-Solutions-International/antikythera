@@ -16,6 +16,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -23,6 +24,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,13 +85,13 @@ class TestSpringEvaluator {
         ClassOrInterfaceType stringType = StaticJavaParser.parseClassOrInterfaceType("String");
         Variable typeVariable = new Variable("test");
         typeVariable.setType(stringType);
-        evaluator.getFields().put("testField", typeVariable);
+        evaluator.setField("testField", typeVariable);
         assertEquals("java.lang.String", evaluator.getFieldClass(nameExpr));
 
         // Test with a Variable containing an Evaluator
         SpringEvaluator innerEvaluator = EvaluatorFactory.create("TestInnerClass", SpringEvaluator.class);
         Variable evaluatorVariable = new Variable(innerEvaluator);
-        evaluator.getFields().put("evaluatorField", evaluatorVariable);
+        evaluator.setField("evaluatorField", evaluatorVariable);
         assertEquals("TestInnerClass", evaluator.getFieldClass(new NameExpr("evaluatorField")));
 
         // Test with MethodCallExpr
@@ -161,7 +163,8 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
+        assertNotNull(evaluator.autoWire(variable,
+                List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNotNull(f);
     }
@@ -173,10 +176,12 @@ class TestSpringEvaluator {
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        MockingRegistry.markAsMocked(AbstractCompiler.findFullyQualifiedTypeName(variable));
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(variable);
+        MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
 
         SpringEvaluator evaluator = EvaluatorFactory.create(sample, SpringEvaluator.class);
-        assertNotNull(evaluator.autoWire(variable, PERSON_REPO));
+        assertNotNull(evaluator.autoWire(variable,
+                List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
         Variable f = AntikytheraRunTime.getAutoWire(PERSON_REPO);
         assertNull(f);
         assertTrue(MockingRegistry.isMockTarget(PERSON_REPO));
@@ -199,7 +204,7 @@ class TestSpringEvaluator {
         // Get the field from the parsed class
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
-        assertNull(evaluator.autoWire(variable, "TestClass"));
+        assertNull(evaluator.autoWire(variable, List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
     }
 }
 

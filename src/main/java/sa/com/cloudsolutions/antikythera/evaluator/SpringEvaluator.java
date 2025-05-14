@@ -21,7 +21,6 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -39,6 +38,7 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -109,8 +109,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         String shortName = t.getNameAsString();
+        List<TypeWrapper> wrappers =  AbstractCompiler.findTypesInVariable(variable);
+        if (wrappers.isEmpty()) {
+            return;
+        }
 
-        String className = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        String className = wrappers.getLast().getFullyQualifiedName();
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             var typeDecl = AbstractCompiler.getMatchingType(cu, shortName).orElse(null);
@@ -147,7 +151,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         try {
             if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
-                Map<String, Variable> fields = evaluator.getFields();
+
 
                 for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
                     for (VariableDeclarator fieldVar : field.getVariables()) {
@@ -157,7 +161,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                 Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
                                 Variable v = new Variable(value);
                                 v.setType(fieldVar.getType());
-                                fields.put(fieldName, v);
+                                evaluator.setField(fieldName, v);
                             }
                         } catch (SQLException e) {
                             logger.warn(e.getMessage());
@@ -172,11 +176,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private void parameterAssignment(Parameter p, AssignExpr assignExpr, Variable va) {
-        if (!assignExpr.getTarget().toString().equals(p.getNameAsString())) {
-            return;
-        }
-
+    private void parameterAssignment(AssignExpr assignExpr, Variable va) {
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> value instanceof NullLiteralExpr ? null : Integer.parseInt(value.toString());
@@ -272,6 +272,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     @Override
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
+        super.setupParameters(md);
         NodeList<Parameter> parameters = md.getParameters();
         for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
             setupParameter(md, parameters.get(i));
@@ -287,12 +288,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param p the parameter in question.
      * @throws ReflectiveOperationException if a reflection operation fails
      */
-    @Override
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
-        Variable va = AntikytheraRunTime.pop();
-        md.getBody().ifPresent(body ->
-                setLocal(body, p.getNameAsString(), va)
-        );
+        Variable va = getValue(md.getBody().orElseThrow(), p.getNameAsString());
 
         if (currentConditional != null ) {
             if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
@@ -312,15 +309,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                if (mce.getScope().get() instanceof NameExpr ne
+                if (mce.getScope().orElseThrow() instanceof NameExpr ne
                         && ne.getNameAsString().equals(p.getNameAsString())
                         && va.getValue() instanceof Evaluator eval) {
+
                     MCEWrapper wrapper = eval.wrapCallExpression(mce);
                     eval.executeLocalMethod(wrapper);
                 }
-            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
-                parameterAssignment(p, assignExpr, va);
-                va.setInitializer(assignExpr);
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr &&
+                assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+
+                    parameterAssignment(assignExpr, va);
+                    va.setInitializer(assignExpr);
             }
         }
     }
@@ -460,31 +460,34 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws AntikytheraException         if there is an error in the code
      * @throws ReflectiveOperationException if a reflection operation fails
      */
+    @SuppressWarnings("unchecked")
     @Override
     Variable executeReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
         /*
          * Leg work is done in the overloaded method.
          */
+        Variable v = super.executeReturnStatement(statement);
+
         if (AntikytheraRunTime.isControllerClass(getClassName()) || onTest) {
-            ReturnStmt stmt = statement.asReturnStmt();
-            Optional<Node> parent = stmt.getParentNode();
-            Variable v = super.executeReturnStatement(stmt);
-            if (parent.isPresent() && returnValue != null) {
-                if (returnValue.getValue() instanceof MethodResponse mr) {
-                    return createTests(mr);
+            Optional<Node> parent = statement.getParentNode();
+
+            if (parent.isPresent() && returnValue != null && returnFrom != null) {
+                Optional<MethodDeclaration> ancestor = returnFrom.findAncestor(MethodDeclaration.class);
+                if (ancestor.isPresent() && ancestor.get().equals(currentMethod)) {
+                    if (returnValue.getValue() instanceof MethodResponse mr) {
+                        return createTests(mr);
+                    }
+                    MethodResponse mr = new MethodResponse();
+                    mr.setBody(returnValue);
+                    createTests(mr);
                 }
-                MethodResponse mr = new MethodResponse();
-                mr.setBody(returnValue);
-                createTests(mr);
             }
-            return v;
-        } else {
-            return super.executeReturnStatement(statement);
         }
+        return v;
     }
 
     /**
-     * Finally create the tests by calling each of the test generators.
+     * Finally, create the tests by calling each of the test generators.
      * There maybe multiple test generators, one of unit tests, one of API tests aec.
      *
      * @param response the response from the controller
@@ -505,22 +508,27 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         generators.add(generator);
     }
 
-    Variable autoWire(VariableDeclarator variable, String resolvedClass) {
+    Variable autoWire(VariableDeclarator variable, List<TypeWrapper> resolvedTypes) {
+        if (resolvedTypes.isEmpty()) {
+            throw new AntikytheraException("No types found for variable " + variable);
+        }
+
         Optional<Node> parent = variable.getParentNode();
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
                 && fd.getAnnotationByName("Autowired").isPresent()) {
-            Variable v = AntikytheraRunTime.getAutoWire(resolvedClass);
+            String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+            Variable v = AntikytheraRunTime.getAutoWire(registryKey);
             if (v == null) {
-                if (MockingRegistry.isMockTarget(resolvedClass)) {
+                if (MockingRegistry.isMockTarget(registryKey)) {
                     try {
                         v = MockingRegistry.mockIt(variable);
                     } catch (ReflectiveOperationException e) {
                         throw new AntikytheraException(e);
                     }
-                } else if (AntikytheraRunTime.getCompilationUnit(resolvedClass) != null) {
-                    v = wireFromSourceCode(variable.getType(), resolvedClass, fd);
+                } else if (AntikytheraRunTime.getCompilationUnit(resolvedTypes.getLast().getFullyQualifiedName()) != null) {
+                    v = wireFromSourceCode(variable.getType(), resolvedTypes.getLast().getFullyQualifiedName(), fd);
                 } else {
-                    v = wireFromByteCode(resolvedClass);
+                    v = wireFromByteCode(resolvedTypes.getLast().getFullyQualifiedName());
                 }
             }
             fields.put(variable.getNameAsString(), v);
@@ -544,7 +552,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
-        Evaluator eval = MockingRegistry.isMockTarget(AbstractCompiler.findFullyQualifiedTypeName(fd.getVariable(0)))
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
+        Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
             ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
             : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -561,26 +570,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     @Override
     void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
-        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, variableDeclarator.getTypeAsString());
-        if (resolvedClass != null) {
-            Variable v = autoWire(variableDeclarator, resolvedClass);
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(field);
+        if (!wrappers.isEmpty()) {
+            String resolvedClass = wrappers.getFirst().getFullyQualifiedName();
+            Variable v = autoWire(variableDeclarator, wrappers);
             if (v == null) {
-                /*
-                 * Try to substitute an implementation for the interface.
-                 */
-                CompilationUnit targetCu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-                if (targetCu != null) {
-                    String name = AbstractCompiler.findFullyQualifiedName(targetCu, variableDeclarator.getType().asString());
-
-                    for (String impl : AntikytheraRunTime.findImplementations(name)) {
-                        v = autoWire(variableDeclarator, impl);
-                        if (v != null) {
-                            return;
-                        }
+                for (String impl : AntikytheraRunTime.findImplementations(resolvedClass)) {
+                    v = AntikytheraRunTime.getAutoWire(impl);
+                    if (v != null) {
+                        return;
                     }
                 }
-            }
-            else {
+            } else {
                 fields.put(variableDeclarator.getNameAsString(), v);
                 return;
             }
@@ -600,7 +601,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     if (repositories.containsKey(fieldClass) && !(v.getValue() instanceof MockingEvaluator)) {
                         boolean isMocked = false;
                         String fieldName = getFieldName(expr.get());
-                        if (fieldName != null && fields.get(fieldName) != null && fields.get(fieldName).getType() != null) {
+                        if (fieldName != null && getField(fieldName) != null && getField(fieldName).getType() != null) {
                             isMocked = MockingRegistry.isMockTarget(fieldClass);
                         }
                         if (!isMocked) {
@@ -759,7 +760,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     String getFieldClass(Expression expr) {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
-            Variable v = fields.get(name);
+            Variable v = getField(name);
             if (v != null) {
                 Type t = v.getType();
                 if (t != null) {
@@ -777,8 +778,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
         return null;
     }
-
-
 
     public void setOnTest(boolean b) {
         onTest = b;
@@ -812,19 +811,5 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             gen.setArgumentGenerator(argumentGenerator);
         }
     }
-
-    @Override
-    Variable handleOptionals(Scope sc) throws ReflectiveOperationException {
-        if (sc.getExpression().isMethodCallExpr()) {
-            MCEWrapper wrapper = sc.getMCEWrapper();
-            Callable callable = wrapper.getMatchingCallable();
-
-            if (callable.isMethodDeclaration()) {
-                return handleOptionalsHelper(sc);
-            }
-        }
-        return null;
-    }
-
 }
 

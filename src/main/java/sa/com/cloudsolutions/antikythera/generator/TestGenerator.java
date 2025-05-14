@@ -83,7 +83,7 @@ public abstract class TestGenerator {
         }
 
         if (testMethodNames.contains(testName)) {
-            testName += "_" + (char)('A' + testMethodNames.size()  % 26 -1);
+            testName += "_" + (char)('A' + testMethodNames.size()  % 26 );
         }
         testMethodNames.add(testName);
         return testName;
@@ -162,7 +162,7 @@ public abstract class TestGenerator {
         this.asserter = asserter;
     }
 
-    public void setupImports() {
+    public void setupAsserterImports() {
         asserter.setupImports(gen);
     }
 

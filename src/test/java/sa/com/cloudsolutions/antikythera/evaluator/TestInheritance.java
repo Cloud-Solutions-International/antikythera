@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -38,9 +37,9 @@ class TestInheritance extends TestHelper {
 
     @Test
     void testFields() {
-        assertEquals(6, evaluator.getFields().size());
-        assertEquals(0, evaluator.getFields().get("id").getValue());
-        assertNull(evaluator.getFields().get("name").getValue());
+        assertEquals(6, evaluator.fields.size());
+        assertEquals(0, evaluator.fields.get("id").getValue());
+        assertNull(evaluator.fields.get("name").getValue());
     }
 
     @Test

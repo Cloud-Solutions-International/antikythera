@@ -6,6 +6,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -17,6 +18,8 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.Map;
 import java.util.Optional;
@@ -66,7 +69,6 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
 
         FPEvaluator<?> fp = createEvaluator(md);
         fp.enclosure = enclosure;
-
         fp.expr = lambda;
         Variable v = new Variable(fp);
         v.setType(fp.getType());
@@ -160,4 +162,37 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     }
 
     public abstract Type getType();
+
+    @Override
+    protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
+        if (wrapper.getType() != null) {
+            Variable v;
+            Evaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), Evaluator.class);
+            eval.setupFields();
+            eval.initializeFields();
+            v = new Variable(eval);
+            return v;
+        }
+        return null;
+    }
+
+    @Override
+    protected Object findScopeType(String s) {
+        Object o = super.findScopeType(s);
+        if (o == null) {
+            TypeWrapper wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), s);
+            return EvaluatorFactory.create(wrapper.getFullyQualifiedName(), enclosure);
+        }
+        return o;
+    }
+
+    @Override
+    protected Variable resolveExpression(NameExpr expr) {
+        Variable v = super.resolveExpression(expr);
+        if (v == null) {
+            TypeWrapper wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), expr.getNameAsString());
+            return resolveExpressionHelper(wrapper);
+        }
+        return v;
+    }
 }

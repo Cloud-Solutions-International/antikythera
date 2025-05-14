@@ -42,7 +42,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                         v = Reflect.variableFactory(fullClassName);
                     } else {
                         Class<?> clazz = Class.forName(fullClassName);
-                        v = new Variable(clazz.newInstance());
+                        v = new Variable(clazz.getDeclaredConstructor().newInstance());
                     }
                 }
             } else {

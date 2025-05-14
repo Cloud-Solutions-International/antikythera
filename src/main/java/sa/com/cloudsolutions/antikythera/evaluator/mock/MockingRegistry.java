@@ -29,11 +29,13 @@ import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +44,7 @@ import static org.mockito.Mockito.withSettings;
 
 /**
  * Keep track of all the types that are being mocked internally while evaluating expressions.
+ * Also supports the when/then type of mocking that you find in frameworks like mockito.
  */
 public class MockingRegistry {
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
@@ -61,6 +64,21 @@ public class MockingRegistry {
 
     public static boolean isMockTarget(String className) {
         return mockedFields.containsKey(className);
+    }
+
+    public static String generateRegistryKey(List<TypeWrapper> resolvedTypes) {
+        if (resolvedTypes.size() == 1) {
+            return resolvedTypes.getFirst().getFullyQualifiedName();
+        }
+
+        StringBuilder joinedNames = new StringBuilder();
+        for (int i = 0; i < resolvedTypes.size(); i++) {
+            joinedNames.append(resolvedTypes.get(i).getFullyQualifiedName());
+            if (i < resolvedTypes.size() - 1) {
+                joinedNames.append(":");
+            }
+        }
+        return joinedNames.toString();
     }
 
     public static void reset() {
@@ -89,12 +107,19 @@ public class MockingRegistry {
      * @throws ClassNotFoundException if the class cannot be found
      */
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
-        String fqn = AbstractCompiler.findFullyQualifiedTypeName(variable);
+        List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
+
+        String fqn = resolvedTypes.getFirst().getFullyQualifiedName();
         Variable v;
         if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
-            Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
-            eval.setVariableName(variable.getNameAsString());
-            v = new Variable(eval);
+            if (resolvedTypes.size() == 1) {
+                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
+                eval.setVariableName(variable.getNameAsString());
+                v = new Variable(eval);
+            }
+            else {
+                return mockCollection(resolvedTypes, fqn);
+            }
         }
         else {
             String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
@@ -107,6 +132,21 @@ public class MockingRegistry {
         }
         v.setType(variable.getType());
         return v;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Variable mockCollection(List<TypeWrapper> resolvedTypes, String fqn) {
+        String collection = resolvedTypes.getLast().getFullyQualifiedName();
+        Variable cv = Reflect.variableFactory(collection);
+        if (collection.equals("java.util.List") || collection.equals("java.util.Set")
+                || collection.equals("java.util.Collection")) {
+            Collection<Object> c = (Collection<Object>) cv.getValue();
+            for (String implementation : AntikytheraRunTime.findImplementations(fqn)) {
+                Evaluator eval = EvaluatorFactory.createLazily(implementation, MockingEvaluator.class);
+                c.add(eval);
+            }
+        }
+        return cv;
     }
 
     public static Variable createMockitoMockInstance(String className) throws ClassNotFoundException {
@@ -242,8 +282,8 @@ public class MockingRegistry {
                         .setArguments(new NodeList<>());
             }
 
-            case "java.util.Optional" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.Optional", false, false));
+            case Reflect.JAVA_UTIL_OPTIONAL -> {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                 yield new MethodCallExpr(
                         new NameExpr("Optional"),
                         "empty"
@@ -268,6 +308,16 @@ public class MockingRegistry {
     }
 
     public static Expression createMockitoArgument(String typeName) {
+        MethodCallExpr mce = generateAnyExpression(typeName);
+        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
+        // If it's a generic Mockito.any() call, add casting
+        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
+            return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
+        }
+        return mce;
+    }
+
+    private static MethodCallExpr generateAnyExpression(String typeName) {
         MethodCallExpr mce = new MethodCallExpr(
                 new NameExpr(MOCKITO),
                 switch (typeName) {
@@ -280,11 +330,6 @@ public class MockingRegistry {
                 }
         );
         mce.setScope(new NameExpr(MOCKITO));
-        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
-        // If it's a generic Mockito.any() call, add casting
-        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
-            return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
-        }
         return mce;
     }
 }

@@ -1,10 +1,14 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
@@ -24,17 +28,20 @@ public abstract class Asserter {
     public void addFieldAsserts(MethodResponse resp, BlockStmt body) {
         if (resp.getBody() != null && resp.getBody().getValue() instanceof Evaluator ev) {
             int i = 0;
-            for(Map.Entry<String, Variable> field : ev.getFields().entrySet()) {
+            TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(ev.getClassName()).orElseThrow();
+            for(FieldDeclaration field : type.getFields()) {
                 try {
-                    if (field.getValue() != null && !field.getKey().equals("serialVersionUID")
-                            && field.getValue().getValue() != null) {
-                        Variable v = field.getValue();
-                        String getter = "get" + field.getKey().substring(0, 1).toUpperCase() + field.getKey().substring(1);
-                        body.addStatement(fieldAssertion(getter, v));
+                    String fieldName = field.getVariable(0).getNameAsString();
+                    Variable value = ev.getField(fieldName);
+
+                    if (value != null && !fieldName.equals("serialVersionUID")
+                            && value.getValue() != null) {
+                        String getter = "get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+                        body.addStatement(fieldAssertion(getter, value));
                         i++;
                     }
                 } catch (Exception pex) {
-                    logger.error("Error asserting {}", field.getKey());
+                    logger.error("Error asserting {}", field.getVariable(0).getNameAsString(), pex);
                 }
                 if (i == 5) {
                     break;
@@ -63,4 +70,17 @@ public abstract class Asserter {
         return assertEquals(v.getValue().toString(), getterCall);
 
     }
+
+    public Expression assertEmpty(String variable) {
+        MethodCallExpr mce = new MethodCallExpr("assertTrue");
+        mce.addArgument(variable + ".isEmpty()");
+        return mce;
+    }
+
+    public Expression assertNotEmpty(String variable) {
+        MethodCallExpr mce = new MethodCallExpr("assertFalse");
+        mce.addArgument(variable + ".isEmpty()");
+        return mce;
+    }
+
 }

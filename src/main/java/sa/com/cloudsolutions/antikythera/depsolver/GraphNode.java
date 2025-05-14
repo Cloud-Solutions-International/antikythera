@@ -276,7 +276,7 @@ public class GraphNode {
         if (typeArg.isClassOrInterfaceType()) {
             ClassOrInterfaceType ctype = typeArg.asClassOrInterfaceType();
             ctype.getTypeArguments().ifPresent(types ->{
-                for (Type t : ctype.getTypeArguments().get()) {
+                for (Type t : types) {
                     processTypeArgument(t);
                 }
             });
