@@ -200,14 +200,14 @@ public class AbstractCompiler {
             return List.of();
         }
 
-        Type type;
-        if (variable instanceof VariableDeclarator v) {
-            type = v.getType();
-        } else if (variable instanceof FieldDeclaration f) {
-            type = f.getElementType();
-        } else if (variable instanceof Parameter parameter) {
-            type = parameter.getType();
-        } else {
+        Type type = switch (variable) {
+            case VariableDeclarator v -> v.getType();
+            case FieldDeclaration f -> f.getElementType();
+            case Parameter parameter -> parameter.getType();
+            default -> null;
+        };
+
+        if (type == null) {
             return List.of();
         }
 

@@ -53,12 +53,13 @@ public class Functional {
     }
 
     private void people1() {
-        List<String> names = people.stream().map(Person::getName).collect(Collectors.toList());
+        List<String> names = people.stream().map(Person::getName).toList();
         System.out.println(names);
     }
 
+    @SuppressWarnings("java:S1612")
     private void people2() {
-        List<String> names = people.stream().map( p -> p.getName()).collect(Collectors.toList());
+        List<String> names = people.stream().map( p -> p.getName()).toList();
         System.out.println(names);
     }
 
@@ -86,7 +87,9 @@ public class Functional {
         people.stream().findFirst().ifPresent(p -> System.out.println(p.getName()));
     }
 
+    @SuppressWarnings("java:1117")
     private void people7() {
+        /* I want to test what happens when the field is hidden */
         Function<String, String> f = a -> "Tom " + a;
         Person p = new Person(f.apply("Bombadil"));
         System.out.println(p.getName());
@@ -104,7 +107,7 @@ public class Functional {
         System.out.println(ageToName);
     }
 
-    @SuppressWarnings("java:S1864")
+    @SuppressWarnings({"java:S1864", "java:S6204"})
     private void staticMethodReference1() {
         List<Integer> shorty = List.of(1,2,3);
         List<Integer> incrementedNumbers = shorty.stream()
@@ -114,9 +117,11 @@ public class Functional {
         System.out.println();
     }
 
-    @SuppressWarnings("java:S1864")
+    @SuppressWarnings({"java:S1864","java:S6204","java:S1612"})
     private void staticMethodReference2() {
         List<Integer> shorty = List.of(1,2,3);
+        /* I am using Collectors.toList() because i want to test that behaviour!
+        *  Same goes for not using a Method Reference. I want to test a lambda dammit! */
         List<Integer> incrementedNumbers = shorty.stream()
                 .map(i -> Functional.increment(i))
                 .collect(Collectors.toList());
