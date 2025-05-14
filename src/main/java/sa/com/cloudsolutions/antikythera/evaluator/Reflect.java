@@ -423,7 +423,7 @@ public class Reflect {
 
     private static Variable generateNonArrayVariable(String qualifiedName) {
         return switch (qualifiedName) {
-            case "List", "java.util.List", JAVA_UTIL_ARRAY_LIST ->
+            case "List", "java.util.List", JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
                     createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", "java.util.Map", "java.util.HashMap" ->

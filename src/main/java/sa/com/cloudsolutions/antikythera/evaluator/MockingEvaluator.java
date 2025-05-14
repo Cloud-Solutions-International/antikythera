@@ -172,7 +172,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return variables.getFirst();
     }
 
-    private Optional<ClassOrInterfaceType> findParentWithGenerics(Class<?> foundIn, Method method) {
+    private Optional<ClassOrInterfaceType> findParentWithGenerics(Class<?> foundIn) {
         if (typeDeclaration.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
             for (ClassOrInterfaceType parent : cdecl.getExtendedTypes()) {
@@ -188,7 +188,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     private Variable mockReturnFromBinaryParent(Class<?> foundIn, Method method) {
-        Optional<ClassOrInterfaceType> parent = findParentWithGenerics(foundIn, method);
+        Optional<ClassOrInterfaceType> parent = findParentWithGenerics(foundIn);
         return parent.map(
                 classOrInterfaceType -> mockFromTypeArguments(classOrInterfaceType, method))
                 .orElse(null);
@@ -398,25 +398,33 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         l.setPathTaken(LineOfCode.TRUE_PATH);
         Branching.add(l);
 
-        CallableDeclaration<?> callable = sc.getMCEWrapper().getMatchingCallable().getCallableDeclaration();
+        Callable callable = sc.getMCEWrapper().getMatchingCallable();
+        CallableDeclaration<?> callableDeclaration = callable.getCallableDeclaration();
         Variable v = Reflect.variableFactory(collectionTypeName);
 
-        if (callable != null) {
-            Type type = callable.asMethodDeclaration().getType();
-            NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        NodeList<Type> typeArgs = null;
+        if (callableDeclaration != null) {
+            Type type = callableDeclaration.asMethodDeclaration().getType();
+            typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        }
+        else {
+            Optional<ClassOrInterfaceType> t = findParentWithGenerics(callable.getFoundInClass());
+            if (t.isPresent()) {
+                NodeList<Type> args = t.get().getTypeArguments().orElse(new NodeList<>());
+                typeArgs = new NodeList<>();
+                if (args.isNonEmpty()) {
+                    typeArgs.add(args.get(0));
+                }
+            }
+        }
+        if (typeArgs != null) {
             if (typeArgs.isEmpty()) {
                 typeArgs.add(new ClassOrInterfaceType().setName("Object"));
             }
-
             Expression expr = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
             if (expr != null) {
                 v.setInitializer(expr);
             }
-        }
-        else {
-            Method m = sc.getMCEWrapper().getMatchingCallable().getMethod();
-
-            System.out.println("bada");
         }
         return v;
     }

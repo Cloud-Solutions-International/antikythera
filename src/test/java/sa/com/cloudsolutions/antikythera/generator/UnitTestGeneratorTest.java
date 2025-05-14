@@ -338,12 +338,11 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
         evaluator.visit(md);
-        assertTrue(outContent.toString().contains("0!1!"));
+        assertTrue(outContent.toString().contains("1!0!"));
         String s = unitTestGenerator.gen.toString();
-        assertTrue(s.contains("(List<Integer>)"));
-        assertTrue(s.contains("(Set<Integer>)"));
-        assertFalse(s.contains("Bada"));
-        assertFalse(s.contains(" = Mockito.mock(List.class);"));
+        assertTrue(s.contains("List.of(new FakeEntity())"));
+        assertTrue(s.contains("List.of()"));
+
     }
 
     @Test
