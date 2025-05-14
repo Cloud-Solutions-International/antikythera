@@ -243,6 +243,7 @@ public class Reflect {
             case "Byte" -> Byte.class;
             case "char" -> char.class;
             case "Character" -> Character.class;
+            case STRING -> String.class;
             default -> AbstractCompiler.loadClass(elementType);
         };
     }

@@ -3,6 +3,9 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +46,10 @@ public class ScopeChain {
                 FieldAccessExpr mce = expr.asFieldAccessExpr();
                 chain.addLast(mce.getScope());
                 expr = mce.getScope();
+            } else if (expr.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                ClassOrInterfaceType ct = oce.getType().asClassOrInterfaceType();
+                expr = null;
             }
             else {
                 expr = null;

@@ -3,9 +3,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

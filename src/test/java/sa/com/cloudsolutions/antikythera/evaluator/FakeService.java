@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Majority of the tests involving this class are in TestRepository and TestMockingEvaluator
+ * The majority of the tests involving this class are in TestRepository and TestMockingEvaluator
  */
 public class FakeService {
     @Autowired

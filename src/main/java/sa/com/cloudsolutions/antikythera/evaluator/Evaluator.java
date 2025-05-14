@@ -912,6 +912,10 @@ public class Evaluator {
             } else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
                 variable = new Variable(findScopeType(s));
+            } else if (expr2.isObjectCreationExpr()) {
+                variable = createObject(expr2, expr2.asObjectCreationExpr());
+            } else if (expr2.isArrayAccessExpr()) {
+                variable = evaluateArrayAccess(expr2);
             }
         }
         return variable;

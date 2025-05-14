@@ -42,4 +42,19 @@ class TestLocals extends TestHelper {
         assertEquals("10,20,100\n20,30,200\n", outContent.toString());
     }
 
+    @Test
+    void testMce() throws ReflectiveOperationException {
+        MethodDeclaration mce = cu
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("mce")).orElseThrow();
+        evaluator.executeMethod(mce);
+        assertEquals("[]\n", outContent.toString());
+    }
+
+    @Test
+    void testArrayAccess() throws ReflectiveOperationException {
+        MethodDeclaration mce = cu
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("arrayAccess")).orElseThrow();
+        evaluator.executeMethod(mce);
+        assertEquals("HELLOWORLD9.1\n", outContent.toString());
+    }
 }
