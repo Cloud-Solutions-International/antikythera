@@ -462,27 +462,30 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws AntikytheraException         if there is an error in the code
      * @throws ReflectiveOperationException if a reflection operation fails
      */
+    @SuppressWarnings("unchecked")
     @Override
     Variable executeReturnStatement(Statement statement) throws AntikytheraException, ReflectiveOperationException {
         /*
          * Leg work is done in the overloaded method.
          */
+        Variable v = super.executeReturnStatement(statement);
+
         if (AntikytheraRunTime.isControllerClass(getClassName()) || onTest) {
-            ReturnStmt stmt = statement.asReturnStmt();
-            Optional<Node> parent = stmt.getParentNode();
-            Variable v = super.executeReturnStatement(stmt);
-            if (parent.isPresent() && returnValue != null) {
-                if (returnValue.getValue() instanceof MethodResponse mr) {
-                    return createTests(mr);
+            Optional<Node> parent = statement.getParentNode();
+
+            if (parent.isPresent() && returnValue != null && returnFrom != null) {
+                Optional<MethodDeclaration> ancestor = returnFrom.findAncestor(MethodDeclaration.class);
+                if (ancestor.isPresent() && ancestor.get().equals(currentMethod)) {
+                    if (returnValue.getValue() instanceof MethodResponse mr) {
+                        return createTests(mr);
+                    }
+                    MethodResponse mr = new MethodResponse();
+                    mr.setBody(returnValue);
+                    createTests(mr);
                 }
-                MethodResponse mr = new MethodResponse();
-                mr.setBody(returnValue);
-                createTests(mr);
             }
-            return v;
-        } else {
-            return super.executeReturnStatement(statement);
         }
+        return v;
     }
 
     /**

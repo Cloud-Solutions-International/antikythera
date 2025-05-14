@@ -393,6 +393,16 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return v;
     }
 
+    /**
+     * Creates a non-empty list of entities.
+     * Finding the entity type is the real challenge as that information is not readily available
+     * when dealing with a method that is declared in JPARepository or one of it's ancestors.
+     * @param sc scope of the method call
+     * @param stmt the statement that involves the method call
+     * @param collectionTypeName the type of collection that is required
+     * @return a collection of the type that matches collectionTypeName which will contain a
+     *      single entity.
+     */
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
         l.setPathTaken(LineOfCode.TRUE_PATH);
