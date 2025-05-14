@@ -317,22 +317,22 @@ public class Reflect {
                 Expression scope = new NameExpr(typeName);
                 Expression mce = new MethodCallExpr(scope, "valueOf")
                     .addArgument(new StringLiteralExpr(initialValue.toString()));
-                v.setInitializer(mce);
+                v.setInitializer(List.of(mce));
             }
             case "java.util.List", JAVA_UTIL_ARRAY_LIST -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("List"));
-                v.setInitializer(init);
+                v.setInitializer(List.of(init));
             }
             case "java.util.Set", JAVA_UTIL_HASH_SET -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("Set"));
-                v.setInitializer(init);
+                v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> {
                 MethodCallExpr init = new MethodCallExpr("empty");
                 init.setScope(new NameExpr(OPTIONAL));
-                v.setInitializer(init);
+                v.setInitializer(List.of(init));
             }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
@@ -342,7 +342,7 @@ public class Reflect {
                 } else {
                     expr.setArguments(NodeList.nodeList());
                 }
-                v.setInitializer(expr);
+                v.setInitializer(List.of(expr));
                 TestGenerator.addImport(new ImportDeclaration(typeName, false, false));
             }
         }
@@ -380,41 +380,46 @@ public class Reflect {
             case STRING, JAVA_LANG_STRING -> {
                 String[] arr = new String[]{ANTIKYTHERA};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(STRING))
-                        .setInitializer(new ArrayInitializerExpr(new NodeList<>(new StringLiteralExpr(ANTIKYTHERA)))));
+                        .setInitializer(new ArrayInitializerExpr(new NodeList<>(new StringLiteralExpr(ANTIKYTHERA))));
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case INTEGER, JAVA_LANG_INTEGER -> {
                 Integer[] arr = new Integer[]{1};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(INTEGER))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case LONG, JAVA_LANG_LONG -> {
                 Long[] arr = new Long[]{1L};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName("Long"))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case DOUBLE, JAVA_LANG_DOUBLE -> {
                 Double[] arr = new Double[]{1.0};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(DOUBLE))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case BOOLEAN, JAVA_LANG_BOOLEAN -> {
                 Boolean[] arr = new Boolean[]{true};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(BOOLEAN))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             default -> new Variable(new Object[0]);
@@ -440,7 +445,7 @@ public class Reflect {
             case "Long", "long", JAVA_LANG_LONG -> createVariable(1L, "Long", "1");
             case STRING, JAVA_LANG_STRING -> {
                 Variable result = createVariable(ANTIKYTHERA, STRING, ANTIKYTHERA);
-                result.setInitializer(new StringLiteralExpr(ANTIKYTHERA));
+                result.setInitializer(List.of(new StringLiteralExpr(ANTIKYTHERA)));
                 yield result;
             }
             default -> new Variable(null);

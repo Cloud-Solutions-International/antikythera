@@ -368,7 +368,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
         then.setVariableName(variableName);
 
-        Expression initializer = then.getVariable().getInitializer();
+        Expression initializer = then.getVariable().getInitializer().getFirst();
         MethodCallExpr when = StaticJavaParser.parseExpression(
                 String.format(
                         "Mockito.when(%s).thenReturn(%s)",
@@ -383,11 +383,12 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable repositoryEmptyPath(String collectionTypeName) {
         Variable v = Reflect.variableFactory(collectionTypeName);
-        if (v != null && v.getInitializer() instanceof ObjectCreationExpr oce) {
+        if (v != null && v.getInitializer().getFirst() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
             if (typeName.endsWith("ArrayList") || typeName.endsWith("LinkedList") || typeName.endsWith("List")) {
                 TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                v.setInitializer(new MethodCallExpr("of").setScope(new NameExpr("List")));
+                v.setInitializer(
+                        List.of(new MethodCallExpr("of").setScope(new NameExpr("List"))));
             }
         }
         return v;
@@ -433,7 +434,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
             Expression expr = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
             if (expr != null) {
-                v.setInitializer(expr);
+                v.setInitializer(List.of(expr));
             }
         }
         return v;

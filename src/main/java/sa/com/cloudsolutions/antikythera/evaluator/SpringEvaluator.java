@@ -320,7 +320,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 assignExpr.getTarget().toString().equals(p.getNameAsString())) {
 
                     parameterAssignment(assignExpr, va);
-                    va.setInitializer(assignExpr);
+                    va.setInitializer(List.of(assignExpr));
             }
         }
     }

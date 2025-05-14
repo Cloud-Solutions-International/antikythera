@@ -4,6 +4,9 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 
+import java.util.List;
+import java.util.Objects;
+
 public class Variable {
     /**
      * Represents a java parser type
@@ -23,7 +26,7 @@ public class Variable {
      */
     private Object value;
 
-    private Expression initializer;
+    private List<Expression> initializer;
 
     private boolean stat;
 
@@ -42,16 +45,11 @@ public class Variable {
      * @param type the identified java parser type.
      */
     public Variable(Type type) {
-        if (type == null) {
-            this.type = new VoidType();
-        }
-        else {
-            this.type = type;
-        }
+        this.type = Objects.requireNonNullElseGet(type, VoidType::new);
     }
 
     /**
-     * Create an instance with the given value.
+     * <p>Create an instance with the given value.</p>
      *
      * if the value is not null, its class will be detected and saved in the class field.
      * @param value the initial value for the Variable
@@ -120,11 +118,11 @@ public class Variable {
         }
     }
 
-    public Expression getInitializer() {
+    public List<Expression> getInitializer() {
         return initializer;
     }
 
-    public void setInitializer(Expression initializer) {
+    public void setInitializer(List<Expression> initializer) {
         this.initializer = initializer;
     }
 }
