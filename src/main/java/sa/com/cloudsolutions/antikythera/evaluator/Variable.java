@@ -34,6 +34,10 @@ public class Variable {
     private static final Random random = new Random();
 
     /**
+     * Represents the name of a parameter, field or local variable that this may represent
+     */
+    private String name;
+    /**
      * Create an object having the given value and java parser type.
      * @param type the identified java parser type
      * @param value the value to hole
@@ -135,5 +139,12 @@ public class Variable {
         char c = (char)( 'a' + random.nextInt(26));
 
         return AbstractCompiler.classToInstanceName(className) + a + b + c;
+    }
+
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
     }
 }

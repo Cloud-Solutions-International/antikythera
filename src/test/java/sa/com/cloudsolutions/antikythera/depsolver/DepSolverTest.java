@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -12,6 +11,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
@@ -141,12 +142,13 @@ class DepSolverTest extends TestHelper {
     }
 
 
-    @Test
-    void testSpecification() {
+    @ParameterizedTest
+    @ValueSource(strings = {"searchFakeDataWithCriteria1", "searchFakeDataWithCriteria2"})
+    void testSpecification(String name) {
         postSetup("sa.com.cloudsolutions.antikythera.evaluator.FakeService");
         Graph.createGraphNode(
                 node.getEnclosingType().asClassOrInterfaceDeclaration()
-                        .getMethodsByName("searchFakeDataWithCriteria").get(0));
+                        .getMethodsByName(name).getFirst());
 
         depSolver.dfs();
         Map<String, CompilationUnit> a = Graph.getDependencies();
@@ -157,7 +159,7 @@ class DepSolverTest extends TestHelper {
         assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification"));
 
         CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification");
-        ClassOrInterfaceDeclaration cst = cs.getType(0).asClassOrInterfaceDeclaration().asClassOrInterfaceDeclaration();
+        ClassOrInterfaceDeclaration cst = cs.getType(0).asClassOrInterfaceDeclaration();
         assertEquals(2, cst.findAll(MethodDeclaration.class).size(),
                 "Should be two with the inner method");
 
