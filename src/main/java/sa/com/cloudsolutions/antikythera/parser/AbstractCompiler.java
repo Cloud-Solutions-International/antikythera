@@ -988,4 +988,37 @@ public class AbstractCompiler {
                     fqn.substring(0, fqn.lastIndexOf('.'))))
                 .orElse(null));
     }
+
+    /**
+     * Converts a class name to an instance name.
+     * The usual convention. If we want to create an instance of List that variable is usually
+     * called 'list'
+     * @param cdecl type declaration
+     * @return a variable name as a string
+     */
+    public static String classToInstanceName(TypeDeclaration<?> cdecl) {
+        return classToInstanceName(cdecl.getNameAsString());
+    }
+
+    /**
+     * Converts a class name to an instance name.
+     * @param className as a string
+     * @return a variable name as a string
+     */
+    public static String classToInstanceName(String className) {
+        String shortName = fullyQualifiedToShortName(className);
+        String name = Character.toLowerCase(shortName.charAt(0)) + shortName.substring(1);
+        if(name.equals("long") || name.equals("int")) {
+            return "_" + name;
+        }
+        return name;
+    }
+
+    public static String fullyQualifiedToShortName(String name) {
+        int index = name.lastIndexOf(".");
+        if (index > 0) {
+            return name.substring(index + 1);
+        }
+        return name;
+    }
 }

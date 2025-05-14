@@ -136,7 +136,7 @@ public class ClassProcessor extends AbstractCompiler {
                         handler.copyDTO(classToPath(targetName));
 
                     } catch (FileNotFoundException fe) {
-                        if (Settings.getProperty("dependencies.on_error").equals("log")) {
+                        if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
                             logger.warn("Could not find {} for copying", targetName);
                         } else {
                             throw fe;
@@ -268,39 +268,6 @@ public class ClassProcessor extends AbstractCompiler {
         else {
             createEdge(classType, from);
         }
-    }
-
-
-    /**
-     * Converts a class name to an instance name.
-     * The usual convention. If we want to create an instance of List that variable is usually
-     * called 'list'
-     * @param cdecl type declaration
-     * @return a variable name as a string
-     */
-    public static String classToInstanceName(TypeDeclaration<?> cdecl) {
-        return classToInstanceName(cdecl.getNameAsString());
-    }
-
-    public static String fullyQualifiedToShortName(String name) {
-        int index = name.lastIndexOf(".");
-        if (index > 0) {
-            return name.substring(index + 1);
-        }
-        return name;
-    }
-
-    /**
-     * Converts a class name to an instance name.
-     * @param className as a string
-     * @return a variable name as a string
-     */
-    public static String classToInstanceName(String className) {
-        String name = Character.toLowerCase(className.charAt(0)) + className.substring(1);
-        if(name.equals("long") || name.equals("int")) {
-            return "_" + name;
-        }
-        return name;
     }
 
     /**

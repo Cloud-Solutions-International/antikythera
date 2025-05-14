@@ -3,9 +3,11 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
 
 public class Variable {
     /**
@@ -29,6 +31,8 @@ public class Variable {
     private List<Expression> initializer;
 
     private boolean stat;
+
+    private static Random random = new Random();
 
     /**
      * Create an object having the given value and java parser type.
@@ -91,10 +95,6 @@ public class Variable {
         this.stat = s;
     }
 
-    public boolean isStatic() {
-        return stat;
-    }
-
     @Override
     public String toString() {
         if (value == null) {
@@ -124,5 +124,21 @@ public class Variable {
 
     public void setInitializer(List<Expression> initializer) {
         this.initializer = initializer;
+    }
+
+    public static String generateVariableName(Type type) {
+        return generateVariableName(type.asString());
+    }
+
+    public static String generateVariableName(Class<?> clazz) {
+        return generateVariableName(clazz.getSimpleName());
+    }
+
+    public static String generateVariableName(String className) {
+        char a = (char)( 'A' + random.nextInt(26));
+        char b = (char)( 'a' + random.nextInt(26));
+        char c = (char)( 'a' + random.nextInt(26));
+
+        return AbstractCompiler.classToInstanceName(className) + a + b + c;
     }
 }
