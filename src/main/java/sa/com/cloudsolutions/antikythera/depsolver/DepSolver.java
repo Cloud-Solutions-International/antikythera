@@ -141,7 +141,6 @@ public class DepSolver {
                 node.processTypeArgument(returnType.asClassOrInterfaceType());
             }
 
-
             // Handle generic type parameters
             for (TypeParameter typeParameter : md.getTypeParameters()) {
                 for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {

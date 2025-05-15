@@ -356,6 +356,17 @@ public class Resolver {
             }
             else if (expr.isNameExpr()) {
                 gn = evaluateNameExpr(expr.asNameExpr(), gn);
+            } else if (expr.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                gn = ImportUtils.addImport(gn, oce.getType());
+            } else if (expr.isArrayAccessExpr()) {
+                ArrayAccessExpr aae = expr.asArrayAccessExpr();
+                if (aae.getName().isNameExpr()) {
+                    gn = evaluateNameExpr(aae.getName().asNameExpr(), gn);
+                }
+            } else if (expr.isClassExpr()) {
+                ClassExpr ce = expr.asClassExpr();
+                gn = ImportUtils.addImport(gn, ce.getType());
             }
         }
 
