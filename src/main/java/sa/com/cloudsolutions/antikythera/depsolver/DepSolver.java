@@ -389,7 +389,7 @@ public class DepSolver {
         @Override
         public void visit(final Parameter n, GraphNode node) {
             names.put(n.getNameAsString(), n.getType());
-            solveType(n.getType(), node);
+            node.processTypeArgument(n.getType());
             super.visit(n, node);
         }
 
@@ -414,23 +414,6 @@ public class DepSolver {
             }
             super.visit(n, node);
         }
-    }
-
-    /**
-     * See if this can be replaced with addTypeArguments of GraphNode
-     * @param vd
-     * @param node
-     * @return
-     */
-    @Deprecated
-    private List<ImportWrapper> solveType(Type vd, GraphNode node)  {
-        if (vd.isClassOrInterfaceType()) {
-            ClassOrInterfaceType ctype = vd.asClassOrInterfaceType();
-            node.processTypeArgument(ctype);
-        } else {
-            ImportUtils.addImport(node, vd);
-        }
-        return List.of();
     }
 
     private class Visitor extends AnnotationVisitor {
@@ -532,10 +515,8 @@ public class DepSolver {
          */
         @Override
         public void visit(ObjectCreationExpr oce, GraphNode node) {
-            List<ImportWrapper> imports = solveType(oce.getType(), node);
-            for (ImportWrapper imp : imports) {
-                node.getDestination().addImport(imp.getImport());
-            }
+            node.processTypeArgument(oce.getType());
+
             MCEWrapper mceWrapper = Resolver.resolveArgumentTypes(node, oce);
             Resolver.chainedMethodCall(node, mceWrapper);
 
