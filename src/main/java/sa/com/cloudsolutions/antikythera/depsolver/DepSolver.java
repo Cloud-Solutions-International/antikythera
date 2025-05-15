@@ -381,7 +381,7 @@ public class DepSolver {
      * This visitor is intended to be used before the Visitor class. It will identify the variables
      * so that resolving the scope of the method calls becomes a lot easier.
      */
-    private class VariableVisitor extends VoidVisitorAdapter<GraphNode> {
+    private static class VariableVisitor extends VoidVisitorAdapter<GraphNode> {
 
         /**
          * Deals with parameters in method declarations.
