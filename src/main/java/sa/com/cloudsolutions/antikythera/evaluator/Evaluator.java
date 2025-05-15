@@ -378,10 +378,7 @@ public class Evaluator {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
         if (parent.isPresent() && parent.get() instanceof VariableDeclarator vdecl) {
             Type componentType = vdecl.getType();
-            Class<?> componentClass;
-
-            String elementType = componentType.getElementType().toString();
-            componentClass = Reflect.getComponentClass(elementType);
+            Class<?> componentClass = Reflect.resolveComponentClass(cu, componentType.getElementType());
 
             List<Expression> values = arrayInitializerExpr.getValues();
             Object array = Array.newInstance(componentClass, values.size());

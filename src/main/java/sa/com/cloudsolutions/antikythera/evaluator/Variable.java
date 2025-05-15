@@ -7,6 +7,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 
 public class Variable {
@@ -86,7 +87,10 @@ public class Variable {
     public void setType(Type type) {
         this.type = type;
         if (this.clazz == null) {
-            this.clazz = Reflect.getComponentClass(type.asString());
+            Optional<Class<?>> opt = Reflect.getComponentClass(type.asString());
+            if (opt.isPresent()) {
+                this.clazz = opt.get();
+            }
         }
     }
 

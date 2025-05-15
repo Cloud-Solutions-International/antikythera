@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
@@ -44,26 +45,36 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class Reflect {
-    public static final String PRIMITIVE_BOOLEAN = "boolean";
-    public static final String PRIMITIVE_FLOAT = "float";
-    public static final String PRIMITIVE_DOUBLE = "double";
-    public static final String PRIMITIVE_SHORT = "short";
-    public static final String INTEGER = "Integer";
-    public static final String LONG = "Long";
+    public static final String ANTIKYTHERA = "Antikythera";
     public static final String BOOLEAN = "Boolean";
+    public static final String BYTE = "Byte";
+    public static final String CHAR = "Char";
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
+    public static final String INTEGER = "Integer";
+    public static final String LONG = "Long";
+    public static final String OPTIONAL = "Optional";
+    public static final String SHORT = "Short";
     public static final String STRING = "String";
-    public static final String ANTIKYTHERA = "Antikythera";
-    public static final String JAVA_LANG_DOUBLE = "java.lang.Double";
+
     public static final String JAVA_LANG_BOOLEAN = "java.lang.Boolean";
+    public static final String JAVA_LANG_BYTE = "java.lang.Byte";
+    public static final String JAVA_LANG_CHARACTER = "java.lang.Character";
+    public static final String JAVA_LANG_DOUBLE = "java.lang.Double";
+    public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
     public static final String JAVA_LANG_LONG = "java.lang.Long";
     public static final String JAVA_LANG_STRING = "java.lang.String";
-    public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
     public static final String JAVA_UTIL_ARRAY_LIST = "java.util.ArrayList";
     public static final String JAVA_UTIL_HASH_SET = "java.util.HashSet";
     public static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
-    public static final String OPTIONAL = "Optional";
+
+    public static final String PRIMITIVE_BOOLEAN = "boolean";
+    public static final String PRIMITIVE_BYTE = "byte";
+    public static final String PRIMITIVE_CHAR = "char";
+    public static final String PRIMITIVE_DOUBLE = "double";
+    public static final String PRIMITIVE_FLOAT = "float";
+    public static final String PRIMITIVE_SHORT = "short";
+
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -75,6 +86,8 @@ public class Reflect {
      * here `int.class -> Integer.class`
      */
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
+
+    static Set<String> basicTypes = new HashSet<>();
 
     static {
         /*
@@ -92,6 +105,24 @@ public class Reflect {
         for (Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
             primitiveToWrapper.put(entry.getValue(), entry.getKey());
         }
+
+        basicTypes.add(JAVA_LANG_BOOLEAN);
+        basicTypes.add(JAVA_LANG_BYTE);
+        basicTypes.add(JAVA_LANG_CHARACTER);
+        basicTypes.add(JAVA_LANG_DOUBLE);
+        basicTypes.add(JAVA_LANG_INTEGER);
+        basicTypes.add(JAVA_LANG_LONG);
+        basicTypes.add(JAVA_LANG_STRING);
+        basicTypes.add(JAVA_UTIL_ARRAY_LIST);
+        basicTypes.add(JAVA_UTIL_HASH_SET);
+        basicTypes.add(JAVA_UTIL_OPTIONAL);
+
+        basicTypes.add(PRIMITIVE_BOOLEAN);
+        basicTypes.add(PRIMITIVE_BYTE);
+        basicTypes.add(PRIMITIVE_CHAR);
+        basicTypes.add(PRIMITIVE_DOUBLE);
+        basicTypes.add(PRIMITIVE_FLOAT);
+        basicTypes.add(PRIMITIVE_SHORT);
     }
 
     private Reflect() {
@@ -226,33 +257,15 @@ public class Reflect {
         };
     }
 
-    public static Class<?> getComponentClass(String elementType) {
-        return switch (elementType) {
-            case "int" -> int.class;
-            case INTEGER -> Integer.class;
-            case PRIMITIVE_DOUBLE -> double.class;
-            case DOUBLE -> Double.class;
-            case PRIMITIVE_BOOLEAN -> boolean.class;
-            case BOOLEAN -> Boolean.class;
-            case "long" -> long.class;
-            case "Long" -> Long.class;
-            case PRIMITIVE_FLOAT -> float.class;
-            case FLOAT -> Float.class;
-            case PRIMITIVE_SHORT -> short.class;
-            case "Short" -> Short.class;
-            case "byte" -> byte.class;
-            case "Byte" -> Byte.class;
-            case "char" -> char.class;
-            case "Character" -> Character.class;
-            case STRING -> String.class;
-            default -> {
-                try {
-                    yield AbstractCompiler.loadClass(elementType);
-                } catch (ClassNotFoundException e) {
-                    yield null;
-                }
+    public static Optional<Class<?>> getComponentClass(String elementType) {
+        if (basicTypes.contains(elementType)) {
+            try {
+                return Optional.of(Class.forName(elementType));
+            } catch (ClassNotFoundException e) {
+                return Optional.empty();
             }
-        };
+        }
+        return Optional.empty();
     }
 
     public static Type getComponentType(Class<?> clazz) {
@@ -264,8 +277,8 @@ public class Reflect {
             case "long", JAVA_LANG_LONG, "java.lang.BigDecimal" -> PrimitiveType.longType();
             case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
             case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
-            case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
-            case "char", "java.lang.Character" -> PrimitiveType.charType();
+            case "byte", JAVA_LANG_BYTE -> PrimitiveType.byteType();
+            case "char", JAVA_LANG_CHARACTER -> PrimitiveType.charType();
             case JAVA_LANG_STRING -> new ClassOrInterfaceType().setName(STRING);
             default -> null;
         };
@@ -681,6 +694,40 @@ public class Reflect {
     }
 
     public static boolean isPrimitiveOrBoxed(String type) {
-        return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
+        return getComponentClass(type)
+                .filter(aClass -> primitiveToWrapper.containsKey(aClass)
+                            || wrapperToPrimitive.containsKey(aClass)).isPresent();
+    }
+
+    public static Class<?> resolveComponentClass(CompilationUnit cu, Type elementType) {
+        Class<?> componentType = null;
+
+        if (elementType.isPrimitiveType()) {
+            componentType = Reflect.getComponentClass(elementType.asString()).orElseThrow();
+        }
+        else {
+            TypeWrapper wrapper = null;
+            if (elementType instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
+                wrapper = AbstractCompiler.findType(cu, ctype.getNameAsString());
+            }
+            else {
+                wrapper = AbstractCompiler.findType(cu, elementType.asString());
+            }
+            if (wrapper == null) {
+                throw new IllegalStateException("Cannot find type " + elementType.asString());
+            }
+            if (wrapper.getClazz() != null) {
+                componentType = wrapper.getClazz();
+            }
+            else {
+                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
+                try {
+                    componentType = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+                } catch (ClassNotFoundException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
+        }
+        return componentType;
     }
 }
