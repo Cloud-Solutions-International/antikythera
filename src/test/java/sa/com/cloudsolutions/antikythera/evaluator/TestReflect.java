@@ -18,7 +18,7 @@ class TestReflect {
     void testGetComponentClass(String s) {
         Optional<Class<?>> clazz = Reflect.getComponentClass(s);
         assertTrue(clazz.isPresent());
-        assertEquals(clazz.get().getName(), s);
+        assertEquals(s, clazz.get().getName());
     }
 
     @ParameterizedTest()

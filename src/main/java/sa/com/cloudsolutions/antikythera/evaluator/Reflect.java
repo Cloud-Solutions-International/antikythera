@@ -48,7 +48,7 @@ public class Reflect {
     public static final String ANTIKYTHERA = "Antikythera";
     public static final String BOOLEAN = "Boolean";
     public static final String BYTE = "Byte";
-    public static final String CHAR = "Char";
+    public static final String CHARACTER = "Character";
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
     public static final String INTEGER = "Integer";
@@ -92,7 +92,7 @@ public class Reflect {
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
 
     static Set<String> basicTypes = new HashSet<>();
-    public static final Map<String, Class<?>> BOXED_TYPE_MAP = new HashMap<>();
+    private static final Map<String, Class<?>> BOXED_TYPE_MAP = new HashMap<>();
 
     static {
         /*
@@ -123,18 +123,18 @@ public class Reflect {
         basicTypes.add(JAVA_UTIL_HASH_SET);
         basicTypes.add(JAVA_UTIL_OPTIONAL);
 
-        BOXED_TYPE_MAP.put(PRIMITIVE_BOOLEAN, Boolean.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_BYTE, Byte.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_CHAR, Character.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_DOUBLE, Double.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_FLOAT, Float.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_INT, Integer.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_LONG, Long.class);
-        BOXED_TYPE_MAP.put(PRIMITIVE_SHORT, Short.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_BOOLEAN, boolean.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_BYTE, byte.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_CHAR, char.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_DOUBLE, double.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_FLOAT, float.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_INT, int.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_LONG, long.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_SHORT, short.class);
 
         BOXED_TYPE_MAP.put(BOOLEAN, Boolean.class);
         BOXED_TYPE_MAP.put(BYTE, Byte.class);
-        BOXED_TYPE_MAP.put(CHAR, Character.class);
+        BOXED_TYPE_MAP.put(CHARACTER, Character.class);
         BOXED_TYPE_MAP.put(DOUBLE, Double.class);
         BOXED_TYPE_MAP.put(FLOAT, Float.class);
         BOXED_TYPE_MAP.put(INTEGER, Integer.class);
