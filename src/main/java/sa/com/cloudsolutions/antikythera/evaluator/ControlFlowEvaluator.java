@@ -63,8 +63,7 @@ public class ControlFlowEvaluator extends Evaluator {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
-            Expression init = v.getInitializer();
-            if (init != null) {
+            if (v.getInitializer() != null) {
                 MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
                 String targetParamName = nameExpr.getNameAsString();
@@ -154,21 +153,21 @@ public class ControlFlowEvaluator extends Evaluator {
                 resolved = Reflect.variableFactory(resolved.getType().asString());
             }
 
-            Expression initializer = resolved.getInitializer();
-            if (initializer instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
+            List<Expression> initializer = resolved.getInitializer();
+            if (initializer.getFirst() instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
                 TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             }
             if (v.getValue() instanceof List<?> list) {
                 Method m = List.class.getMethod("add", Object.class);
                 m.invoke(list, resolved.getValue());
                 TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer));
+                return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
             }
             if (v.getValue() instanceof Set<?> set) {
                 Method m = Set.class.getMethod("add", Object.class);
                 m.invoke(set, resolved.getValue());
                 TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer));
+                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
             }
             if (v.getValue() instanceof Map<?,?>) {
                 if (typeArgs.size() == 1) {
@@ -182,7 +181,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
                 return StaticJavaParser.parseExpression(
                         String.format("Map.of(%s, %s)",
-                                initializer, resolved2.getInitializer()));
+                                initializer.getFirst(), resolved2.getInitializer().getFirst()));
             }
 
         } catch (ReflectiveOperationException|IOException e) {
@@ -268,13 +267,13 @@ public class ControlFlowEvaluator extends Evaluator {
             if (field.getClazz() != null) {
                 Variable v = Reflect.variableFactory(field.getClazz().getName());
                 if (v != null) {
-                    value = v.getInitializer().toString();
+                    value = v.getInitializer().getFirst().toString();
                 }
             }
             else if (field.getType() != null) {
                 Variable v = Reflect.variableFactory(field.getType().asString());
                 if (v != null) {
-                    value = v.getInitializer().toString();
+                    value = v.getInitializer().getFirst().toString();
                 }
             }
         }
@@ -459,7 +458,7 @@ public class ControlFlowEvaluator extends Evaluator {
             Variable v = new Variable(eval);
             String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
             String[] parts = init.split("=");
-            v.setInitializer(StaticJavaParser.parseExpression(parts[1]));
+            v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
 
             return v;
         }

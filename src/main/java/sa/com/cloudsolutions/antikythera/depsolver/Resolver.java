@@ -356,6 +356,17 @@ public class Resolver {
             }
             else if (expr.isNameExpr()) {
                 gn = evaluateNameExpr(expr.asNameExpr(), gn);
+            } else if (expr.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                gn = ImportUtils.addImport(gn, oce.getType());
+            } else if (expr.isArrayAccessExpr()) {
+                ArrayAccessExpr aae = expr.asArrayAccessExpr();
+                if (aae.getName().isNameExpr()) {
+                    gn = evaluateNameExpr(aae.getName().asNameExpr(), gn);
+                }
+            } else if (expr.isClassExpr()) {
+                ClassExpr ce = expr.asClassExpr();
+                gn = ImportUtils.addImport(gn, ce.getType());
             }
         }
 
@@ -498,34 +509,35 @@ public class Resolver {
 
     @SuppressWarnings("unchecked")
     static void wrapCallable(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types) {
-        if (callExpression instanceof MethodCallExpr methodCallExpr) {
-            MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
-            GraphNode gn = Resolver.chainedMethodCall(node, wrap);
-            if (gn != null) {
-                if (gn.getNode() instanceof MethodDeclaration md) {
-                    Type t = md.getType();
-                    ImportUtils.addImport(node, t);
-                    types.add(t);
-                } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
-                    Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
-                    if (omd.isPresent()) {
-                        Callable cd = omd.get();
-                        if (cd.isCallableDeclaration()) {
-                            if (cd.isMethodDeclaration()) {
-                                Type t = cd.asMethodDeclaration().getType();
-                                types.add(t);
-                                ImportUtils.addImport(node, t);
 
-                            }
-                            cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
-                                ImportUtils.addImport(node, c.getNameAsString())
-                            );
-                        }
-                    } else {
-                        Type t = lombokSolver(methodCallExpr, cid, gn);
-                        if (t != null) {
+        MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
+        GraphNode gn = Resolver.chainedMethodCall(node, wrap);
+        if (gn != null) {
+            if (gn.getNode() instanceof MethodDeclaration md) {
+                Type t = md.getType();
+                ImportUtils.addImport(node, t);
+                types.add(t);
+            } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
+                Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
+                if (omd.isPresent()) {
+                    Callable cd = omd.get();
+                    if (cd.isCallableDeclaration()) {
+                        if (cd.isMethodDeclaration()) {
+                            Type t = cd.asMethodDeclaration().getType();
                             types.add(t);
+                            ImportUtils.addImport(node, t);
+
                         }
+                        cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
+                            ImportUtils.addImport(node, c.getNameAsString())
+                        );
+                    }
+                } else {
+                    if (callExpression instanceof MethodCallExpr methodCallExpr) {
+                            Type t = lombokSolver(methodCallExpr, cid, gn);
+                            if (t != null) {
+                                types.add(t);
+                            }
                     }
                 }
             }

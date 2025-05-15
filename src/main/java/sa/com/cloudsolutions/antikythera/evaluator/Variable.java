@@ -3,6 +3,12 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Random;
 
 public class Variable {
     /**
@@ -23,10 +29,15 @@ public class Variable {
      */
     private Object value;
 
-    private Expression initializer;
+    private List<Expression> initializer;
 
-    private boolean stat;
+    @SuppressWarnings("java:S2245")
+    private static final Random random = new Random();
 
+    /**
+     * Represents the name of a parameter, field or local variable that this may represent
+     */
+    private String name;
     /**
      * Create an object having the given value and java parser type.
      * @param type the identified java parser type
@@ -42,16 +53,11 @@ public class Variable {
      * @param type the identified java parser type.
      */
     public Variable(Type type) {
-        if (type == null) {
-            this.type = new VoidType();
-        }
-        else {
-            this.type = type;
-        }
+        this.type = Objects.requireNonNullElseGet(type, VoidType::new);
     }
 
     /**
-     * Create an instance with the given value.
+     * <p>Create an instance with the given value.</p>
      *
      * if the value is not null, its class will be detected and saved in the class field.
      * @param value the initial value for the Variable
@@ -81,20 +87,11 @@ public class Variable {
     public void setType(Type type) {
         this.type = type;
         if (this.clazz == null) {
-            try {
-                this.clazz = Reflect.getComponentClass(type.asString());
-            } catch (ClassNotFoundException e) {
-                // can be silently ignored
+            Optional<Class<?>> opt = Reflect.getComponentClass(type.asString());
+            if (opt.isPresent()) {
+                this.clazz = opt.get();
             }
         }
-    }
-
-    public void setStatic(boolean s) {
-        this.stat = s;
-    }
-
-    public boolean isStatic() {
-        return stat;
     }
 
     @Override
@@ -120,11 +117,34 @@ public class Variable {
         }
     }
 
-    public Expression getInitializer() {
+    public List<Expression> getInitializer() {
         return initializer;
     }
 
-    public void setInitializer(Expression initializer) {
+    public void setInitializer(List<Expression> initializer) {
         this.initializer = initializer;
+    }
+
+    public static String generateVariableName(Type type) {
+        return generateVariableName(type.asString());
+    }
+
+    public static String generateVariableName(Class<?> clazz) {
+        return generateVariableName(clazz.getSimpleName());
+    }
+
+    public static String generateVariableName(String className) {
+        char a = (char)( 'A' + random.nextInt(26));
+        char b = (char)( 'a' + random.nextInt(26));
+        char c = (char)( 'a' + random.nextInt(26));
+
+        return AbstractCompiler.classToInstanceName(className) + a + b + c;
+    }
+
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
     }
 }

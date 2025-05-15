@@ -412,14 +412,14 @@ public class UnitTestGenerator extends TestGenerator {
         Type t = param.getType();
         if (v.getInitializer() != null) {
             body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
-                    v.getInitializer() + ";");
+                    v.getInitializer().getFirst() + ";");
         }
         else {
             if (param.findCompilationUnit().isPresent()) {
                 CompilationUnit cu = param.findCompilationUnit().orElseThrow();
                 if (t instanceof ArrayType) {
                     Variable mocked = Reflect.variableFactory(t.asString());
-                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
                     mockParameterFields(v, nameAsString);
                     return;
                 }
@@ -450,7 +450,7 @@ public class UnitTestGenerator extends TestGenerator {
 
             if (value.isPresent()) {
                 body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
-                        "Optional.of(" + mocked.getInitializer() + ");");
+                        "Optional.of(" + mocked.getInitializer().getFirst() + ");");
             } else {
                 body.addStatement(param.getTypeAsString() + " " + nameAsString + " = Optional.empty();");
             }

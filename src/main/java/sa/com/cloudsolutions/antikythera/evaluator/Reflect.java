@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
@@ -25,6 +26,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverte
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -43,26 +45,40 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class Reflect {
-    public static final String PRIMITIVE_BOOLEAN = "boolean";
-    public static final String PRIMITIVE_FLOAT = "float";
-    public static final String PRIMITIVE_DOUBLE = "double";
-    public static final String PRIMITIVE_SHORT = "short";
-    public static final String INTEGER = "Integer";
-    public static final String LONG = "Long";
+    public static final String ANTIKYTHERA = "Antikythera";
     public static final String BOOLEAN = "Boolean";
+    public static final String BYTE = "Byte";
+    public static final String CHARACTER = "Character";
     public static final String DOUBLE = "Double";
     public static final String FLOAT = "Float";
+    public static final String INTEGER = "Integer";
+    public static final String LONG = "Long";
+    public static final String OPTIONAL = "Optional";
+    public static final String SHORT = "Short";
     public static final String STRING = "String";
-    public static final String ANTIKYTHERA = "Antikythera";
-    public static final String JAVA_LANG_DOUBLE = "java.lang.Double";
+
+    public static final String JAVA_LANG_BIG_DECIMAL = "java.lang.BigDecimal";
     public static final String JAVA_LANG_BOOLEAN = "java.lang.Boolean";
+    public static final String JAVA_LANG_BYTE = "java.lang.Byte";
+    public static final String JAVA_LANG_CHARACTER = "java.lang.Character";
+    public static final String JAVA_LANG_DOUBLE = "java.lang.Double";
+    public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
     public static final String JAVA_LANG_LONG = "java.lang.Long";
     public static final String JAVA_LANG_STRING = "java.lang.String";
-    public static final String JAVA_LANG_INTEGER = "java.lang.Integer";
     public static final String JAVA_UTIL_ARRAY_LIST = "java.util.ArrayList";
     public static final String JAVA_UTIL_HASH_SET = "java.util.HashSet";
     public static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
-    public static final String OPTIONAL = "Optional";
+
+    public static final String PRIMITIVE_BOOLEAN = "boolean";
+    public static final String PRIMITIVE_BYTE = "byte";
+    public static final String PRIMITIVE_CHAR = "char";
+    public static final String PRIMITIVE_DOUBLE = "double";
+    public static final String PRIMITIVE_FLOAT = "float";
+    public static final String PRIMITIVE_INT = "int";
+    public static final String PRIMITIVE_LONG = "long";
+    public static final String PRIMITIVE_SHORT = "short";
+
+
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -74,6 +90,9 @@ public class Reflect {
      * here `int.class -> Integer.class`
      */
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
+
+    static Set<String> basicTypes = new HashSet<>();
+    private static final Map<String, Class<?>> BOXED_TYPE_MAP = new HashMap<>();
 
     static {
         /*
@@ -91,6 +110,39 @@ public class Reflect {
         for (Map.Entry<Class<?>, Class<?>> entry : wrapperToPrimitive.entrySet()) {
             primitiveToWrapper.put(entry.getValue(), entry.getKey());
         }
+
+        basicTypes.add(JAVA_LANG_BIG_DECIMAL);
+        basicTypes.add(JAVA_LANG_BOOLEAN);
+        basicTypes.add(JAVA_LANG_BYTE);
+        basicTypes.add(JAVA_LANG_CHARACTER);
+        basicTypes.add(JAVA_LANG_DOUBLE);
+        basicTypes.add(JAVA_LANG_INTEGER);
+        basicTypes.add(JAVA_LANG_LONG);
+        basicTypes.add(JAVA_LANG_STRING);
+        basicTypes.add(JAVA_UTIL_ARRAY_LIST);
+        basicTypes.add(JAVA_UTIL_HASH_SET);
+        basicTypes.add(JAVA_UTIL_OPTIONAL);
+
+        BOXED_TYPE_MAP.put(PRIMITIVE_BOOLEAN, boolean.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_BYTE, byte.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_CHAR, char.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_DOUBLE, double.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_FLOAT, float.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_INT, int.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_LONG, long.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_SHORT, short.class);
+
+        BOXED_TYPE_MAP.put(BOOLEAN, Boolean.class);
+        BOXED_TYPE_MAP.put(BYTE, Byte.class);
+        BOXED_TYPE_MAP.put(CHARACTER, Character.class);
+        BOXED_TYPE_MAP.put(DOUBLE, Double.class);
+        BOXED_TYPE_MAP.put(FLOAT, Float.class);
+        BOXED_TYPE_MAP.put(INTEGER, Integer.class);
+        BOXED_TYPE_MAP.put(LONG, Long.class);
+        BOXED_TYPE_MAP.put(OPTIONAL, Optional.class);
+        BOXED_TYPE_MAP.put(SHORT, Short.class);
+        BOXED_TYPE_MAP.put(STRING, String.class);
+
     }
 
     private Reflect() {
@@ -176,7 +228,7 @@ public class Reflect {
         return reflectionArguments;
     }
 
-    private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
+    public static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
 
         Class<?> functional = getFunctionalInterface(argumentTypes[i]);
         if (functional != null) {
@@ -225,26 +277,15 @@ public class Reflect {
         };
     }
 
-    public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
-        return switch (elementType) {
-            case "int" -> int.class;
-            case INTEGER -> Integer.class;
-            case PRIMITIVE_DOUBLE -> double.class;
-            case DOUBLE -> Double.class;
-            case PRIMITIVE_BOOLEAN -> boolean.class;
-            case BOOLEAN -> Boolean.class;
-            case "long" -> long.class;
-            case "Long" -> Long.class;
-            case PRIMITIVE_FLOAT -> float.class;
-            case FLOAT -> Float.class;
-            case PRIMITIVE_SHORT -> short.class;
-            case "Short" -> Short.class;
-            case "byte" -> byte.class;
-            case "Byte" -> Byte.class;
-            case "char" -> char.class;
-            case "Character" -> Character.class;
-            default -> AbstractCompiler.loadClass(elementType);
-        };
+    public static Optional<Class<?>> getComponentClass(String elementType) {
+        if (basicTypes.contains(elementType)) {
+            try {
+                return Optional.of(Class.forName(elementType));
+            } catch (ClassNotFoundException e) {
+                return Optional.empty();
+            }
+        }
+        return Optional.ofNullable(BOXED_TYPE_MAP.get(elementType));
     }
 
     public static Type getComponentType(Class<?> clazz) {
@@ -253,11 +294,11 @@ public class Reflect {
             case "int", JAVA_LANG_INTEGER -> PrimitiveType.intType();
             case PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE -> PrimitiveType.doubleType();
             case PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> PrimitiveType.booleanType();
-            case "long", JAVA_LANG_LONG, "java.lang.BigDecimal" -> PrimitiveType.longType();
+            case "long", JAVA_LANG_LONG, JAVA_LANG_BIG_DECIMAL -> PrimitiveType.longType();
             case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
             case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
-            case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
-            case "char", "java.lang.Character" -> PrimitiveType.charType();
+            case "byte", JAVA_LANG_BYTE -> PrimitiveType.byteType();
+            case "char", JAVA_LANG_CHARACTER -> PrimitiveType.charType();
             case JAVA_LANG_STRING -> new ClassOrInterfaceType().setName(STRING);
             default -> null;
         };
@@ -273,7 +314,7 @@ public class Reflect {
             case "Long" -> new LongLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
             case PRIMITIVE_BOOLEAN , BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
-            case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
+            case CHARACTER -> new CharLiteralExpr(value.toString().charAt(0));
             default -> new StringLiteralExpr(value.toString());
         };
     }
@@ -317,22 +358,22 @@ public class Reflect {
                 Expression scope = new NameExpr(typeName);
                 Expression mce = new MethodCallExpr(scope, "valueOf")
                     .addArgument(new StringLiteralExpr(initialValue.toString()));
-                v.setInitializer(mce);
+                v.setInitializer(List.of(mce));
             }
             case "java.util.List", JAVA_UTIL_ARRAY_LIST -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("List"));
-                v.setInitializer(init);
+                v.setInitializer(List.of(init));
             }
             case "java.util.Set", JAVA_UTIL_HASH_SET -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("Set"));
-                v.setInitializer(init);
+                v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> {
                 MethodCallExpr init = new MethodCallExpr("empty");
                 init.setScope(new NameExpr(OPTIONAL));
-                v.setInitializer(init);
+                v.setInitializer(List.of(init));
             }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
@@ -342,7 +383,7 @@ public class Reflect {
                 } else {
                     expr.setArguments(NodeList.nodeList());
                 }
-                v.setInitializer(expr);
+                v.setInitializer(List.of(expr));
                 TestGenerator.addImport(new ImportDeclaration(typeName, false, false));
             }
         }
@@ -380,41 +421,46 @@ public class Reflect {
             case STRING, JAVA_LANG_STRING -> {
                 String[] arr = new String[]{ANTIKYTHERA};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(STRING))
-                        .setInitializer(new ArrayInitializerExpr(new NodeList<>(new StringLiteralExpr(ANTIKYTHERA)))));
+                        .setInitializer(new ArrayInitializerExpr(new NodeList<>(new StringLiteralExpr(ANTIKYTHERA))));
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case INTEGER, JAVA_LANG_INTEGER -> {
                 Integer[] arr = new Integer[]{1};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(INTEGER))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case LONG, JAVA_LANG_LONG -> {
                 Long[] arr = new Long[]{1L};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName("Long"))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case DOUBLE, JAVA_LANG_DOUBLE -> {
                 Double[] arr = new Double[]{1.0};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(DOUBLE))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             case BOOLEAN, JAVA_LANG_BOOLEAN -> {
                 Boolean[] arr = new Boolean[]{true};
                 Variable v = new Variable(arr);
-                v.setInitializer(new ArrayCreationExpr()
+                ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(BOOLEAN))
-                        .setInitializer(new ArrayInitializerExpr()));
+                        .setInitializer(new ArrayInitializerExpr());
+                v.setInitializer(List.of(init));
                 yield v;
             }
             default -> new Variable(new Object[0]);
@@ -440,7 +486,7 @@ public class Reflect {
             case "Long", "long", JAVA_LANG_LONG -> createVariable(1L, "Long", "1");
             case STRING, JAVA_LANG_STRING -> {
                 Variable result = createVariable(ANTIKYTHERA, STRING, ANTIKYTHERA);
-                result.setInitializer(new StringLiteralExpr(ANTIKYTHERA));
+                result.setInitializer(List.of(new StringLiteralExpr(ANTIKYTHERA)));
                 yield result;
             }
             default -> new Variable(null);
@@ -668,10 +714,40 @@ public class Reflect {
     }
 
     public static boolean isPrimitiveOrBoxed(String type) {
-        try {
-            return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
-        } catch (ClassNotFoundException e) {
-            return false;
+        return getComponentClass(type)
+                .filter(aClass -> primitiveToWrapper.containsKey(aClass)
+                            || wrapperToPrimitive.containsKey(aClass)).isPresent();
+    }
+
+    public static Class<?> resolveComponentClass(CompilationUnit cu, Type elementType) {
+        Class<?> componentType = null;
+
+        if (elementType.isPrimitiveType()) {
+            componentType = Reflect.getComponentClass(elementType.asString()).orElseThrow();
         }
+        else {
+            TypeWrapper wrapper = null;
+            if (elementType instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
+                wrapper = AbstractCompiler.findType(cu, ctype.getNameAsString());
+            }
+            else {
+                wrapper = AbstractCompiler.findType(cu, elementType.asString());
+            }
+            if (wrapper == null) {
+                throw new IllegalStateException("Cannot find type " + elementType.asString());
+            }
+            if (wrapper.getClazz() != null) {
+                componentType = wrapper.getClazz();
+            }
+            else {
+                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
+                try {
+                    componentType = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+                } catch (ClassNotFoundException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
+        }
+        return componentType;
     }
 }

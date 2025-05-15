@@ -376,19 +376,20 @@ public class Evaluator {
      */
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof VariableDeclarator vdecl) {
-            Type componentType = vdecl.getType();
-            Class<?> componentClass;
-
-            String elementType = componentType.getElementType().toString();
-            componentClass = Reflect.getComponentClass(elementType);
+        if (parent.isPresent() && parent.get() instanceof VariableDeclarator) {
 
             List<Expression> values = arrayInitializerExpr.getValues();
-            Object array = Array.newInstance(componentClass, values.size());
+            Object array = Array.newInstance(Object.class, values.size());
 
             for (int i = 0; i < values.size(); i++) {
                 Object value = evaluateExpression(values.get(i)).getValue();
-                Array.set(array, i, value);
+                if (value instanceof Evaluator evaluator) {
+                    MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+                    Array.set(array, i, AKBuddy.createDynamicClass(interceptor).getDeclaredConstructor().newInstance());
+                }
+                else {
+                    Array.set(array, i, value);
+                }
             }
 
             return new Variable(array);
@@ -577,7 +578,7 @@ public class Evaluator {
                  * this could raise a null pointer exception, that's fine with me. that means
                  * some other code is misbehaving and this NPE will give a change to catch it
                  */
-                v.setInitializer(init.get());
+                v.setInitializer(List.of(init.get()));
             } else {
                 /*
                  * No initializer. We need to create an entry in the symbol table. If the variable is
@@ -912,6 +913,10 @@ public class Evaluator {
             } else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
                 variable = new Variable(findScopeType(s));
+            } else if (expr2.isObjectCreationExpr()) {
+                variable = createObject(expr2, expr2.asObjectCreationExpr());
+            } else if (expr2.isArrayAccessExpr()) {
+                variable = evaluateArrayAccess(expr2);
             }
         }
         return variable;
@@ -1166,17 +1171,17 @@ public class Evaluator {
         boolean hasSetter = hasData || classDecl.getAnnotationByName("Setter").isPresent();
 
         if (methodName.startsWith("get") && hasGetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("get", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("get", ""));
             return getField(field);
         }
 
         if (methodName.startsWith("is") && hasGetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("is", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("is", ""));
             return getField(field);
         }
 
         if (methodName.startsWith("set") && hasSetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("set", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("set", ""));
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
             return new Variable(null);
@@ -1196,7 +1201,7 @@ public class Evaluator {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className))).orElse(null);
+                ClassProcessor.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
@@ -1696,7 +1701,7 @@ public class Evaluator {
      * Execute a statement that represents an If - Then or If - Then - Else
      *
      * @param ifst If / Then statement
-     * @throws Exception
+     * @throws Exception if the if then else cannot be evaluated
      */
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
 
@@ -1738,7 +1743,7 @@ public class Evaluator {
             executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
         }
 
-        if (!matchFound && !t.getFinallyBlock().isPresent()) {
+        if (!matchFound && t.getFinallyBlock().isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
     }
@@ -1813,7 +1818,6 @@ public class Evaluator {
             if (v != null) {
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
-                    v.setStatic(true);
                     AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
                 }
             }

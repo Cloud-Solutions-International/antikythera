@@ -12,7 +12,7 @@ import java.lang.reflect.Method;
 
 public class MethodInterceptor {
     private Evaluator evaluator;
-    private Class<?> wrappedClass;
+    private Class<?> wrappedClass = Object.class;
 
     public MethodInterceptor(Evaluator evaluator) {
         this.evaluator = evaluator;
@@ -73,6 +73,10 @@ public class MethodInterceptor {
 
     public Evaluator getEvaluator() {
         return evaluator;
+    }
+
+    public void setWrappedClass(Class<?> componentClass) {
+        this.wrappedClass = componentClass;
     }
 
     public static class Interceptor {

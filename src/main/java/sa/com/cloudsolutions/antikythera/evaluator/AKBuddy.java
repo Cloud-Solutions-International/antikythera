@@ -20,6 +20,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
 import java.util.List;
+import java.util.Optional;
 
 
 /**
@@ -75,7 +76,7 @@ public class AKBuddy {
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
+        DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
@@ -125,40 +126,16 @@ public class AKBuddy {
     }
 
     private static Class<?> getParameterType(CompilationUnit cu, Parameter p) {
-        try {
-            if (p.getType().isArrayType()) {
-                // Get the element type without [] suffix
-                Type elementType = p.getType().asArrayType().getElementType();
+        if (p.getType().isArrayType()) {
+            // Get the element type without [] suffix
+            Type elementType = p.getType().asArrayType().getElementType();
+            Class<?> componentType = Reflect.resolveComponentClass(cu, elementType);
 
-                Class<?> componentType;
-                if (elementType.isPrimitiveType()) {
-                    componentType = Reflect.getComponentClass(elementType.asString());
-                } else {
-                    String fullName = AbstractCompiler.findFullyQualifiedName(cu, elementType.asString());
-                    componentType = Reflect.getComponentClass(fullName);
-                }
+            // Create an empty array of the correct type
+            return Array.newInstance(componentType, 0).getClass();
 
-                // Create an empty array of the correct type
-                return Array.newInstance(componentType, 0).getClass();
-
-            } else {
-                // Handle non-array types as before
-                if (p.getType().isPrimitiveType()) {
-                    return Reflect.getComponentClass(p.getTypeAsString());
-                } else {
-                    if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
-                        String fullName = AbstractCompiler.findFullyQualifiedName(cu, ctype.getNameAsString());
-                        return Reflect.getComponentClass(fullName);
-                    }
-                    else {
-                        String fullName = AbstractCompiler.findFullyQualifiedName(cu, p.getType().asString());
-                        return Reflect.getComponentClass(fullName);
-                    }
-                }
-            }
-
-        } catch (ClassNotFoundException e) {
-            throw new AntikytheraException(e);
+        } else {
+            return Reflect.resolveComponentClass(cu, p.getType());
         }
     }
 
@@ -170,7 +147,7 @@ public class AKBuddy {
             TypeDescription.Generic fieldType = null;
             if (vd.getType().isPrimitiveType()) {
                 fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-                        Reflect.getComponentClass(vd.getTypeAsString()));
+                        Reflect.resolveComponentClass(cu, vd.getType()));
             }
             else {
                 try {
