@@ -1228,7 +1228,7 @@ public class Evaluator {
     }
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
-    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
         String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
 
@@ -1830,13 +1830,6 @@ public class Evaluator {
             }
         } catch (UnsolvedSymbolException e) {
             logger.debug("ignore {}", variableDeclarator);
-        } catch (IOException e) {
-            String action = Settings.getProperty("dependencies.on_error", String.class).orElse("exit");
-            if (action.equals("exit")) {
-                throw new GeneratorException("Exception while processing fields", e);
-            }
-
-            logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
 
         } catch (AntikytheraException | ReflectiveOperationException e) {
             throw new GeneratorException(e);
