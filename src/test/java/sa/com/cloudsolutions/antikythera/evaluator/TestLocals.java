@@ -5,6 +5,8 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -17,7 +19,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestLocals extends TestHelper {
-    private final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Locals";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Locals";
     CompilationUnit cu;
 
     @BeforeAll
@@ -42,19 +44,13 @@ class TestLocals extends TestHelper {
         assertEquals("10,20,100\n20,30,200\n", outContent.toString());
     }
 
-    @Test
-    void testMce() throws ReflectiveOperationException {
-        MethodDeclaration mce = cu
-                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("mce")).orElseThrow();
-        evaluator.executeMethod(mce);
-        assertEquals("[]\n", outContent.toString());
-    }
 
-    @Test
-    void testArrayAccess() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"mce, []", "arrayAccess, HELLOWORLD9.1", "people, Bertie, Biggles"})
+    void testVarious(String name, String output) throws ReflectiveOperationException {
         MethodDeclaration mce = cu
-                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("arrayAccess")).orElseThrow();
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(mce);
-        assertEquals("HELLOWORLD9.1\n", outContent.toString());
+        assertEquals(output, outContent.toString().strip());
     }
 }

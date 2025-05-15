@@ -53,9 +53,8 @@ public class MCEWrapper {
 
             Type type = argumentTypes.get(i);
             String elementType = type.getElementType().toString();
-            try {
-                classes[i] = Reflect.getComponentClass(elementType);
-            } catch (ClassNotFoundException e) {
+            classes[i] = Reflect.getComponentClass(elementType);
+            if (classes[i] == null) {
                 argumentTypeAsNonPrimitiveClass(type, classes, i);
             }
         }

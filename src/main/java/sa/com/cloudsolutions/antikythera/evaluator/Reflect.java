@@ -25,6 +25,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverte
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -176,7 +177,7 @@ public class Reflect {
         return reflectionArguments;
     }
 
-    private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
+    public static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
 
         Class<?> functional = getFunctionalInterface(argumentTypes[i]);
         if (functional != null) {
@@ -225,7 +226,7 @@ public class Reflect {
         };
     }
 
-    public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
+    public static Class<?> getComponentClass(String elementType) {
         return switch (elementType) {
             case "int" -> int.class;
             case INTEGER -> Integer.class;
@@ -244,7 +245,13 @@ public class Reflect {
             case "char" -> char.class;
             case "Character" -> Character.class;
             case STRING -> String.class;
-            default -> AbstractCompiler.loadClass(elementType);
+            default -> {
+                try {
+                    yield AbstractCompiler.loadClass(elementType);
+                } catch (ClassNotFoundException e) {
+                    yield null;
+                }
+            }
         };
     }
 
@@ -674,10 +681,6 @@ public class Reflect {
     }
 
     public static boolean isPrimitiveOrBoxed(String type) {
-        try {
-            return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
+        return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
     }
 }

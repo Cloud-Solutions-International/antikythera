@@ -8,6 +8,7 @@ public class Locals {
         l.doStuff();
         l.arrayAccess();
         l.mce();
+        l.people();
     }
 
     private void doStuff() {
@@ -25,11 +26,17 @@ public class Locals {
 
     private void mce() {
         String s = new ArrayList<String>().toString();
-        System.out.println(s);
+        System.out.print(s);
     }
 
     private void arrayAccess() {
         String[] a = {"Hello", "World"};
         System.out.println(a[0].toUpperCase() + a[1].toUpperCase() + 9.1);
     }
+
+    private void people() {
+        IPerson[] a = {new Person("Bertie"), new Person("Biggles")};
+        System.out.println(a[0].getName() + ", " + a[1].getName());
+    }
+
 }
