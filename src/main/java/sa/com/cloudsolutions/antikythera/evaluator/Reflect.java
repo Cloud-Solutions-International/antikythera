@@ -57,6 +57,7 @@ public class Reflect {
     public static final String SHORT = "Short";
     public static final String STRING = "String";
 
+    public static final String JAVA_LANG_BIG_DECIMAL = "java.lang.BigDecimal";
     public static final String JAVA_LANG_BOOLEAN = "java.lang.Boolean";
     public static final String JAVA_LANG_BYTE = "java.lang.Byte";
     public static final String JAVA_LANG_CHARACTER = "java.lang.Character";
@@ -76,6 +77,7 @@ public class Reflect {
     public static final String PRIMITIVE_SHORT = "short";
 
 
+
     /**
      * Keeps a map of wrapper types to their primitive counterpart
      * for example, `Integer.class -> int.class`
@@ -88,6 +90,7 @@ public class Reflect {
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
 
     static Set<String> basicTypes = new HashSet<>();
+    static Set<String> boxed = new HashSet<>();
 
     static {
         /*
@@ -106,6 +109,7 @@ public class Reflect {
             primitiveToWrapper.put(entry.getValue(), entry.getKey());
         }
 
+        basicTypes.add(JAVA_LANG_BIG_DECIMAL);
         basicTypes.add(JAVA_LANG_BOOLEAN);
         basicTypes.add(JAVA_LANG_BYTE);
         basicTypes.add(JAVA_LANG_CHARACTER);
@@ -123,6 +127,18 @@ public class Reflect {
         basicTypes.add(PRIMITIVE_DOUBLE);
         basicTypes.add(PRIMITIVE_FLOAT);
         basicTypes.add(PRIMITIVE_SHORT);
+
+        boxed.add(BOOLEAN);
+        boxed.add(BYTE);
+        boxed.add(CHAR);
+        boxed.add(DOUBLE);
+        boxed.add(FLOAT);
+        boxed.add(INTEGER);
+        boxed.add(LONG);
+        boxed.add(OPTIONAL);
+        boxed.add(SHORT);
+        boxed.add(STRING);
+
     }
 
     private Reflect() {
@@ -265,6 +281,9 @@ public class Reflect {
                 return Optional.empty();
             }
         }
+        if (boxed.contains(elementType)) {
+            return getComponentClass("java.lang" + "." + elementType);
+        }
         return Optional.empty();
     }
 
@@ -274,7 +293,7 @@ public class Reflect {
             case "int", JAVA_LANG_INTEGER -> PrimitiveType.intType();
             case PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE -> PrimitiveType.doubleType();
             case PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> PrimitiveType.booleanType();
-            case "long", JAVA_LANG_LONG, "java.lang.BigDecimal" -> PrimitiveType.longType();
+            case "long", JAVA_LANG_LONG, JAVA_LANG_BIG_DECIMAL -> PrimitiveType.longType();
             case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
             case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
             case "byte", JAVA_LANG_BYTE -> PrimitiveType.byteType();
