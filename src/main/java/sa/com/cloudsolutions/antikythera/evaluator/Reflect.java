@@ -314,7 +314,7 @@ public class Reflect {
             case "Long" -> new LongLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
             case PRIMITIVE_BOOLEAN , BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
-            case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
+            case CHARACTER -> new CharLiteralExpr(value.toString().charAt(0));
             default -> new StringLiteralExpr(value.toString());
         };
     }

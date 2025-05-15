@@ -376,7 +376,7 @@ public class Evaluator {
      */
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof VariableDeclarator vdecl) {
+        if (parent.isPresent() && parent.get() instanceof VariableDeclarator) {
 
             List<Expression> values = arrayInitializerExpr.getValues();
             Object array = Array.newInstance(Object.class, values.size());
@@ -1171,17 +1171,17 @@ public class Evaluator {
         boolean hasSetter = hasData || classDecl.getAnnotationByName("Setter").isPresent();
 
         if (methodName.startsWith("get") && hasGetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("get", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("get", ""));
             return getField(field);
         }
 
         if (methodName.startsWith("is") && hasGetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("is", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("is", ""));
             return getField(field);
         }
 
         if (methodName.startsWith("set") && hasSetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("set", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("set", ""));
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
             return new Variable(null);
@@ -1201,7 +1201,7 @@ public class Evaluator {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className))).orElse(null);
+                ClassProcessor.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
@@ -1701,7 +1701,7 @@ public class Evaluator {
      * Execute a statement that represents an If - Then or If - Then - Else
      *
      * @param ifst If / Then statement
-     * @throws Exception
+     * @throws Exception if the if then else cannot be evaluated
      */
     Variable ifThenElseBlock(IfStmt ifst) throws Exception {
 
@@ -1743,7 +1743,7 @@ public class Evaluator {
             executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
         }
 
-        if (!matchFound && !t.getFinallyBlock().isPresent()) {
+        if (!matchFound && t.getFinallyBlock().isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
     }
