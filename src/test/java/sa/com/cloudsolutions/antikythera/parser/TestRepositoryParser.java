@@ -2,7 +2,11 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.PrimitiveType;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
@@ -22,11 +26,13 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRepositoryParser {
@@ -98,8 +104,17 @@ class TestRepositoryParser {
         parser.processTypes();
         parser.buildQueries();
 
-        MCEWrapper wrapper = new MCEWrapper(new MethodCallExpr("findById"));
+        MethodCallExpr mce = new MethodCallExpr("findById");
+        MCEWrapper wrapper = new MCEWrapper(mce);
         wrapper.getArgumentTypes().add(PrimitiveType.longType());
+        assertThrows(NoSuchElementException.class, () ->
+            AbstractCompiler.findCallableDeclaration(wrapper,parser.getCompilationUnit().getType(0)));
+
+        BlockStmt body = new BlockStmt();
+        MethodDeclaration md = new MethodDeclaration().setName("bada").setBody(body);
+        body.addStatement(mce);
+        cu.getType(0).addMember(md);
+
         Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(wrapper,parser.getCompilationUnit().getType(0));
         assertTrue(cd.isPresent());
         assertFalse(cd.get().isMethodDeclaration());
