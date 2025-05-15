@@ -74,6 +74,8 @@ public class Reflect {
     public static final String PRIMITIVE_CHAR = "char";
     public static final String PRIMITIVE_DOUBLE = "double";
     public static final String PRIMITIVE_FLOAT = "float";
+    public static final String PRIMITIVE_INT = "int";
+    public static final String PRIMITIVE_LONG = "long";
     public static final String PRIMITIVE_SHORT = "short";
 
 
@@ -90,7 +92,7 @@ public class Reflect {
     static Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
 
     static Set<String> basicTypes = new HashSet<>();
-    static Set<String> boxed = new HashSet<>();
+    public static final Map<String, Class<?>> BOXED_TYPE_MAP = new HashMap<>();
 
     static {
         /*
@@ -121,23 +123,25 @@ public class Reflect {
         basicTypes.add(JAVA_UTIL_HASH_SET);
         basicTypes.add(JAVA_UTIL_OPTIONAL);
 
-        basicTypes.add(PRIMITIVE_BOOLEAN);
-        basicTypes.add(PRIMITIVE_BYTE);
-        basicTypes.add(PRIMITIVE_CHAR);
-        basicTypes.add(PRIMITIVE_DOUBLE);
-        basicTypes.add(PRIMITIVE_FLOAT);
-        basicTypes.add(PRIMITIVE_SHORT);
+        BOXED_TYPE_MAP.put(PRIMITIVE_BOOLEAN, Boolean.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_BYTE, Byte.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_CHAR, Character.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_DOUBLE, Double.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_FLOAT, Float.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_INT, Integer.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_LONG, Long.class);
+        BOXED_TYPE_MAP.put(PRIMITIVE_SHORT, Short.class);
 
-        boxed.add(BOOLEAN);
-        boxed.add(BYTE);
-        boxed.add(CHAR);
-        boxed.add(DOUBLE);
-        boxed.add(FLOAT);
-        boxed.add(INTEGER);
-        boxed.add(LONG);
-        boxed.add(OPTIONAL);
-        boxed.add(SHORT);
-        boxed.add(STRING);
+        BOXED_TYPE_MAP.put(BOOLEAN, Boolean.class);
+        BOXED_TYPE_MAP.put(BYTE, Byte.class);
+        BOXED_TYPE_MAP.put(CHAR, Character.class);
+        BOXED_TYPE_MAP.put(DOUBLE, Double.class);
+        BOXED_TYPE_MAP.put(FLOAT, Float.class);
+        BOXED_TYPE_MAP.put(INTEGER, Integer.class);
+        BOXED_TYPE_MAP.put(LONG, Long.class);
+        BOXED_TYPE_MAP.put(OPTIONAL, Optional.class);
+        BOXED_TYPE_MAP.put(SHORT, Short.class);
+        BOXED_TYPE_MAP.put(STRING, String.class);
 
     }
 
@@ -281,10 +285,7 @@ public class Reflect {
                 return Optional.empty();
             }
         }
-        if (boxed.contains(elementType)) {
-            return getComponentClass("java.lang" + "." + elementType);
-        }
-        return Optional.empty();
+        return Optional.ofNullable(BOXED_TYPE_MAP.get(elementType));
     }
 
     public static Type getComponentType(Class<?> clazz) {
