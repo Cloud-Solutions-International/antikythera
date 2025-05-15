@@ -36,7 +36,7 @@ public class Locals {
 
     private void people() {
         IPerson[] a = {new Person("Bertie"), new Person("Biggles")};
-        System.out.println(a[0].getName() + ", " + a[1].getName());
+        System.out.println(a[0].getName() + " and " + a[1].getName());
     }
 
 }
