@@ -130,6 +130,8 @@ public class Evaluator {
 
     protected TypeDeclaration<?> typeDeclaration;
 
+    private static int sequence = 0;
+
     protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
@@ -1816,6 +1818,11 @@ public class Evaluator {
             }
             Variable v = resolveVariableDeclaration(variableDeclarator);
             if (v != null) {
+                if (isSequenceField(field, variableDeclarator)) {
+                    incrementSequence();
+                    v.setValue(sequence);
+                }
+
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
                     AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
@@ -1851,6 +1858,19 @@ public class Evaluator {
 
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
+    }
+
+    private boolean isSequenceField(FieldDeclaration field,  VariableDeclarator variableDeclarator) {
+
+        String typeName = variableDeclarator.getTypeAsString();
+        return (field.getAnnotationByName("Id").isPresent()
+                && typeDeclaration.getAnnotationByName("Entity").isPresent()
+                && variableDeclarator.getInitializer().isEmpty()
+                && ( typeName.equals("int") || typeName.equals("long") || typeName.equals("Inter") || typeName.equals("Long")));
+    }
+
+    private static void incrementSequence() {
+        sequence++;
     }
 
     /**

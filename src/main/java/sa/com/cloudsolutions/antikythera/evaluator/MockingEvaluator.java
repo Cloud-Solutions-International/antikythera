@@ -32,7 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
-    private static Set<String> collectionTypes = Set.of(
+    private static final Set<String> collectionTypes = Set.of(
             "java.util.List",
             "java.util.ArrayList",
             "java.util.Collection",

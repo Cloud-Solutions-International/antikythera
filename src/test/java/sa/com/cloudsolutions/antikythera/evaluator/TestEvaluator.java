@@ -148,6 +148,17 @@ class TestEvaluator extends TestHelper {
         assertEquals(42, resolvedFields.get("number").getValue());
     }
 
+    @Test
+    void testSequence() {
+        Variable v = evaluator.getField("id");
+        assertEquals(43, v.getValue());
+
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity",
+                Evaluator.class);
+
+        v = evaluator.getField("id");
+        assertEquals(1, v.getValue());
+    }
 }
 
 class TestEvaluatorWithFinches extends TestHelper {
