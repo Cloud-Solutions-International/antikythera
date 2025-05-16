@@ -433,7 +433,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (typeArgs.isEmpty()) {
                 typeArgs.add(new ClassOrInterfaceType().setName("Object"));
             }
-            Expression expr = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
+            Expression expr = addToCollection(typeArgs, v, new NameExpr("bada"));
             if (expr != null) {
                 v.setInitializer(List.of(expr));
             }

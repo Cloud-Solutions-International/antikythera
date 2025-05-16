@@ -141,34 +141,34 @@ public class ControlFlowEvaluator extends Evaluator {
             typeArgs.add(new ClassOrInterfaceType().setName("Object"));
         }
 
-        return setupNonEmptyCollection(typeArgs, v, name);
+        return addToCollection(typeArgs, v, name);
     }
 
-    protected Expression setupNonEmptyCollection(NodeList<Type> typeArgs, Variable v, NameExpr name) {
+    protected Expression addToCollection(NodeList<Type> typeArgs, Variable wrappedCollection, NameExpr name) {
         VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
         try {
-            Variable resolved = resolveVariableDeclaration(vdecl);
-            if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
-                resolved = Reflect.variableFactory(resolved.getType().asString());
+            Variable member = resolveVariableDeclaration(vdecl);
+            if (member.getValue() == null && Reflect.isPrimitiveOrBoxed(member.getType().asString())) {
+                member = Reflect.variableFactory(member.getType().asString());
             }
 
-            List<Expression> initializer = resolved.getInitializer();
-            if (initializer.getFirst() instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
+            List<Expression> initializer = member.getInitializer();
+            if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
                 TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             }
-            if (v.getValue() instanceof List<?> list) {
+            if (wrappedCollection.getValue() instanceof List<?> list) {
                 Method m = List.class.getMethod("add", Object.class);
-                m.invoke(list, resolved.getValue());
+                m.invoke(list, member.getValue());
                 TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
                 return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
             }
-            if (v.getValue() instanceof Set<?> set) {
+            if (wrappedCollection.getValue() instanceof Set<?> set) {
                 Method m = Set.class.getMethod("add", Object.class);
-                m.invoke(set, resolved.getValue());
+                m.invoke(set, member.getValue());
                 TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
                 return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
             }
-            if (v.getValue() instanceof Map<?,?>) {
+            if (wrappedCollection.getValue() instanceof Map<?,?>) {
                 if (typeArgs.size() == 1) {
                     typeArgs.add(new ClassOrInterfaceType().setName("Object"));
                 }

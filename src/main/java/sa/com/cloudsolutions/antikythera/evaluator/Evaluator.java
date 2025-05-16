@@ -1822,11 +1822,6 @@ public class Evaluator {
                     v.setValue(sequence);
                     MethodCallExpr mce = new MethodCallExpr(
                             "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
-                    String scope = variableName == null
-                            ? AbstractCompiler.classToInstanceName(AbstractCompiler.fullyQualifiedToShortName(className))
-                            : variableName;
-
-                    mce.setScope(new NameExpr(scope));
                     mce.addArgument(new IntegerLiteralExpr().setValue(Integer.toString(sequence)));
                     v.getInitializer().add(mce);
                 }

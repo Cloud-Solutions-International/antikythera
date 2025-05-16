@@ -159,7 +159,7 @@ class TestEvaluator extends TestHelper {
         v = evaluator.getField("id");
         assertTrue(0 <  (int) v.getValue());
         assertFalse(v.getInitializer().isEmpty());
-        assertTrue(v.getInitializer().getFirst().toString().startsWith("fakeEntity.setId("));
+        assertTrue(v.getInitializer().getFirst().toString().startsWith("setId("));
     }
 }
 
