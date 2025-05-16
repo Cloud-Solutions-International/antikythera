@@ -28,7 +28,6 @@ import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
@@ -164,8 +163,7 @@ public class Evaluator {
                 String value = longLiteralExpr.getValue();
                 yield new Variable(Long.parseLong(value.endsWith("L") ? value.replaceFirst("L", "") : value));
             }
-            case NullLiteralExpr nullLiteralExpr -> new Variable(null);
-            default -> throw new EvaluatorException("Unknown literal expression %s".formatted(expr));
+            default -> new Variable(null);
         };
     }
 
@@ -1877,7 +1875,7 @@ public class Evaluator {
         return (field.getAnnotationByName("Id").isPresent()
                 && typeDeclaration.getAnnotationByName("Entity").isPresent()
                 && variableDeclarator.getInitializer().isEmpty()
-                && ( typeName.equals("int") || typeName.equals("long") || typeName.equals("Inter") || typeName.equals("Long")));
+                && ( typeName.equals("int") || typeName.equals("long") || typeName.equals("Integer") || typeName.equals("Long")));
     }
 
     private static void incrementSequence() {

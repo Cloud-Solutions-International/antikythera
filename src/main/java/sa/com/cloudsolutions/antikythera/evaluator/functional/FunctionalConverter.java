@@ -17,7 +17,6 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
 import com.github.javaparser.ast.type.Type;
-import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -75,23 +74,23 @@ public class FunctionalConverter {
                 pos = i;
             }
         }
-        if ( !(outerScope.getValue() instanceof Evaluator)) {
-            Class<?> clazz = outerScope.getClazz();
-            for (Method m : Reflect.getMethodsByName(clazz, name)) {
-                if (m.getParameterCount() == mce.getArguments().size()) {
-                    Class<?> param = m.getParameterTypes()[pos];
-                    if (param.isInterface() && param.isAnnotationPresent(FunctionalInterface.class)) {
-                        Method functionalMethod = getFunctionalInterfaceMethod(param);
-                        if (functionalMethod != null && functionalMethod.getReturnType() != void.class) {
-                            body.addStatement(new ReturnStmt(call));
-                        } else {
-                            body.addStatement(call);
-                        }
-                        break;
+
+        Class<?> clazz = outerScope.getClazz();
+        for (Method m : Reflect.getMethodsByName(clazz, name)) {
+            if (m.getParameterCount() == mce.getArguments().size()) {
+                Class<?> param = m.getParameterTypes()[pos];
+                if (param.isInterface() && param.isAnnotationPresent(FunctionalInterface.class)) {
+                    Method functionalMethod = getFunctionalInterfaceMethod(param);
+                    if (functionalMethod != null && functionalMethod.getReturnType() != void.class) {
+                        body.addStatement(new ReturnStmt(call));
+                    } else {
+                        body.addStatement(call);
                     }
+                    break;
                 }
             }
         }
+
     }
 
     private static MethodCallExpr createMethodCallExpression(MethodReferenceExpr methodRef) {

@@ -199,8 +199,11 @@ public class MockingRegistry {
         );
 
         MethodCallExpr methodCall = new MethodCallExpr()
-                .setScope(new NameExpr(scopeVariable))
                 .setName(methodName);
+
+        if (scopeVariable != null) {
+            methodCall.setScope(new NameExpr(scopeVariable));
+        }
 
         mockitoWhen.setArguments(new NodeList<>(methodCall));
 
