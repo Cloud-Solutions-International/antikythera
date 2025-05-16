@@ -23,7 +23,7 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -33,7 +33,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -262,7 +261,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
         Variable field = evaluator.getField(
-                ClassProcessor.classToInstanceName(name.substring(3)));
+                AbstractCompiler.classToInstanceName(name.substring(3)));
         if (field != null) {
             if (field.getClazz() != null) {
                 Variable v = Reflect.variableFactory(field.getClazz().getName());

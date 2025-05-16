@@ -295,6 +295,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     Variable straightPathHelper(ClassOrInterfaceDeclaration cdecl) throws ReflectiveOperationException {
+        Variable v = null;
         for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
             Type x = t.getTypeArguments().orElse(new NodeList<>()).getFirst().orElse(null);
             if (x instanceof ClassOrInterfaceType ciType) {
@@ -307,14 +308,14 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                         typeEval.setupFields();
                         typeEval.initializeFields();
                         TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
-                        return new Variable(Optional.of(typeEval));
+                        v = new Variable(Optional.of(typeEval));
                     } else {
-                        Variable v = optionalByteBuddy(ciType.getNameAsString());
-                        if (v != null) {
-                            return v;
-                        }
+                        v = optionalByteBuddy(ciType.getNameAsString());
                     }
                 }
+            }
+            if (v != null) {
+                return v;
             }
         }
         return null;
