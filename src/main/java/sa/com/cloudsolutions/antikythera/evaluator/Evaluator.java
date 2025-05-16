@@ -795,8 +795,8 @@ public class Evaluator {
             Variable old = getValue(node, nameAsString);
             if (old != null) {
                 old.setValue(v.getValue());
+                return;
             }
-            return;
         }
 
         BlockStmt block = AbstractCompiler.findBlockStatement(node);
