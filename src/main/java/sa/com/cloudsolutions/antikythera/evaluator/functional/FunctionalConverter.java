@@ -5,6 +5,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -15,6 +16,7 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
+import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -24,6 +26,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Optional;
 
 public class FunctionalConverter {
 
@@ -43,6 +46,14 @@ public class FunctionalConverter {
             Node parent = methodRef.getParentNode().orElseThrow();
             if (parent instanceof MethodCallExpr mce) {
                 searchForFunctionals(methodRef, outerScope, mce, body, call);
+            } else if (parent instanceof VariableDeclarator vd) {
+                Type t = vd.getType();
+                if (t.isClassOrInterfaceType()) {
+                    ClassOrInterfaceType ctype = t.asClassOrInterfaceType();
+                    Optional<NodeList<Type>> generics = ctype.getTypeArguments();
+                    generics.ifPresent(types -> parameters.set(0, new Parameter(types.get(0), "arg")));
+                }
+                body.addStatement(new ReturnStmt(call));
             }
         }
         else {

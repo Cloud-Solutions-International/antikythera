@@ -914,7 +914,11 @@ public class Evaluator {
                 variable = new Variable(this);
             } else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
-                variable = new Variable(findScopeType(s));
+                Object scopeType = findScopeType(s);
+                variable = new Variable(scopeType);
+                if (scopeType instanceof Class<?> clazz) {
+                    variable.setClazz(clazz);
+                }
             } else if (expr2.isObjectCreationExpr()) {
                 variable = createObject(expr2, expr2.asObjectCreationExpr());
             } else if (expr2.isArrayAccessExpr()) {
