@@ -160,6 +160,8 @@ class TestEvaluator extends TestHelper {
         assertTrue(0 <  (int) v.getValue());
         assertFalse(v.getInitializer().isEmpty());
         assertTrue(v.getInitializer().getFirst().toString().startsWith("setId("));
+
+        assertEquals(1, evaluator.getFieldInitializers().size());
     }
 }
 

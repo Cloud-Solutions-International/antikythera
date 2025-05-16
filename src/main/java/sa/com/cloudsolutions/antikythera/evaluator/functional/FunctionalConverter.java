@@ -18,10 +18,12 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 public class FunctionalConverter {
 
@@ -94,36 +96,57 @@ public class FunctionalConverter {
                 return call;
             }
 
-            createMethodCalleExpressionArguments(methodRef, typeExpr, call);
+            createMethodCallExpressionArguments(methodRef, typeExpr, call);
 
+        } else {
+            // For instance method references like Person::getId, set scope to 'arg'
+            call.setScope(new NameExpr("arg"));
         }
         return call;
     }
 
-    private static void createMethodCalleExpressionArguments(MethodReferenceExpr methodRef, TypeExpr typeExpr, MethodCallExpr call) {
+    private static void createMethodCallExpressionArguments(MethodReferenceExpr methodRef, TypeExpr typeExpr, MethodCallExpr call) {
         CompilationUnit cu = methodRef.findCompilationUnit().orElseThrow();
         TypeWrapper typeWrapper = AbstractCompiler.findType(cu, typeExpr.toString());
 
-        if (typeWrapper == null || typeWrapper.getType() == null){
+        if (typeWrapper == null)
+        {
+            return;
+        }
+        if (typeWrapper.getType() == null) {
+            try {
+                Method m = typeWrapper.getClazz().getDeclaredMethod(methodRef.getIdentifier(), Object.class);
+                if (Modifier.isStatic(m.getModifiers())) {
+                    call.setScope(methodRef.getScope());
+                }
+                else {
+                    call.setScope(new NameExpr("arg"));
+                }
+                addArguments(m.getParameterCount(), call);
+            } catch (NoSuchMethodException e) {
+                throw new AntikytheraException(e);
+            }
             return;
         }
         MethodDeclaration md = typeWrapper.getType().getMethodsByName(methodRef.getIdentifier()).getFirst();
+        addArguments(md.getParameters().size(), call);
+
         if (md.isStatic()) {
-            if (md.getParameters().size() == 1) {
-                call.addArgument(new NameExpr("arg"));
-            }
-            else {
-                for(int i = 0 ; i < md.getParameters().size() ; i++) {
-                    call.addArgument(new NameExpr("arg" + i));
-                }
-            }
             call.setScope(methodRef.getScope());
         }
         else {
-            for(int i = 0 ; i < md.getParameters().size() ; i++) {
+            call.setScope(new NameExpr("arg"));
+        }
+    }
+
+    private static void addArguments(int numberOfarguments, MethodCallExpr call) {
+        if (numberOfarguments == 1) {
+            call.addArgument(new NameExpr("arg"));
+        }
+        else {
+            for(int i = 0 ; i < numberOfarguments ; i++) {
                 call.addArgument(new NameExpr("arg" + i));
             }
-            call.setScope(new NameExpr("arg"));
         }
     }
 

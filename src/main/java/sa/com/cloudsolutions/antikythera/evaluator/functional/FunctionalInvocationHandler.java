@@ -34,7 +34,11 @@ public record FunctionalInvocationHandler(FPEvaluator<?> evaluator) implements I
             return null;
         }
         if (evaluator instanceof Supplier s) {
-            return s.get();
+            Object result = s.get();
+            if (result instanceof sa.com.cloudsolutions.antikythera.evaluator.Variable v) {
+                return v.getValue();
+            }
+            return result;
         }
         return null;
     }

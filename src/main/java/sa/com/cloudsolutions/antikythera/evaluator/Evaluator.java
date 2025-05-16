@@ -75,6 +75,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -1837,6 +1838,16 @@ public class Evaluator {
         } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
         }
+    }
+
+    public List<Expression> getFieldInitializers() {
+        List<Expression> fi = new ArrayList<>();
+        for (Variable v : fields.values()) {
+            if (v != null) {
+                fi.addAll(v.getInitializer());
+            }
+        }
+        return fi;
     }
 
     public void reset() {
