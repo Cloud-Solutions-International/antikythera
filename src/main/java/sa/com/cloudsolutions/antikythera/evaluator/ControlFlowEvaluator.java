@@ -63,7 +63,7 @@ public class ControlFlowEvaluator extends Evaluator {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
-            if (v.getInitializer() != null) {
+            if (!v.getInitializer().isEmpty()) {
                 MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
                 String targetParamName = nameExpr.getNameAsString();

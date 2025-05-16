@@ -410,7 +410,7 @@ public class UnitTestGenerator extends TestGenerator {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
-        if (v.getInitializer() != null) {
+        if (!v.getInitializer().isEmpty()) {
             body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
                     v.getInitializer().getFirst() + ";");
         }

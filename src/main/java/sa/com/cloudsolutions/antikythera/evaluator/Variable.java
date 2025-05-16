@@ -5,6 +5,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,7 +30,7 @@ public class Variable {
      */
     private Object value;
 
-    private List<Expression> initializer;
+    private List<Expression> initializer = new ArrayList<>();
 
     @SuppressWarnings("java:S2245")
     private static final Random random = new Random();
@@ -88,9 +89,7 @@ public class Variable {
         this.type = type;
         if (this.clazz == null) {
             Optional<Class<?>> opt = Reflect.getComponentClass(type.asString());
-            if (opt.isPresent()) {
-                this.clazz = opt.get();
-            }
+            opt.ifPresent(aClass -> this.clazz = aClass);
         }
     }
 
