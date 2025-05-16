@@ -30,6 +30,7 @@ public class Functional {
         printHello( a -> "Hello " + a );
     }
 
+    @SuppressWarnings("java:S1117")
     private void greet2() {
         printHello( a -> { return "Hello " + a; });
     }
@@ -144,6 +145,12 @@ public class Functional {
         System.out.println();
     }
 
+    @SuppressWarnings("java:S1117")
+    private void valueOf() {
+        Function<Integer, String> a = String::valueOf;
+        System.out.println(a.apply(1));
+    }
+
     @SuppressWarnings("java:S6204")
     private void collectAgain() {
         List<Person> people = List.of(new Person(1,"","","",""),
@@ -176,6 +183,7 @@ public class Functional {
         f.nestedStream();
         f.staticMethodReference1();
         f.collectAgain();
+        f.valueOf();
     }
 
 }

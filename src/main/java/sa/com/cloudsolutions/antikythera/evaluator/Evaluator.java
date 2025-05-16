@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
@@ -311,6 +312,10 @@ public class Evaluator {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
         } else if (expr.isArrayAccessExpr()) {
             return evaluateArrayAccess(expr);
+        } else if (expr.isMethodReferenceExpr()) {
+            return evaluateExpression(
+                    FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), new Variable(this)
+                    ));
         }
         return null;
     }
@@ -601,16 +606,7 @@ public class Evaluator {
     }
 
     private Variable initializeVariable(VariableDeclarator decl, Expression init) throws ReflectiveOperationException {
-        Variable v;
-        if (init.isMethodCallExpr()) {
-            v = evaluateMethodCall(init.asMethodCallExpr());
-        } else if (init.isObjectCreationExpr()) {
-            v = createObject(init, init.asObjectCreationExpr());
-        } else if (init.isLambdaExpr()) {
-            v = FPEvaluator.create(init.asLambdaExpr(), this);
-        } else {
-            v = evaluateExpression(init);
-        }
+        Variable v = evaluateExpression(init);
 
         if (v != null) {
             v.setType(decl.getType());
@@ -794,16 +790,20 @@ public class Evaluator {
      * @param v            The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getValue(node, nameAsString);
-        if (old != null) {
-            old.setValue(v.getValue());
-        } else {
-            BlockStmt block = AbstractCompiler.findBlockStatement(node);
-            int hash = (block != null) ? block.hashCode() : 0;
-
-            Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
-            localVars.put(nameAsString, v);
+        Optional<Node> parent = node.getParentNode();
+        if (parent.isEmpty() ||  !(parent.get() instanceof VariableDeclarationExpr)) {
+            Variable old = getValue(node, nameAsString);
+            if (old != null) {
+                old.setValue(v.getValue());
+            }
+            return;
         }
+
+        BlockStmt block = AbstractCompiler.findBlockStatement(node);
+        int hash = (block != null) ? block.hashCode() : 0;
+
+        Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
+        localVars.put(nameAsString, v);
     }
 
     /**
