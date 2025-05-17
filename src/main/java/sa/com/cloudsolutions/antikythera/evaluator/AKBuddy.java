@@ -18,7 +18,9 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -26,6 +28,7 @@ import java.util.List;
  * This will be primarily used in mocking.
  */
 public class AKBuddy {
+    private static Map<String, Class<?>> registry = new HashMap<>();
 
     protected AKBuddy() {}
 
@@ -51,10 +54,15 @@ public class AKBuddy {
 
     private static Class<?> createDynamicClassBasedOnByteCode(MethodInterceptor interceptor) {
         Class<?> wrappedClass = interceptor.getWrappedClass();
+        Class<?> existing = registry.get(wrappedClass.getName());
+        if (existing != null) {
+            return existing;
+        }
+
         ByteBuddy byteBuddy = new ByteBuddy();
         ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
-        return byteBuddy.subclass(wrappedClass)
+        Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
@@ -64,9 +72,16 @@ public class AKBuddy {
                 .make()
                 .load(targetLoader)
                 .getLoaded();
+
+        registry.put(wrappedClass.getName(), clazz);
+        return clazz;
     }
 
-    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval)  {
+        Class<?> existing = registry.get(eval.getClassName());
+        if (existing != null) {
+            return existing;
+        }
         CompilationUnit cu = eval.getCompilationUnit();
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
         String className = dtoType.getNameAsString();
@@ -95,9 +110,12 @@ public class AKBuddy {
         builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
         ClassLoader targetLoader = findSafeLoader(Object.class.getClassLoader(), interceptor.getClass().getClassLoader());
-        return builder.make()
+        Class<?> clazz = builder.make()
                 .load(targetLoader)
                 .getLoaded();
+
+        registry.put(eval.getClassName(), clazz);
+        return clazz;
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
