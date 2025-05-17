@@ -705,8 +705,9 @@ public class UnitTestGenerator extends TestGenerator {
         detectAutoWiringHelper(cu, decl, suite.get());
     }
 
-    private void detectAutoWiringHelper(CompilationUnit cu, TypeDeclaration<?> decl, ClassOrInterfaceDeclaration t) {
-        for (FieldDeclaration fd : decl.getFields()) {
+    private void detectAutoWiringHelper(CompilationUnit cu, TypeDeclaration<?> classUnderTest,
+                                        ClassOrInterfaceDeclaration testSuite) {
+        for (FieldDeclaration fd : classUnderTest.getFields()) {
             List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
             if (wrappers.isEmpty()) {
                 continue;
@@ -714,7 +715,7 @@ public class UnitTestGenerator extends TestGenerator {
             String registryKey = MockingRegistry.generateRegistryKey(wrappers);
             if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(registryKey)) {
                 MockingRegistry.markAsMocked(registryKey);
-                FieldDeclaration field = t.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+                FieldDeclaration field = testSuite.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
                 field.addAnnotation("Mock");
                 ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
                 if (wrapper != null) {
