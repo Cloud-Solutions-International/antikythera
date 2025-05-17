@@ -106,7 +106,7 @@ public class ControlFlowEvaluator extends Evaluator {
         }
 
         if (valueExpressions.size() == 1) {
-            List.of(
+            return List.of(
                     new AssignExpr(
                             new NameExpr(nameExpr.getNameAsString()),
                             valueExpressions.getFirst(),
