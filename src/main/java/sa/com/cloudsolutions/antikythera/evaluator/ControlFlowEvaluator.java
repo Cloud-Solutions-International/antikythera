@@ -262,7 +262,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
         Variable field = evaluator.getField(
-                ClassProcessor.classToInstanceName(name.substring(3)));
+                AbstractCompiler.classToInstanceName(name.substring(3)));
         if (field != null) {
             if (field.getClazz() != null) {
                 Variable v = Reflect.variableFactory(field.getClazz().getName());
