@@ -191,6 +191,7 @@ public class ControlFlowEvaluator extends Evaluator {
                         Variable value = findValueForKey(typeArgs, name);
                         addToMap(member, value, map);
                     }
+                    return mocks;
                 }
             }
 
