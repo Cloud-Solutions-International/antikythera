@@ -122,13 +122,13 @@ public class ControlFlowEvaluator extends Evaluator {
             if (list.isEmpty()) {
                 if (v.getValue() instanceof List<?>) {
                     TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                    return StaticJavaParser.parseExpression("List.of()");
+                    return List.of(StaticJavaParser.parseExpression("List.of()"));
                 } else if (v.getValue() instanceof Set<?>) {
                     TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                    return StaticJavaParser.parseExpression("Set.of()");
+                    return List.of(StaticJavaParser.parseExpression("Set.of()"));
                 } else if (v.getValue() instanceof Map<?,?>) {
                     TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
-                    return StaticJavaParser.parseExpression("Map.of()");
+                    return List.of(StaticJavaParser.parseExpression("Map.of()"));
                 }
             }
             else if(entry.getKey() instanceof NameExpr name) {
@@ -143,7 +143,7 @@ public class ControlFlowEvaluator extends Evaluator {
      * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
      * @param v represents the type of collection or map that we need
      * @param name the name of the variable
-     * @return an expression that can be used to set up the condition
+     * @return a list of expressions that can be used to set up the condition
      */
     private List<Expression> setupNonEmptyCollections(Variable v, NameExpr name) {
         Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
