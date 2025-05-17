@@ -740,12 +740,8 @@ public class Reflect {
                 componentType = wrapper.getClazz();
             }
             else {
-                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
-                try {
-                    componentType = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
-                } catch (ClassNotFoundException e) {
-                    throw new AntikytheraException(e);
-                }
+                Evaluator evaluator = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
+                componentType = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
             }
         }
         return componentType;

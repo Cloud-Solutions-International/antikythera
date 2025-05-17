@@ -12,6 +12,7 @@ import com.github.javaparser.ast.type.Type;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -29,6 +30,7 @@ import java.util.Map;
  */
 public class AKBuddy {
     private static Map<String, Class<?>> registry = new HashMap<>();
+    private static CustomLoader loader = new CustomLoader();
 
     protected AKBuddy() {}
 
@@ -41,9 +43,8 @@ public class AKBuddy {
      *
      * @param interceptor the MethodInterceptor to be used for the dynamic class.
      * @return an instance of the class that was faked.
-     * @throws ClassNotFoundException If an error occurs during reflection operations.
      */
-    public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
+    public static Class<?> createDynamicClass(MethodInterceptor interceptor)  {
         Evaluator eval = interceptor.getEvaluator();
         if (eval != null) {
             return createDynamicClassBasedOnSourceCode(interceptor, eval);
@@ -60,7 +61,6 @@ public class AKBuddy {
         }
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
         Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
@@ -70,7 +70,7 @@ public class AKBuddy {
                 ))
                 .intercept(MethodDelegation.to(interceptor))
                 .make()
-                .load(targetLoader)
+                .load(loader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(wrappedClass.getName(), clazz);
@@ -109,9 +109,8 @@ public class AKBuddy {
         builder = addFields(fields, cu, builder);
         builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
-        ClassLoader targetLoader = findSafeLoader(Object.class.getClassLoader(), interceptor.getClass().getClassLoader());
         Class<?> clazz = builder.make()
-                .load(targetLoader)
+                .load(loader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(eval.getClassName(), clazz);
@@ -128,7 +127,6 @@ public class AKBuddy {
             Class<?>[] parameterTypes = method.getParameters().stream()
                 .map(p -> getParameterType(cu, p))
                 .toArray(Class<?>[]::new);
-
 
             builder = builder.defineMethod(methodName,
                         Object.class,
@@ -168,7 +166,8 @@ public class AKBuddy {
             else {
                 try {
                     String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
-                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
+                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
+                            Class.forName(fqn, true, loader));
                 } catch (ClassNotFoundException|NullPointerException cex) {
                     continue;
                 }
@@ -180,12 +179,9 @@ public class AKBuddy {
         return builder;
     }
 
-    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
-        try {
-            Class.forName(MethodInterceptor.class.getName(), false, primary);
-            return primary;
-        } catch (ClassNotFoundException e) {
-            return fallback;
+    private static class CustomLoader extends ClassLoader {
+        public CustomLoader() {
+            super(ClassLoader.getSystemClassLoader()); // delegate to system loader
         }
     }
 }
