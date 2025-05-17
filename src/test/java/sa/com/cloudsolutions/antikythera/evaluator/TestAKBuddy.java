@@ -11,6 +11,9 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -34,6 +37,7 @@ class TestAKBuddy extends TestHelper {
 
     @BeforeEach
     void before() {
+        System.setOut(new PrintStream(outContent));
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
     }
 
@@ -42,6 +46,22 @@ class TestAKBuddy extends TestHelper {
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "Employee").orElseThrow();
         Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+        Object instance = clazz.getDeclaredConstructor().newInstance();
+        assertNotNull(instance);
+
+        for(FieldDeclaration fd : cdecl.getFields()) {
+            String name = fd.getVariable(0).getNameAsString();
+            assertNotNull(instance.getClass().getDeclaredField(name));
+        }
+    }
+
+    @Test
+    void createComplexDynamicClass() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "FakeService").orElseThrow();
+        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
         Object instance = clazz.getDeclaredConstructor().newInstance();
         assertNotNull(instance);
 
