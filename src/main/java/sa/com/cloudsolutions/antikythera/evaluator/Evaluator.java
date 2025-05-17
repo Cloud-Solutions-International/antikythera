@@ -388,7 +388,14 @@ public class Evaluator {
 
             for (int i = 0; i < values.size(); i++) {
                 Object value = evaluateExpression(values.get(i)).getValue();
-                Array.set(array, i, value);
+                if (value instanceof Evaluator evaluator) {
+                    MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+                    Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+                    Array.set(array, i, dynamicClass.getDeclaredConstructor().newInstance());
+                }
+                else {
+                    Array.set(array, i, value);
+                }
             }
 
             return new Variable(array);
@@ -598,16 +605,7 @@ public class Evaluator {
     }
 
     private Variable initializeVariable(VariableDeclarator decl, Expression init) throws ReflectiveOperationException {
-        Variable v;
-        if (init.isMethodCallExpr()) {
-            v = evaluateMethodCall(init.asMethodCallExpr());
-        } else if (init.isObjectCreationExpr()) {
-            v = createObject(init, init.asObjectCreationExpr());
-        } else if (init.isLambdaExpr()) {
-            v = FPEvaluator.create(init.asLambdaExpr(), this);
-        } else {
-            v = evaluateExpression(init);
-        }
+        Variable v = evaluateExpression(init);
 
         if (v != null) {
             v.setType(decl.getType());
@@ -791,16 +789,20 @@ public class Evaluator {
      * @param v            The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getValue(node, nameAsString);
-        if (old != null) {
-            old.setValue(v.getValue());
-        } else {
-            BlockStmt block = AbstractCompiler.findBlockStatement(node);
-            int hash = (block != null) ? block.hashCode() : 0;
-
-            Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
-            localVars.put(nameAsString, v);
+        Optional<Node> parent = node.getParentNode();
+        if (parent.isEmpty() ||  !(parent.get() instanceof VariableDeclarationExpr)) {
+            Variable old = getValue(node, nameAsString);
+            if (old != null) {
+                old.setValue(v.getValue());
+                return;
+            }
         }
+
+        BlockStmt block = AbstractCompiler.findBlockStatement(node);
+        int hash = (block != null) ? block.hashCode() : 0;
+
+        Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
+        localVars.put(nameAsString, v);
     }
 
     /**
@@ -911,7 +913,11 @@ public class Evaluator {
                 variable = new Variable(this);
             } else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
-                variable = new Variable(findScopeType(s));
+                Object scopeType = findScopeType(s);
+                variable = new Variable(scopeType);
+                if (scopeType instanceof Class<?> clazz) {
+                    variable.setClazz(clazz);
+                }
             } else if (expr2.isObjectCreationExpr()) {
                 variable = createObject(expr2, expr2.asObjectCreationExpr());
             } else if (expr2.isArrayAccessExpr()) {

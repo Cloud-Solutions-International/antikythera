@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Method;
 import java.util.List;
 
 
