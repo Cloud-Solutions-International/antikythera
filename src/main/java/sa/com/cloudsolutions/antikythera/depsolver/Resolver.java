@@ -25,6 +25,8 @@ import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
@@ -42,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 
 public class Resolver {
+    private static final Logger logger = LoggerFactory.getLogger(Resolver.class);
 
     private Resolver() {}
 
@@ -53,27 +56,29 @@ public class Resolver {
      */
     public static GraphNode resolveThisFieldAccess(GraphNode node, FieldAccessExpr value) {
         TypeDeclaration<?> decl = node.getEnclosingType();
-        if (decl != null) {
-            if (decl.isEnumDeclaration()) {
-                for (EnumConstantDeclaration ecd : decl.asEnumDeclaration().getEntries()) {
-                    if (ecd.getNameAsString().equals(value.getNameAsString())) {
-                        node.addEnumConstant(ecd);
-                        break;
-                    }
-                }
-            }
-            else {
-                FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
-                if (f != null) {
-                    node.addField(f);
-                    TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), f.getElementType());
-
-                    if (wrapper != null && wrapper.getType() != null) {
-                        return Graph.createGraphNode(wrapper.getType());
-                    }
+        if (decl == null) {
+            return null;
+        }
+        if (decl.isEnumDeclaration()) {
+            for (EnumConstantDeclaration ecd : decl.asEnumDeclaration().getEntries()) {
+                if (ecd.getNameAsString().equals(value.getNameAsString())) {
+                    node.addEnumConstant(ecd);
+                    break;
                 }
             }
         }
+        else {
+            FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
+            if (f != null) {
+                node.addField(f);
+                TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), f.getElementType());
+
+                if (wrapper != null && wrapper.getType() != null) {
+                    return Graph.createGraphNode(wrapper.getType());
+                }
+            }
+        }
+
         return null;
     }
 
@@ -238,7 +243,7 @@ public class Resolver {
             return Optional.of(ct);
 
         } catch (ReflectiveOperationException e) {
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         }
         return Optional.empty();
     }
@@ -356,6 +361,17 @@ public class Resolver {
             }
             else if (expr.isNameExpr()) {
                 gn = evaluateNameExpr(expr.asNameExpr(), gn);
+            } else if (expr.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                gn = ImportUtils.addImport(gn, oce.getType());
+            } else if (expr.isArrayAccessExpr()) {
+                ArrayAccessExpr aae = expr.asArrayAccessExpr();
+                if (aae.getName().isNameExpr()) {
+                    gn = evaluateNameExpr(aae.getName().asNameExpr(), gn);
+                }
+            } else if (expr.isClassExpr()) {
+                ClassExpr ce = expr.asClassExpr();
+                gn = ImportUtils.addImport(gn, ce.getType());
             }
         }
 
@@ -498,38 +514,42 @@ public class Resolver {
 
     @SuppressWarnings("unchecked")
     static void wrapCallable(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types) {
-        if (callExpression instanceof MethodCallExpr methodCallExpr) {
-            MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
-            GraphNode gn = Resolver.chainedMethodCall(node, wrap);
-            if (gn != null) {
-                if (gn.getNode() instanceof MethodDeclaration md) {
-                    Type t = md.getType();
-                    ImportUtils.addImport(node, t);
-                    types.add(t);
-                } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
-                    Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
-                    if (omd.isPresent()) {
-                        Callable cd = omd.get();
-                        if (cd.isCallableDeclaration()) {
-                            if (cd.isMethodDeclaration()) {
-                                Type t = cd.asMethodDeclaration().getType();
-                                types.add(t);
-                                ImportUtils.addImport(node, t);
 
-                            }
-                            cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
-                                ImportUtils.addImport(node, c.getNameAsString())
-                            );
-                        }
-                    } else {
+        MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
+        GraphNode gn = Resolver.chainedMethodCall(node, wrap);
+        if (gn == null) {
+            return;
+        }
+
+        if (gn.getNode() instanceof MethodDeclaration md) {
+            Type t = md.getType();
+            ImportUtils.addImport(node, t);
+            types.add(t);
+        } else if (gn.getNode() instanceof ClassOrInterfaceDeclaration cid) {
+            Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
+            if (omd.isPresent()) {
+                Callable cd = omd.get();
+                if (cd.isCallableDeclaration()) {
+                    if (cd.isMethodDeclaration()) {
+                        Type t = cd.asMethodDeclaration().getType();
+                        types.add(t);
+                        ImportUtils.addImport(node, t);
+
+                    }
+                    cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
+                        ImportUtils.addImport(node, c.getNameAsString())
+                    );
+                }
+            } else {
+                if (callExpression instanceof MethodCallExpr methodCallExpr) {
                         Type t = lombokSolver(methodCallExpr, cid, gn);
                         if (t != null) {
                             types.add(t);
                         }
-                    }
                 }
             }
         }
+
     }
 
     static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) {
@@ -539,7 +559,7 @@ public class Resolver {
         ) {
             String field = argMethodCall.getNameAsString().substring(3);
             if (!field.isEmpty()) {
-                Optional<FieldDeclaration> fd = cid.getFieldByName(ClassProcessor.classToInstanceName(field));
+                Optional<FieldDeclaration> fd = cid.getFieldByName(AbstractCompiler.classToInstanceName(field));
                 if (fd.isPresent()) {
                     Type t = fd.get().getElementType();
                     ImportUtils.addImport(gn, t);
