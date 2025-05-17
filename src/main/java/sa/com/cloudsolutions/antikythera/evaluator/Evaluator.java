@@ -1242,11 +1242,7 @@ public class Evaluator {
         }
 
         if (variable.getType().isClassOrInterfaceType()) {
-            if (variable.getInitializer().isPresent()) {
-                return resolveNonPrimitiveVariable(variable);
-            }
-            return new Variable(null);
-
+            return resolveNonPrimitiveVariable(variable);
         } else {
             return resolvePrimitiveVariable(variable);
         }
@@ -1824,6 +1820,15 @@ public class Evaluator {
                     fields.put(variableDeclarator.getNameAsString(), s);
                     return;
                 }
+            }
+            if (variableDeclarator.getInitializer().isEmpty()) {
+                Variable nullVariable = new Variable(null);
+                if (variableDeclarator.getType().isPrimitiveType()) {
+                    nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
+                }
+                nullVariable.setType(variableDeclarator.getType());
+                fields.put(variableDeclarator.getNameAsString(), nullVariable);
+                return;
             }
             Variable v = resolveVariableDeclaration(variableDeclarator);
             if (v != null) {

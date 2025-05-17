@@ -27,6 +27,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator extends TestHelper {
@@ -133,7 +134,7 @@ class TestEvaluator extends TestHelper {
 
         Map<String, Variable> resolvedFields = evaluator.fields;
 
-        assertNotNull(resolvedFields.get("stringList"));
+        assertNull(resolvedFields.get("stringList").getValue());
         assertTrue(resolvedFields.get("stringList").getType().isClassOrInterfaceType());
         assertEquals("List", resolvedFields.get("stringList").getType().asClassOrInterfaceType().getNameAsString());
 
