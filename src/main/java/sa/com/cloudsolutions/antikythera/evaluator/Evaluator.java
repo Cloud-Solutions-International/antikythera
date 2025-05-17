@@ -52,7 +52,7 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import net.bytebuddy.ByteBuddy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
+
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
@@ -70,13 +70,13 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
-import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -130,6 +130,8 @@ public class Evaluator {
     protected String variableName;
 
     protected TypeDeclaration<?> typeDeclaration;
+
+    private static int sequence = 0;
 
     protected Evaluator() {
         locals = new HashMap<>();
@@ -1748,7 +1750,7 @@ public class Evaluator {
             executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
         }
 
-        if (!matchFound && !t.getFinallyBlock().isPresent()) {
+        if (!matchFound && t.getFinallyBlock().isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
     }
@@ -1821,6 +1823,15 @@ public class Evaluator {
             }
             Variable v = resolveVariableDeclaration(variableDeclarator);
             if (v != null) {
+                if (isSequenceField(field, variableDeclarator)) {
+                    incrementSequence();
+                    v.setValue(sequence);
+                    MethodCallExpr mce = new MethodCallExpr(
+                            "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
+                    mce.addArgument(new IntegerLiteralExpr().setValue(Integer.toString(sequence)));
+                    v.getInitializer().add(mce);
+                }
+
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
                     AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
@@ -1828,9 +1839,20 @@ public class Evaluator {
             }
         } catch (UnsolvedSymbolException e) {
             logger.debug("ignore {}", variableDeclarator);
-        } catch (AntikytheraException | ReflectiveOperationException e) {
+
+        } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
         }
+    }
+
+    public List<Expression> getFieldInitializers() {
+        List<Expression> fi = new ArrayList<>();
+        for (Variable v : fields.values()) {
+            if (v != null) {
+                fi.addAll(v.getInitializer());
+            }
+        }
+        return fi;
     }
 
     public void reset() {
@@ -1848,6 +1870,19 @@ public class Evaluator {
 
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
+    }
+
+    private boolean isSequenceField(FieldDeclaration field,  VariableDeclarator variableDeclarator) {
+
+        String typeName = variableDeclarator.getTypeAsString();
+        return (field.getAnnotationByName("Id").isPresent()
+                && typeDeclaration.getAnnotationByName("Entity").isPresent()
+                && variableDeclarator.getInitializer().isEmpty()
+                && ( typeName.equals("int") || typeName.equals("long") || typeName.equals("Integer") || typeName.equals("Long")));
+    }
+
+    private static void incrementSequence() {
+        sequence++;
     }
 
     /**
