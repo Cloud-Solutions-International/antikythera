@@ -504,7 +504,9 @@ public class UnitTestGenerator extends TestGenerator {
         }
         else {
             if (result.getExpression() != null) {
-              //  addWhenThen(result.getExpression());
+                for (Expression e : result.getExpression()) {
+                    addWhenThen(e);
+                }
             }
         }
     }
