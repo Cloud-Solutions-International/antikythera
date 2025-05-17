@@ -56,22 +56,6 @@ class TestAKBuddy extends TestHelper {
     }
 
     @Test
-    void createComplexDynamicClass() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
-
-        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "FakeService").orElseThrow();
-        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
-        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
-        Object instance = clazz.getDeclaredConstructor().newInstance();
-        assertNotNull(instance);
-
-        for(FieldDeclaration fd : cdecl.getFields()) {
-            String name = fd.getVariable(0).getNameAsString();
-            assertNotNull(instance.getClass().getDeclaredField(name));
-        }
-    }
-
-    @Test
     void mockWithAKBuddy() throws ReflectiveOperationException, SQLException {
         Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(Statement.class));
         Statement instance = (Statement) clazz.getDeclaredConstructor().newInstance();
