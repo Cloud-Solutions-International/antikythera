@@ -1821,7 +1821,10 @@ public class Evaluator {
                     return;
                 }
             }
-            if (variableDeclarator.getInitializer().isEmpty()) {
+            if (variableDeclarator.getInitializer().isEmpty()
+                        && field.getAnnotationByName("Mock").isEmpty()
+                        && field.getAnnotationByName("Autowired").isEmpty()
+            ) {
                 Variable nullVariable = new Variable(null);
                 if (variableDeclarator.getType().isPrimitiveType()) {
                     nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
