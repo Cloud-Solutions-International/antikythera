@@ -33,7 +33,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -148,24 +147,34 @@ public class ControlFlowEvaluator extends Evaluator {
     protected Expression setupNonEmptyCollection(NodeList<Type> typeArgs, Variable wrappedCollection, NameExpr name) {
         VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
         try {
-            Variable resolved = resolveVariableDeclaration(vdecl);
-            if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
-                resolved = Reflect.variableFactory(resolved.getType().asString());
+            Variable member = resolveVariableDeclaration(vdecl);
+            if (member.getValue() == null && Reflect.isPrimitiveOrBoxed(member.getType().asString())) {
+                member = Reflect.variableFactory(member.getType().asString());
             }
 
-            List<Expression> initializer = resolved.getInitializer();
-            if (initializer.getFirst() instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
+            if (member.getValue() instanceof Evaluator eval) {
+                List<Expression> fieldIntializers = eval.getFieldInitializers();
+                if (fieldIntializers.isEmpty()) {
+
+                }
+                else {
+
+                }
+            }
+
+            List<Expression> initializer = member.getInitializer();
+            if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
                 TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             }
             if (wrappedCollection.getValue() instanceof List<?> list) {
                 Method m = List.class.getMethod("add", Object.class);
-                m.invoke(list, resolved.getValue());
+                m.invoke(list, member.getValue());
                 TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
                 return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
             }
             if (wrappedCollection.getValue() instanceof Set<?> set) {
                 Method m = Set.class.getMethod("add", Object.class);
-                m.invoke(set, resolved.getValue());
+                m.invoke(set, member.getValue());
                 TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
                 return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
             }
@@ -272,7 +281,7 @@ public class ControlFlowEvaluator extends Evaluator {
             }
             else if (field.getType() != null) {
                 Variable v = Reflect.variableFactory(field.getType().asString());
-                if (v != null) {
+                if (v != null && !v.getInitializer().isEmpty()) {
                     value = v.getInitializer().getFirst().toString();
                 }
             }

@@ -1242,7 +1242,11 @@ public class Evaluator {
         }
 
         if (variable.getType().isClassOrInterfaceType()) {
-            return resolveNonPrimitiveVariable(variable);
+            if (variable.getInitializer().isPresent()) {
+                return resolveNonPrimitiveVariable(variable);
+            }
+            return new Variable(null);
+
         } else {
             return resolvePrimitiveVariable(variable);
         }
