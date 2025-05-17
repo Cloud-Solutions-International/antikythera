@@ -173,8 +173,10 @@ public class ControlFlowEvaluator extends Evaluator {
                 else {
                     List<Expression> mocks = new ArrayList<>();
                     String instanceName = Variable.generateVariableName(pimaryType);
-                    Expression expr = StaticJavaParser.parseExpression(
-                            String.format("%s %s = new %s()", pimaryType, instanceName, pimaryType));
+                    Expression expr = StaticJavaParser.parseStatement(
+                            String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
+                    ).asExpressionStmt().getExpression();
+
                     mocks.add(expr);
 
                     if (wrappedCollection.getValue() instanceof List<?> list) {
