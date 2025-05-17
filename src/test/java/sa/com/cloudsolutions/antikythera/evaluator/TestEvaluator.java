@@ -26,6 +26,7 @@ import java.io.PrintStream;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -149,6 +150,20 @@ class TestEvaluator extends TestHelper {
         assertEquals(42, resolvedFields.get("number").getValue());
     }
 
+    @Test
+    void testSequence() {
+        Variable v = evaluator.getField("id");
+        assertEquals(43, v.getValue());
+
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity",
+                Evaluator.class);
+        v = evaluator.getField("id");
+        assertTrue(0 <  (int) v.getValue());
+        assertFalse(v.getInitializer().isEmpty());
+        assertTrue(v.getInitializer().getFirst().toString().startsWith("setId("));
+
+        assertEquals(1, evaluator.getFieldInitializers().size());
+    }
 }
 
 class TestEvaluatorWithFinches extends TestHelper {
