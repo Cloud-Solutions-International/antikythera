@@ -4,9 +4,11 @@ import com.github.javaparser.ast.expr.Expression;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
+import java.util.List;
+
 public class MockingCall {
     private boolean fromSetup;
-    private Expression expression;
+    private List<Expression> expression;
     private Variable variable;
     private final Callable callable;
     private String variableName;
@@ -25,11 +27,11 @@ public class MockingCall {
         this.fromSetup = fromSetup;
     }
 
-    public Expression getExpression() {
+    public List<Expression> getExpression() {
         return expression;
     }
 
-    public void setExpression(Expression expression) {
+    public void setExpression(List<Expression> expression) {
         this.expression = expression;
     }
 
