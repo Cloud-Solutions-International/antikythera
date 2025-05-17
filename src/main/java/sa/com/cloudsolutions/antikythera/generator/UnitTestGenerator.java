@@ -263,7 +263,7 @@ public class UnitTestGenerator extends TestGenerator {
             Optional<Expression> arg = scoped.getArguments().getFirst();
             if (arg.isPresent() && baseTestClass != null
                     && arg.get() instanceof MethodCallExpr argMethod) {
-                if (mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
+                if (argMethod.getScope().isPresent() && mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
                     return true;
                 }
                 addImportsForCasting(argMethod);
@@ -410,7 +410,7 @@ public class UnitTestGenerator extends TestGenerator {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
-        if (v.getInitializer() != null) {
+        if (!v.getInitializer().isEmpty()) {
             body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
                     v.getInitializer().getFirst() + ";");
         }
