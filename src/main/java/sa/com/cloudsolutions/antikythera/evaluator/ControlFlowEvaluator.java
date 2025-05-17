@@ -178,6 +178,12 @@ public class ControlFlowEvaluator extends Evaluator {
                     ).asExpressionStmt().getExpression();
 
                     mocks.add(expr);
+                    for (Expression e : fieldIntializers) {
+                        if (e.isMethodCallExpr()) {
+                            e.asMethodCallExpr().setScope(new NameExpr(instanceName));
+                        }
+                        mocks.add(e);
+                    }
 
                     if (wrappedCollection.getValue() instanceof List<?> list) {
                         addToList(member, list);
