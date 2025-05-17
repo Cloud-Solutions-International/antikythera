@@ -387,18 +387,20 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         then.setVariableName(variableName);
 
         List<Expression> initializer = then.getVariable().getInitializer();
-        if (initializer.size() == 1) {
-            MethodCallExpr when = StaticJavaParser.parseExpression(
-                    String.format(
-                            "Mockito.when(%s).thenReturn(%s)",
-                            mce, initializer.getFirst())
-            );
+        List<Expression> mocks = new ArrayList<>();
+        if (initializer.size() > 1) {
+            for(int i = 0 ; i < initializer.size() -1; i++) {
+                mocks.add(initializer.get(i));
+            }
+        }
+        MethodCallExpr when = StaticJavaParser.parseExpression(
+                String.format(
+                        "Mockito.when(%s).thenReturn(%s)",
+                        mce, initializer.getLast())
+        );
+        mocks.add(when);
+        then.setExpression(mocks);
 
-            then.setExpression(List.of(when));
-        }
-        else {
-            then.setExpression(initializer);
-        }
 
         MockingRegistry.when(className, then);
         return v;

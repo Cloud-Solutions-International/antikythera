@@ -1835,14 +1835,7 @@ public class Evaluator {
             }
             Variable v = resolveVariableDeclaration(variableDeclarator);
             if (v != null) {
-                if (isSequenceField(field, variableDeclarator)) {
-                    incrementSequence();
-                    v.setValue(sequence);
-                    MethodCallExpr mce = new MethodCallExpr(
-                            "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
-                    mce.addArgument(new IntegerLiteralExpr().setValue(Integer.toString(sequence)));
-                    v.getInitializer().add(mce);
-                }
+                checkSequences(field, variableDeclarator, v);
 
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
@@ -1854,6 +1847,23 @@ public class Evaluator {
 
         } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
+        }
+    }
+
+    private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
+        if (isSequenceField(field, variableDeclarator)) {
+            incrementSequence();
+            v.setValue(sequence);
+            MethodCallExpr mce = new MethodCallExpr(
+                    "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
+            String type = v.getType().asString();
+            if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
+                mce.addArgument(new LongLiteralExpr().setValue(Integer.toString(sequence) + "L"));
+            }
+            else {
+                mce.addArgument(new IntegerLiteralExpr().setValue(Integer.toString(sequence)));
+            }
+            v.getInitializer().add(mce);
         }
     }
 
