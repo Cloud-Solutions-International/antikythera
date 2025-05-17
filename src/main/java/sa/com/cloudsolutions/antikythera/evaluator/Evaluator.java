@@ -56,6 +56,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
@@ -309,6 +310,10 @@ public class Evaluator {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
         } else if (expr.isArrayAccessExpr()) {
             return evaluateArrayAccess(expr);
+        } else if (expr.isMethodReferenceExpr()) {
+            return evaluateExpression(
+                    FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), new Variable(this)
+                    ));
         }
         return null;
     }
@@ -376,15 +381,10 @@ public class Evaluator {
      */
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof VariableDeclarator vdecl) {
-            Type componentType = vdecl.getType();
-            Class<?> componentClass;
-
-            String elementType = componentType.getElementType().toString();
-            componentClass = Reflect.getComponentClass(elementType);
+        if (parent.isPresent() && parent.get() instanceof VariableDeclarator) {
 
             List<Expression> values = arrayInitializerExpr.getValues();
-            Object array = Array.newInstance(componentClass, values.size());
+            Object array = Array.newInstance(Object.class, values.size());
 
             for (int i = 0; i < values.size(); i++) {
                 Object value = evaluateExpression(values.get(i)).getValue();
