@@ -1708,9 +1708,9 @@ public class Evaluator {
      * Execute a statement that represents an If - Then or If - Then - Else
      *
      * @param ifst If / Then statement
-     * @throws Exception
+     * @throws Exception when the condition evaluation or subsequent block execution fails
      */
-    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
+    void ifThenElseBlock(IfStmt ifst) throws Exception {
 
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {
@@ -1721,7 +1721,6 @@ public class Evaluator {
                 executeStatement(elseBlock.get());
             }
         }
-        return v;
     }
 
     protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
@@ -1824,6 +1823,7 @@ public class Evaluator {
             if (variableDeclarator.getInitializer().isEmpty()
                         && field.getAnnotationByName("Mock").isEmpty()
                         && field.getAnnotationByName("Autowired").isEmpty()
+                        && !isSequenceField(field, variableDeclarator)
             ) {
                 Variable nullVariable = new Variable(null);
                 if (variableDeclarator.getType().isPrimitiveType()) {

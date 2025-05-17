@@ -155,46 +155,52 @@ public class ControlFlowEvaluator extends Evaluator {
             if (member.getValue() instanceof Evaluator eval) {
                 List<Expression> fieldIntializers = eval.getFieldInitializers();
                 if (fieldIntializers.isEmpty()) {
-
+                    return createSingleItemCollection(typeArgs, member, wrappedCollection, name);
                 }
                 else {
+                    String instanceName = Variable.generateVariableName(typeArgs.get(0));
 
                 }
             }
 
-            List<Expression> initializer = member.getInitializer();
-            if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
-                TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
-            }
-            if (wrappedCollection.getValue() instanceof List<?> list) {
-                Method m = List.class.getMethod("add", Object.class);
-                m.invoke(list, member.getValue());
-                TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
-            }
-            if (wrappedCollection.getValue() instanceof Set<?> set) {
-                Method m = Set.class.getMethod("add", Object.class);
-                m.invoke(set, member.getValue());
-                TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
-            }
-            if (wrappedCollection.getValue() instanceof Map<?,?>) {
-                if (typeArgs.size() == 1) {
-                    typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-                }
-                VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
-                Variable resolved2 = resolveVariableDeclaration(vdecl2);
-                if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
-                    resolved2 = Reflect.variableFactory(resolved2.getType().asString());
-                }
-
-                return StaticJavaParser.parseExpression(
-                        String.format("Map.of(%s, %s)",
-                                initializer.getFirst(), resolved2.getInitializer().getFirst()));
-            }
+            return createSingleItemCollection(typeArgs, member, wrappedCollection, name);
 
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
+        }
+    }
+
+    private Expression createSingleItemCollection(NodeList<Type> typeArgs, Variable member,
+                                                  Variable wrappedCollection, NameExpr name) throws ReflectiveOperationException {
+        List<Expression> initializer = member.getInitializer();
+        if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
+            TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
+        }
+        if (wrappedCollection.getValue() instanceof List<?> list) {
+            Method m = List.class.getMethod("add", Object.class);
+            m.invoke(list, member.getValue());
+            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+            return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
+        }
+        if (wrappedCollection.getValue() instanceof Set<?> set) {
+            Method m = Set.class.getMethod("add", Object.class);
+            m.invoke(set, member.getValue());
+            TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
+            return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
+        }
+        if (wrappedCollection.getValue() instanceof Map<?,?>) {
+            if (typeArgs.size() == 1) {
+                typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+            }
+            VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
+            Variable resolved2 = resolveVariableDeclaration(vdecl2);
+            if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
+                resolved2 = Reflect.variableFactory(resolved2.getType().asString());
+            }
+
+            return StaticJavaParser.parseExpression(
+                    String.format("Map.of(%s, %s)",
+                            initializer.getFirst(), resolved2.getInitializer().getFirst()));
         }
         return null;
     }
