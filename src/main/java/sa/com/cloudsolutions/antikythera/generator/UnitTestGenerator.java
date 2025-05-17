@@ -55,11 +55,15 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Unit test generator.
+ * <p>Unit test generator.</p>
  *
- * The responsibility of deciding what should be mocked and what should not be mocked lies here.
+ * <p>The responsibility of deciding what should be mocked and what should not be mocked lies here.
  * Each class that is marked as autowired will be considered a candidate for mocking. These will
- * be registered in the mocking registry.
+ * be registered in the mocking registry.</p>
+ *
+ * <p>Then the evaluators will in turn add more mocking statements to the mocking registry. When the
+ * tests are being generated, this class will check the registry to find out what additional mocks
+ * need to be added.</p>
  */
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
@@ -336,7 +340,7 @@ public class UnitTestGenerator extends TestGenerator {
             if (c.getAnnotationByName("Service").isPresent()) {
                 injectMocks(c);
             } else {
-                instanceName = ClassProcessor.classToInstanceName(c.getNameAsString());
+                instanceName = AbstractCompiler.classToInstanceName(c.getNameAsString());
                 getBody(testMethod).addStatement(ArgumentGenerator.instantiateClass(c, instanceName));
             }
         });
@@ -357,7 +361,7 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (!autoWired) {
-            instanceName = ClassProcessor.classToInstanceName(classUnderTest.getNameAsString());
+            instanceName = AbstractCompiler.classToInstanceName(classUnderTest.getNameAsString());
 
             if (testClass.getFieldByName(classUnderTest.getNameAsString()).isEmpty()) {
                 FieldDeclaration fd = testClass.addField(classUnderTest.getNameAsString(), instanceName);

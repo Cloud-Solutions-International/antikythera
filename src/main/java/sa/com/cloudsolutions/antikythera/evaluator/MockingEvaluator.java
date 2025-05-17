@@ -6,6 +6,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -220,6 +221,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return null;
         }
 
+        Variable v = getIdField();
+        if (v != null) return v;
+
         setupParameters(md);
         Type returnType = md.getType();
         if (returnType.isVoidType()) {
@@ -242,6 +246,20 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
 
         return mockReturnFromCompilationUnit(cd, md, returnType);
+    }
+
+    private Variable getIdField() {
+        if (typeDeclaration != null && typeDeclaration.getAnnotationByName("Entity").isPresent()) {
+            for (FieldDeclaration f : typeDeclaration.getFields()) {
+                if (f.getAnnotationByName("Id").isPresent()) {
+                    Variable v = getField(f.getVariable(0).getNameAsString());
+                    if (v != null) {
+                        return v;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     Variable mockReturnFromCompilationUnit(CallableDeclaration<?> cd, MethodDeclaration md, Type returnType) {
