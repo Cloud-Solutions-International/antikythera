@@ -184,7 +184,7 @@ public class ControlFlowEvaluator extends Evaluator {
                                 initializer.getFirst(), resolved2.getInitializer().getFirst()));
             }
 
-        } catch (ReflectiveOperationException|IOException e) {
+        } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
         }
         return null;

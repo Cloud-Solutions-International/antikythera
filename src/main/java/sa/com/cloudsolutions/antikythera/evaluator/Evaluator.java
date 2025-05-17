@@ -1176,17 +1176,17 @@ public class Evaluator {
         boolean hasSetter = hasData || classDecl.getAnnotationByName("Setter").isPresent();
 
         if (methodName.startsWith("get") && hasGetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("get", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("get", ""));
             return getField(field);
         }
 
         if (methodName.startsWith("is") && hasGetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("is", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("is", ""));
             return getField(field);
         }
 
         if (methodName.startsWith("set") && hasSetter) {
-            String field = ClassProcessor.classToInstanceName(methodName.replace("set", ""));
+            String field = AbstractCompiler.classToInstanceName(methodName.replace("set", ""));
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
             return new Variable(null);
@@ -1206,7 +1206,7 @@ public class Evaluator {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(ClassProcessor.fullyQualifiedToShortName(className))).orElse(null);
+                ClassProcessor.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
@@ -1231,7 +1231,7 @@ public class Evaluator {
     }
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
-    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
         String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
 
@@ -1828,14 +1828,6 @@ public class Evaluator {
             }
         } catch (UnsolvedSymbolException e) {
             logger.debug("ignore {}", variableDeclarator);
-        } catch (IOException e) {
-            String action = Settings.getProperty("dependencies.on_error", String.class).orElse("exit");
-            if (action.equals("exit")) {
-                throw new GeneratorException("Exception while processing fields", e);
-            }
-
-            logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
-
         } catch (AntikytheraException | ReflectiveOperationException e) {
             throw new GeneratorException(e);
         }
