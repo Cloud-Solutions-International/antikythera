@@ -219,7 +219,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public void     createTests(MethodDeclaration md, MethodResponse response) {
+    public void createTests(MethodDeclaration md, MethodResponse response) {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
@@ -693,11 +693,11 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             decl.getAnnotationByName("Service")
                     .ifPresent(b -> detectConstructorInjection(cu, decl));
-            detectAutowiring(cu, decl);
+            identifyAutoWiring(cu, decl);
         }
     }
 
-    private void detectAutowiring(CompilationUnit cu, TypeDeclaration<?> decl) {
+    private void identifyAutoWiring(CompilationUnit cu, TypeDeclaration<?> decl) {
         Optional<ClassOrInterfaceDeclaration> suite = findSuite(decl);
         if (suite.isEmpty()) {
             return;

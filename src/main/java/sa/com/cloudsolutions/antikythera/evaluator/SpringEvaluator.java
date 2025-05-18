@@ -519,9 +519,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         Optional<Node> parent = variable.getParentNode();
+        String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
-                && fd.getAnnotationByName("Autowired").isPresent()) {
-            String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+                && (fd.getAnnotationByName("Autowired").isPresent() || MockingRegistry.isMockTarget(registryKey))) {
+
             Variable v = AntikytheraRunTime.getAutoWire(registryKey);
             if (v == null) {
                 if (MockingRegistry.isMockTarget(registryKey)) {
