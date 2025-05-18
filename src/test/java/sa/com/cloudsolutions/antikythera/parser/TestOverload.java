@@ -1,22 +1,14 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
-import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.depsolver.Resolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
@@ -27,12 +19,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 
 class TestOverlord extends TestHelper {
     private static final String CLASS_NAME = "sa.com.cloudsolutions.antikythera.evaluator.Overlord";

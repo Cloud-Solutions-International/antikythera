@@ -413,42 +413,48 @@ public class AbstractCompiler {
             return true;
         }
         if (argumentType.isClassOrInterfaceType() && paramType.isClassOrInterfaceType())  {
-            if (methodCall.asMethodCallExpr().isPresent() && methodCall.asMethodCallExpr().get().findCompilationUnit().isPresent()) {
-                CompilationUnit callerSource = methodCall.asMethodCallExpr().get().findCompilationUnit().get();
-                CompilationUnit declarationSource = param.findCompilationUnit().orElseThrow();
+            return parametersVsArgumentsDeepCompare(param, argumentType, methodCall, paramType);
+        }
+        return false;
+    }
 
-                List<TypeWrapper> callerTypes = findWrappedTypes(callerSource, argumentType);
-                List<TypeWrapper> declarationTypes = findWrappedTypes(declarationSource, paramType);
+    private static boolean parametersVsArgumentsDeepCompare(Parameter param, Type argumentType, MCEWrapper methodCall, Type paramType) {
+        Optional<MethodCallExpr> mce = methodCall.asMethodCallExpr();
 
-                TypeWrapper wp = callerTypes.getLast();
-                TypeWrapper ap = declarationTypes.getLast();
-                if (wp.getType() != null && ap.getType() != null) {
-                    return (wp.getType().getFullyQualifiedName().orElseThrow().equals(ap.getType().getFullyQualifiedName().orElseThrow()));
-                }
-                if (wp.getClazz() != null && ap.getClazz() != null) {
-                    return wp.getClazz().isAssignableFrom(ap.getClazz()) || ap.getClazz().isAssignableFrom(wp.getClazz());
-                }
+        if (mce.isPresent() && mce.get().findCompilationUnit().isPresent()) {
+            CompilationUnit callerSource = mce.orElseThrow().findCompilationUnit().orElseThrow();
+            CompilationUnit declarationSource = param.findCompilationUnit().orElseThrow();
 
-                return false;
+            List<TypeWrapper> callerTypes = findWrappedTypes(callerSource, argumentType);
+            List<TypeWrapper> declarationTypes = findWrappedTypes(declarationSource, paramType);
+
+            TypeWrapper wp = callerTypes.getLast();
+            TypeWrapper ap = declarationTypes.getLast();
+            if (wp.getType() != null && ap.getType() != null) {
+                return (wp.getType().getFullyQualifiedName().orElseThrow().equals(ap.getType().getFullyQualifiedName().orElseThrow()));
             }
-            else {
-                ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
-                ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
-
-                if (pt.getNameAsString().equals(at.getNameAsString())) {
-                    Optional<NodeList<Type>> args1 = pt.getTypeArguments();
-                    Optional<NodeList<Type>> args2 = at.getTypeArguments();
-                    if (args1.isPresent()) {
-                        if (args2.isPresent()) {
-                            return args1.get().size() == args2.get().size();
-                        }
-                    } else {
-                        return args2.isEmpty();
-                    }
-                    return true;
-                }
+            if (wp.getClazz() != null && ap.getClazz() != null) {
+                return wp.getClazz().isAssignableFrom(ap.getClazz()) || ap.getClazz().isAssignableFrom(wp.getClazz());
             }
+
             return false;
+        }
+        else {
+            ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
+            ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
+
+            if (pt.getNameAsString().equals(at.getNameAsString())) {
+                Optional<NodeList<Type>> args1 = pt.getTypeArguments();
+                Optional<NodeList<Type>> args2 = at.getTypeArguments();
+                if (args1.isPresent()) {
+                    if (args2.isPresent()) {
+                        return args1.get().size() == args2.get().size();
+                    }
+                } else {
+                    return args2.isEmpty();
+                }
+                return true;
+            }
         }
         return false;
     }
