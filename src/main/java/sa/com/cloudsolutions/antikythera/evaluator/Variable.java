@@ -88,10 +88,9 @@ public class Variable {
     public void setType(Type type) {
         this.type = type;
         if (this.clazz == null) {
-            try {
-                this.clazz = Reflect.getComponentClass(type.asString());
-            } catch (ClassNotFoundException e) {
-                // can be silently ignored
+            Optional<Class<?>> opt = Reflect.getComponentClass(type.asString());
+            if (opt.isPresent()) {
+                this.clazz = opt.get();
             }
         }
     }

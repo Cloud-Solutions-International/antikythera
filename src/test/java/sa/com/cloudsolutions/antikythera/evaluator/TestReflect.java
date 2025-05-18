@@ -6,22 +6,27 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestReflect {
 
     @ParameterizedTest()
     @ValueSource(strings = {"int","double","float","short","byte","char","boolean"})
-    void testGetComponentClass(String s) throws ClassNotFoundException {
-        Class<?> clazz = Reflect.getComponentClass(s);
-        assertEquals(clazz.getName(), s);
+    void testGetComponentClass(String s) {
+        Optional<Class<?>> clazz = Reflect.getComponentClass(s);
+        assertTrue(clazz.isPresent());
+        assertEquals(s, clazz.get().getName());
     }
 
     @ParameterizedTest()
     @ValueSource(strings = {"Integer","Double","Float","Short","Byte","Character","Boolean"})
-    void testGetComponentClass2(String s) throws ClassNotFoundException {
-        Class<?> clazz = Reflect.getComponentClass(s);
-        assertEquals(clazz.getName(), "java.lang." + s);
+    void testGetComponentClass2(String s)  {
+        Optional<Class<?>> clazz = Reflect.getComponentClass(s);
+        assertTrue(clazz.isPresent());
+        assertEquals(clazz.get().getName(), "java.lang." + s);
     }
 
     @ParameterizedTest
