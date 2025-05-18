@@ -374,12 +374,13 @@ public class AbstractCompiler {
     /**
      * Compares the list of argument types against the parameters of a callable declarations
      *
-     * @param arguments the types of the arguments that need to be matched
+     * @param methodCall the wrapper method call we are dealing with
      * @param callable  the list of callable declarations. These maybe method declarations or
      *                  constructor declarations.
      * @return the callable declaration if the arguments match the parameters
      */
-    private static Optional<CallableDeclaration<?>> matchCallable(NodeList<Type> arguments, CallableDeclaration<?> callable) {
+    private static Optional<CallableDeclaration<?>> matchCallable(MCEWrapper methodCall, CallableDeclaration<?> callable) {
+        NodeList<Type> arguments = methodCall.getArgumentTypes();
         if (arguments != null &&
                 (callable.getParameters().size() == arguments.size() ||
                         (callable.getParameters().size() > arguments.size() && callable.getParameter(arguments.size()).isVarArgs()))) {
@@ -387,7 +388,7 @@ public class AbstractCompiler {
                 Parameter param = callable.getParameter(i);
                 Type argumentType = arguments.get(i);
                 Type paramType = param.getType();
-                if (matchParameterVsArgument(paramType, argumentType)) {
+                if (matchParameterVsArgument(param, argumentType, methodCall)) {
                     continue;
                 }
                 if (!(paramType.equals(argumentType)
@@ -403,7 +404,8 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    private static boolean matchParameterVsArgument(Type paramType, Type argumentType) {
+    private static boolean matchParameterVsArgument(Parameter param, Type argumentType, MCEWrapper methodCall) {
+        Type paramType = param.getType();
         if (paramType.equals(argumentType) || argumentType == null) {
             return true;
         }
@@ -411,21 +413,40 @@ public class AbstractCompiler {
             return true;
         }
         if (argumentType.isClassOrInterfaceType() && paramType.isClassOrInterfaceType())  {
-            //AbstractCompiler.findTypesInVariable()
-            ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
-            ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
+            if (methodCall.asMethodCallExpr().isPresent() && methodCall.asMethodCallExpr().get().findCompilationUnit().isPresent()) {
+                CompilationUnit callerSource = methodCall.asMethodCallExpr().get().findCompilationUnit().get();
+                CompilationUnit declarationSource = param.findCompilationUnit().orElseThrow();
 
-            if (pt.getNameAsString().equals(at.getNameAsString())) {
-                Optional<NodeList<Type>> args1 = pt.getTypeArguments();
-                Optional<NodeList<Type>> args2 = at.getTypeArguments();
-                if (args1.isPresent()) {
-                    if (args2.isPresent()) {
-                        return args1.get().size() == args2.get().size();
-                    }
-                } else {
-                    return args2.isEmpty();
+                List<TypeWrapper> callerTypes = findWrappedTypes(callerSource, argumentType);
+                List<TypeWrapper> declarationTypes = findWrappedTypes(declarationSource, paramType);
+
+                TypeWrapper wp = callerTypes.getLast();
+                TypeWrapper ap = declarationTypes.getLast();
+                if (wp.getType() != null && ap.getType() != null) {
+                    return (wp.getType().getFullyQualifiedName().orElseThrow().equals(ap.getType().getFullyQualifiedName().orElseThrow()));
                 }
-                return true;
+                if (wp.getClazz() != null && ap.getClazz() != null) {
+                    return wp.getClazz().isAssignableFrom(ap.getClazz()) || ap.getClazz().isAssignableFrom(wp.getClazz());
+                }
+
+                return false;
+            }
+            else {
+                ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
+                ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
+
+                if (pt.getNameAsString().equals(at.getNameAsString())) {
+                    Optional<NodeList<Type>> args1 = pt.getTypeArguments();
+                    Optional<NodeList<Type>> args2 = at.getTypeArguments();
+                    if (args1.isPresent()) {
+                        if (args2.isPresent()) {
+                            return args1.get().size() == args2.get().size();
+                        }
+                    } else {
+                        return args2.isEmpty();
+                    }
+                    return true;
+                }
             }
             return false;
         }
@@ -753,7 +774,7 @@ public class AbstractCompiler {
         List<ConstructorDeclaration> constructors = decl.getConstructors();
         for (int i = 0; i < constructors.size(); i++) {
             ConstructorDeclaration constructor = constructors.get(i);
-            Optional<CallableDeclaration<?>> callable = matchCallable(methodCall.getArgumentTypes(), constructor);
+            Optional<CallableDeclaration<?>> callable = matchCallable(methodCall, constructor);
             if (callable.isPresent() && callable.get() instanceof ConstructorDeclaration md) {
                 return Optional.of(new Callable(md, methodCall));
             }
@@ -794,7 +815,7 @@ public class AbstractCompiler {
             for (int i = 0; i < methodsByName.size(); i++) {
                 MethodDeclaration method = methodsByName.get(i);
                 if (methodCall.getArgumentTypes() != null) {
-                    Optional<CallableDeclaration<?>> callable = matchCallable(methodCall.getArgumentTypes(), method);
+                    Optional<CallableDeclaration<?>> callable = matchCallable(methodCall, method);
                     if (callable.isPresent() && callable.get() instanceof MethodDeclaration md) {
                         return Optional.of(new Callable(md, methodCall));
                     }

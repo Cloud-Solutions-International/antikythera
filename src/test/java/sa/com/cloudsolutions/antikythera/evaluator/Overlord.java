@@ -42,6 +42,8 @@ public class Overlord {
     public void p4() {
         ArrayList<Integer> a = new ArrayList<>();
         a.add(1);
+        a.add(2);
+        a.add(3);
         print(a);
     }
 

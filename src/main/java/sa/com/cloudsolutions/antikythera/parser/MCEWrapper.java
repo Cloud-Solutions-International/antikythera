@@ -12,6 +12,8 @@ import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
+import java.util.Optional;
+
 /**
  * Wraps method call expressions to solve their argument types.
  * At the time that a method call is being evaluated, typically we only have the argument names
@@ -22,13 +24,13 @@ public class MCEWrapper {
     /**
      * The MCE being wrapped
      */
-    NodeWithArguments<?> methodCallExpr;
+    private final NodeWithArguments<?> methodCallExpr;
     /**
      * The type of each argument (if correctly identified or else null)
      */
-    NodeList<Type> argumentTypes;
+    private NodeList<Type> argumentTypes;
 
-    Callable matchingCallable;
+    private Callable matchingCallable;
 
     public MCEWrapper(NodeWithArguments<?> oce) {
         this.methodCallExpr = oce;
@@ -120,5 +122,12 @@ public class MCEWrapper {
 
     public void setMatchingCallable(Callable match) {
         this.matchingCallable = match;
+    }
+
+    public Optional<MethodCallExpr> asMethodCallExpr() {
+        if (methodCallExpr instanceof MethodCallExpr mce) {
+            return Optional.of(mce);
+        }
+        return Optional.empty();
     }
 }

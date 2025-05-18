@@ -66,7 +66,7 @@ class TestOverlord extends TestHelper {
          * Should be able to locate 10 method calls in the class, finding the corresponding
          * methodDeclaration is another matter
          */
-        assertEquals(15, methodCalls.size());
+        assertEquals(17, methodCalls.size());
     }
 
     /**
@@ -74,7 +74,7 @@ class TestOverlord extends TestHelper {
      */
     @ParameterizedTest
     @CsvSource({"p1, String input: a", "p2, Int input: 1",
-            "p3, First int: 1 Second int: 2", "p4, 1 2"})
+            "p3, First int: 1 Second int: 2", "p4, 1 2 3"})
     void testCalls(String name, String value) throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration md = compilationUnit.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals(name)).orElseThrow();
