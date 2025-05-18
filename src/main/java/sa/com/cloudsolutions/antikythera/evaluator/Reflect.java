@@ -293,11 +293,11 @@ public class Reflect {
             case "int", JAVA_LANG_INTEGER -> PrimitiveType.intType();
             case PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE -> PrimitiveType.doubleType();
             case PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> PrimitiveType.booleanType();
-            case "long", JAVA_LANG_LONG, "java.lang.BigDecimal" -> PrimitiveType.longType();
+            case "long", JAVA_LANG_LONG, JAVA_LANG_BIG_DECIMAL -> PrimitiveType.longType();
             case PRIMITIVE_FLOAT, FLOAT, "java.lang.Float" -> PrimitiveType.floatType();
             case PRIMITIVE_SHORT, "java.lang.Short" -> PrimitiveType.shortType();
-            case "byte", "java.lang.Byte" -> PrimitiveType.byteType();
-            case "char", "java.lang.Character" -> PrimitiveType.charType();
+            case "byte", JAVA_LANG_BYTE -> PrimitiveType.byteType();
+            case "char", JAVA_LANG_CHARACTER -> PrimitiveType.charType();
             case JAVA_LANG_STRING -> new ClassOrInterfaceType().setName(STRING);
             default -> null;
         };
@@ -313,7 +313,7 @@ public class Reflect {
             case "Long" -> new LongLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
             case PRIMITIVE_BOOLEAN , BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
-            case "Character" -> new CharLiteralExpr(value.toString().charAt(0));
+            case CHARACTER -> new CharLiteralExpr(value.toString().charAt(0));
             default -> new StringLiteralExpr(value.toString());
         };
     }

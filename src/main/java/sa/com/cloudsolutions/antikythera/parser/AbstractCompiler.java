@@ -211,20 +211,24 @@ public class AbstractCompiler {
             return List.of();
         }
 
+        return findWrappedTypes(cu.get(), type);
+    }
+
+    private static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
             if (classType.getTypeArguments().isPresent()) {
                 List<TypeWrapper> typeWrappers = new ArrayList<>();
                 List<Type> args = classType.getTypeArguments().orElseThrow();
                 for (Type arg : args) {
-                    typeWrappers.add(findType(cu.get(), arg));
+                    typeWrappers.add(findType(cu, arg));
                 }
-                typeWrappers.add(findType(cu.get(), classType.getNameAsString()));
+                typeWrappers.add(findType(cu, classType.getNameAsString()));
                 return typeWrappers;
             }
         }
 
-        TypeWrapper foundType = findType(cu.get(), type);
+        TypeWrapper foundType = findType(cu, type);
         return foundType != null ? List.of(foundType) : List.of();
     }
 
@@ -383,13 +387,7 @@ public class AbstractCompiler {
                 Parameter param = callable.getParameter(i);
                 Type argumentType = arguments.get(i);
                 Type paramType = param.getType();
-                if (paramType.equals(argumentType) || argumentType == null) {
-                    continue;
-                }
-                if (argumentType.isPrimitiveType() && argumentType.asString().equals(paramType.asString().toLowerCase())) {
-                    continue;
-                }
-                if (argumentType.isClassOrInterfaceType() && paramType.isClassOrInterfaceType() && classMatch(argumentType, paramType)) {
+                if (matchParameterVsArgument(paramType, argumentType)) {
                     continue;
                 }
                 if (!(paramType.equals(argumentType)
@@ -405,24 +403,35 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    private static boolean classMatch(Type argumentType, Type paramType) {
-        ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
-        ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
-
-        if (pt.getNameAsString().equals(at.getNameAsString())) {
-            Optional<NodeList<Type>> args1 = pt.getTypeArguments();
-            Optional<NodeList<Type>> args2 = at.getTypeArguments();
-            if (args1.isPresent()) {
-                if (args2.isPresent()) {
-                    return args1.get().size() == args2.get().size();
-                }
-            } else {
-                return args2.isEmpty();
-            }
+    private static boolean matchParameterVsArgument(Type paramType, Type argumentType) {
+        if (paramType.equals(argumentType) || argumentType == null) {
             return true;
+        }
+        if (argumentType.isPrimitiveType() && argumentType.asString().equals(paramType.asString().toLowerCase())) {
+            return true;
+        }
+        if (argumentType.isClassOrInterfaceType() && paramType.isClassOrInterfaceType())  {
+            //AbstractCompiler.findTypesInVariable()
+            ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
+            ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
+
+            if (pt.getNameAsString().equals(at.getNameAsString())) {
+                Optional<NodeList<Type>> args1 = pt.getTypeArguments();
+                Optional<NodeList<Type>> args2 = at.getTypeArguments();
+                if (args1.isPresent()) {
+                    if (args2.isPresent()) {
+                        return args1.get().size() == args2.get().size();
+                    }
+                } else {
+                    return args2.isEmpty();
+                }
+                return true;
+            }
+            return false;
         }
         return false;
     }
+
 
     public static String findFullyQualifiedName(CompilationUnit cu, Type t) {
         if (t instanceof ClassOrInterfaceType ctype) {
