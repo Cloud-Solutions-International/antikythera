@@ -334,24 +334,19 @@ public class Evaluator {
 
     private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
         ClassExpr classExpr = expr.asClassExpr();
-        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, classExpr.getType().asString());
 
-        if (fullyQualifiedName != null) {
-            try {
-                // Try to load the class as a compiled binary
-                Class<?> loadedClass = AbstractCompiler.loadClass(fullyQualifiedName);
-                return new Variable(loadedClass);
-            } catch (ClassNotFoundException e) {
-                // Class not found as binary, check if available as source
-                CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                if (sourceCU != null) {
-                    Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
-                    Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+        if (wrapper != null) {
+            if (wrapper.getClazz() != null) {
+                return new Variable(wrapper.getClazz());
+            }
+            if (wrapper.getType() != null) {
+                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), Evaluator.class);
+                Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
-                    Variable v = new Variable(dynamicClass);
-                    v.setClazz(Class.class);
-                    return v;
-                }
+                Variable v = new Variable(dynamicClass);
+                v.setClazz(Class.class);
+                return v;
             }
         }
         return null;

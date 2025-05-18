@@ -398,10 +398,8 @@ public class GraphNode {
             if (variable.getType().isClassOrInterfaceType()) {
                 processTypeArgument(variable.getType().asClassOrInterfaceType());
 
-                if(variable.getType().asClassOrInterfaceType().getScope().isPresent()){
-                    ClassOrInterfaceType scp = variable.getType().asClassOrInterfaceType().getScope().get();
-                    ImportUtils.addImport(this, scp.getNameAsString());
-                }
+                variable.getType().asClassOrInterfaceType().getScope()
+                    .ifPresent(scp -> ImportUtils.addImport(this, scp.getNameAsString()));
             }
             else {
                 ImportUtils.addImport(this, variable.getType());

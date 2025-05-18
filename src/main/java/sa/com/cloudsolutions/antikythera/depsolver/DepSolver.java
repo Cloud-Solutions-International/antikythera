@@ -39,6 +39,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
@@ -178,18 +179,17 @@ public class DepSolver {
 
     private static void findParentMethods(GraphNode node, MethodDeclaration md)  {
         TypeDeclaration<?> td = node.getTypeDeclaration();
-        if (td.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = td.asClassOrInterfaceDeclaration();
-            for(ClassOrInterfaceType parent : cdecl.getImplementedTypes()) {
-                String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), parent.getNameAsString());
-                if (fqName != null) {
-                    AntikytheraRunTime.getTypeDeclaration(fqName).ifPresent(parentType -> {
-                        for (MethodDeclaration pmd : parentType.getMethodsByName(md.getNameAsString())) {
-                            if(pmd.getParameters().size() == md.getParameters().size()) {
-                                Graph.createGraphNode(pmd);
-                            }
-                        }
-                    });
+        if (!td.isClassOrInterfaceDeclaration()) {
+            return;
+        }
+
+        for(ClassOrInterfaceType parent : td.asClassOrInterfaceDeclaration().getImplementedTypes()) {
+            TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), parent.getNameAsString());
+            if (wrapper != null && wrapper.getType() != null) {
+                for (MethodDeclaration pmd : wrapper.getType().getMethodsByName(md.getNameAsString())) {
+                    if(pmd.getParameters().size() == md.getParameters().size()) {
+                        Graph.createGraphNode(pmd);
+                    }
                 }
             }
         }
