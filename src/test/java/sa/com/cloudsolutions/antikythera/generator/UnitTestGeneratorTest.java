@@ -119,10 +119,10 @@ class UnitTestGeneratorTest {
     }
 
     @Test
-    void testMockFields() {
+    void testIdentifyFieldsToBeMocked() {
 
         classUnderTest.addAnnotation("Service");
-        unitTestGenerator.mockFields();
+        unitTestGenerator.identifyFieldsToBeMocked();
         CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
         TypeDeclaration<?> testClass = testCu.getType(0);
 
@@ -370,7 +370,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     }
 
     @Test
-    void mockFields() {
+    void identifyFieldsToBeMocked() {
         setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);

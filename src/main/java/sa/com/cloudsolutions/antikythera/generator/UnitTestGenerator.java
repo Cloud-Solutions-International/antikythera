@@ -98,7 +98,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param t the type declaration which holds the fields being mocked.
      */
-    private static void identifyMockedTypes(TypeDeclaration<?> t) {
+    private static void identifyExistingMocks(TypeDeclaration<?> t) {
         for (FieldDeclaration fd : t.getFields()) {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
                     fd.getAnnotationByName("Mock").isPresent()) {
@@ -135,7 +135,7 @@ public class UnitTestGenerator extends TestGenerator {
             if (t.isClassOrInterfaceDeclaration()) {
                 loadPredefinedBaseClassForTest(t.asClassOrInterfaceDeclaration());
             }
-            identifyMockedTypes(t);
+            identifyExistingMocks(t);
         }
     }
 
@@ -197,7 +197,7 @@ public class UnitTestGenerator extends TestGenerator {
         try {
             baseTestClass = StaticJavaParser.parse(new File(helperPath));
             for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
-                identifyMockedTypes(t);
+                identifyExistingMocks(t);
             }
 
             baseTestClass.findFirst(MethodDeclaration.class,
@@ -636,7 +636,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void addBeforeClass() {
-        mockFields();
+        identifyFieldsToBeMocked();
 
         MethodDeclaration before = new MethodDeclaration();
         before.setType(void.class);
@@ -661,7 +661,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public void mockFields() {
+    public void identifyFieldsToBeMocked() {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
@@ -676,10 +676,10 @@ public class UnitTestGenerator extends TestGenerator {
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             CompilationUnit cu = entry.getValue();
-            mockFields(cu);
+            identifyFieldsToBeMocked(cu);
         }
 
-        mockFields(compilationUnitUnderTest);
+        identifyFieldsToBeMocked(compilationUnitUnderTest);
     }
 
     /**
@@ -688,7 +688,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param cu the compilation unit that contains code to be tested.
      */
-    private void mockFields(CompilationUnit cu) {
+    private void identifyFieldsToBeMocked(CompilationUnit cu) {
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
             decl.getAnnotationByName("Service")
