@@ -33,7 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
-    private static Set<String> collectionTypes = Set.of(
+    private static final Set<String> collectionTypes = Set.of(
             "java.util.List",
             "java.util.ArrayList",
             "java.util.Collection",
@@ -196,7 +196,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     }
 
-    private Variable mockFromTypeArguments(ClassOrInterfaceType parent, Method method) {
+     Variable mockFromTypeArguments(ClassOrInterfaceType parent, Method method) {
         Type r = parent.getTypeArguments().orElseThrow().getFirst().orElseThrow();
         String fullName = AbstractCompiler.findFullyQualifiedName(cu, r.toString());
         if (fullName != null) {
@@ -248,7 +248,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return mockReturnFromCompilationUnit(cd, md, returnType);
     }
 
-    private Variable getIdField() {
+     Variable getIdField() {
         if (typeDeclaration != null && typeDeclaration.getAnnotationByName("Entity").isPresent()) {
             for (FieldDeclaration f : typeDeclaration.getFields()) {
                 if (f.getAnnotationByName("Id").isPresent()) {
@@ -338,7 +338,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    private Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
+    Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
         String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, typeName);
         if (resolvedClass != null) {
             Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
@@ -406,7 +406,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return v;
     }
 
-    private Variable repositoryEmptyPath(String collectionTypeName) {
+     Variable repositoryEmptyPath(String collectionTypeName) {
         Variable v = Reflect.variableFactory(collectionTypeName);
         if (v != null && v.getInitializer().getFirst() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
