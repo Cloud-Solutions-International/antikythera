@@ -126,6 +126,8 @@ public class AKBuddy {
     }
 
     private static Class<?> getParameterType(CompilationUnit cu, Parameter p) {
+        TypeWrapper t = null;
+
         try {
             if (p.getType().isArrayType()) {
                 // Get the element type without [] suffix
@@ -147,7 +149,7 @@ public class AKBuddy {
                 if (p.getType().isPrimitiveType()) {
                     return Reflect.getComponentClass(p.getTypeAsString());
                 } else {
-                    TypeWrapper t;
+
                     if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
                         t = AbstractCompiler.findType(cu, ctype.getNameAsString());
                     }
@@ -160,8 +162,16 @@ public class AKBuddy {
                     return Reflect.getComponentClass(t.getFullyQualifiedName());
                 }
             }
-
         } catch (ClassNotFoundException e) {
+            if (t != null && t.getType() != null) {
+                Evaluator o = EvaluatorFactory.create(t.getFullyQualifiedName(), MockingEvaluator.class);
+                MethodInterceptor interceptor = new MethodInterceptor(o);
+                try {
+                    return AKBuddy.createDynamicClass(interceptor);
+                } catch (ClassNotFoundException ex) {
+                    throw new AntikytheraException(ex);
+                }
+            }
             throw new AntikytheraException(e);
         }
     }
