@@ -164,13 +164,7 @@ public class AKBuddy {
             }
         } catch (ClassNotFoundException e) {
             if (t != null && t.getType() != null) {
-                Evaluator o = EvaluatorFactory.create(t.getFullyQualifiedName(), MockingEvaluator.class);
-                MethodInterceptor interceptor = new MethodInterceptor(o);
-                try {
-                    return AKBuddy.createDynamicClass(interceptor);
-                } catch (ClassNotFoundException ex) {
-                    throw new AntikytheraException(ex);
-                }
+                return new ByteBuddy().subclass(Object.class).make().load(System.class.getClassLoader()).getLoaded();
             }
             throw new AntikytheraException(e);
         }
