@@ -22,6 +22,7 @@ import java.nio.file.StandardCopyOption;
 
 import java.util.Collection;
 
+@SuppressWarnings("java:S6548")
 public class Antikythera {
 
     public static final String SRC = "src";

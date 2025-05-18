@@ -428,6 +428,9 @@ public class AbstractCompiler {
             List<TypeWrapper> callerTypes = findWrappedTypes(callerSource, argumentType);
             List<TypeWrapper> declarationTypes = findWrappedTypes(declarationSource, paramType);
 
+            if (callerTypes.isEmpty()) {
+                return false;
+            }
             TypeWrapper wp = callerTypes.getLast();
             TypeWrapper ap = declarationTypes.getLast();
             if (wp.getType() != null && ap.getType() != null) {
