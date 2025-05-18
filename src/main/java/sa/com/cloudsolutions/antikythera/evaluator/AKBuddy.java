@@ -147,14 +147,17 @@ public class AKBuddy {
                 if (p.getType().isPrimitiveType()) {
                     return Reflect.getComponentClass(p.getTypeAsString());
                 } else {
+                    TypeWrapper t;
                     if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
-                        String fullName = AbstractCompiler.findFullyQualifiedName(cu, ctype.getNameAsString());
-                        return Reflect.getComponentClass(fullName);
+                        t = AbstractCompiler.findType(cu, ctype.getNameAsString());
                     }
                     else {
-                        String fullName = AbstractCompiler.findFullyQualifiedName(cu, p.getType().asString());
-                        return Reflect.getComponentClass(fullName);
+                        t = AbstractCompiler.findType(cu, p.getType().asString());
                     }
+                    if (t.getClazz() != null) {
+                        return t.getClazz();
+                    }
+                    return Reflect.getComponentClass(t.getFullyQualifiedName());
                 }
             }
 

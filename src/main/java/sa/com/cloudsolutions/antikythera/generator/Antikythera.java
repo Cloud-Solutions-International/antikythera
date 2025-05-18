@@ -186,6 +186,9 @@ public class Antikythera {
     }
 
     private void processService(String servicePath, String[] parts) throws IOException {
+        logger.info("******************");
+        logger.info("Processing service {}", servicePath);
+
         ServicesParser processor = new ServicesParser(servicePath);
         if (parts.length == 2) {
             processor.start(parts[1]);
