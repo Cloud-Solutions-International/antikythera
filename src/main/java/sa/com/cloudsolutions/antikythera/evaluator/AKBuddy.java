@@ -103,31 +103,29 @@ public class AKBuddy {
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
-            DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
+                                                     DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
 
         for (MethodDeclaration method : methods) {
             String methodName = method.getNameAsString();
 
             // Get parameter types
             Class<?>[] parameterTypes = method.getParameters().stream()
-                .map(p -> getParameterType(cu, p))
-                .toArray(Class<?>[]::new);
+                    .map(p -> getParameterType(cu, p))
+                    .toArray(Class<?>[]::new);
 
 
             builder = builder.defineMethod(methodName,
-                        Object.class,
-                        net.bytebuddy.description.modifier.Visibility.PUBLIC)
+                            Object.class,
+                            net.bytebuddy.description.modifier.Visibility.PUBLIC)
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
-                        .filter(ElementMatchers.named("intercept"))
-                        .to(new MethodInterceptor.Interceptor(interceptor, method)));
+                            .filter(ElementMatchers.named("intercept"))
+                            .to(new MethodInterceptor.Interceptor(interceptor, method)));
         }
         return builder;
     }
 
     private static Class<?> getParameterType(CompilationUnit cu, Parameter p) {
-        TypeWrapper t = null;
-
         try {
             if (p.getType().isArrayType()) {
                 // Get the element type without [] suffix
@@ -149,7 +147,7 @@ public class AKBuddy {
                 if (p.getType().isPrimitiveType()) {
                     return Reflect.getComponentClass(p.getTypeAsString());
                 } else {
-
+                    TypeWrapper t;
                     if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
                         t = AbstractCompiler.findType(cu, ctype.getNameAsString());
                     }
@@ -162,11 +160,14 @@ public class AKBuddy {
                     return Reflect.getComponentClass(t.getFullyQualifiedName());
                 }
             }
+
         } catch (ClassNotFoundException e) {
-            if (t != null && t.getType() != null) {
-                return new ByteBuddy().subclass(Object.class).make().load(System.class.getClassLoader()).getLoaded();
-            }
-            throw new AntikytheraException(e);
+            /*
+             * TODO : fix this temporary hack.
+             * Lots of functions will actually fail to evaluate due to returning an object.class however
+             * the program will not crash.
+             */
+            return Object.class;
         }
     }
 
