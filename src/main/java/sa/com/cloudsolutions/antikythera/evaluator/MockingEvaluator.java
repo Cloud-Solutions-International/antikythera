@@ -87,6 +87,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     @Override
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
+        returnFrom = null;
         if (callable.isMethodDeclaration()) {
             if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
                 MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();

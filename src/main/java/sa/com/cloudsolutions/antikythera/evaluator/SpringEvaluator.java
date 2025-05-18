@@ -46,6 +46,7 @@ import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -341,7 +342,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             for (Statement stmt : statements) {
                 executeStatement(stmt);
                 if (returnFrom != null) {
-                    break;
+                    MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
+                    MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
+                    if (method == null || method.equals(parent)) {
+                        break;
+                    }
                 }
             }
         } catch (Exception e) {
