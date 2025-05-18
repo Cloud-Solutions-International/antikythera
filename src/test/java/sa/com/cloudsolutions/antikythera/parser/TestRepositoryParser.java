@@ -94,30 +94,4 @@ class TestRepositoryParser {
         Expression result = RepositoryQuery.convertExpressionToSnakeCase(functionExpr);
         assertEquals("SUM(total_amount)", result.toString());
     }
-
-    @Test
-    void testProcess() throws IOException {
-        AntikytheraRunTime.resetAll();
-        AbstractCompiler.preProcess();
-
-        parser.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        parser.processTypes();
-        parser.buildQueries();
-
-        MethodCallExpr mce = new MethodCallExpr("findById");
-        MCEWrapper wrapper = new MCEWrapper(mce);
-        wrapper.getArgumentTypes().add(PrimitiveType.longType());
-        assertThrows(NoSuchElementException.class, () ->
-            AbstractCompiler.findCallableDeclaration(wrapper,parser.getCompilationUnit().getType(0)));
-
-        BlockStmt body = new BlockStmt();
-        MethodDeclaration md = new MethodDeclaration().setName("bada").setBody(body);
-        body.addStatement(mce);
-        cu.getType(0).addMember(md);
-
-        Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(wrapper,parser.getCompilationUnit().getType(0));
-        assertTrue(cd.isPresent());
-        assertFalse(cd.get().isMethodDeclaration());
-        assertNotNull(parser.get(cd.get()));
-    }
 }

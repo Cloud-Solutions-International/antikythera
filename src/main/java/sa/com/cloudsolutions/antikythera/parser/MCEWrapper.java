@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AKBuddy;
@@ -55,15 +54,38 @@ public class MCEWrapper {
         for (int i = 0; i < argumentTypes.size(); i++) {
 
             Type type = argumentTypes.get(i);
-            CompilationUnit cu = (methodCallExpr instanceof MethodCallExpr mce)
-                    ? mce.findCompilationUnit().orElseThrow()
-                    : ((ObjectCreationExpr) methodCallExpr).findCompilationUnit().orElseThrow();
-
-
-            classes[i] = Reflect.resolveComponentClass(cu, type.getElementType());
+            String elementType = type.getElementType().toString();
+            try {
+                classes[i] = Reflect.getComponentClass(elementType);
+            } catch (ClassNotFoundException e) {
+                argumentTypeAsNonPrimitiveClass(type, classes, i);
+            }
         }
 
         return classes;
+    }
+
+    private void argumentTypeAsNonPrimitiveClass(Type type, Class<?>[] classes, int i) {
+        if (methodCallExpr instanceof MethodCallExpr mce) {
+            CompilationUnit cu = mce.findCompilationUnit().orElse(null);
+            if (cu != null) {
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
+                if (wrapper != null) {
+                    if (wrapper.getClazz() != null) {
+                        classes[i] = wrapper.getClazz();
+                    }
+                    else {
+                        MockingEvaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+                        try {
+                            Class<?> cls = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                            classes[i] = cls;
+                        } catch (ClassNotFoundException ex) {
+                            classes[i] = Object.class;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
