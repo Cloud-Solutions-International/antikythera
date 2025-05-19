@@ -31,7 +31,7 @@ class TestQueries extends TestHelper{
     void each() throws AntikytheraException {
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         UnitTestGenerator gen = new UnitTestGenerator(cu);
-        gen.mockFields();
+        gen.identifyFieldsToBeMocked();
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
     }

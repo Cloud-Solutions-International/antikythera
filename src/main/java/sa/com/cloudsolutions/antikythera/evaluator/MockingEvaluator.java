@@ -6,6 +6,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -32,7 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
-    private static Set<String> collectionTypes = Set.of(
+    private static final Set<String> collectionTypes = Set.of(
             "java.util.List",
             "java.util.ArrayList",
             "java.util.Collection",
@@ -86,6 +87,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     @Override
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
+        returnFrom = null;
         if (callable.isMethodDeclaration()) {
             if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
                 MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
@@ -166,7 +168,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                     "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
                     variableName)
         );
-        mockingCall.setExpression(mce);
+        mockingCall.setExpression(List.of(mce));
 
         MockingRegistry.when(className, mockingCall);
         return variables.getFirst();
@@ -195,7 +197,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     }
 
-    private Variable mockFromTypeArguments(ClassOrInterfaceType parent, Method method) {
+     Variable mockFromTypeArguments(ClassOrInterfaceType parent, Method method) {
         Type r = parent.getTypeArguments().orElseThrow().getFirst().orElseThrow();
         String fullName = AbstractCompiler.findFullyQualifiedName(cu, r.toString());
         if (fullName != null) {
@@ -220,6 +222,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return null;
         }
 
+        Variable v = getIdField();
+        if (v != null) return v;
+
         setupParameters(md);
         Type returnType = md.getType();
         if (returnType.isVoidType()) {
@@ -242,6 +247,20 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
 
         return mockReturnFromCompilationUnit(cd, md, returnType);
+    }
+
+     Variable getIdField() {
+        if (typeDeclaration != null && typeDeclaration.getAnnotationByName("Entity").isPresent()) {
+            for (FieldDeclaration f : typeDeclaration.getFields()) {
+                if (f.getAnnotationByName("Id").isPresent()) {
+                    Variable v = getField(f.getVariable(0).getNameAsString());
+                    if (v != null) {
+                        return v;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     Variable mockReturnFromCompilationUnit(CallableDeclaration<?> cd, MethodDeclaration md, Type returnType) {
@@ -320,7 +339,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    private Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
+    Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
         String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, typeName);
         if (resolvedClass != null) {
             Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
@@ -368,20 +387,27 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
         then.setVariableName(variableName);
 
-        Expression initializer = then.getVariable().getInitializer().getFirst();
+        List<Expression> initializer = then.getVariable().getInitializer();
+        List<Expression> mocks = new ArrayList<>();
+        if (initializer.size() > 1) {
+            for(int i = 0 ; i < initializer.size() -1; i++) {
+                mocks.add(initializer.get(i));
+            }
+        }
         MethodCallExpr when = StaticJavaParser.parseExpression(
                 String.format(
                         "Mockito.when(%s).thenReturn(%s)",
-                        mce, initializer)
+                        mce, initializer.getLast())
         );
+        mocks.add(when);
+        then.setExpression(mocks);
 
-        then.setExpression(when);
 
         MockingRegistry.when(className, then);
         return v;
     }
 
-    private Variable repositoryEmptyPath(String collectionTypeName) {
+     Variable repositoryEmptyPath(String collectionTypeName) {
         Variable v = Reflect.variableFactory(collectionTypeName);
         if (v != null && v.getInitializer().getFirst() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
@@ -432,9 +458,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (typeArgs.isEmpty()) {
                 typeArgs.add(new ClassOrInterfaceType().setName("Object"));
             }
-            Expression expr = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
-            if (expr != null) {
-                v.setInitializer(List.of(expr));
+            List<Expression> expressions = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
+            if (expressions != null) {
+                v.setInitializer(expressions);
             }
         }
         return v;

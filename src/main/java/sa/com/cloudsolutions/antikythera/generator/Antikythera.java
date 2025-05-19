@@ -4,6 +4,7 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -22,6 +23,7 @@ import java.nio.file.StandardCopyOption;
 
 import java.util.Collection;
 
+@SuppressWarnings("java:S6548")
 public class Antikythera {
 
     public static final String SRC = "src";
@@ -150,13 +152,49 @@ public class Antikythera {
     private void generateUnitTests() throws IOException {
         for (String service : services) {
             String[] parts = service.split("#");
-            ServicesParser processor = new ServicesParser(parts[0]);
-            if (parts.length == 2) {
-                processor.start(parts[1]);
+            String path = parts[0];
+
+            // Check if it's a source file in compilation units
+            if (AntikytheraRunTime.getCompilationUnit(path) != null) {
+                processService(path, parts);
             } else {
-                processor.start();
+                // Might be a package - check directory
+                Path packagePath = Paths.get(Settings.getBasePath(),
+                    path.replace('.', File.separatorChar));
+
+                if (Files.isDirectory(packagePath)) {
+                    try (var paths = Files.walk(packagePath)) {
+                        paths.filter(Files::isRegularFile)
+                             .filter(p -> p.toString().endsWith(".java"))
+                             .forEach(p -> {
+                                 String relativePath = Paths.get(Settings.getBasePath())
+                                     .relativize(p).toString()
+                                     .replace(File.separatorChar, '.')
+                                     .replaceAll("\\.java$", "");
+                                 try {
+                                     processService(relativePath, parts);
+                                 } catch (IOException e) {
+                                     logger.error("Failed to process service {}", relativePath, e);
+                                 }
+                             });
+                    }
+                } else {
+                    logger.warn("Service path {} not found as file or package", path);
+                }
             }
-            processor.writeFiles();
         }
+    }
+
+    private void processService(String servicePath, String[] parts) throws IOException {
+        logger.info("******************");
+        logger.info("Processing service {}", servicePath);
+
+        ServicesParser processor = new ServicesParser(servicePath);
+        if (parts.length == 2) {
+            processor.start(parts[1]);
+        } else {
+            processor.start();
+        }
+        processor.writeFiles();
     }
 }

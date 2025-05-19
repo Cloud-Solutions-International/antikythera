@@ -52,10 +52,11 @@ import com.github.javaparser.resolution.UnsolvedSymbolException;
 import net.bytebuddy.ByteBuddy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
+
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
@@ -69,13 +70,13 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
-import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -129,6 +130,8 @@ public class Evaluator {
     protected String variableName;
 
     protected TypeDeclaration<?> typeDeclaration;
+
+    private static int sequence = 0;
 
     protected Evaluator() {
         locals = new HashMap<>();
@@ -309,6 +312,10 @@ public class Evaluator {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
         } else if (expr.isArrayAccessExpr()) {
             return evaluateArrayAccess(expr);
+        } else if (expr.isMethodReferenceExpr()) {
+            return evaluateExpression(
+                    FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), new Variable(this)
+                    ));
         }
         return null;
     }
@@ -327,24 +334,19 @@ public class Evaluator {
 
     private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
         ClassExpr classExpr = expr.asClassExpr();
-        String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, classExpr.getType().asString());
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, classExpr.getType().asString());
 
-        if (fullyQualifiedName != null) {
-            try {
-                // Try to load the class as a compiled binary
-                Class<?> loadedClass = AbstractCompiler.loadClass(fullyQualifiedName);
-                return new Variable(loadedClass);
-            } catch (ClassNotFoundException e) {
-                // Class not found as binary, check if available as source
-                CompilationUnit sourceCU = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                if (sourceCU != null) {
-                    Evaluator evaluator = EvaluatorFactory.createLazily(fullyQualifiedName, Evaluator.class);
-                    Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+        if (wrapper != null) {
+            if (wrapper.getClazz() != null) {
+                return new Variable(wrapper.getClazz());
+            }
+            if (wrapper.getType() != null) {
+                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), Evaluator.class);
+                Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
 
-                    Variable v = new Variable(dynamicClass);
-                    v.setClazz(Class.class);
-                    return v;
-                }
+                Variable v = new Variable(dynamicClass);
+                v.setClazz(Class.class);
+                return v;
             }
         }
         return null;
@@ -385,7 +387,8 @@ public class Evaluator {
                 Object value = evaluateExpression(values.get(i)).getValue();
                 if (value instanceof Evaluator evaluator) {
                     MethodInterceptor interceptor = new MethodInterceptor(evaluator);
-                    Array.set(array, i, AKBuddy.createDynamicClass(interceptor).getDeclaredConstructor().newInstance());
+                    Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+                    Array.set(array, i, dynamicClass.getDeclaredConstructor().newInstance());
                 }
                 else {
                     Array.set(array, i, value);
@@ -599,16 +602,7 @@ public class Evaluator {
     }
 
     private Variable initializeVariable(VariableDeclarator decl, Expression init) throws ReflectiveOperationException {
-        Variable v;
-        if (init.isMethodCallExpr()) {
-            v = evaluateMethodCall(init.asMethodCallExpr());
-        } else if (init.isObjectCreationExpr()) {
-            v = createObject(init, init.asObjectCreationExpr());
-        } else if (init.isLambdaExpr()) {
-            v = FPEvaluator.create(init.asLambdaExpr(), this);
-        } else {
-            v = evaluateExpression(init);
-        }
+        Variable v = evaluateExpression(init);
 
         if (v != null) {
             v.setType(decl.getType());
@@ -792,16 +786,20 @@ public class Evaluator {
      * @param v            The value to be set for the variable.
      */
     void setLocal(Node node, String nameAsString, Variable v) {
-        Variable old = getValue(node, nameAsString);
-        if (old != null) {
-            old.setValue(v.getValue());
-        } else {
-            BlockStmt block = AbstractCompiler.findBlockStatement(node);
-            int hash = (block != null) ? block.hashCode() : 0;
-
-            Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
-            localVars.put(nameAsString, v);
+        Optional<Node> parent = node.getParentNode();
+        if (parent.isEmpty() ||  !(parent.get() instanceof VariableDeclarationExpr)) {
+            Variable old = getValue(node, nameAsString);
+            if (old != null) {
+                old.setValue(v.getValue());
+                return;
+            }
         }
+
+        BlockStmt block = AbstractCompiler.findBlockStatement(node);
+        int hash = (block != null) ? block.hashCode() : 0;
+
+        Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
+        localVars.put(nameAsString, v);
     }
 
     /**
@@ -912,7 +910,11 @@ public class Evaluator {
                 variable = new Variable(this);
             } else if (expr2.isTypeExpr()) {
                 String s = expr2.toString();
-                variable = new Variable(findScopeType(s));
+                Object scopeType = findScopeType(s);
+                variable = new Variable(scopeType);
+                if (scopeType instanceof Class<?> clazz) {
+                    variable.setClazz(clazz);
+                }
             } else if (expr2.isObjectCreationExpr()) {
                 variable = createObject(expr2, expr2.asObjectCreationExpr());
             } else if (expr2.isArrayAccessExpr()) {
@@ -1226,7 +1228,7 @@ public class Evaluator {
     }
 
     @SuppressWarnings({"java:S3776", "java:S1130"})
-    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException, IOException {
+    Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
         String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
 
@@ -1701,9 +1703,9 @@ public class Evaluator {
      * Execute a statement that represents an If - Then or If - Then - Else
      *
      * @param ifst If / Then statement
-     * @throws Exception if the if then else cannot be evaluated
+     * @throws Exception when the condition evaluation or subsequent block execution fails
      */
-    Variable ifThenElseBlock(IfStmt ifst) throws Exception {
+    void ifThenElseBlock(IfStmt ifst) throws Exception {
 
         Variable v = evaluateExpression(ifst.getCondition());
         if ((boolean) v.getValue()) {
@@ -1714,7 +1716,6 @@ public class Evaluator {
                 executeStatement(elseBlock.get());
             }
         }
-        return v;
     }
 
     protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
@@ -1814,8 +1815,23 @@ public class Evaluator {
                     return;
                 }
             }
+            if (variableDeclarator.getInitializer().isEmpty()
+                        && field.getAnnotationByName("Mock").isEmpty()
+                        && field.getAnnotationByName("Autowired").isEmpty()
+                        && !isSequenceField(field, variableDeclarator)
+            ) {
+                Variable nullVariable = new Variable(null);
+                if (variableDeclarator.getType().isPrimitiveType()) {
+                    nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
+                }
+                nullVariable.setType(variableDeclarator.getType());
+                fields.put(variableDeclarator.getNameAsString(), nullVariable);
+                return;
+            }
             Variable v = resolveVariableDeclaration(variableDeclarator);
             if (v != null) {
+                checkSequences(field, variableDeclarator, v);
+
                 fields.put(variableDeclarator.getNameAsString(), v);
                 if (field.isStatic()) {
                     AntikytheraRunTime.setStaticVariable(getClassName(), variableDeclarator.getNameAsString(), v);
@@ -1823,17 +1839,37 @@ public class Evaluator {
             }
         } catch (UnsolvedSymbolException e) {
             logger.debug("ignore {}", variableDeclarator);
-        } catch (IOException e) {
-            String action = Settings.getProperty("dependencies.on_error", String.class).orElse("exit");
-            if (action.equals("exit")) {
-                throw new GeneratorException("Exception while processing fields", e);
-            }
 
-            logger.error("Exception while processing fields\n\t\t{}", e.getMessage());
-
-        } catch (AntikytheraException | ReflectiveOperationException e) {
+        } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
         }
+    }
+
+    private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
+        if (isSequenceField(field, variableDeclarator)) {
+            incrementSequence();
+            v.setValue(sequence);
+            MethodCallExpr mce = new MethodCallExpr(
+                    "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
+            String type = v.getType().asString();
+            if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
+                mce.addArgument(new LongLiteralExpr().setValue(Integer.toString(sequence) + "L"));
+            }
+            else {
+                mce.addArgument(new IntegerLiteralExpr().setValue(Integer.toString(sequence)));
+            }
+            v.getInitializer().add(mce);
+        }
+    }
+
+    public List<Expression> getFieldInitializers() {
+        List<Expression> fi = new ArrayList<>();
+        for (Variable v : fields.values()) {
+            if (v != null) {
+                fi.addAll(v.getInitializer());
+            }
+        }
+        return fi;
     }
 
     public void reset() {
@@ -1851,6 +1887,19 @@ public class Evaluator {
 
     public void setCompilationUnit(CompilationUnit compilationUnit) {
         this.cu = compilationUnit;
+    }
+
+    private boolean isSequenceField(FieldDeclaration field,  VariableDeclarator variableDeclarator) {
+
+        String typeName = variableDeclarator.getTypeAsString();
+        return (field.getAnnotationByName("Id").isPresent()
+                && typeDeclaration.getAnnotationByName("Entity").isPresent()
+                && variableDeclarator.getInitializer().isEmpty()
+                && ( typeName.equals("int") || typeName.equals("long") || typeName.equals("Integer") || typeName.equals("Long")));
+    }
+
+    private static void incrementSequence() {
+        sequence++;
     }
 
     /**

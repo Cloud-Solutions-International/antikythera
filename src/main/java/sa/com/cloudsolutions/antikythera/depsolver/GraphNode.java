@@ -16,9 +16,9 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportUtils;
 
@@ -167,48 +167,41 @@ public class GraphNode {
      */
     private void inherit()  {
         ClassOrInterfaceDeclaration enclosingDeclaration = enclosingType.asClassOrInterfaceDeclaration();
-        if (typeDeclaration.isClassOrInterfaceDeclaration()) {
-            ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
-            if (enclosingDeclaration.isInterface()) {
-                cdecl.setInterface(true);
-            } else {
-                cdecl.setInterface(false);
 
-                if (cdecl.getImplementedTypes().isEmpty()) {
-                    for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
-                        cdecl.addImplementedType(ifc.clone());
-                        processTypeArgument(ifc);
-                    }
-                }
-            }
-            if (cdecl.getExtendedTypes().isEmpty()) {
-                /*
-                 * this empty check is in place to make sure that we do not repeat the process.
-                 * cdecl is the target, if it contains the extentions that means its completed.
-                 */
-                for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
-                    cdecl.addExtendedType(ifc.clone());
-                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(ifc.findCompilationUnit().get(),ifc.getNameAsString())  ;
-                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullyQualifiedName);
-                    if (cu != null) {
+        ClassOrInterfaceDeclaration cdecl = typeDeclaration.asClassOrInterfaceDeclaration();
+        if (enclosingDeclaration.isInterface()) {
+            cdecl.setInterface(true);
+        } else {
+            cdecl.setInterface(false);
 
-                    }
-                    else {
-
-                        try {
-                            Class<?> clz = AbstractCompiler.loadClass(fullyQualifiedName);
-                            if (Modifier.isAbstract(clz.getModifiers())) {
-                                for (MethodDeclaration md : enclosingDeclaration.getMethods()) {
-                                    addAbstractMethods(md,clz);
-                                }
-                            }
-                        } catch (ClassNotFoundException e) {
-                            logger.error("Class not found: " + fullyQualifiedName);
-                        }
-                    }
-
+            if (cdecl.getImplementedTypes().isEmpty()) {
+                for (ClassOrInterfaceType ifc : enclosingDeclaration.getImplementedTypes()) {
+                    cdecl.addImplementedType(ifc.clone());
                     processTypeArgument(ifc);
                 }
+            }
+        }
+        if (cdecl.getExtendedTypes().isEmpty()) {
+            /*
+             * this empty check is in place to make sure that we do not repeat the process.
+             * cdecl is the target, if it contains the extensions that means its completed.
+             */
+            for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
+                cdecl.addExtendedType(ifc.clone());
+                TypeWrapper wrapper = AbstractCompiler.findType(ifc.findCompilationUnit().get(),ifc.getNameAsString());
+                if (wrapper != null) {
+                    Class<?> clz = wrapper.getClazz();
+                    if (clz != null && Modifier.isAbstract(clz.getModifiers())) {
+                        for (MethodDeclaration md : enclosingDeclaration.getMethods()) {
+                            addAbstractMethods(md, clz);
+                        }
+                    }
+                }
+                else {
+                    logger.error("Class not found: {}", ifc.getNameAsString());
+                }
+
+                processTypeArgument(ifc);
             }
         }
     }
@@ -405,10 +398,8 @@ public class GraphNode {
             if (variable.getType().isClassOrInterfaceType()) {
                 processTypeArgument(variable.getType().asClassOrInterfaceType());
 
-                if(variable.getType().asClassOrInterfaceType().getScope().isPresent()){
-                    ClassOrInterfaceType scp = variable.getType().asClassOrInterfaceType().getScope().get();
-                    ImportUtils.addImport(this, scp.getNameAsString());
-                }
+                variable.getType().asClassOrInterfaceType().getScope()
+                    .ifPresent(scp -> ImportUtils.addImport(this, scp.getNameAsString()));
             }
             else {
                 ImportUtils.addImport(this, variable.getType());

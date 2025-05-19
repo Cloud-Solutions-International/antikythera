@@ -23,7 +23,6 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -33,7 +32,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
-import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -58,83 +57,98 @@ public class ControlFlowEvaluator extends Evaluator {
      * @return an optional expression that can be used to set up the condition empty if all
      *      the conditions cannot be met.
      */
-    @SuppressWarnings("unchecked")
-    Optional<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
+    List<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
         NameExpr nameExpr = entry.getKey().asNameExpr();
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
-            if (v.getInitializer() != null) {
-                MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
-
-                String targetParamName = nameExpr.getNameAsString();
-                for (Parameter param : md.getParameters()) {
-                    if (param.getNameAsString().equals(targetParamName)) {
-                        Expression expr = setupConditionThroughAssignment(entry, v);
-                        addPreCondition(stmt, expr);
-                        return Optional.of(expr);
-                    }
-                }
-                /*
-                 * We tried to match the name of the variable with the name of the parameter, but
-                 * a match could not be found. So it is not possible to force branching by
-                 * assigning values to a parameter in a conditional
-                 */
-                return Optional.empty();
-            }
+            List<Expression> expr = setupConditionThroughAssignmentForLocal(stmt, entry, v, nameExpr);
+            if (expr != null) return expr;
         } else {
             v = new Variable(entry.getValue());
         }
 
-        Expression expr = setupConditionThroughAssignment(entry, v);
-        addPreCondition(stmt, expr);
-        return Optional.of(expr);
-    }
-
-    private Expression setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
-        Expression valueExpr;
-        if (v.getType() instanceof PrimitiveType) {
-            valueExpr = Reflect.createLiteralExpression(entry.getValue());
-        } else {
-            valueExpr = setupConditionForNonPrimitive(entry, v);
+        List<Expression> expr = setupConditionThroughAssignment(entry, v);
+        for (Expression e : expr) {
+            addPreCondition(stmt, e);
         }
 
-        return new AssignExpr(
-                new NameExpr(nameExpr.getNameAsString()),
-                valueExpr,
-                AssignExpr.Operator.ASSIGN
-        );
+        return expr;
     }
 
-    private Expression setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
+    @SuppressWarnings("unchecked")
+    private List<Expression> setupConditionThroughAssignmentForLocal(Statement stmt, Map.Entry<Expression, Object> entry, Variable v, NameExpr nameExpr) {
+        if (v.getInitializer() != null) {
+            MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
+
+            String targetParamName = nameExpr.getNameAsString();
+            for (Parameter param : md.getParameters()) {
+                if (param.getNameAsString().equals(targetParamName)) {
+                    List<Expression> expr = setupConditionThroughAssignment(entry, v);
+                    for (Expression e : expr) {
+                        addPreCondition(stmt, e);
+                    }
+                    return expr;
+                }
+            }
+            /*
+             * We tried to match the name of the variable with the name of the parameter, but
+             * a match could not be found. So it is not possible to force branching by
+             * assigning values to a parameter in a conditional
+             */
+        }
+        return List.of();
+    }
+
+    private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
+        NameExpr nameExpr = entry.getKey().asNameExpr();
+        List<Expression> valueExpressions;
+        if (v.getType() instanceof PrimitiveType) {
+            valueExpressions = List.of(Reflect.createLiteralExpression(entry.getValue()));
+        } else {
+            valueExpressions = setupConditionForNonPrimitive(entry, v);
+        }
+
+        if (valueExpressions.size() == 1) {
+            return List.of(
+                    new AssignExpr(
+                            new NameExpr(nameExpr.getNameAsString()),
+                            valueExpressions.getFirst(),
+                            AssignExpr.Operator.ASSIGN
+                    )
+            );
+        }
+        return valueExpressions;
+    }
+
+    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
         if (entry.getValue() instanceof List<?> list) {
             if (list.isEmpty()) {
                 if (v.getValue() instanceof List<?>) {
                     TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                    return StaticJavaParser.parseExpression("List.of()");
+                    return List.of(StaticJavaParser.parseExpression("List.of()"));
                 } else if (v.getValue() instanceof Set<?>) {
                     TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                    return StaticJavaParser.parseExpression("Set.of()");
+                    return List.of(StaticJavaParser.parseExpression("Set.of()"));
                 } else if (v.getValue() instanceof Map<?,?>) {
                     TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
-                    return StaticJavaParser.parseExpression("Map.of()");
+                    return List.of(StaticJavaParser.parseExpression("Map.of()"));
                 }
             }
             else if(entry.getKey() instanceof NameExpr name) {
                 return setupNonEmptyCollections(v, name);
             }
         }
-        return entry.getValue() == null ? new NullLiteralExpr()
-                        : new StringLiteralExpr(entry.getValue().toString());
+        return List.of(entry.getValue() == null ? new NullLiteralExpr()
+                        : new StringLiteralExpr(entry.getValue().toString()));
     }
 
     /**
      * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
      * @param v represents the type of collection or map that we need
      * @param name the name of the variable
-     * @return an expression that can be used to set up the condition
+     * @return a list of expressions that can be used to set up the condition
      */
-    private Expression setupNonEmptyCollections(Variable v, NameExpr name) {
+    private List<Expression> setupNonEmptyCollections(Variable v, NameExpr name) {
         Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
         Type type = param.getType();
         NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
@@ -145,49 +159,116 @@ public class ControlFlowEvaluator extends Evaluator {
         return setupNonEmptyCollection(typeArgs, v, name);
     }
 
-    protected Expression setupNonEmptyCollection(NodeList<Type> typeArgs, Variable v, NameExpr name) {
-        VariableDeclarator vdecl = new VariableDeclarator(typeArgs.get(0), name.getNameAsString());
+    protected List<Expression> setupNonEmptyCollection(NodeList<Type> typeArgs, Variable wrappedCollection, NameExpr name) {
+        Type pimaryType = typeArgs.getFirst().orElseThrow();
+        VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
         try {
-            Variable resolved = resolveVariableDeclaration(vdecl);
-            if (resolved.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved.getType().asString())) {
-                resolved = Reflect.variableFactory(resolved.getType().asString());
+            Variable member = resolveVariableDeclaration(vdecl);
+            if (member.getValue() == null && Reflect.isPrimitiveOrBoxed(member.getType().asString())) {
+                member = Reflect.variableFactory(member.getType().asString());
             }
 
-            List<Expression> initializer = resolved.getInitializer();
-            if (initializer.getFirst() instanceof ObjectCreationExpr && resolved.getValue() instanceof Evaluator eval) {
-                TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
-            }
-            if (v.getValue() instanceof List<?> list) {
-                Method m = List.class.getMethod("add", Object.class);
-                m.invoke(list, resolved.getValue());
-                TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
-            }
-            if (v.getValue() instanceof Set<?> set) {
-                Method m = Set.class.getMethod("add", Object.class);
-                m.invoke(set, resolved.getValue());
-                TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
-            }
-            if (v.getValue() instanceof Map<?,?>) {
-                if (typeArgs.size() == 1) {
-                    typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-                }
-                VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
-                Variable resolved2 = resolveVariableDeclaration(vdecl2);
-                if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
-                    resolved2 = Reflect.variableFactory(resolved2.getType().asString());
-                }
-
-                return StaticJavaParser.parseExpression(
-                        String.format("Map.of(%s, %s)",
-                                initializer.getFirst(), resolved2.getInitializer().getFirst()));
+            if (member.getValue() instanceof Evaluator eval) {
+                return createSingleItemCollectionWithInitializer(typeArgs, member, wrappedCollection, name, eval);
             }
 
-        } catch (ReflectiveOperationException|IOException e) {
+            return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
+
+        } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
         }
+    }
+
+    private List<Expression> createSingleItemCollectionWithInitializer(NodeList<Type> typeArgs, Variable member,
+                                                                       Variable wrappedCollection, NameExpr name, Evaluator eval) throws ReflectiveOperationException {
+        Type pimaryType = typeArgs.getFirst().orElseThrow();
+        List<Expression> fieldIntializers = eval.getFieldInitializers();
+        if (fieldIntializers.isEmpty()) {
+            return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
+        }
+        else {
+            List<Expression> mocks = new ArrayList<>();
+            String instanceName = Variable.generateVariableName(pimaryType);
+            Expression expr = StaticJavaParser.parseStatement(
+                    String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
+            ).asExpressionStmt().getExpression();
+
+            mocks.add(expr);
+            for (Expression e : fieldIntializers) {
+                if (e.isMethodCallExpr()) {
+                    e.asMethodCallExpr().setScope(new NameExpr(instanceName));
+                }
+                mocks.add(e);
+            }
+
+            if (wrappedCollection.getValue() instanceof List<?> list) {
+                addToList(member, list);
+                mocks.add(StaticJavaParser.parseExpression(String.format("List.of(%s)", instanceName)));
+            }
+            else if (wrappedCollection.getValue() instanceof Set<?> set) {
+                addToSet(member, set);
+                mocks.add(StaticJavaParser.parseExpression(String.format("Set.of(%s)", instanceName)));
+            }
+            else if (wrappedCollection.getValue() instanceof Map<?, ?> map) {
+                Variable value = findValueForKey(typeArgs, name);
+                addToMap(member, value, map);
+            }
+            return mocks;
+        }
+    }
+
+    private Expression createSingleItemCollection(NodeList<Type> typeArgs, Variable member,
+                                                  Variable wrappedCollection, NameExpr name) throws ReflectiveOperationException {
+        List<Expression> initializer = member.getInitializer();
+        if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
+            TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
+        }
+        if (wrappedCollection.getValue() instanceof List<?> list) {
+            addToList(member, list);
+            return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
+        }
+        if (wrappedCollection.getValue() instanceof Set<?> set) {
+            addToSet(member, set);
+            return StaticJavaParser.parseExpression(String.format("Set.of(%s)", initializer.getFirst()));
+        }
+        if (wrappedCollection.getValue() instanceof Map<?,?>) {
+            Variable value = findValueForKey(typeArgs, name);
+
+            return StaticJavaParser.parseExpression(
+                    String.format("Map.of(%s, %s)",
+                            initializer.getFirst(), value.getInitializer().getFirst()));
+        }
         return null;
+    }
+
+    private Variable findValueForKey(NodeList<Type> typeArgs, NameExpr name) throws ReflectiveOperationException {
+        if (typeArgs.size() == 1) {
+            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        }
+        VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
+        Variable resolved2 = resolveVariableDeclaration(vdecl2);
+        if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
+            resolved2 = Reflect.variableFactory(resolved2.getType().asString());
+        }
+        return resolved2;
+    }
+
+    private static void addToSet(Variable member, Set<?> set) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+        Method m = Set.class.getMethod("add", Object.class);
+        m.invoke(set, member.getValue());
+        TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
+    }
+
+    private static void addToMap(Variable key, Variable value, Map<?,?> map) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+        Method m = Map.class.getMethod("put", Object.class, Object.class);
+        m.invoke(map,  key.getValue(), value.getValue());
+        TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
+    }
+
+    private static void addToList(Variable member, List<?> list) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+        Method m = List.class.getMethod("add", Object.class);
+        m.invoke(list, member.getValue());
+        TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
     }
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
@@ -262,7 +343,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private static String findSuitableNotNullValue(String name, Evaluator evaluator, String value) {
         Variable field = evaluator.getField(
-                ClassProcessor.classToInstanceName(name.substring(3)));
+                AbstractCompiler.classToInstanceName(name.substring(3)));
         if (field != null) {
             if (field.getClazz() != null) {
                 Variable v = Reflect.variableFactory(field.getClazz().getName());
@@ -272,7 +353,7 @@ public class ControlFlowEvaluator extends Evaluator {
             }
             else if (field.getType() != null) {
                 Variable v = Reflect.variableFactory(field.getType().asString());
-                if (v != null) {
+                if (v != null && !v.getInitializer().isEmpty()) {
                     value = v.getInitializer().getFirst().toString();
                 }
             }
@@ -305,7 +386,7 @@ public class ControlFlowEvaluator extends Evaluator {
                 Type type = param.getType();
                 for (Map.Entry<Expression, Object> entry : value.entrySet()) {
                     if (type.isPrimitiveType()) {
-                        setupConditionThroughAssignment(stmt, entry).ifPresent(expressions::add);
+                        expressions.addAll(setupConditionThroughAssignment(stmt, entry));
                     } else {
                         setupConditionThroughMethodCalls(stmt, entry);
                     }

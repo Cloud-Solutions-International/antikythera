@@ -46,6 +46,7 @@ import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -341,7 +342,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             for (Statement stmt : statements) {
                 executeStatement(stmt);
                 if (returnFrom != null) {
-                    break;
+                    MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
+                    MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
+                    if (method == null || method.equals(parent)) {
+                        break;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -445,9 +450,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
-    public Variable resolveVariableDeclaration(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException, IOException {
+    public Variable resolveVariableDeclaration(VariableDeclarator field) throws AntikytheraException, ReflectiveOperationException {
         Variable v = super.resolveVariableDeclaration(field);
-        detectRepository(field);
+        try {
+            detectRepository(field);
+        } catch (IOException e) {
+            throw new AntikytheraException(e);
+        }
         return v;
     }
 
@@ -514,9 +523,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         Optional<Node> parent = variable.getParentNode();
+        String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
-                && fd.getAnnotationByName("Autowired").isPresent()) {
-            String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
+                && (fd.getAnnotationByName("Autowired").isPresent() || MockingRegistry.isMockTarget(registryKey))) {
+
             Variable v = AntikytheraRunTime.getAutoWire(registryKey);
             if (v == null) {
                 if (MockingRegistry.isMockTarget(registryKey)) {

@@ -2,13 +2,14 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -213,4 +215,81 @@ class TestMockingEvaluator {
         assertInstanceOf(ArrayList.class, v.getValue());
     }
 
+    @Test
+    void testResolveExpressionHelperWithFakeEntity() {
+        // Get TypeDeclaration for FakeEntity from AntikytheraRunTime
+        TypeDeclaration<?> fakeEntityType = AntikytheraRunTime.getTypeDeclaration(
+                "sa.com.cloudsolutions.antikythera.evaluator.FakeEntity").orElseThrow();
+
+        // Create TypeWrapper with the TypeDeclaration
+        TypeWrapper wrapper = new TypeWrapper(fakeEntityType);
+
+        // Execute the method under test
+        Variable result = mockingEvaluator.resolveExpressionHelper(wrapper);
+
+        // Verify the result
+        assertNotNull(result);
+        assertNotNull(result.getValue());
+        assertInstanceOf(Evaluator.class, result.getValue());
+        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity",
+                ((Evaluator)result.getValue()).getClassName());
+    }
+
+    @Test
+    void testRepositoryEmptyPath() {
+        // Test List type
+        Variable listResult = mockingEvaluator.repositoryEmptyPath("java.util.List");
+        assertNotNull(listResult);
+        assertNotNull(listResult.getValue());
+        assertInstanceOf(List.class, listResult.getValue());
+        assertEquals(0, ((List<?>) listResult.getValue()).size());
+
+        // Test ArrayList type
+        Variable arrayListResult = mockingEvaluator.repositoryEmptyPath("java.util.ArrayList");
+        assertNotNull(arrayListResult);
+        assertNotNull(arrayListResult.getValue());
+        assertInstanceOf(List.class, arrayListResult.getValue());
+        assertEquals(0, ((List<?>) arrayListResult.getValue()).size());
+
+        // Test LinkedList type
+        Variable linkedListResult = mockingEvaluator.repositoryEmptyPath("java.util.LinkedList");
+        assertNotNull(linkedListResult);
+        assertNotNull(linkedListResult.getValue());
+        assertInstanceOf(List.class, linkedListResult.getValue());
+        assertEquals(0, ((List<?>) linkedListResult.getValue()).size());
+    }
+
+    @Test
+    void testOptionalByteBuddy() throws ReflectiveOperationException {
+        assertNull(mockingEvaluator.optionalByteBuddy("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity"));
+        mockingEvaluator = EvaluatorFactory.create(
+                "sa.com.cloudsolutions.antikythera.evaluator.FakeService", MockingEvaluator.class);
+
+        Variable result = mockingEvaluator.optionalByteBuddy("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity");
+
+        // Verify
+        assertNotNull(result);
+        assertNotNull(result.getValue());
+        assertInstanceOf(Optional.class, result.getValue());
+        Optional<?> optional = (Optional<?>) result.getValue();
+        assertTrue(optional.isPresent());
+        Object value = optional.get();
+        assertTrue(value.getClass().getName().contains("FakeEntity"));
+        assertTrue(value.getClass().getName().contains("ByteBuddy"));
+    }
+
+    @Test
+    void testGetIdField() {
+        // Test with default mockingEvaluator (should return null)
+        Variable result1 = mockingEvaluator.getIdField();
+        assertNull(result1);
+
+        // Test with FakeEntity (should return non-null)
+        mockingEvaluator = EvaluatorFactory.create(
+                "sa.com.cloudsolutions.antikythera.evaluator.FakeEntity", MockingEvaluator.class);
+
+        Variable result2 = mockingEvaluator.getIdField();
+        assertNotNull(result2);
+        assertNotNull(result2.getValue());
+    }
 }

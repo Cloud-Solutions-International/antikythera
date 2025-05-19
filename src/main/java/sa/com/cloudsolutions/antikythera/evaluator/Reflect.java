@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
@@ -26,7 +25,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverte
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
-import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -228,7 +226,7 @@ public class Reflect {
         return reflectionArguments;
     }
 
-    public static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
+    private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
 
         Class<?> functional = getFunctionalInterface(argumentTypes[i]);
         if (functional != null) {
@@ -277,15 +275,16 @@ public class Reflect {
         };
     }
 
-    public static Optional<Class<?>> getComponentClass(String elementType) {
+    public static Class<?> getComponentClass(String elementType) throws ClassNotFoundException {
         if (basicTypes.contains(elementType)) {
-            try {
-                return Optional.of(Class.forName(elementType));
-            } catch (ClassNotFoundException e) {
-                return Optional.empty();
-            }
+            return Class.forName(elementType);
         }
-        return Optional.ofNullable(BOXED_TYPE_MAP.get(elementType));
+        Class<?> boxed = BOXED_TYPE_MAP.get(elementType);
+        if (boxed != null) {
+            return boxed;
+        }
+        return AbstractCompiler.loadClass(elementType);
+
     }
 
     public static Type getComponentType(Class<?> clazz) {
@@ -714,40 +713,10 @@ public class Reflect {
     }
 
     public static boolean isPrimitiveOrBoxed(String type) {
-        return getComponentClass(type)
-                .filter(aClass -> primitiveToWrapper.containsKey(aClass)
-                            || wrapperToPrimitive.containsKey(aClass)).isPresent();
-    }
-
-    public static Class<?> resolveComponentClass(CompilationUnit cu, Type elementType) {
-        Class<?> componentType = null;
-
-        if (elementType.isPrimitiveType()) {
-            componentType = Reflect.getComponentClass(elementType.asString()).orElseThrow();
+        try {
+            return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
+        } catch (ClassNotFoundException e) {
+            return false;
         }
-        else {
-            TypeWrapper wrapper = null;
-            if (elementType instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
-                wrapper = AbstractCompiler.findType(cu, ctype.getNameAsString());
-            }
-            else {
-                wrapper = AbstractCompiler.findType(cu, elementType.asString());
-            }
-            if (wrapper == null) {
-                throw new IllegalStateException("Cannot find type " + elementType.asString());
-            }
-            if (wrapper.getClazz() != null) {
-                componentType = wrapper.getClazz();
-            }
-            else {
-                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
-                try {
-                    componentType = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
-                } catch (ClassNotFoundException e) {
-                    throw new AntikytheraException(e);
-                }
-            }
-        }
-        return componentType;
     }
 }

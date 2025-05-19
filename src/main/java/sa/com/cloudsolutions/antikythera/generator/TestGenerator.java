@@ -142,7 +142,7 @@ public abstract class TestGenerator {
      * Setup fields on the methods being tested.
      * The default behaviour is to do nothing.
      */
-    public void mockFields() {
+    public void identifyFieldsToBeMocked() {
 
     }
 

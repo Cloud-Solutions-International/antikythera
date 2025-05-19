@@ -30,6 +30,7 @@ public class Functional {
         printHello( a -> "Hello " + a );
     }
 
+    @SuppressWarnings("java:S1117")
     private void greet2() {
         printHello( a -> { return "Hello " + a; });
     }
@@ -87,7 +88,7 @@ public class Functional {
         people.stream().findFirst().ifPresent(p -> System.out.println(p.getName()));
     }
 
-    @SuppressWarnings("java:1117")
+    @SuppressWarnings("java:S1117")
     private void people7() {
         /* I want to test what happens when the field is hidden */
         Function<String, String> f = a -> "Tom " + a;
@@ -144,6 +145,25 @@ public class Functional {
         System.out.println();
     }
 
+    @SuppressWarnings("java:S1117")
+    private void valueOf() {
+        Function<Integer, String> a = String::valueOf;
+        System.out.println(a.apply(1));
+    }
+
+    @SuppressWarnings("java:S6204")
+    private void collectAgain() {
+        List<Person> people = List.of(new Person(1,"","","",""),
+                new Person(2,"","","",""));
+        List<Integer> ints = people.stream()
+                .map(Person::getId)
+                .collect(Collectors.toList());
+
+        System.out.println(ints.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(" ")));
+    }
+
     public static void main(String[] args) {
         Functional f = new Functional();
         f.greet1();
@@ -162,6 +182,8 @@ public class Functional {
         f.maps1();
         f.nestedStream();
         f.staticMethodReference1();
+        f.collectAgain();
+        f.valueOf();
     }
 
 }

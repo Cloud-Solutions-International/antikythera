@@ -19,8 +19,8 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Optional;
 
 
 /**
@@ -76,7 +76,7 @@ public class AKBuddy {
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
+        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
@@ -103,39 +103,71 @@ public class AKBuddy {
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
-            DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
+                                                     DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
 
         for (MethodDeclaration method : methods) {
             String methodName = method.getNameAsString();
 
             // Get parameter types
             Class<?>[] parameterTypes = method.getParameters().stream()
-                .map(p -> getParameterType(cu, p))
-                .toArray(Class<?>[]::new);
+                    .map(p -> getParameterType(cu, p))
+                    .toArray(Class<?>[]::new);
 
 
             builder = builder.defineMethod(methodName,
-                        Object.class,
-                        net.bytebuddy.description.modifier.Visibility.PUBLIC)
+                            Object.class,
+                            net.bytebuddy.description.modifier.Visibility.PUBLIC)
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
-                        .filter(ElementMatchers.named("intercept"))
-                        .to(new MethodInterceptor.Interceptor(interceptor, method)));
+                            .filter(ElementMatchers.named("intercept"))
+                            .to(new MethodInterceptor.Interceptor(interceptor, method)));
         }
         return builder;
     }
 
     private static Class<?> getParameterType(CompilationUnit cu, Parameter p) {
-        if (p.getType().isArrayType()) {
-            // Get the element type without [] suffix
-            Type elementType = p.getType().asArrayType().getElementType();
-            Class<?> componentType = Reflect.resolveComponentClass(cu, elementType);
+        try {
+            if (p.getType().isArrayType()) {
+                // Get the element type without [] suffix
+                Type elementType = p.getType().asArrayType().getElementType();
 
-            // Create an empty array of the correct type
-            return Array.newInstance(componentType, 0).getClass();
+                Class<?> componentType;
+                if (elementType.isPrimitiveType()) {
+                    componentType = Reflect.getComponentClass(elementType.asString());
+                } else {
+                    String fullName = AbstractCompiler.findFullyQualifiedName(cu, elementType.asString());
+                    componentType = Reflect.getComponentClass(fullName);
+                }
 
-        } else {
-            return Reflect.resolveComponentClass(cu, p.getType());
+                // Create an empty array of the correct type
+                return Array.newInstance(componentType, 0).getClass();
+
+            } else {
+                // Handle non-array types as before
+                if (p.getType().isPrimitiveType()) {
+                    return Reflect.getComponentClass(p.getTypeAsString());
+                } else {
+                    TypeWrapper t;
+                    if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
+                        t = AbstractCompiler.findType(cu, ctype.getNameAsString());
+                    }
+                    else {
+                        t = AbstractCompiler.findType(cu, p.getType().asString());
+                    }
+                    if (t.getClazz() != null) {
+                        return t.getClazz();
+                    }
+                    return Reflect.getComponentClass(t.getFullyQualifiedName());
+                }
+            }
+
+        } catch (ClassNotFoundException e) {
+            /*
+             * TODO : fix this temporary hack.
+             * Lots of functions will actually fail to evaluate due to returning an object.class however
+             * the program will not crash.
+             */
+            return Object.class;
         }
     }
 
@@ -147,7 +179,7 @@ public class AKBuddy {
             TypeDescription.Generic fieldType = null;
             if (vd.getType().isPrimitiveType()) {
                 fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-                        Reflect.resolveComponentClass(cu, vd.getType()));
+                        Reflect.getComponentClass(vd.getTypeAsString()));
             }
             else {
                 try {

@@ -14,7 +14,7 @@ public class KitchenSink {
     private HashMap<String, LinkedHashMap<Person, Person>> itsComplicated;
     private String text = "test";
     private Integer number = 42;
-    private int i = 43;
+    private int id = 43;
 
     Object getSomething(String thing) {
         switch (thing) {
@@ -28,8 +28,8 @@ public class KitchenSink {
                 return text;
             case "number":
                 return number;
-            case "i":
-                return i;
+            case "id":
+                return id;
             default:
                 return null;
         }

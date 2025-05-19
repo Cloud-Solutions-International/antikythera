@@ -181,7 +181,10 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
         Object o = super.findScopeType(s);
         if (o == null) {
             TypeWrapper wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), s);
-            return EvaluatorFactory.create(wrapper.getFullyQualifiedName(), enclosure);
+            if (wrapper.getType() != null) {
+                return EvaluatorFactory.create(wrapper.getFullyQualifiedName(), enclosure);
+            }
+            return wrapper.getClazz();
         }
         return o;
     }
