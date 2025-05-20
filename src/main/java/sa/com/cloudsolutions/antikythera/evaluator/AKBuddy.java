@@ -20,7 +20,10 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -28,6 +31,10 @@ import java.util.List;
  * This will be primarily used in mocking.
  */
 public class AKBuddy {
+    private static final Map<String, Class<?>> registry = new HashMap<>();
+    private static final CustomLoader loader = new CustomLoader();
+    public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
+    public static final String SET_INTERCEPTOR = "setInterceptor";
 
     protected AKBuddy() {}
 
@@ -53,22 +60,38 @@ public class AKBuddy {
 
     private static Class<?> createDynamicClassBasedOnByteCode(MethodInterceptor interceptor) {
         Class<?> wrappedClass = interceptor.getWrappedClass();
+        Class<?> existing = registry.get(wrappedClass.getName());
+        if (existing != null) {
+            return existing;
+        }
+
         ByteBuddy byteBuddy = new ByteBuddy();
         ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
-        return byteBuddy.subclass(wrappedClass)
+        Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
                 .intercept(MethodDelegation.to(interceptor))
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
+                .defineMethod(SET_INTERCEPTOR, MethodInterceptor.class, Modifier.PUBLIC)
+                .withParameters(MethodInterceptor.class)
+                .intercept(FieldAccessor.ofField(INSTANCE_INTERCEPTOR))
                 .make()
-                .load(targetLoader)
+                .load(loader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
+
+        registry.put(wrappedClass.getName(), clazz);
+        return clazz;
     }
 
-    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) {
+        Class<?> existing = registry.get(eval.getClassName());
+        if (existing != null) {
+            return existing;
+        }
         CompilationUnit cu = eval.getCompilationUnit();
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
         String className = dtoType.getNameAsString();
@@ -76,13 +99,20 @@ public class AKBuddy {
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
+        DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
-                .intercept(MethodDelegation.to(interceptor));
+                .intercept(MethodDelegation.withDefaultConfiguration()
+                        .filter(ElementMatchers.named("intercept"))
+                        .to(MethodInterceptor.Interceptor.class)
+                        .andThen(FieldAccessor.ofField(INSTANCE_INTERCEPTOR)))
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
+                .defineMethod(SET_INTERCEPTOR, MethodInterceptor.class, Modifier.PUBLIC)
+                .withParameters(MethodInterceptor.class)
+                .intercept(FieldAccessor.ofField(INSTANCE_INTERCEPTOR));
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
@@ -94,12 +124,14 @@ public class AKBuddy {
         }
 
         builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
+        builder = addMethods(dtoType.getMethods(), cu, builder);
 
-        ClassLoader targetLoader = findSafeLoader(Object.class.getClassLoader(), interceptor.getClass().getClassLoader());
-        return builder.make()
-                .load(targetLoader)
+        Class<?> clazz = builder.make()
+                .load(loader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
+
+        registry.put(eval.getClassName(), clazz);
+        return clazz;
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
