@@ -10,17 +10,17 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.List;
@@ -33,7 +33,6 @@ import java.util.Map;
  */
 public class AKBuddy {
     private static final Map<String, Class<?>> registry = new HashMap<>();
-    private static final CustomLoader loader = new CustomLoader();
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
     public static final String SET_INTERCEPTOR = "setInterceptor";
 
@@ -67,7 +66,6 @@ public class AKBuddy {
         }
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
         Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
@@ -81,14 +79,14 @@ public class AKBuddy {
                 .withParameters(MethodInterceptor.class)
                 .intercept(FieldAccessor.ofField(INSTANCE_INTERCEPTOR))
                 .make()
-                .load(loader, ClassLoadingStrategy.Default.INJECTION)
+                .load(AKBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(wrappedClass.getName(), clazz);
         return clazz;
     }
 
-    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) {
+    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
@@ -125,10 +123,10 @@ public class AKBuddy {
         }
 
         builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder);
+        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
         Class<?> clazz = builder.make()
-                .load(loader, ClassLoadingStrategy.Default.INJECTION)
+                .load(AKBuddy.class.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(eval.getClassName(), clazz);
