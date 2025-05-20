@@ -45,14 +45,60 @@ class TestAKBuddy extends TestHelper {
     void createDyncamicClass() throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "Employee").orElseThrow();
-        Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
-        Object instance = clazz.getDeclaredConstructor().newInstance();
+        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+        assertNotNull(clazz);
+        Object instance = AKBuddy.createInstance(clazz, interceptor);
         assertNotNull(instance);
 
         for(FieldDeclaration fd : cdecl.getFields()) {
             String name = fd.getVariable(0).getNameAsString();
             assertNotNull(instance.getClass().getDeclaredField(name));
         }
+    }
+
+    @Test
+    void createComplexDynamicClass() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "FakeService").orElseThrow();
+        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+        Object instance = AKBuddy.createInstance(clazz, interceptor);
+        assertNotNull(instance);
+
+        for(FieldDeclaration fd : cdecl.getFields()) {
+            String name = fd.getVariable(0).getNameAsString();
+            assertNotNull(instance.getClass().getDeclaredField(name));
+        }
+    }
+
+    @Test
+    void swapInterceptor() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+        Object emp1 = AKBuddy.createInstance(clazz, interceptor);
+        assertNotNull(emp1);
+
+        Object emp2 = AKBuddy.createInstance(clazz, interceptor);
+        assertNotNull(emp2);
+
+        Field f = emp1.getClass().getDeclaredField("p");
+        f.setAccessible(true);
+
+        Object fieldValue = f.get(emp1); // get the value of field 'p' from emp1
+        Method setName = fieldValue.getClass().getMethod("setName", String.class);
+        setName.invoke(fieldValue, "NewName");
+
+        Method m1 = emp1.getClass().getDeclaredMethod("publicAccess");
+        Method m2 = emp1.getClass().getDeclaredMethod("publicAccess");
+
+        m1.invoke(emp1);
+        m2.invoke(emp2);
+
+        assertEquals("Hornblower\nHornblower\n", outContent.toString());
     }
 
     @Test

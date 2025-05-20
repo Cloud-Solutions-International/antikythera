@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.List;
 
@@ -203,5 +204,9 @@ public class AKBuddy {
         } catch (ClassNotFoundException e) {
             return fallback;
         }
+    }
+
+    public static Object createInstance(Class<?> clazz, MethodInterceptor interceptor) throws ReflectiveOperationException {
+        return clazz.getDeclaredConstructor().newInstance();
     }
 }
