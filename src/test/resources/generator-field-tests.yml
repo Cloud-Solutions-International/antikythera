@@ -7,7 +7,7 @@ variables:
   m2_folder: ${HOME}/.m2/repository
 
 # Points to top level folder of the application under test. This is a file system path.
-base_path: ${projects_folder}/antikythera-test-helper/src/test/java
+base_path: ${projects_folder}/antikythera-test-helper/src/main/java
 
 # Add the base path to the src/main/java folder of csi-project
 # The top level package for your project. As an example for the pharmacy project it is
