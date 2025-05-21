@@ -50,8 +50,7 @@ class TestArithmetic extends  TestHelper {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("assignments")).orElseThrow();
 
-        Arithmetic arithmetic = new Arithmetic();
-        AntikytheraRunTime.push(new Variable(arithmetic));
+        AntikytheraRunTime.push(new Variable(evaluator));
 
         evaluator.executeMethod(doStuff);
 
@@ -64,8 +63,7 @@ class TestArithmetic extends  TestHelper {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("doStuff")).orElseThrow();
 
-        Arithmetic arithmetic = new Arithmetic();
-        AntikytheraRunTime.push(new Variable(arithmetic));
+        AntikytheraRunTime.push(new Variable(evaluator));
 
         evaluator.executeMethod(doStuff);
 
@@ -79,8 +77,7 @@ class TestArithmetic extends  TestHelper {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("simpleAddition")).orElseThrow();
 
-        Arithmetic arithmetic = new Arithmetic();
-        AntikytheraRunTime.push(new Variable(arithmetic));
+        AntikytheraRunTime.push(new Variable(evaluator));
 
         evaluator.executeMethod(doStuff);
 
@@ -94,8 +91,7 @@ class TestArithmetic extends  TestHelper {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("additionViaStrings")).orElseThrow();
 
-        Arithmetic arithmetic = new Arithmetic();
-        AntikytheraRunTime.push(new Variable(arithmetic));
+        AntikytheraRunTime.push(new Variable(evaluator));
 
         evaluator.executeMethod(doStuff);
 

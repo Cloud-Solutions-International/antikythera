@@ -25,11 +25,12 @@ import com.github.javaparser.ast.expr.Expression;
 class TestConditional extends TestHelper {
 
     public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
+    public static final String PERSON_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Person";
     CompilationUnit cu;
 
     @BeforeAll
     static void setup() throws IOException {
-        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        Settings.loadConfigMap(new File("../antikythera-test-helper/src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
         AntikytheraRunTime.reset();
         MockingRegistry.reset();
@@ -43,9 +44,10 @@ class TestConditional extends TestHelper {
         Branching.clear();
     }
 
+
     @Test
     void testExecuteMethod() throws ReflectiveOperationException {
-        Person p = new Person("Hello");
+        Evaluator p = EvaluatorFactory.create(PERSON_CLASS, SpringEvaluator.class);
         AntikytheraRunTime.push(new Variable(p));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
@@ -106,12 +108,13 @@ class TestConditional extends TestHelper {
 
     @Test
     void testConditional4() throws ReflectiveOperationException {
+        Evaluator p = EvaluatorFactory.create(PERSON_CLASS, SpringEvaluator.class);
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("conditional4")).orElseThrow();
 
-        AntikytheraRunTime.push(new Variable(new Person("AA")));
+        AntikytheraRunTime.push(new Variable(p));
         evaluator.executeMethod(method);
         String s = outContent.toString();
         assertEquals("ZERO!",s);
