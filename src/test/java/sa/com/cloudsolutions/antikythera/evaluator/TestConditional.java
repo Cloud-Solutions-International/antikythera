@@ -30,7 +30,7 @@ class TestConditional extends TestHelper {
 
     @BeforeAll
     static void setup() throws IOException {
-        Settings.loadConfigMap(new File("../antikythera-test-helper/src/test/resources/generator-field-tests.yml"));
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
         AntikytheraRunTime.reset();
         MockingRegistry.reset();
