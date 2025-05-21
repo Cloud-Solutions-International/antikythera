@@ -258,7 +258,6 @@ class UnitTestGeneratorTest {
 }
 
 class UnitTestGeneratorMoreTests extends TestHelper {
-    public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.evaluator.FakeService";
     CompilationUnit cu;
     UnitTestGenerator unitTestGenerator;
 
@@ -303,13 +302,13 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
 
 
-        MethodDeclaration md = setupMethod(FAKE_SERVICE,"castingHelper");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","castingHelper");
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
-        SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
@@ -328,32 +327,32 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
 
 
-        MethodDeclaration md = setupMethod(FAKE_SERVICE,"findAll");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","findAll");
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
-        SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
         evaluator.visit(md);
         assertTrue(outContent.toString().contains("1!0!"));
         String s = unitTestGenerator.gen.toString();
-        assertTrue(s.contains("List.of(fakeEntity"));
+        assertTrue(s.contains("List.of(new FakeEntity())"));
         assertTrue(s.contains("List.of()"));
 
     }
 
     @Test
     void testAutowiredCollection() throws ReflectiveOperationException {
-        MethodDeclaration md = setupMethod(FAKE_SERVICE,"autoList");
+        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.FakeService","autoList");
 
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
-        Evaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
+        Evaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
         evaluator.visit(md);
         assertTrue(outContent.toString().contains("Person: class sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator"));
         assertTrue(unitTestGenerator.gen.toString().contains("@Mock()\n" +
@@ -370,7 +369,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     }
 
     @Test
-    void identifyFieldsToBeMocked() {
+    void mockFields() {
         setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);

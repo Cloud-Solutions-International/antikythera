@@ -214,7 +214,7 @@ public class UnitTestGenerator extends TestGenerator {
                     });
 
         } catch (FileNotFoundException e) {
-            throw new AntikytheraException("Base class could not be loaded for tests.");
+            throw new AntikytheraException("Base class could not be loaded for tests.", e);
         }
     }
 
