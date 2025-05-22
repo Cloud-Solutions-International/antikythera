@@ -529,7 +529,7 @@ public class AbstractCompiler {
          * Lastly, we will try to invoke Class.forName to see if the class can be located in any jar file
          *    that we have loaded.
          */
-
+        if (cu == null) return null;
         TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
         if (p != null) {
             return new TypeWrapper(p);
