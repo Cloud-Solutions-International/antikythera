@@ -14,7 +14,6 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -186,7 +185,8 @@ public class AKBuddy {
                     String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
                     fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
                 } catch (ClassNotFoundException|NullPointerException cex) {
-                    continue;
+                    // TODO : user proper dynamic types here
+                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Object.class);
                 }
             }
 

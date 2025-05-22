@@ -340,13 +340,19 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     Variable optionalByteBuddy(String typeName) throws ReflectiveOperationException {
-        String resolvedClass = AbstractCompiler.findFullyQualifiedName(cu, typeName);
-        if (resolvedClass != null) {
-            Class<?> clazz = AbstractCompiler.loadClass(resolvedClass);
-            MethodInterceptor interceptor = new MethodInterceptor(clazz);
-            Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
-            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, typeName);
+        if (wrapper != null) {
+            Class<?> clazz = wrapper.getClazz();
             TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
+            if (clazz != null) {
+                MethodInterceptor interceptor = new MethodInterceptor(clazz);
+                Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+                Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                return new Variable(Optional.of(instance));
+            }
+            Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), Evaluator.class);
+            Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
             return new Variable(Optional.of(instance));
         }
         return null;
