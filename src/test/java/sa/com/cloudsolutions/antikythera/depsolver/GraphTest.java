@@ -6,14 +6,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import java.io.File;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 class GraphTest {
@@ -25,47 +24,32 @@ class GraphTest {
     }
 
     @Test
-    void testCreatGraphNode() throws AntikytheraException, IOException {
-        ReturnValueCompiler comp = new ReturnValueCompiler();
-        CompilationUnit cu = comp.getCompilationUnit();
+    void testCreatGraphNode() {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.ReturnValue");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
 
         GraphNode gn = Graph.createGraphNode(md);
         assertEquals(md, gn.getNode());
-        assertEquals("ReturnValue",gn.getEnclosingType().getNameAsString());
+        assertEquals("ReturnValue", gn.getEnclosingType().getNameAsString());
         assertNotNull(gn.getDestination());
 
         assertEquals(1, Graph.getNodes().size());
     }
 
     @Test
-    void testPersonInterface() throws AntikytheraException, IOException {
-        PersonCompiler comp = new PersonCompiler();
-        CompilationUnit cu = comp.getCompilationUnit();
+    void testPersonInterface()  {
+         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Person");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getName")).orElseThrow();
 
         GraphNode gn = Graph.createGraphNode(md);
         assertEquals(md, gn.getNode());
-        assertEquals("Person",gn.getEnclosingType().getNameAsString());
+        assertEquals("Person", gn.getEnclosingType().getNameAsString());
         assertNotNull(gn.getDestination());
 
         gn.buildNode();
-        // to need assert
-    }
-
-    class ReturnValueCompiler extends AbstractCompiler {
-        protected ReturnValueCompiler() throws IOException, AntikytheraException {
-            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/ReturnValue.java")).getResult().get();
-        }
-    }
-
-    class PersonCompiler extends AbstractCompiler {
-        protected PersonCompiler() throws IOException, AntikytheraException {
-            cu = getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/Person.java")).getResult().get();
-            AntikytheraRunTime.addCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.IPerson",
-                getJavaParser().parse(new File("src/test/java/sa/com/cloudsolutions/antikythera/evaluator/IPerson.java")).getResult().get());
-        }
+        assertTrue(gn.preProcessed);
+        assertTrue(gn.getDestination().toString().contains("public class Person implements IPerson"));
     }
 }
