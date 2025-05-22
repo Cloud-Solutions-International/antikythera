@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,11 @@ class TestConditional extends TestHelper {
     @Test
     void testExecuteMethod() throws ReflectiveOperationException {
         Evaluator p = EvaluatorFactory.create(PERSON_CLASS, SpringEvaluator.class);
+        TypeDeclaration<?> td = AntikytheraRunTime.getTypeDeclaration(p.getClassName()).orElseThrow();
+        ConstructorDeclaration cde = td.findFirst(ConstructorDeclaration.class).orElseThrow();
+        AntikytheraRunTime.push(new Variable("Hello"));
+        p.executeConstructor(cde);
+
         AntikytheraRunTime.push(new Variable(p));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,

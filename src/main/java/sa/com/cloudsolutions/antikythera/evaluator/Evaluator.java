@@ -1472,7 +1472,11 @@ public class Evaluator {
                 if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
                     executeStatement(stmt);
                     if (returnFrom != null) {
-                        break;
+                        MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
+                        MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
+                        if (method == null || method.equals(parent)) {
+                            break;
+                        }
                     }
                 }
             }

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -31,6 +32,7 @@ class TestArithmetic extends  TestHelper {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+        MockingRegistry.reset();
     }
 
     @BeforeEach
@@ -49,9 +51,6 @@ class TestArithmetic extends  TestHelper {
     void testAssignments() throws Exception {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("assignments")).orElseThrow();
-
-        AntikytheraRunTime.push(new Variable(evaluator));
-
         evaluator.executeMethod(doStuff);
 
         String output = outContent.toString();
@@ -77,8 +76,6 @@ class TestArithmetic extends  TestHelper {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("simpleAddition")).orElseThrow();
 
-        AntikytheraRunTime.push(new Variable(evaluator));
-
         evaluator.executeMethod(doStuff);
 
         String output = outContent.toString();
@@ -90,9 +87,6 @@ class TestArithmetic extends  TestHelper {
     void testAdditionViaStrings() throws Exception {
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("additionViaStrings")).orElseThrow();
-
-        AntikytheraRunTime.push(new Variable(evaluator));
-
         evaluator.executeMethod(doStuff);
 
         String output = outContent.toString();
