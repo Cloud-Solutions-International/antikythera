@@ -516,8 +516,9 @@ public class AbstractCompiler {
                 /*
                  * dirty hack to handle an extreme edge case
                  */
-                return className.equals("Optional") ?
-                        new TypeWrapper(Optional.class) : new TypeWrapper();
+                if (className.equals("Optional")) {
+                    return new TypeWrapper(Optional.class);
+                }
             }
         }
 
@@ -528,11 +529,15 @@ public class AbstractCompiler {
          * Lastly, we will try to invoke Class.forName to see if the class can be located in any jar file
          *    that we have loaded.
          */
-
+        if (cu == null) return null;
         TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
         if (p != null) {
             return new TypeWrapper(p);
         }
+        if (AntikytheraRunTime.getTypeDeclaration(className).isPresent()) {
+            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).get());
+        }
+
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
             if (imp.getType() != null) {

@@ -89,9 +89,6 @@ class UnitTestGeneratorTest {
      */
     @Test
     void testSetUpBase() throws NoSuchMethodException {
-        Settings.setProperty(Settings.BASE_PATH,
-                Settings.getProperty(Settings.BASE_PATH, String.class)
-                        .orElse("").replace("src/test/resources/sources",""));
         unitTestGenerator.loadPredefinedBaseClassForTest("sa.com.cloudsolutions.antikythera.evaluator.mock.Hello");
 
         Method m = Statement.class.getDeclaredMethod("execute", String.class);

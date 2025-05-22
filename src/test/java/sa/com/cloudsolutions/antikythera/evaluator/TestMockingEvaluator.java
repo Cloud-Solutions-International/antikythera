@@ -261,7 +261,9 @@ class TestMockingEvaluator {
 
     @Test
     void testOptionalByteBuddy() throws ReflectiveOperationException {
-        assertNull(mockingEvaluator.optionalByteBuddy("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity"));
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity");
+        assertNotNull(cu);
+
         mockingEvaluator = EvaluatorFactory.create(
                 "sa.com.cloudsolutions.antikythera.evaluator.FakeService", MockingEvaluator.class);
 
@@ -275,7 +277,7 @@ class TestMockingEvaluator {
         assertTrue(optional.isPresent());
         Object value = optional.get();
         assertTrue(value.getClass().getName().contains("FakeEntity"));
-        assertTrue(value.getClass().getName().contains("ByteBuddy"));
+        assertFalse(value.getClass().getName().contains("ByteBuddy"));
     }
 
     @Test

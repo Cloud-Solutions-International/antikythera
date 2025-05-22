@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import com.github.javaparser.ast.expr.Expression;
 class TestConditional extends TestHelper {
 
     public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
+    public static final String PERSON_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Person";
     CompilationUnit cu;
 
     @BeforeAll
@@ -43,9 +46,15 @@ class TestConditional extends TestHelper {
         Branching.clear();
     }
 
+
     @Test
     void testExecuteMethod() throws ReflectiveOperationException {
-        Person p = new Person("Hello");
+        Evaluator p = EvaluatorFactory.create(PERSON_CLASS, SpringEvaluator.class);
+        TypeDeclaration<?> td = AntikytheraRunTime.getTypeDeclaration(p.getClassName()).orElseThrow();
+        ConstructorDeclaration cde = td.findFirst(ConstructorDeclaration.class).orElseThrow();
+        AntikytheraRunTime.push(new Variable("Hello"));
+        p.executeConstructor(cde);
+
         AntikytheraRunTime.push(new Variable(p));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
@@ -106,12 +115,13 @@ class TestConditional extends TestHelper {
 
     @Test
     void testConditional4() throws ReflectiveOperationException {
+        Evaluator p = EvaluatorFactory.create(PERSON_CLASS, SpringEvaluator.class);
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("conditional4")).orElseThrow();
 
-        AntikytheraRunTime.push(new Variable(new Person("AA")));
+        AntikytheraRunTime.push(new Variable(p));
         evaluator.executeMethod(method);
         String s = outContent.toString();
         assertEquals("ZERO!",s);
