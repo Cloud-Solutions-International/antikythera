@@ -210,23 +210,23 @@ public class AKBuddy {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
-            TypeDescription.Generic fieldType = null;
             if (vd.getType().isPrimitiveType()) {
-                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-                        Reflect.getComponentClass(vd.getTypeAsString()));
+                builder = builder.defineField(fieldName, Reflect.getComponentClass(vd.getTypeAsString()),
+                        net.bytebuddy.description.modifier.Visibility.PRIVATE);
             }
             else {
-                try {
-                    String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
-                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
-                } catch (ClassNotFoundException|NullPointerException cex) {
-                    // TODO : user proper dynamic types here
-                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Object.class);
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
+                if (wrapper != null) {
+                    if (wrapper.getClazz() != null) {
+                        builder = builder.defineField(fieldName, wrapper.getClazz(), net.bytebuddy.description.modifier.Visibility.PRIVATE);
+                    }
+                    else {
+                        Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
+                        Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                        builder = builder.defineField(fieldName, clazz, net.bytebuddy.description.modifier.Visibility.PRIVATE);
+                    }
                 }
             }
-
-            // Define field
-            builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
         }
         return builder;
     }
@@ -236,6 +236,7 @@ public class AKBuddy {
         Object instance = dynamicClass.getDeclaredConstructor().newInstance();
         Method m = dynamicClass.getDeclaredMethod(SET_INTERCEPTOR, MethodInterceptor.class);
         m.invoke(instance, interceptor);
+
 
         // Initialize fields
         for (Field field : instance.getClass().getDeclaredFields()) {
