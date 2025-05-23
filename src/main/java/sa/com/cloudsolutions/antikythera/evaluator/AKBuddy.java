@@ -69,7 +69,6 @@ public class AKBuddy {
         }
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
         Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
@@ -232,6 +231,7 @@ public class AKBuddy {
         return builder;
     }
 
+    @SuppressWarnings("java:S3011")
     public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
         Object instance = dynamicClass.getDeclaredConstructor().newInstance();
         Method m = dynamicClass.getDeclaredMethod(SET_INTERCEPTOR, MethodInterceptor.class);
@@ -240,7 +240,6 @@ public class AKBuddy {
         // Initialize fields
         for (Field field : instance.getClass().getDeclaredFields()) {
             field.setAccessible(true);
-            Class<?> fieldType = field.getType();
             if (field.get(instance) == null && !field.getName().equals(INSTANCE_INTERCEPTOR)) {
                 Variable value = interceptor.getEvaluator().getField(field.getName());
                 if (value.getValue() instanceof Evaluator eval) {
@@ -254,16 +253,6 @@ public class AKBuddy {
         }
 
         return instance;
-    }
-
-
-    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
-        try {
-            Class.forName(MethodInterceptor.class.getName(), false, primary);
-            return primary;
-        } catch (ClassNotFoundException e) {
-            return fallback;
-        }
     }
 
     public static class AKClassLoader extends ClassLoader {
