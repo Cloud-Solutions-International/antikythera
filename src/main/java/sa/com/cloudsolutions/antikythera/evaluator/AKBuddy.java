@@ -10,16 +10,19 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +35,7 @@ import java.util.Map;
  */
 public class AKBuddy {
     private static final Map<String, Class<?>> registry = new HashMap<>();
-    private static final CustomLoader loader = new CustomLoader();
+    private static final AKClassLoader loader = new AKClassLoader();
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
     public static final String SET_INTERCEPTOR = "setInterceptor";
 
@@ -87,14 +90,14 @@ public class AKBuddy {
         return clazz;
     }
 
-    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) {
+    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
         }
         CompilationUnit cu = eval.getCompilationUnit();
         TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
-        String className = dtoType.getNameAsString();
+        String className = eval.getClassName();
 
         List<FieldDeclaration> fields = dtoType.getFields();
 
@@ -124,7 +127,7 @@ public class AKBuddy {
         }
 
         builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder);
+        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
         Class<?> clazz = builder.make()
                 .load(loader, ClassLoadingStrategy.Default.INJECTION)
@@ -229,6 +232,31 @@ public class AKBuddy {
         return builder;
     }
 
+    public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
+        Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+        Method m = dynamicClass.getDeclaredMethod(SET_INTERCEPTOR, MethodInterceptor.class);
+        m.invoke(instance, interceptor);
+
+        // Initialize fields
+        for (Field field : instance.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
+            Class<?> fieldType = field.getType();
+            if (field.get(instance) == null && !field.getName().equals(INSTANCE_INTERCEPTOR)) {
+                Variable value = interceptor.getEvaluator().getField(field.getName());
+                if (value.getValue() instanceof Evaluator eval) {
+                    Class<?> fieldClass = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                    field.set(instance, fieldClass.getDeclaredConstructor().newInstance());
+                }
+                else {
+                    field.set(instance, value.getValue());
+                }
+            }
+        }
+
+        return instance;
+    }
+
+
     private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
         try {
             Class.forName(MethodInterceptor.class.getName(), false, primary);
@@ -238,7 +266,9 @@ public class AKBuddy {
         }
     }
 
-    public static Object createInstance(Class<?> clazz, MethodInterceptor interceptor) throws ReflectiveOperationException {
-        return clazz.getDeclaredConstructor().newInstance();
+    public static class AKClassLoader extends ClassLoader {
+        public AKClassLoader() {
+            super(ClassLoader.getSystemClassLoader());
+        }
     }
 }
