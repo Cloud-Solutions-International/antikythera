@@ -5,6 +5,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 public class TypeWrapper {
     TypeDeclaration<?> type;
     Class<?> clazz;
+    private boolean isController;
+    private boolean isService;
+    private boolean component;
+    private boolean isInterface;
 
     public TypeWrapper(TypeDeclaration<?> type) {
         this.type = type;
@@ -40,5 +44,38 @@ public class TypeWrapper {
             return type.getFullyQualifiedName().orElseThrow();
         }
         return clazz.getName();
+    }
+
+    public boolean isController() {
+        return isController;
+    }
+    public void setController(boolean isController) {
+        this.isController = isController;
+    }
+    public boolean isService() {
+        return isService;
+    }
+    public void setService(boolean isService) {
+        this.isService = isService;
+    }
+
+    public void setCompilationUnit(TypeDeclaration<?> type) {
+        this.type = type;
+    }
+
+    public boolean isComponent() {
+        return component;
+    }
+
+    public void setComponent(boolean component) {
+        this.component = component;
+    }
+
+    public boolean isInterface() {
+        return isInterface;
+    }
+
+    public void setInterface(boolean isInterface) {
+        this.isInterface = isInterface;
     }
 }

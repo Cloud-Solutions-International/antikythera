@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.util.Deque;
 import java.util.HashMap;
@@ -25,7 +26,7 @@ public class AntikytheraRunTime {
      */
     private static final Map<String, CompilationUnit> resolved = new HashMap<>();
 
-    private static final Map<String, ClassInfo> resolvedTypes = new HashMap<>();
+    private static final Map<String, TypeWrapper> resolvedTypes = new HashMap<>();
     /**
      * <p>We are not using a stack data structure here, but a Deque. This is because Deque is a
      * double-ended queue, which can be used as a stack. It is more efficient than a Stack ADT.
@@ -72,42 +73,39 @@ public class AntikytheraRunTime {
 
     public static void addCompilationUnit(String className, CompilationUnit cu) {
         for(TypeDeclaration<?> type : cu.getTypes()) {
-            ClassInfo classInfo = new ClassInfo();
-            classInfo.className = type.getFullyQualifiedName().orElseThrow();
-            classInfo.cu = cu;
-            classInfo.typeDeclaration = type;
+            TypeWrapper typeWrapper = new TypeWrapper(type);
 
             if(type.isAnnotationPresent("Service")) {
-                classInfo.serviceClass = true;
+                typeWrapper.setService(true);
             } else if(type.isAnnotationPresent("RestController")
                     || type.isAnnotationPresent("Controller")) {
-                classInfo.controllerClass = true;
+                typeWrapper.setController(true);
             } else if(type.isAnnotationPresent("Component")) {
-                classInfo.componentClass = true;
+                typeWrapper.setComponent(true);
             }
 
             if(type.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
-                classInfo.isInterface = cdecl.isInterface();
+                typeWrapper.setInterface(cdecl.isInterface());
             }
-            resolvedTypes.put(classInfo.getClassName(),classInfo);
+            resolvedTypes.put(typeWrapper.getFullyQualifiedName(),typeWrapper);
         }
         resolved.put(className, cu);
     }
 
     public static boolean isServiceClass(String className) {
-        ClassInfo classInfo = resolvedTypes.get(className);
-        return classInfo != null && classInfo.serviceClass;
+        TypeWrapper typeWrapper = resolvedTypes.get(className);
+        return typeWrapper != null && typeWrapper.isService();
     }
 
     public static boolean isControllerClass(String className) {
-        ClassInfo classInfo = resolvedTypes.get(className);
-        return classInfo != null && classInfo.controllerClass;
+        TypeWrapper typeWrapper = resolvedTypes.get(className);
+        return typeWrapper != null && typeWrapper.isController();
     }
 
     public static boolean isComponentClass(String className) {
-        ClassInfo classInfo = resolvedTypes.get(className);
-        return classInfo != null && classInfo.componentClass;
+        TypeWrapper typeWrapper = resolvedTypes.get(className);
+        return typeWrapper != null && typeWrapper.isComponent();
     }
 
     public static void reset() {
@@ -131,35 +129,14 @@ public class AntikytheraRunTime {
     }
 
     public static boolean isInterface(String name) {
-        ClassInfo classInfo = resolvedTypes.get(name);
-        return classInfo != null && classInfo.isInterface;
+        TypeWrapper typeWrapper = resolvedTypes.get(name);
+        return typeWrapper != null && typeWrapper.isInterface();
     }
 
     @SuppressWarnings("java:S1452")
     public static Optional<TypeDeclaration<?>> getTypeDeclaration(String className) {
-        ClassInfo type = resolvedTypes.get(className);
-        return Optional.ofNullable(type)
-                .map(t -> t.typeDeclaration);
-    }
-
-    static class ClassInfo {
-        private String className;
-        private CompilationUnit cu;
-        private boolean serviceClass;
-        private boolean controllerClass;
-        private boolean componentClass;
-        private boolean isInterface;
-        private TypeDeclaration<?> typeDeclaration;
-
-        protected ClassInfo() {}
-
-        public String getClassName() {
-            return className;
-        }
-
-        public CompilationUnit getCu() {
-            return cu;
-        }
+        TypeWrapper type = resolvedTypes.get(className);
+        return Optional.ofNullable(type).map(TypeWrapper::getType);
     }
 
     public static void resetAll() {
