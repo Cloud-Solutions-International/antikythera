@@ -95,7 +95,7 @@ public class AKBuddy {
             return existing;
         }
         CompilationUnit cu = eval.getCompilationUnit();
-        TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
+        TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
         String className = eval.getClassName();
 
         List<FieldDeclaration> fields = dtoType.getFields();
@@ -237,18 +237,24 @@ public class AKBuddy {
         Method m = dynamicClass.getDeclaredMethod(SET_INTERCEPTOR, MethodInterceptor.class);
         m.invoke(instance, interceptor);
 
+        Evaluator evaluator = interceptor.getEvaluator();
+        if (evaluator != null) {
+            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
+            for (FieldDeclaration field : dtoType.getFields()) {
+                Field f = instance.getClass().getDeclaredField(field.getVariable(0).getNameAsString());
+                f.setAccessible(true);
 
-        // Initialize fields
-        for (Field field : instance.getClass().getDeclaredFields()) {
-            field.setAccessible(true);
-            if (field.get(instance) == null && !field.getName().equals(INSTANCE_INTERCEPTOR)) {
-                Variable value = interceptor.getEvaluator().getField(field.getName());
-                if (value.getValue() instanceof Evaluator eval) {
-                    Class<?> fieldClass = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                    field.set(instance, fieldClass.getDeclaredConstructor().newInstance());
-                }
-                else {
-                    field.set(instance, value.getValue());
+                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
+                if(v != null) {
+                    Object value = v.getValue();
+
+                    if (value instanceof Evaluator eval) {
+                        Class<?> c = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                        f.set(instance, c.getDeclaredConstructor().newInstance());
+                    }
+                    else {
+                        f.set(instance, value);
+                    }
                 }
             }
         }
