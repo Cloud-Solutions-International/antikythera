@@ -75,30 +75,39 @@ class TestAKBuddy extends TestHelper {
 
     @Test
     void swapInterceptor() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
-        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+        Evaluator evaluator1 = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        Evaluator evaluator2 = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        MethodInterceptor interceptor1 = new MethodInterceptor(evaluator1);
+        MethodInterceptor interceptor2 = new MethodInterceptor(evaluator2);
 
-        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
-        Object emp1 = AKBuddy.createInstance(clazz, interceptor);
-        assertNotNull(emp1);
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor1);
+        Object emp1 = AKBuddy.createInstance(clazz, interceptor1);
+        assertNotNull(emp1, "interceptor on first instance setup correctly");
 
-        Object emp2 = AKBuddy.createInstance(clazz, interceptor);
-        assertNotNull(emp2);
+        Object emp2 = AKBuddy.createInstance(clazz, interceptor2);
+        assertNotNull(emp2, "interceptor on second instance setup correctly");
 
         Field f = emp1.getClass().getDeclaredField("p");
         f.setAccessible(true);
 
-        Object fieldValue = f.get(emp1); // get the value of field 'p' from emp1
-        Method setName = fieldValue.getClass().getMethod("setName", String.class);
-        setName.invoke(fieldValue, "NewName");
-
         Method m1 = emp1.getClass().getDeclaredMethod("publicAccess");
-        Method m2 = emp1.getClass().getDeclaredMethod("publicAccess");
+        Method m2 = emp2.getClass().getDeclaredMethod("publicAccess");
+
+        assertNotNull(m1);
+        assertNotNull(m2, "publicAccess method defined in Employee sources has been copied to the dynamic class");
+
+        Object fieldValue = f.get(emp1); // get the value of field 'p' from emp1
+        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.Person",
+                fieldValue.getClass().getName(), "We have an accessible Person field in Employee");
+
+
+        Method setName = fieldValue.getClass().getMethod("setName", String.class);
+        setName.invoke(fieldValue, "Horatio");
 
         m1.invoke(emp1);
         m2.invoke(emp2);
 
-        assertEquals("Hornblower\nHornblower\n", outContent.toString());
+        assertEquals("Horatio\nHornblower\n", outContent.toString());
     }
 
     @Test
