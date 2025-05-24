@@ -71,25 +71,11 @@ public class AntikytheraRunTime {
         return resolved.get(cls);
     }
 
+    public static void addType(String className, TypeWrapper typeWrapper) {
+        resolvedTypes.put(className, typeWrapper);
+    }
+
     public static void addCompilationUnit(String className, CompilationUnit cu) {
-        for(TypeDeclaration<?> type : cu.getTypes()) {
-            TypeWrapper typeWrapper = new TypeWrapper(type);
-
-            if(type.isAnnotationPresent("Service")) {
-                typeWrapper.setService(true);
-            } else if(type.isAnnotationPresent("RestController")
-                    || type.isAnnotationPresent("Controller")) {
-                typeWrapper.setController(true);
-            } else if(type.isAnnotationPresent("Component")) {
-                typeWrapper.setComponent(true);
-            }
-
-            if(type.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
-                typeWrapper.setInterface(cdecl.isInterface());
-            }
-            resolvedTypes.put(typeWrapper.getFullyQualifiedName(),typeWrapper);
-        }
         resolved.put(className, cu);
     }
 

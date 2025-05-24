@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 
 public class TypeWrapper {
@@ -57,10 +58,6 @@ public class TypeWrapper {
     }
     public void setService(boolean isService) {
         this.isService = isService;
-    }
-
-    public void setCompilationUnit(TypeDeclaration<?> type) {
-        this.type = type;
     }
 
     public boolean isComponent() {
