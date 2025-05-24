@@ -249,8 +249,9 @@ public class AKBuddy {
                     Object value = v.getValue();
 
                     if (value instanceof Evaluator eval) {
-                        Class<?> c = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                        f.set(instance, c.getDeclaredConstructor().newInstance());
+                        MethodInterceptor interceptor1 = new MethodInterceptor(eval);
+                        Class<?> c = AKBuddy.createDynamicClass(interceptor1);
+                        f.set(instance, AKBuddy.createInstance(c, interceptor1));
                     }
                     else {
                         f.set(instance, value);

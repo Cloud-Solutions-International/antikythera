@@ -160,7 +160,7 @@ public class MockingRegistry {
         Class<?> cls = AbstractCompiler.loadClass(className);
         MethodInterceptor interceptor = new MethodInterceptor(cls);
         Class<?> bb = AKBuddy.createDynamicClass(interceptor);
-        Variable v = new Variable(bb.getDeclaredConstructor().newInstance());
+        Variable v = new Variable(AKBuddy.createInstance(bb, interceptor));
         v.setClazz(cls);
         return v;
     }

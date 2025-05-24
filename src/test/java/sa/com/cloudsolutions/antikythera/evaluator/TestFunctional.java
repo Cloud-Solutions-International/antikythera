@@ -46,6 +46,7 @@ class TestFunctional extends TestHelper{
     })
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());
         assertEquals(value + "\n", outContent.toString());

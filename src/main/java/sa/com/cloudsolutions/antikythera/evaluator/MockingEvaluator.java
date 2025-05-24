@@ -347,12 +347,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (clazz != null) {
                 MethodInterceptor interceptor = new MethodInterceptor(clazz);
                 Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
-                Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+                Object instance = AKBuddy.createInstance(dynamicClass, interceptor);
                 return new Variable(Optional.of(instance));
             }
             Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), Evaluator.class);
-            Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+            MethodInterceptor interceptor = new MethodInterceptor(eval);
+            Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+            Object instance = AKBuddy.createInstance(dynamicClass, interceptor);
             return new Variable(Optional.of(instance));
         }
         return null;

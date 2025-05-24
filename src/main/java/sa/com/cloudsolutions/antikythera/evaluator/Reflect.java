@@ -253,7 +253,7 @@ public class Reflect {
             MethodInterceptor interceptor = new MethodInterceptor(eval);
             try {
                 Class<?> c = AKBuddy.createDynamicClass(interceptor);
-                args[i] = c.getDeclaredConstructor().newInstance();
+                args[i] = AKBuddy.createInstance(c, interceptor);
                 argumentTypes[i] = c;
             } catch (ReflectiveOperationException e) {
                 throw new AntikytheraException(e);
