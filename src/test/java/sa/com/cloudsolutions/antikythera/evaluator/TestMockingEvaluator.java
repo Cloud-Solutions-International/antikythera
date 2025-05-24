@@ -261,7 +261,7 @@ class TestMockingEvaluator {
 
     @Test
     void testOptionalByteBuddy() throws ReflectiveOperationException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity");
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity");
         assertNotNull(cu);
 
         mockingEvaluator = EvaluatorFactory.create(
