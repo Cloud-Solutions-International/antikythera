@@ -16,6 +16,7 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.implementation.SuperMethodCall;
 import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -37,7 +38,6 @@ public class AKBuddy {
     private static final Map<String, Class<?>> registry = new HashMap<>();
     private static final AKClassLoader loader = new AKClassLoader();
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
-    public static final String SET_INTERCEPTOR = "setInterceptor";
 
     protected AKBuddy() {}
 
@@ -77,10 +77,7 @@ public class AKBuddy {
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
                 .intercept(MethodDelegation.to(interceptor))
-                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
-                .defineMethod(SET_INTERCEPTOR, MethodInterceptor.class, Modifier.PUBLIC)
-                .withParameters(MethodInterceptor.class)
-                .intercept(FieldAccessor.ofField(INSTANCE_INTERCEPTOR))
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PUBLIC)
                 .make()
                 .load(loader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
@@ -102,19 +99,11 @@ public class AKBuddy {
 
         ByteBuddy byteBuddy = new ByteBuddy();
         DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
-                .method(ElementMatchers.not(
-                        ElementMatchers.isDeclaredBy(Object.class)
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
-                ))
-                .intercept(MethodDelegation.withDefaultConfiguration()
-                        .filter(ElementMatchers.named("intercept"))
-                        .to(MethodInterceptor.Interceptor.class)
-                        .andThen(FieldAccessor.ofField(INSTANCE_INTERCEPTOR)))
-                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
-                .defineMethod(SET_INTERCEPTOR, MethodInterceptor.class, Modifier.PUBLIC)
-                .withParameters(MethodInterceptor.class)
-                .intercept(FieldAccessor.ofField(INSTANCE_INTERCEPTOR));
+                .method(ElementMatchers.any())
+                .intercept(MethodDelegation.to(interceptor)
+                            .andThen(SuperMethodCall.INSTANCE)
+                        )
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PUBLIC);
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
@@ -154,7 +143,7 @@ public class AKBuddy {
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
                             .filter(ElementMatchers.named("intercept"))
-                            .to(new MethodInterceptor.Interceptor(interceptor, method)));
+                            .to(new MethodInterceptor.Interceptor(method)));
         }
         return builder;
     }
@@ -206,24 +195,26 @@ public class AKBuddy {
     }
 
     private static DynamicType.Builder<?> addFields(List<FieldDeclaration> fields, CompilationUnit cu, DynamicType.Builder<?> builder) throws ClassNotFoundException {
+        builder = builder.defineField("bada", String.class, Visibility.PUBLIC);
+
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
             if (vd.getType().isPrimitiveType()) {
                 builder = builder.defineField(fieldName, Reflect.getComponentClass(vd.getTypeAsString()),
-                        net.bytebuddy.description.modifier.Visibility.PRIVATE);
+                        net.bytebuddy.description.modifier.Visibility.PUBLIC);
             }
             else {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
                 if (wrapper != null) {
                     if (wrapper.getClazz() != null) {
-                        builder = builder.defineField(fieldName, wrapper.getClazz(), net.bytebuddy.description.modifier.Visibility.PRIVATE);
+                        builder = builder.defineField(fieldName, wrapper.getClazz(), net.bytebuddy.description.modifier.Visibility.PUBLIC);
                     }
                     else {
                         Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
                         Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                        builder = builder.defineField(fieldName, clazz, net.bytebuddy.description.modifier.Visibility.PRIVATE);
+                        builder = builder.defineField(fieldName, clazz, net.bytebuddy.description.modifier.Visibility.PUBLIC);
                     }
                 }
             }
@@ -234,8 +225,9 @@ public class AKBuddy {
     @SuppressWarnings("java:S3011")
     public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
         Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-        Method m = dynamicClass.getDeclaredMethod(SET_INTERCEPTOR, MethodInterceptor.class);
-        m.invoke(instance, interceptor);
+        Field icpt = dynamicClass.getDeclaredField(INSTANCE_INTERCEPTOR);
+        icpt.setAccessible(true);
+        icpt.set(instance, interceptor);
 
         Evaluator evaluator = interceptor.getEvaluator();
         if (evaluator != null) {

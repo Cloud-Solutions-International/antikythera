@@ -4,10 +4,12 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.Origin;
 import net.bytebuddy.implementation.bind.annotation.RuntimeType;
+import net.bytebuddy.implementation.bind.annotation.This;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 public class MethodInterceptor {
@@ -80,16 +82,16 @@ public class MethodInterceptor {
     }
 
     public static class Interceptor {
-        private final MethodInterceptor parent;
         private final MethodDeclaration sourceMethod;
 
-        public Interceptor(MethodInterceptor parent, MethodDeclaration sourceMethod) {
-            this.parent = parent;
+        public Interceptor(MethodDeclaration sourceMethod) {
             this.sourceMethod = sourceMethod;
         }
 
         @RuntimeType
-        public Object intercept(@Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+        public Object intercept(@This Object instance, @Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
+            Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
+            MethodInterceptor parent = (MethodInterceptor) f.get(instance);
             return parent.intercept(method, args, sourceMethod);
         }
     }
