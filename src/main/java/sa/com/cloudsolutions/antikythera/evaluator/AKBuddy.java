@@ -77,7 +77,7 @@ public class AKBuddy {
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
                 .intercept(MethodDelegation.to(interceptor))
-                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PUBLIC)
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
                 .load(loader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
@@ -103,7 +103,7 @@ public class AKBuddy {
                 .intercept(MethodDelegation.to(interceptor)
                             .andThen(SuperMethodCall.INSTANCE)
                         )
-                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PUBLIC);
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE);
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
@@ -195,26 +195,24 @@ public class AKBuddy {
     }
 
     private static DynamicType.Builder<?> addFields(List<FieldDeclaration> fields, CompilationUnit cu, DynamicType.Builder<?> builder) throws ClassNotFoundException {
-        builder = builder.defineField("bada", String.class, Visibility.PUBLIC);
-
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
             if (vd.getType().isPrimitiveType()) {
                 builder = builder.defineField(fieldName, Reflect.getComponentClass(vd.getTypeAsString()),
-                        net.bytebuddy.description.modifier.Visibility.PUBLIC);
+                        Visibility.PRIVATE);
             }
             else {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
                 if (wrapper != null) {
                     if (wrapper.getClazz() != null) {
-                        builder = builder.defineField(fieldName, wrapper.getClazz(), net.bytebuddy.description.modifier.Visibility.PUBLIC);
+                        builder = builder.defineField(fieldName, wrapper.getClazz(), Visibility.PRIVATE);
                     }
                     else {
                         Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
                         Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                        builder = builder.defineField(fieldName, clazz, net.bytebuddy.description.modifier.Visibility.PUBLIC);
+                        builder = builder.defineField(fieldName, clazz, Visibility.PRIVATE);
                     }
                 }
             }

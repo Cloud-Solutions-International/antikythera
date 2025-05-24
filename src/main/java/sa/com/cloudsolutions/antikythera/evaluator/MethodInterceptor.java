@@ -91,6 +91,7 @@ public class MethodInterceptor {
         @RuntimeType
         public Object intercept(@This Object instance, @Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
+            f.setAccessible(true);
             MethodInterceptor parent = (MethodInterceptor) f.get(instance);
             return parent.intercept(method, args, sourceMethod);
         }
