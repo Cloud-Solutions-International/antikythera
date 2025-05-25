@@ -72,7 +72,7 @@ public class AKBuddy {
 
         ByteBuddy byteBuddy = new ByteBuddy();
 
-        Class<?> clazz = byteBuddy.subclass(Object.class)
+        Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
@@ -118,7 +118,7 @@ public class AKBuddy {
         }
 
         builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
+        builder = addMethods(dtoType.getMethods(), cu, builder);
 
         Class<?> clazz = builder.make()
                 .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
@@ -129,7 +129,7 @@ public class AKBuddy {
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
-                                                     DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
+                                                     DynamicType.Builder<?> builder)  {
 
         for (MethodDeclaration method : methods) {
             String methodName = method.getNameAsString();
