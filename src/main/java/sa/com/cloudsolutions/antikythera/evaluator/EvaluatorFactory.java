@@ -1,9 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.lang.reflect.Constructor;
+import java.util.Optional;
 
 
 public class EvaluatorFactory {
@@ -16,8 +19,8 @@ public class EvaluatorFactory {
      * all the fields that need one.
      * This method delegates the work to the other create method.
      * @param className the name of the class for which we are creating an evaluator
-     * @param enclosure another evaluator instance which encloses this evaluator. It maybe the
-     *                  evaluator for the classes that holds a field, for example
+     * @param enclosure another evaluator instance which encloses this evaluator. As an example It
+     *                 maybe the evaluator for the classes that holds a field.
      * @return an evaluator instance.
      */
     public static Evaluator create(String className, Evaluator enclosure) {
