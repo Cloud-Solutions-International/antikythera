@@ -68,9 +68,11 @@ public class AKBuddy {
             return existing;
         }
 
+        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
+
         ByteBuddy byteBuddy = new ByteBuddy();
 
-        Class<?> clazz = byteBuddy.subclass(wrappedClass)
+        Class<?> clazz = byteBuddy.subclass(Object.class)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
@@ -79,7 +81,7 @@ public class AKBuddy {
                 .intercept(MethodDelegation.to(interceptor))
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
-                .load(loader, ClassLoadingStrategy.Default.INJECTION)
+                .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(wrappedClass.getName(), clazz);
@@ -87,6 +89,7 @@ public class AKBuddy {
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+        ClassLoader targetLoader = findSafeLoader(interceptor.getWrappedClass().getClassLoader(), interceptor.getClass().getClassLoader());
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
@@ -118,7 +121,7 @@ public class AKBuddy {
         builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
         Class<?> clazz = builder.make()
-                .load(loader, ClassLoadingStrategy.Default.INJECTION)
+                .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(eval.getClassName(), clazz);
@@ -251,6 +254,15 @@ public class AKBuddy {
         }
 
         return instance;
+    }
+
+    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
+        try {
+            Class.forName(MethodInterceptor.class.getName(), false, primary);
+            return primary;
+        } catch (ClassNotFoundException e) {
+            return fallback;
+        }
     }
 
     public static class AKClassLoader extends ClassLoader {
