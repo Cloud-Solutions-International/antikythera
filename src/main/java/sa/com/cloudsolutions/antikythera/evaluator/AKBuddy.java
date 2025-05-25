@@ -103,9 +103,7 @@ public class AKBuddy {
         ByteBuddy byteBuddy = new ByteBuddy();
         DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
                 .method(ElementMatchers.any())
-                .intercept(MethodDelegation.to(interceptor)
-                            .andThen(SuperMethodCall.INSTANCE)
-                        )
+                .intercept(MethodDelegation.to(interceptor))
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE);
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
