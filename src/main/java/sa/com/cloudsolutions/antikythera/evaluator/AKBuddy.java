@@ -68,28 +68,11 @@ public class AKBuddy {
             return existing;
         }
 
-        // Get the wrapped class's ClassLoader if available, otherwise use current context
-        ClassLoader targetLoader = interceptor.getWrappedClass() != null ?
-                interceptor.getWrappedClass().getClassLoader() :
-                Thread.currentThread().getContextClassLoader();
-
-        // Create a composite ClassLoader that delegates to both loaders
-        ClassLoader compositeLoader = new ClassLoader(targetLoader) {
-            @Override
-            public Class<?> loadClass(String name) throws ClassNotFoundException {
-                try {
-                    // First try the parent (application) ClassLoader
-                    return super.loadClass(name);
-                } catch (ClassNotFoundException e) {
-                    // If not found, try the ByteBuddy ClassLoader
-                    return ByteBuddy.class.getClassLoader().loadClass(name);
-                }
-            }
-        };
+        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
 
         ByteBuddy byteBuddy = new ByteBuddy();
 
-        Class<?> clazz = byteBuddy.subclass(wrappedClass)
+        Class<?> clazz = byteBuddy.subclass(Object.class)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
@@ -98,7 +81,7 @@ public class AKBuddy {
                 .intercept(MethodDelegation.to(interceptor))
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
-                .load(compositeLoader)
+                .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(wrappedClass.getName(), clazz);
@@ -106,31 +89,11 @@ public class AKBuddy {
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+        ClassLoader targetLoader = findSafeLoader(interceptor.getWrappedClass().getClassLoader(), interceptor.getClass().getClassLoader());
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
         }
-
-        // Get the wrapped class's ClassLoader if available, otherwise use current context
-        ClassLoader targetLoader = interceptor.getWrappedClass() != null ?
-                interceptor.getWrappedClass().getClassLoader() :
-                Thread.currentThread().getContextClassLoader();
-
-        // Create a composite ClassLoader that delegates to both loaders
-        ClassLoader compositeLoader = new ClassLoader(targetLoader) {
-            @Override
-            public Class<?> loadClass(String name) throws ClassNotFoundException {
-                try {
-                    // First try the parent (application) ClassLoader
-                    return super.loadClass(name);
-                } catch (ClassNotFoundException e) {
-                    // If not found, try the ByteBuddy ClassLoader
-                    return ByteBuddy.class.getClassLoader().loadClass(name);
-                }
-            }
-        };
-
-
         CompilationUnit cu = eval.getCompilationUnit();
         TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
         String className = eval.getClassName();
@@ -158,7 +121,7 @@ public class AKBuddy {
         builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
 
         Class<?> clazz = builder.make()
-                .load(targetLoader)
+                .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(eval.getClassName(), clazz);
@@ -304,17 +267,7 @@ public class AKBuddy {
 
     public static class AKClassLoader extends ClassLoader {
         public AKClassLoader() {
-            super(Thread.currentThread().getContextClassLoader());
-        }
-
-        @Override
-        protected Class<?> findClass(String name) throws ClassNotFoundException {
-            try {
-                return super.findClass(name);
-            } catch (ClassNotFoundException e) {
-                // Try the system classloader as a last resort
-                return ClassLoader.getSystemClassLoader().loadClass(name);
-            }
+            super(ClassLoader.getSystemClassLoader());
         }
     }
 }
