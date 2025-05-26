@@ -31,7 +31,6 @@ import java.util.Map;
  */
 public class AKBuddy {
     private static final Map<String, Class<?>> registry = new HashMap<>();
-    private static final AKClassLoader loader = new AKClassLoader();
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
 
     protected AKBuddy() {}
@@ -63,7 +62,7 @@ public class AKBuddy {
             return existing;
         }
 
-        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
+        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader());
 
         ByteBuddy byteBuddy = new ByteBuddy();
 
@@ -76,7 +75,7 @@ public class AKBuddy {
                 .intercept(MethodDelegation.to(interceptor))
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
-                .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
+                .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(wrappedClass.getName(), clazz);
@@ -84,7 +83,7 @@ public class AKBuddy {
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
-        ClassLoader targetLoader = findSafeLoader(interceptor.getWrappedClass().getClassLoader(), interceptor.getClass().getClassLoader());
+        ClassLoader targetLoader = findSafeLoader(interceptor.getWrappedClass().getClassLoader());
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
@@ -114,7 +113,7 @@ public class AKBuddy {
         builder = addMethods(dtoType.getMethods(), cu, builder);
 
         Class<?> clazz = builder.make()
-                .load(targetLoader, ClassLoadingStrategy.Default.INJECTION)
+                .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
 
         registry.put(eval.getClassName(), clazz);
@@ -249,18 +248,12 @@ public class AKBuddy {
         return instance;
     }
 
-    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
+    private static ClassLoader findSafeLoader(ClassLoader primary) {
         try {
             Class.forName(MethodInterceptor.class.getName(), false, primary);
             return primary;
         } catch (ClassNotFoundException e) {
-            return fallback;
-        }
-    }
-
-    public static class AKClassLoader extends ClassLoader {
-        public AKClassLoader() {
-            super(ClassLoader.getSystemClassLoader());
+            return AbstractCompiler.getClassLoader();
         }
     }
 }

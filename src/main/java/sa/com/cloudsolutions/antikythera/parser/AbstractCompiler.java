@@ -118,7 +118,6 @@ public class AbstractCompiler {
         }
 
         loader = new URLClassLoader(urls.toArray(new URL[0]), AbstractCompiler.class.getClassLoader());
-
         Collection<String> finch = Settings.getPropertyList("finch", String.class);
 
         for (String path : finch) {
@@ -1071,5 +1070,9 @@ public class AbstractCompiler {
             return name.substring(index + 1);
         }
         return name;
+    }
+
+    public static ClassLoader getClassLoader() {
+        return loader;
     }
 }
