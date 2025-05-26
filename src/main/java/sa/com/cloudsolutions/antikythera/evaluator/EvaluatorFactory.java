@@ -1,12 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.lang.reflect.Constructor;
-import java.util.Optional;
 
 
 public class EvaluatorFactory {
