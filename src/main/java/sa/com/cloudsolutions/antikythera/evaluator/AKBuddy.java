@@ -62,8 +62,6 @@ public class AKBuddy {
             return existing;
         }
 
-        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader());
-
         ByteBuddy byteBuddy = new ByteBuddy();
 
         Class<?> clazz = byteBuddy.subclass(wrappedClass)
@@ -83,7 +81,6 @@ public class AKBuddy {
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
-        ClassLoader targetLoader = findSafeLoader(interceptor.getWrappedClass().getClassLoader());
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
@@ -112,12 +109,18 @@ public class AKBuddy {
         builder = addFields(fields, cu, builder);
         builder = addMethods(dtoType.getMethods(), cu, builder);
 
-        Class<?> clazz = builder.make()
-                .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
-                .getLoaded();
+        DynamicType.Unloaded<?> unloaded = builder.make();
 
-        registry.put(eval.getClassName(), clazz);
-        return clazz;
+        try {
+            Class<?> clazz = unloaded.load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                    .getLoaded();
+            registry.put(eval.getClassName(), clazz);
+            return clazz;
+        } catch (IllegalStateException e) {
+            Class<?> clazz = AbstractCompiler.loadClass(eval.getClassName());
+            registry.put(eval.getClassName(), clazz);
+            return clazz;
+        }
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
@@ -218,7 +221,7 @@ public class AKBuddy {
     @SuppressWarnings("java:S3011")
     public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
         Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-        Field icpt = dynamicClass.getDeclaredField(INSTANCE_INTERCEPTOR);
+        Field icpt = instance.getClass().getDeclaredField(INSTANCE_INTERCEPTOR);
         icpt.setAccessible(true);
         icpt.set(instance, interceptor);
 
@@ -257,3 +260,4 @@ public class AKBuddy {
         }
     }
 }
+
