@@ -117,7 +117,8 @@ public class AbstractCompiler {
             combinedTypeSolver.add(jarSolver);
         }
 
-        loader = new URLClassLoader(urls.toArray(new URL[0]), AbstractCompiler.class.getClassLoader());
+        loader = new URLClassLoader(urls.toArray(new URL[0]),
+                loader == null ? AbstractCompiler.class.getClassLoader() : loader);
         Collection<String> finch = Settings.getPropertyList("finch", String.class);
 
         for (String path : finch) {

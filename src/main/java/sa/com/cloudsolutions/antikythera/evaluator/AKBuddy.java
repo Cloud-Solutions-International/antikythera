@@ -250,14 +250,5 @@ public class AKBuddy {
 
         return instance;
     }
-
-    private static ClassLoader findSafeLoader(ClassLoader primary) {
-        try {
-            Class.forName(MethodInterceptor.class.getName(), false, primary);
-            return primary;
-        } catch (ClassNotFoundException e) {
-            return AbstractCompiler.getClassLoader();
-        }
-    }
 }
 
