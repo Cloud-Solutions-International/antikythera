@@ -476,15 +476,17 @@ public class UnitTestGenerator extends TestGenerator {
             for (FieldDeclaration field : t.getFields()) {
                 String name = field.getVariable(0).getNameAsString();
                 Variable f = eval.getField(name);
-                if (f != null && f.getType() != null
-                        && f.getType().isPrimitiveType()
-                        && !name.equals("serialVersionUID")) {
-
+                if (f != null && f.getType() != null && !name.equals("serialVersionUID")) {
                     Object value = f.getValue();
-                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                            nameAsString,
-                            ClassProcessor.instanceToClassName(name),
-                            value instanceof Long ? value + "L" : value.toString()));
+                    if (value != null) {
+                        if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
+                            continue;
+                        }
+                        body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                                nameAsString,
+                                ClassProcessor.instanceToClassName(name),
+                                value instanceof Long ? value + "L" : value.toString()));
+                    }
                 }
             }
         }
