@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 
 public class TypeWrapper {
