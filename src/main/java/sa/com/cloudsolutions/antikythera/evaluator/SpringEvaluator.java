@@ -297,34 +297,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    /**
-     * <p>Execute a block of statements.</p>
-     * <p>
-     * When generating tests, we may end up executing the same block of statements repeatedly until
-     * all the branches have been covered.
-     *
-     * @param statements the collection of statements that make up the block
-     * @throws AntikytheraException         if there are situations where we cannot process the block
-     * @throws ReflectiveOperationException if a reflection operation fails
-     */
-    @Override
-    protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
-        try {
-            for (Statement stmt : statements) {
-                executeStatement(stmt);
-                if (returnFrom != null) {
-                    MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
-                    MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
-                    if (method == null || method.equals(parent)) {
-                        break;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            handleApplicationException(e);
-        }
-    }
-
     @Override
     protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
         if (!(e instanceof AntikytheraException ae)) {
