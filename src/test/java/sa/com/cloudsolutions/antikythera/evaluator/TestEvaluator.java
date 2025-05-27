@@ -158,7 +158,7 @@ class TestEvaluator extends TestHelper {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity",
                 Evaluator.class);
         v = evaluator.getField("id");
-        assertTrue(0 <  (int) v.getValue());
+        assertTrue(0 < (long) v.getValue());
         assertFalse(v.getInitializer().isEmpty());
         assertTrue(v.getInitializer().getFirst().toString().startsWith("setId("));
 

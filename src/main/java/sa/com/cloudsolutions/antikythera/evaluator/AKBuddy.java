@@ -10,16 +10,19 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import net.bytebuddy.ByteBuddy;
-import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Array;
-import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -27,6 +30,8 @@ import java.util.List;
  * This will be primarily used in mocking.
  */
 public class AKBuddy {
+    private static final Map<String, Class<?>> registry = new HashMap<>();
+    public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
 
     protected AKBuddy() {}
 
@@ -52,36 +57,45 @@ public class AKBuddy {
 
     private static Class<?> createDynamicClassBasedOnByteCode(MethodInterceptor interceptor) {
         Class<?> wrappedClass = interceptor.getWrappedClass();
-        ByteBuddy byteBuddy = new ByteBuddy();
-        ClassLoader targetLoader = findSafeLoader(wrappedClass.getClassLoader(), interceptor.getClass().getClassLoader());
+        Class<?> existing = registry.get(wrappedClass.getName());
+        if (existing != null) {
+            return existing;
+        }
 
-        return byteBuddy.subclass(wrappedClass)
+        ByteBuddy byteBuddy = new ByteBuddy();
+
+        Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.not(
                         ElementMatchers.isDeclaredBy(Object.class)
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
                 .intercept(MethodDelegation.to(interceptor))
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
-                .load(targetLoader)
+                .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
+
+        registry.put(wrappedClass.getName(), clazz);
+        return clazz;
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+        Class<?> existing = registry.get(eval.getClassName());
+        if (existing != null) {
+            return existing;
+        }
         CompilationUnit cu = eval.getCompilationUnit();
-        TypeDeclaration<?> dtoType = AbstractCompiler.getMatchingType(cu, eval.getClassName()).orElseThrow();
-        String className = dtoType.getNameAsString();
+        TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
+        String className = eval.getClassName();
 
         List<FieldDeclaration> fields = dtoType.getFields();
 
         ByteBuddy byteBuddy = new ByteBuddy();
-        DynamicType.Builder<?> builder = byteBuddy.subclass(Object.class).name(className)
-                .method(ElementMatchers.not(
-                        ElementMatchers.isDeclaredBy(Object.class)
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
-                ))
-                .intercept(MethodDelegation.to(interceptor));
+        DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
+                .method(ElementMatchers.any())
+                .intercept(MethodDelegation.to(interceptor))
+                .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE);
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
@@ -93,16 +107,24 @@ public class AKBuddy {
         }
 
         builder = addFields(fields, cu, builder);
-        builder = addMethods(dtoType.getMethods(), cu, builder, interceptor);
+        builder = addMethods(dtoType.getMethods(), cu, builder);
 
-        ClassLoader targetLoader = findSafeLoader(Object.class.getClassLoader(), interceptor.getClass().getClassLoader());
-        return builder.make()
-                .load(targetLoader)
-                .getLoaded();
+        DynamicType.Unloaded<?> unloaded = builder.make();
+
+        try {
+            Class<?> clazz = unloaded.load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                    .getLoaded();
+            registry.put(eval.getClassName(), clazz);
+            return clazz;
+        } catch (IllegalStateException e) {
+            Class<?> clazz = AbstractCompiler.loadClass(eval.getClassName());
+            registry.put(eval.getClassName(), clazz);
+            return clazz;
+        }
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
-                                                     DynamicType.Builder<?> builder, MethodInterceptor interceptor)  {
+                                                     DynamicType.Builder<?> builder)  {
 
         for (MethodDeclaration method : methods) {
             String methodName = method.getNameAsString();
@@ -119,7 +141,7 @@ public class AKBuddy {
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
                             .filter(ElementMatchers.named("intercept"))
-                            .to(new MethodInterceptor.Interceptor(interceptor, method)));
+                            .to(new MethodInterceptor.Interceptor(method)));
         }
         return builder;
     }
@@ -175,33 +197,58 @@ public class AKBuddy {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
-            TypeDescription.Generic fieldType = null;
             if (vd.getType().isPrimitiveType()) {
-                fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-                        Reflect.getComponentClass(vd.getTypeAsString()));
+                builder = builder.defineField(fieldName, Reflect.getComponentClass(vd.getTypeAsString()),
+                        Visibility.PRIVATE);
             }
             else {
-                try {
-                    String fqn = AbstractCompiler.findFullyQualifiedName(cu, vd.getType().asString());
-                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Class.forName(fqn));
-                } catch (ClassNotFoundException|NullPointerException cex) {
-                    // TODO : user proper dynamic types here
-                    fieldType = TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(Object.class);
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
+                if (wrapper != null) {
+                    if (wrapper.getClazz() != null) {
+                        builder = builder.defineField(fieldName, wrapper.getClazz(), Visibility.PRIVATE);
+                    }
+                    else {
+                        Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
+                        Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                        builder = builder.defineField(fieldName, clazz, Visibility.PRIVATE);
+                    }
                 }
             }
-
-            // Define field
-            builder = builder.defineField(fieldName, fieldType, net.bytebuddy.description.modifier.Visibility.PRIVATE);
         }
         return builder;
     }
 
-    private static ClassLoader findSafeLoader(ClassLoader primary, ClassLoader fallback) {
-        try {
-            Class.forName(MethodInterceptor.class.getName(), false, primary);
-            return primary;
-        } catch (ClassNotFoundException e) {
-            return fallback;
+    @SuppressWarnings("java:S3011")
+    public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
+        Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+        Field icpt = instance.getClass().getDeclaredField(INSTANCE_INTERCEPTOR);
+        icpt.setAccessible(true);
+        icpt.set(instance, interceptor);
+
+        Evaluator evaluator = interceptor.getEvaluator();
+        if (evaluator != null) {
+            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
+            for (FieldDeclaration field : dtoType.getFields()) {
+                Field f = instance.getClass().getDeclaredField(field.getVariable(0).getNameAsString());
+                f.setAccessible(true);
+
+                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
+                if(v != null) {
+                    Object value = v.getValue();
+
+                    if (value instanceof Evaluator eval) {
+                        MethodInterceptor interceptor1 = new MethodInterceptor(eval);
+                        Class<?> c = AKBuddy.createDynamicClass(interceptor1);
+                        f.set(instance, AKBuddy.createInstance(c, interceptor1));
+                    }
+                    else {
+                        f.set(instance, value);
+                    }
+                }
+            }
         }
+
+        return instance;
     }
 }
+

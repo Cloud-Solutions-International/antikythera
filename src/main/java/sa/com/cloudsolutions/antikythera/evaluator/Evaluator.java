@@ -131,7 +131,7 @@ public class Evaluator {
 
     protected TypeDeclaration<?> typeDeclaration;
 
-    private static int sequence = 0;
+    private static long sequence = 0;
 
     protected Evaluator() {
         locals = new HashMap<>();
@@ -388,7 +388,7 @@ public class Evaluator {
                 if (value instanceof Evaluator evaluator) {
                     MethodInterceptor interceptor = new MethodInterceptor(evaluator);
                     Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
-                    Array.set(array, i, dynamicClass.getDeclaredConstructor().newInstance());
+                    Array.set(array, i, AKBuddy.createInstance(dynamicClass, interceptor));
                 }
                 else {
                     Array.set(array, i, value);
@@ -1857,10 +1857,10 @@ public class Evaluator {
                     "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
             String type = v.getType().asString();
             if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
-                mce.addArgument(new LongLiteralExpr().setValue(Integer.toString(sequence) + "L"));
+                mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence) + "L"));
             }
             else {
-                mce.addArgument(new IntegerLiteralExpr().setValue(Integer.toString(sequence)));
+                mce.addArgument(new IntegerLiteralExpr().setValue(Long.toString(sequence)));
             }
             v.getInitializer().add(mce);
         }

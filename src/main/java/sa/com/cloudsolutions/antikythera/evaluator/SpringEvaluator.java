@@ -12,6 +12,7 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -46,7 +47,6 @@ import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -177,35 +177,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private void parameterAssignment(AssignExpr assignExpr, Variable va) {
-        Expression value = assignExpr.getValue();
-        Object result = switch (va.getClazz().getSimpleName()) {
-            case "Integer" -> value instanceof NullLiteralExpr ? null : Integer.parseInt(value.toString());
-            case "Double" -> Double.parseDouble(value.toString());
-            case "Long" -> Long.parseLong(value.toString());
-            case "Float" -> Float.parseFloat(value.toString());
-            case "Boolean" -> value.isBooleanLiteralExpr() ? value.asBooleanLiteralExpr().getValue() : value;
-            case "Character" -> value.isCharLiteralExpr() ? value.asCharLiteralExpr().getValue() : value;
-            case "String" -> {
-                if (value.isStringLiteralExpr()) {
-                    yield value.asStringLiteralExpr().getValue();
-                }
-                if (value.isNullLiteralExpr()) {
-                    yield null;
-                }
-                yield value;
-            }
-            default -> {
-                try {
-                    yield evaluateExpression(value).getValue();
-                } catch (ReflectiveOperationException e) {
-                    throw new AntikytheraException(e);
-                }
-            }
-        };
-        va.setValue(result);
-    }
-
     /**
      * <p>This is where the code evaluation really starts</p>
      * <p>
@@ -323,34 +294,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     parameterAssignment(assignExpr, va);
                     va.setInitializer(List.of(assignExpr));
             }
-        }
-    }
-
-    /**
-     * <p>Execute a block of statements.</p>
-     * <p>
-     * When generating tests, we may end up executing the same block of statements repeatedly until
-     * all the branches have been covered.
-     *
-     * @param statements the collection of statements that make up the block
-     * @throws AntikytheraException         if there are situations where we cannot process the block
-     * @throws ReflectiveOperationException if a reflection operation fails
-     */
-    @Override
-    protected void executeBlock(List<Statement> statements) throws AntikytheraException, ReflectiveOperationException {
-        try {
-            for (Statement stmt : statements) {
-                executeStatement(stmt);
-                if (returnFrom != null) {
-                    MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
-                    MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
-                    if (method == null || method.equals(parent)) {
-                        break;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            handleApplicationException(e);
         }
     }
 

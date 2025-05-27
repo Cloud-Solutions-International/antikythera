@@ -11,6 +11,8 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
@@ -109,13 +111,15 @@ public class ControlFlowEvaluator extends Evaluator {
         }
 
         if (valueExpressions.size() == 1) {
-            return List.of(
-                    new AssignExpr(
-                            new NameExpr(nameExpr.getNameAsString()),
-                            valueExpressions.getFirst(),
-                            AssignExpr.Operator.ASSIGN
-                    )
+            AssignExpr a = new AssignExpr(
+                    new NameExpr(nameExpr.getNameAsString()),
+                    valueExpressions.getFirst(),
+                    AssignExpr.Operator.ASSIGN
             );
+            if (v.getType() instanceof PrimitiveType && entry.getValue() instanceof String s && s.equals("T")) {
+                parameterAssignment(a, v);
+            }
+            return List.of(a);
         }
         return valueExpressions;
     }
@@ -149,14 +153,19 @@ public class ControlFlowEvaluator extends Evaluator {
      * @return a list of expressions that can be used to set up the condition
      */
     private List<Expression> setupNonEmptyCollections(Variable v, NameExpr name) {
-        Parameter param = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString()).orElseThrow();
-        Type type = param.getType();
-        NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
-        if (typeArgs.isEmpty()) {
-            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-        }
 
-        return setupNonEmptyCollection(typeArgs, v, name);
+        Optional<Parameter> paramByName = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString());
+        if (paramByName.isPresent()) {
+            Parameter param = paramByName.orElseThrow();
+            Type type = param.getType();
+            NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+            if (typeArgs.isEmpty()) {
+                typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+            }
+
+            return setupNonEmptyCollection(typeArgs, v, name);
+        }
+        return List.of();
     }
 
     protected List<Expression> setupNonEmptyCollection(NodeList<Type> typeArgs, Variable wrappedCollection, NameExpr name) {
@@ -559,6 +568,61 @@ public class ControlFlowEvaluator extends Evaluator {
             }
         }
         return null;
+    }
+
+    protected void parameterAssignment(AssignExpr assignExpr, Variable va) {
+        Expression value = assignExpr.getValue();
+        Object result = switch (va.getClazz().getSimpleName()) {
+            case "Integer" -> {
+                if (value instanceof NullLiteralExpr) {
+                    yield null;
+                }
+                if (value.isStringLiteralExpr() && value.asStringLiteralExpr().getValue().equals("T")) {
+                    assignExpr.setValue(new IntegerLiteralExpr().setValue("1"));
+                    yield 1;
+                }
+
+                yield Integer.parseInt(value.toString());
+            }
+            case "Double" -> Double.parseDouble(value.toString());
+            case "Long", "LongLiteralExpr" -> {
+                if (value instanceof NullLiteralExpr ) {
+                    yield null;
+                }
+                if (value.isStringLiteralExpr()) {
+                    String s = value.asStringLiteralExpr().getValue().replace("L","");
+                    if (s.equals("T")) {
+                        assignExpr.setValue(new LongLiteralExpr().setValue("1L"));
+                        yield Long.valueOf("1");
+                    }
+                    yield Long.parseLong(s);
+                }
+                if (value.isLongLiteralExpr()) {
+                    yield value;
+                }
+                yield Long.parseLong(value.toString());
+            }
+            case "Float" -> Float.parseFloat(value.toString());
+            case "Boolean" -> value.isBooleanLiteralExpr() ? value.asBooleanLiteralExpr().getValue() : value;
+            case "Character" -> value.isCharLiteralExpr() ? value.asCharLiteralExpr().getValue() : value;
+            case "String" -> {
+                if (value.isStringLiteralExpr()) {
+                    yield value.asStringLiteralExpr().getValue();
+                }
+                if (value.isNullLiteralExpr()) {
+                    yield null;
+                }
+                yield value;
+            }
+            default -> {
+                try {
+                    yield evaluateExpression(value).getValue();
+                } catch (ReflectiveOperationException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
+        };
+        va.setValue(result);
     }
 
 }

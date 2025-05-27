@@ -117,8 +117,8 @@ public class AbstractCompiler {
             combinedTypeSolver.add(jarSolver);
         }
 
-        loader = new URLClassLoader(urls.toArray(new URL[0]), AbstractCompiler.class.getClassLoader());
-
+        loader = new URLClassLoader(urls.toArray(new URL[0]),
+                loader == null ? AbstractCompiler.class.getClassLoader() : loader);
         Collection<String> finch = Settings.getPropertyList("finch", String.class);
 
         for (String path : finch) {
@@ -262,27 +262,34 @@ public class AbstractCompiler {
     }
 
     private void cache(CompilationUnit cu) {
-        for (TypeDeclaration<?> type : findContainedTypes(cu)) {
-            type.getFullyQualifiedName().ifPresent(
-                    cname -> AntikytheraRunTime.addCompilationUnit(cname, cu)
-            );
-        }
-    }
-
-    private static List<TypeDeclaration<?>> findContainedTypes(CompilationUnit cu) {
-        List<TypeDeclaration<?>> types = new ArrayList<>();
         for (TypeDeclaration<?> type : cu.getTypes()) {
-            types.add(type);
-            findInners(type, types);
+            findContainedTypes(type, cu);
         }
-        return types;
     }
 
-    private static void findInners(TypeDeclaration<?> cdecl, List<TypeDeclaration<?>> inners) {
-        for (Node child : cdecl.getChildNodes()) {
-            if (child instanceof ClassOrInterfaceDeclaration cid) {
-                inners.add(cid);
-                findInners(cid, inners);
+    private void findContainedTypes(TypeDeclaration<?> declaration, CompilationUnit cu) {
+        for(TypeDeclaration<?> type : declaration.findAll(TypeDeclaration.class)) {
+            TypeWrapper typeWrapper = new TypeWrapper(type);
+            if(type.isAnnotationPresent("Service")) {
+                typeWrapper.setService(true);
+            } else if(type.isAnnotationPresent("RestController")
+                    || type.isAnnotationPresent("Controller")) {
+                typeWrapper.setController(true);
+            } else if(type.isAnnotationPresent("Component")) {
+                typeWrapper.setComponent(true);
+            }
+
+            if(type.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
+                typeWrapper.setInterface(cdecl.isInterface());
+            }
+            type.getFullyQualifiedName().ifPresent(name -> {
+                AntikytheraRunTime.addType(name, typeWrapper);
+                AntikytheraRunTime.addCompilationUnit(name, cu);
+
+            });
+            if (!type.equals(declaration)) {
+                findContainedTypes(type, cu);
             }
         }
     }
@@ -362,7 +369,7 @@ public class AbstractCompiler {
      * @return An optional of the type declaration
      */
     public static Optional<TypeDeclaration<?>> getMatchingType(CompilationUnit cu, String className) {
-        for (TypeDeclaration<?> type : findContainedTypes(cu)) {
+        for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
             if (type.getNameAsString().equals(className)
                     || className.equals(type.getFullyQualifiedName().orElse(null))) {
                 return Optional.of(type);
@@ -1064,5 +1071,9 @@ public class AbstractCompiler {
             return name.substring(index + 1);
         }
         return name;
+    }
+
+    public static ClassLoader getClassLoader() {
+        return loader;
     }
 }

@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class TestNesting extends TestHelper{
     @BeforeAll
@@ -20,6 +22,23 @@ class TestNesting extends TestHelper{
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+    }
+
+    @Test
+    void testInnerClasses() {
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches.DTO"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches.Person"));
+
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Bunches"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Bunches.DTO"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Bunches.Person"));
+
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting.Inner"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Nesting"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Nesting.Inner"));
+
     }
 
     @ParameterizedTest
