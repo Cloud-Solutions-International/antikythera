@@ -372,7 +372,6 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     void mockArguments() {
-
         for (var param : methodUnderTest.getParameters()) {
             Type paramType = param.getType();
             String nameAsString = param.getNameAsString();
@@ -460,8 +459,13 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         else {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
-            mockParameterFields(v, nameAsString);
+            if (mocked.getInitializer().isEmpty()) {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = null;");
+            }
+            else {
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer() + ";");
+                mockParameterFields(v, nameAsString);
+            }
         }
     }
 
