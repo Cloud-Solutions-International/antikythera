@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Clone dependent projects
-        run: git clone git@github.com:Cloud-Solutions-International/antikythera-test-helper.git ../antikythera-test-helper && git clone git@github.com:Cloud-Solutions-International/antikythera-sample-project.git ../antikythera-sample-project
+        run: git clone https://github.com/Cloud-Solutions-International/antikythera-test-helper.git ../antikythera-test-helper && git clone https://github.com/Cloud-Solutions-International/antikythera-sample-project.git ../antikythera-sample-project
 
       - name: Set up JDK 21 with Temurin
         uses: actions/setup-java@v4
