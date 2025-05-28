@@ -6,8 +6,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
-import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -103,10 +101,4 @@ class JunitAsserterTest {
         assertEquals("assertEquals(42, resp.getCount())", expr.toString());
     }
 
-    @Test
-    void testLombok() {
-        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Tea", Evaluator.class);
-        MethodResponse mr = new MethodResponse(new Variable(eval));
-
-    }
 }

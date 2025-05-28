@@ -40,5 +40,6 @@ public class JunitAsserter extends Asserter {
         assertThrows.addArgument(String.format("() -> %s ", invocation.replace(';', ' ')));
         return assertThrows;
     }
+
 }
 

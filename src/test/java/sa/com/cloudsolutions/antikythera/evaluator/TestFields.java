@@ -2,11 +2,14 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.JunitAsserter;
+import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -14,6 +17,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,15 +82,7 @@ class TestFields extends TestHelper {
 
     @Test
     void testLombok() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Tea", Evaluator.class);
-        cu = evaluator.getCompilationUnit();
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("main")).orElseThrow();
-
-        Variable v = new Variable(new String[] {});
-        AntikytheraRunTime.push(v);
-
-        evaluator.executeMethod(md);
+        lombokHelper();
         assertEquals("""
                 Tea Origin: Great Western
                 Tea Quantity: 100
@@ -95,5 +91,30 @@ class TestFields extends TestHelper {
                 Is Ceylon: true
                 Is Green: false
                 """, outContent.toString());
+    }
+
+    private void lombokHelper() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Tea", Evaluator.class);
+        cu = evaluator.getCompilationUnit();
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("run")).orElseThrow();
+
+        evaluator.executeMethod(md);
+    }
+
+
+    @Test
+    void testGetterAndSetter() throws ReflectiveOperationException {
+        lombokHelper();
+        JunitAsserter asserter = new JunitAsserter();
+
+        MethodResponse mr = new MethodResponse();
+        mr.setBody(new Variable(evaluator));
+        BlockStmt block = new BlockStmt();
+        asserter.addFieldAsserts(mr, block);
+        String s = block.toString();
+        assertFalse(s.isEmpty());
+        assertTrue(s.contains("assertEquals(\"Great Western\", resp.getOrigin())"));
+        assertTrue(s.contains("assertEquals(100, resp.getQuantity())"));
     }
 }
