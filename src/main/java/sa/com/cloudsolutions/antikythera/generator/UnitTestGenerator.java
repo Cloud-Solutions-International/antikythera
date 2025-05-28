@@ -80,7 +80,7 @@ public class UnitTestGenerator extends TestGenerator {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + TEST_NAME_SUFFIX;
 
-        filePath = basePath.replace("main", "test") + File.separator +
+        filePath = basePath.replace("main/java", "test/java") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
 
         File file = new File(filePath);
@@ -192,7 +192,7 @@ public class UnitTestGenerator extends TestGenerator {
      */
      void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
-        String helperPath = basePath.replace("main", "test") + File.separator +
+        String helperPath = basePath.replace("src/main", "src/test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
         try {
             baseTestClass = StaticJavaParser.parse(new File(helperPath));
@@ -675,7 +675,9 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                if (!wrappers.isEmpty()) {
+                    MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                }
             }
         }
 
