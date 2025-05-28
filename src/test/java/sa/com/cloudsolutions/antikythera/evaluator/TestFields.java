@@ -91,6 +91,8 @@ class TestFields extends TestHelper {
                 Is Ceylon: true
                 Is Green: false
                 """, outContent.toString());
+
+        assertTrue((boolean) evaluator.getField("isOrganic").getValue());
     }
 
     private void lombokHelper() throws ReflectiveOperationException {
@@ -116,5 +118,9 @@ class TestFields extends TestHelper {
         assertFalse(s.isEmpty());
         assertTrue(s.contains("assertEquals(\"Great Western\", resp.getOrigin())"));
         assertTrue(s.contains("assertEquals(100, resp.getQuantity())"));
+        assertTrue(s.contains("assertEquals(true, resp.isOrganic())"));
+        assertTrue(s.contains("assertEquals(true, resp.isBop())"));
+        assertTrue(s.contains("assertEquals(true, resp.getCeylon())"));
+
     }
 }
