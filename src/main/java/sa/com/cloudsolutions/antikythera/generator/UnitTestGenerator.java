@@ -471,9 +471,12 @@ public class UnitTestGenerator extends TestGenerator {
 
     void mockParameterFields(Variable v, String nameAsString) {
         if (v.getValue() instanceof Evaluator eval) {
-            TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
-            for (FieldDeclaration field : t.getFields()) {
-                mockFieldHelper(nameAsString, eval, field);
+            Optional<TypeDeclaration<?>> typeDeclarationOpt = AntikytheraRunTime.getTypeDeclaration(eval.getClassName());
+            if (typeDeclarationOpt.isPresent()) {
+                TypeDeclaration<?> t = typeDeclarationOpt.get();
+                for (FieldDeclaration field : t.getFields()) {
+                    mockFieldHelper(nameAsString, eval, field);
+                }
             }
         }
     }
