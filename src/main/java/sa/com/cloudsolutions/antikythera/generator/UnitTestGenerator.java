@@ -190,7 +190,7 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param baseClassName the name of the base class.
      */
-     void loadPredefinedBaseClassForTest(String baseClassName) {
+    void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String helperPath = basePath.replace("src/main", "src/test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
@@ -488,10 +488,19 @@ public class UnitTestGenerator extends TestGenerator {
                 if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
                     return;
                 }
-                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                        nameAsString,
-                        ClassProcessor.instanceToClassName(name),
-                        value instanceof Long ? value + "L" : value.toString()));
+                if (value instanceof List) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(name)
+                    ));
+                }
+                else {
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(name),
+                            value instanceof Long ? value + "L" : value.toString()));
+                }
             }
         }
     }
@@ -659,7 +668,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (baseTestClass != null) {
             baseTestClass.findFirst(MethodDeclaration.class,
-                    md -> md.getNameAsString().equals("setUpBase"))
+                            md -> md.getNameAsString().equals("setUpBase"))
                     .ifPresent(md -> beforeBody.addStatement("setUpBase();"));
         }
 
@@ -753,7 +762,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectConstructorInjectionHelper(CompilationUnit cu, ClassOrInterfaceDeclaration suite,
-            Parameter param, Map<String, String> paramToFieldMap) {
+                                                  Parameter param, Map<String, String> paramToFieldMap) {
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(param);
         String registryKey = MockingRegistry.generateRegistryKey(wrappers);
         String paramName = param.getNameAsString();
@@ -791,7 +800,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     Optional<ClassOrInterfaceDeclaration> findSuite(TypeDeclaration<?> decl) {
         return gen.findFirst(ClassOrInterfaceDeclaration.class,
-            t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX));
+                t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX));
 
     }
 
