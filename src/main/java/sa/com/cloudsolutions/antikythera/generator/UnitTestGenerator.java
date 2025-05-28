@@ -103,7 +103,9 @@ public class UnitTestGenerator extends TestGenerator {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
                     fd.getAnnotationByName("Mock").isPresent()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                if(!wrappers.isEmpty()){
+                    MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                }
             }
         }
 
