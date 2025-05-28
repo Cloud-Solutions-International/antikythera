@@ -256,6 +256,8 @@ class UnitTestGeneratorTest {
 
 class UnitTestGeneratorMoreTests extends TestHelper {
     public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.evaluator.FakeService";
+    public static final String PERSON = "sa.com.cloudsolutions.antikythera.evaluator.Person";
+    public static final String CONDITIONAL = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
     CompilationUnit cu;
     UnitTestGenerator unitTestGenerator;
 
@@ -359,7 +361,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
 
     @Test
     void testMockWithMockito1() {
-        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","printMap");
+        MethodDeclaration md = setupMethod(CONDITIONAL,"printMap");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
@@ -368,17 +370,18 @@ class UnitTestGeneratorMoreTests extends TestHelper {
 
     @Test
     void identifyFieldsToBeMocked() {
-        setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
+        setupMethod(CONDITIONAL,"main");
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
-        Evaluator eval = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Person", Evaluator.class);
+        Evaluator eval = EvaluatorFactory.create(PERSON, Evaluator.class);
         unitTestGenerator.mockParameterFields(new Variable(eval),  "bada");
-        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"));
-        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getAge()).thenReturn(0);"));
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"),
+            "Default primitive values should not be mocked.");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getAge()).thenReturn(0);"));
     }
 
     @Test
     void mockWithEvaluator() {
-        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","switchCase1");
+        MethodDeclaration md = setupMethod(CONDITIONAL,"switchCase1");
         Type t = new ClassOrInterfaceType().setName("Person");
         Parameter p = new Parameter(t, "person");
         md.getParameters().add(p);
@@ -390,7 +393,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
 
     @Test
     void testMockWithMockito2() {
-        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
+        MethodDeclaration md = setupMethod(CONDITIONAL,"main");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
 
@@ -400,7 +403,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
 
     @Test
     void testMockWithMockito3() {
-        MethodDeclaration md = setupMethod("sa.com.cloudsolutions.antikythera.evaluator.Conditional","main");
+        MethodDeclaration md = setupMethod(CONDITIONAL,"main");
         Parameter param = md.getParameter(0);
         unitTestGenerator.mockWithMockito(param, new Variable("hello"));
         MethodCallExpr mce = new MethodCallExpr(new NameExpr("Bean"), "setName");

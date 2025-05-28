@@ -470,27 +470,33 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     void mockParameterFields(Variable v, String nameAsString) {
-        BlockStmt body = getBody(testMethod);
         if (v.getValue() instanceof Evaluator eval) {
             TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
             for (FieldDeclaration field : t.getFields()) {
-                String name = field.getVariable(0).getNameAsString();
-                Variable f = eval.getField(name);
-                if (f != null && f.getType() != null
-                        && f.getType().isPrimitiveType()
-                        && !name.equals("serialVersionUID")) {
-
-                    Object value = f.getValue();
-                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                            nameAsString,
-                            ClassProcessor.instanceToClassName(name),
-                            value instanceof Long ? value + "L" : value.toString()));
-                }
+                mockFieldHelper(nameAsString, eval, field);
             }
         }
     }
 
-     void applyPreconditions() {
+    private void mockFieldHelper(String nameAsString, Evaluator eval, FieldDeclaration field) {
+        BlockStmt body = getBody(testMethod);
+        String name = field.getVariable(0).getNameAsString();
+        Variable f = eval.getField(name);
+        if (f != null && f.getType() != null && !name.equals("serialVersionUID")) {
+            Object value = f.getValue();
+            if (value != null) {
+                if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
+                    return;
+                }
+                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                        nameAsString,
+                        ClassProcessor.instanceToClassName(name),
+                        value instanceof Long ? value + "L" : value.toString()));
+            }
+        }
+    }
+
+    void applyPreconditions() {
         for (MockingCall  result : MockingRegistry.getAllMocks()) {
             if (! result.isFromSetup()) {
                 applyRegistryCondition(result);

@@ -1466,6 +1466,7 @@ public class Evaluator {
      * @throws AntikytheraException         if there are situations where we cannot process the block
      * @throws ReflectiveOperationException if a reflection operation fails
      */
+    @SuppressWarnings("unchecked")
     protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException {
         try {
             for (Statement stmt : statements) {

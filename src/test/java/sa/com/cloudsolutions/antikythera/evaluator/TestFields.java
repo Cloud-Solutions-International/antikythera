@@ -75,4 +75,25 @@ class TestFields extends TestHelper {
             {"id":0,"name":"Hornblower","address":null,"phone":null,"email":null}
             """.trim(), outContent.toString().strip());
     }
+
+    @Test
+    void testLombok() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Tea", Evaluator.class);
+        cu = evaluator.getCompilationUnit();
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("main")).orElseThrow();
+
+        Variable v = new Variable(new String[] {});
+        AntikytheraRunTime.push(v);
+
+        evaluator.executeMethod(md);
+        assertEquals("""
+                Tea Origin: Great Western
+                Tea Quantity: 100
+                Is Organic: true
+                Is BOP: true
+                Is Ceylon: true
+                Is Green: false
+                """, outContent.toString());
+    }
 }
