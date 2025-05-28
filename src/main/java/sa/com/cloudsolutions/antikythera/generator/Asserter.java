@@ -15,7 +15,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.lang.reflect.Method;
 import java.util.Collection;
-import java.util.Map;
 
 public abstract class Asserter {
     private static final Logger logger = LoggerFactory.getLogger(Asserter.class);
@@ -28,38 +27,42 @@ public abstract class Asserter {
 
     public void addFieldAsserts(MethodResponse resp, BlockStmt body) {
         if (resp.getBody() != null && resp.getBody().getValue() instanceof Evaluator ev) {
-            int i = 0;
-            TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(ev.getClassName()).orElseThrow();
-            for(FieldDeclaration field : type.getFields()) {
-                VariableDeclarator fieldVariable = field.getVariable(0);
-                try {
-                    String fieldName = fieldVariable.getNameAsString();
-                    Variable value = ev.getField(fieldName);
+            addFieldAsserts(body, ev);
+        }
+    }
 
-                    if (value != null && !fieldName.equals("serialVersionUID")
-                            && value.getValue() != null) {
-                        /*
-                         * For `boolean` fields that start with `is` immediately followed by a title-case
-                         * letter, nothing is prefixed to generate the getter name.
-                         * So if you have a field boolean isOrganic the getter will be isOrganic()
-                         */
-                        String getter;
-                        if (value.getType() != null && value.getType().isPrimitiveType()
-                                && value.getType().asString().equals("boolean") && fieldName.startsWith("is")) {
-                            getter = fieldName;
-                        }
-                        else {
-                            getter = "get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
-                        }
-                        body.addStatement(fieldAssertion(getter, value));
-                        i++;
+    private void addFieldAsserts(BlockStmt body, Evaluator ev) {
+        int i = 0;
+        TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(ev.getClassName()).orElseThrow();
+        for(FieldDeclaration field : type.getFields()) {
+            VariableDeclarator fieldVariable = field.getVariable(0);
+            try {
+                String fieldName = fieldVariable.getNameAsString();
+                Variable value = ev.getField(fieldName);
+
+                if (value != null && !fieldName.equals("serialVersionUID")
+                        && value.getValue() != null) {
+                    /*
+                     * For `boolean` fields that start with `is` immediately followed by a title-case
+                     * letter, nothing is prefixed to generate the getter name.
+                     * So if you have a field boolean isOrganic the getter will be isOrganic()
+                     */
+                    String getter;
+                    if (value.getType() != null && value.getType().isPrimitiveType()
+                            && value.getType().asString().equals("boolean") && fieldName.startsWith("is")) {
+                        getter = fieldName;
                     }
-                } catch (Exception pex) {
-                    logger.error("Error asserting {}", fieldVariable.getNameAsString(), pex);
+                    else {
+                        getter = "get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+                    }
+                    body.addStatement(fieldAssertion(getter, value));
+                    i++;
                 }
-                if (i == 5) {
-                    break;
-                }
+            } catch (Exception pex) {
+                logger.error("Error asserting {}", fieldVariable.getNameAsString(), pex);
+            }
+            if (i == 5) {
+                break;
             }
         }
     }
