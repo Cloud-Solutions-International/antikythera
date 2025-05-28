@@ -80,7 +80,7 @@ public class UnitTestGenerator extends TestGenerator {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
         String className = AbstractCompiler.getPublicType(cu).getNameAsString() + TEST_NAME_SUFFIX;
 
-        filePath = basePath.replace("main", "test") + File.separator +
+        filePath = basePath.replace("main/java", "test/java") + File.separator +
                 packageDecl.replace(".", File.separator) + File.separator + className + ".java";
 
         File file = new File(filePath);
@@ -103,7 +103,9 @@ public class UnitTestGenerator extends TestGenerator {
             if (fd.getAnnotationByName("MockBean").isPresent() ||
                     fd.getAnnotationByName("Mock").isPresent()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                if(!wrappers.isEmpty()){
+                    MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                }
             }
         }
 
@@ -190,9 +192,9 @@ public class UnitTestGenerator extends TestGenerator {
      *
      * @param baseClassName the name of the base class.
      */
-     void loadPredefinedBaseClassForTest(String baseClassName) {
+    void loadPredefinedBaseClassForTest(String baseClassName) {
         String basePath = Settings.getProperty(Settings.BASE_PATH, String.class).orElseThrow();
-        String helperPath = basePath.replace("main", "test") + File.separator +
+        String helperPath = basePath.replace("src/main", "src/test") + File.separator +
                 AbstractCompiler.classToPath(baseClassName);
         try {
             baseTestClass = StaticJavaParser.parse(new File(helperPath));
@@ -471,9 +473,12 @@ public class UnitTestGenerator extends TestGenerator {
 
     void mockParameterFields(Variable v, String nameAsString) {
         if (v.getValue() instanceof Evaluator eval) {
-            TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
-            for (FieldDeclaration field : t.getFields()) {
-                mockFieldHelper(nameAsString, eval, field);
+            Optional<TypeDeclaration<?>> typeDeclarationOpt = AntikytheraRunTime.getTypeDeclaration(eval.getClassName());
+            if (typeDeclarationOpt.isPresent()) {
+                TypeDeclaration<?> t = typeDeclarationOpt.get();
+                for (FieldDeclaration field : t.getFields()) {
+                    mockFieldHelper(nameAsString, eval, field);
+                }
             }
         }
     }
@@ -488,10 +493,19 @@ public class UnitTestGenerator extends TestGenerator {
                 if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
                     return;
                 }
-                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                        nameAsString,
-                        ClassProcessor.instanceToClassName(name),
-                        value instanceof Long ? value + "L" : value.toString()));
+                if (value instanceof List) {
+                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(name)
+                    ));
+                }
+                else {
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(name),
+                            value instanceof Long ? value + "L" : value.toString()));
+                }
             }
         }
     }
@@ -659,7 +673,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (baseTestClass != null) {
             baseTestClass.findFirst(MethodDeclaration.class,
-                    md -> md.getNameAsString().equals("setUpBase"))
+                            md -> md.getNameAsString().equals("setUpBase"))
                     .ifPresent(md -> beforeBody.addStatement("setUpBase();"));
         }
 
@@ -675,7 +689,9 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                if (!wrappers.isEmpty()) {
+                    MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                }
             }
         }
 
@@ -751,7 +767,7 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectConstructorInjectionHelper(CompilationUnit cu, ClassOrInterfaceDeclaration suite,
-            Parameter param, Map<String, String> paramToFieldMap) {
+                                                  Parameter param, Map<String, String> paramToFieldMap) {
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(param);
         String registryKey = MockingRegistry.generateRegistryKey(wrappers);
         String paramName = param.getNameAsString();
@@ -789,7 +805,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     Optional<ClassOrInterfaceDeclaration> findSuite(TypeDeclaration<?> decl) {
         return gen.findFirst(ClassOrInterfaceDeclaration.class,
-            t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX));
+                t -> t.getNameAsString().equals(decl.getNameAsString() + TEST_NAME_SUFFIX));
 
     }
 
