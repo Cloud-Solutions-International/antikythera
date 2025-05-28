@@ -1489,8 +1489,6 @@ public class Evaluator {
                     }
                 }
             }
-        } catch (EvaluatorException | ReflectiveOperationException ex) {
-            throw ex;
         } catch (Exception e) {
             handleApplicationException(e);
         }
