@@ -75,7 +75,7 @@ public class Reflect {
     public static final String PRIMITIVE_INT = "int";
     public static final String PRIMITIVE_LONG = "long";
     public static final String PRIMITIVE_SHORT = "short";
-
+    public static final String JAVA_UTIL_LIST = "java.util.List";
 
 
     /**
@@ -359,7 +359,7 @@ public class Reflect {
                     .addArgument(new StringLiteralExpr(initialValue.toString()));
                 v.setInitializer(List.of(mce));
             }
-            case "java.util.List", JAVA_UTIL_ARRAY_LIST -> {
+            case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("List"));
                 v.setInitializer(List.of(init));
@@ -468,7 +468,7 @@ public class Reflect {
 
     private static Variable generateNonArrayVariable(String qualifiedName) {
         return switch (qualifiedName) {
-            case "List", "java.util.List", JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
+            case "List", JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
                     createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", "java.util.Map", "java.util.HashMap" ->
