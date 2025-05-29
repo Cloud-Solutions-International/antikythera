@@ -216,7 +216,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
-            "ternary5, False!True!"
+            "ternary5, False!True!", "drinkable, Very good!good!Not drinkable!",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
