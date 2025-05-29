@@ -446,11 +446,8 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     Variable optionalEmptyPath(Scope sc, LineOfCode l) throws ReflectiveOperationException {
-        List<Precondition> expressions;
         if (l.getPathTaken() != LineOfCode.BOTH_PATHS) {
-            expressions = l.getPreconditions();
-
-            for (Precondition expression : expressions) {
+            for (Precondition expression : l.getPreconditions()) {
                 evaluateExpression(expression.getExpression());
             }
         }
