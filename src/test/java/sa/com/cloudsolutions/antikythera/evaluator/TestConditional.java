@@ -12,6 +12,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -20,6 +21,7 @@ import java.io.PrintStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.expr.Expression;
@@ -217,8 +219,8 @@ class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
             "stringCompare, Donno!Hello!Donno!AK!", "fileCompare, tmp!Null!Other!",
-            "numberCompare, One!Two!Other!", "clarendon, good!Not drinkable!",
-            "ternary5, False!True!", "drinkable, Very good!good!Not drinkable!",
+            "numberCompare, One!Two!Other!",
+            "ternary5, False!True!",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -228,6 +230,19 @@ class TestConditional extends TestHelper {
 
 
         evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals(result,s.replaceAll("\\n",""));
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "drinkable, Very good!good!", "clarendon, good!"})
+    void testWithNPE(String name, String result) {
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+
+        assertThrows(EvaluatorException.class, () -> evaluator.visit(method));
         String s = outContent.toString();
         assertEquals(result,s.replaceAll("\\n",""));
     }

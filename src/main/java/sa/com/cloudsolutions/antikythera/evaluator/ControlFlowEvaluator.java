@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -332,10 +333,33 @@ public class ControlFlowEvaluator extends Evaluator {
             if (entry.getValue().equals("T")) {
                 setupConditionalNotNullValue(stmt, entry, name, setter);
             } else {
+                createSetterFromGetter(entry, setter);
+            }
+            if (setter.getArguments().isEmpty()) {
                 setter.addArgument(entry.getValue().toString());
             }
         }
         addPreCondition(stmt, setter);
+    }
+
+    private void createSetterFromGetter(Map.Entry<Expression, Object> entry, MethodCallExpr setter) {
+        Expression key = entry.getKey();
+        Optional< Node> parent = entry.getKey().getParentNode();
+        if (key.isMethodCallExpr() && parent.isPresent()  && parent.get() instanceof MethodCallExpr mce
+                        && mce.getNameAsString().equals("equals")) {
+            Expression argument = mce.getArgument(0);
+            if (argument.isObjectCreationExpr()) {
+                try {
+                    Variable v = evaluateExpression(argument);
+                    setter.addArgument(v.getInitializer().getFirst());
+                } catch (ReflectiveOperationException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
+            else if (argument.isLiteralExpr()) {
+                setter.addArgument(argument.asLiteralExpr());
+            }
+        }
     }
 
     private void setupConditionalNotNullValue(Statement stmt, Map.Entry<Expression, Object> entry, String name, MethodCallExpr setter) {
