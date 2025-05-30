@@ -216,6 +216,8 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
+            "stringCompare, Donno!Hello!Donno!AK!", "fileCompare, tmp!Null!Other!",
+            "numberCompare, One!Two!Other!",
             "ternary5, False!True!", "drinkable, Very good!good!Not drinkable!",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
