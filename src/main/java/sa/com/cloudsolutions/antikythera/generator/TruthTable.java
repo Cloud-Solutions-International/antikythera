@@ -55,7 +55,7 @@ public class TruthTable {
     private final Set<Expression> conditions;
 
     /**
-     * If any c
+     * If any additional constraints need to be applied, they will be held here.
      */
     private final HashMap<Expression, List<Expression>> constraints;
     /**
@@ -284,7 +284,7 @@ public class TruthTable {
         return totalCombinations;
     }
     /**
-     * <p>Identifies numeric variables from the list and maps them to their upper bounds.</p>
+     * <p>Identifies numeric variables from the list and maps them to their bounds.</p>
      *
      * <p></p>Numeric variables need special treatment and cannot be just treated as [0,1] because
      * certain inequalities can only be filled by considering a wider domain of numbers</p>
@@ -296,9 +296,8 @@ public class TruthTable {
      *   Returns empty map
      *
      * @param variableList Array of Expression objects representing variables
-     * @return Map of numeric variables to their upper bounds
+     * @return Map of numeric variables to their bounds
      */
-
     private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
         Map<Expression, Interval> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
@@ -728,6 +727,9 @@ public class TruthTable {
          * Processes variable names found in conditional expressions and determines their value domains.
          * For each name expression encountered:
          * - If part of an equals() comparison with null, sets domain to [null, "T"]
+         *      Truth table does not have any means to determine what should be the reasonable
+         *      default value. That information is only available to evaluators. So the
+         *      evaluator or other users of this class should set the correct default value.
          * - If part of a numeric comparison, sets domain to [0, numberOfVariables ]
          * - If part of a string comparison, sets domain to [null, "literal"]
          * - For boolean conditions, sets domain to [true, false]
@@ -738,16 +740,20 @@ public class TruthTable {
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
-            n.getParentNode().ifPresentOrElse(
-                    parent -> handleParentNode(n, parent, collector),
-                    () -> collector.put(n, new Pair<>(true, false))
-            );
+            Optional<Node> parent = n.getParentNode();
+            if (parent.isPresent()) {
+                handleParentNode(n, parent.get(), collector);
+            } else {
+                collector.put(n, new Pair<>(true, false));
+            }
             super.visit(n, collector);
         }
 
         private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS_CALL)) {
-                findDomain(n, collector, mce.getArgument(0));
+            if (parent instanceof MethodCallExpr mce ) {
+                if (mce.getNameAsString().equals(EQUALS_CALL)) {
+                    findDomain(n, collector, mce.getArgument(0));
+                }
             } else if (parent instanceof BinaryExpr b) {
                 findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
             } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
@@ -893,10 +899,12 @@ public class TruthTable {
                     } else if (literalValue > max) {
                         collector.put(n, new Pair<>(min, literalValue));
                     }
-                    // If literalValue is within bounds, no action needed
+                    else {
+                        collector.put(n, new Pair<>(min, literalValue + 1));
+                    }
                 }
             } else {
-                collector.put(n, new Pair<>(literalValue, literalValue));
+                collector.put(n, new Pair<>(literalValue, literalValue + 1));
             }
         }
 
@@ -922,7 +930,10 @@ public class TruthTable {
                 } else {
                     collector.put(m, new Pair<>(true, false));
                 }
+            } else if (!collector.containsKey(m)) {
+                findDomain(m, collector, m);
             }
+
             super.visit(m, collector);
         }
 
