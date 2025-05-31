@@ -303,7 +303,7 @@ public class TruthTable {
         Map<Expression, Interval> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
             Expectation e = variables.get(v);
-            if (e.domain.a instanceof Integer min && e.domain.b instanceof Integer max) {
+            if (e.getDomain().a instanceof Integer min && e.getDomain().b instanceof Integer max) {
                 numericRanges.put(v, new Interval(min, max));
             }
         }
@@ -341,7 +341,7 @@ public class TruthTable {
                 truthValues.put(v, value);
                 product *= range.width;
             } else {
-                Pair<Object, Object> bounds = variables.get(v).domain;
+                Pair<Object, Object> bounds = variables.get(v).getDomain();
                 boolean value = ((combination / product) % 2) == 1;
                 truthValues.put(v, value ? bounds.b : bounds.a);
                 product *= 2;
@@ -358,7 +358,7 @@ public class TruthTable {
                         new Expectation(0, maxLiteral));
             } else {
                 for(Map.Entry<Expression, Expectation> entry : variables.entrySet()) {
-                    Pair<Object, Object> value = entry.getValue().domain;
+                    Pair<Object, Object> value = entry.getValue().getDomain();
                     if (value.a instanceof Number || value.b instanceof Number) {
                         variables.put(entry.getKey(),
                                 new Expectation(0, Math.max(1, variables.size() - 1)));
@@ -382,7 +382,7 @@ public class TruthTable {
 
     private boolean isDefaultDomain() {
         for(Expectation e : variables.values()) {
-            Pair<Object, Object> p = e.domain;
+            Pair<Object, Object> p = e.getDomain();
             if (p.a instanceof Collection<?> || p.b instanceof Collection<?> || p.a instanceof Map<?,?> || p.b instanceof Map<?,?>) {
                 continue;
             }
@@ -405,7 +405,7 @@ public class TruthTable {
         }
 
         int literalValue = Integer.parseInt(value.asIntegerLiteralExpr().getValue());
-        Pair<Object, Object> currentDomain = variables.get(variable).domain;
+        Pair<Object, Object> currentDomain = variables.get(variable).getDomain();
 
         if (!(currentDomain.a instanceof Integer && currentDomain.b instanceof Integer)) {
             return;
@@ -899,7 +899,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 int literalValue) {
             if (collector.containsKey(n)) {
                 Expectation existing = collector.get(n);
-                Pair<Object, Object> existingBounds = existing.domain;
+                Pair<Object, Object> existingBounds = existing.getDomain();
                 if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
                     if (literalValue < min) {
                         collector.put(n, new Expectation(literalValue, max));
@@ -993,11 +993,15 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
     }
 
     private static class Expectation {
-        Pair<Object, Object> domain;
+        private Pair<Object, Object> domain;
         boolean result;
 
         public Expectation(Object first, Object second) {
             this.domain = new Pair<>(first, second);
+        }
+
+        public Pair<Object, Object> getDomain() {
+            return domain;
         }
     }
 
