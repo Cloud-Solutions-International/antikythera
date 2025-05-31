@@ -236,6 +236,15 @@ public class TruthTable {
                             !satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
                     return false;
                 }
+                if (constraintExpr instanceof MethodCallExpr mce) {
+                    Optional<Expression> scope = mce.getScope();
+                    if (scope.isPresent() && scope.get().equals(variable)) {
+                        Object value = truthValues.get(variable);
+                        if (value instanceof Boolean b) {
+                            return b;
+                        }
+                    }
+                }
             }
         }
         return true;
@@ -714,7 +723,7 @@ public class TruthTable {
         return table;
     }
 
-    public void addConstraint(NameExpr name, BinaryExpr constraint) {
+    public void addConstraint(Expression name, Expression constraint) {
         constraints.computeIfAbsent(name, k -> new ArrayList<>()).add(constraint);
     }
 

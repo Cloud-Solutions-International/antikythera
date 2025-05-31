@@ -601,6 +601,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 if (bin.getLeft().isNameExpr()) {
                     tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
                 }
+            } else if (cond.isMethodCallExpr()) {
+                MethodCallExpr mce = cond.asMethodCallExpr();
+                Optional<Expression> expr = mce.getScope();
+                if (expr.isPresent()) {
+                    tt.addConstraint(expr.get(), mce);
+                }
             }
         }
 
