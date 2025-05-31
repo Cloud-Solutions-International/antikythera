@@ -662,7 +662,7 @@ public class TruthTable {
                 return argument.isNullLiteralExpr();
             }
             if (argument.isStringLiteralExpr()) {
-                return scopeValue;
+                return argument.asStringLiteralExpr().getValue().equals(scopeValue);
             }
             return scopeValue.equals(getValue(argument, truthValues));
         } else {
