@@ -569,8 +569,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     @Override
     Variable resolveVariableRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-        TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, resolvedClass).orElseThrow();
+        TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(resolvedClass).orElseThrow();
         if (type instanceof ClassOrInterfaceDeclaration cdecl) {
             String nameAsString = variable.getNameAsString();
 

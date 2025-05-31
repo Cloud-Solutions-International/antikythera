@@ -1,8 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+
+import java.util.List;
+import java.util.Optional;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
 
@@ -49,6 +54,15 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 Evaluator o = EvaluatorFactory.create(fullClassName, SpringEvaluator.class);
                 v = new Variable(o);
                 v.setType(t);
+                Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
+                if (opt.isPresent()) {
+                    String init = ArgumentGenerator.instantiateClass(
+                            opt.get().asClassOrInterfaceDeclaration(),
+                            param.getNameAsString()
+                    ).replace(";","");
+                    String[] parts = init.split("=");
+                    v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
+                }
             }
         }
         return v;
