@@ -152,6 +152,14 @@ public class LineOfCode {
         } else {
             pathTaken++;
         }
+        // Automatically transition parent if all children are fully travelled
+        if (parent != null) {
+            boolean allChildrenFullyTravelled = parent.children.stream()
+                .allMatch(child -> child.isFullyTravelled());
+            if (allChildrenFullyTravelled && !parent.isFullyTravelled()) {
+                parent.transition();
+            }
+        }
     }
 
     /**
