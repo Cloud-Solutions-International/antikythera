@@ -75,7 +75,7 @@ public class Reflect {
     public static final String PRIMITIVE_INT = "int";
     public static final String PRIMITIVE_LONG = "long";
     public static final String PRIMITIVE_SHORT = "short";
-
+    public static final String JAVA_UTIL_LIST = "java.util.List";
 
 
     /**
@@ -356,10 +356,10 @@ public class Reflect {
             case "Long", DOUBLE, INTEGER, FLOAT, BOOLEAN -> {
                 Expression scope = new NameExpr(typeName);
                 Expression mce = new MethodCallExpr(scope, "valueOf")
-                    .addArgument(new StringLiteralExpr(initialValue.toString()));
+                        .addArgument(new StringLiteralExpr(initialValue.toString()));
                 v.setInitializer(List.of(mce));
             }
-            case "java.util.List", JAVA_UTIL_ARRAY_LIST -> {
+            case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
                 MethodCallExpr init = new MethodCallExpr("of");
                 init.setScope(new NameExpr("List"));
                 v.setInitializer(List.of(init));
@@ -376,7 +376,7 @@ public class Reflect {
             }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(typeName));
+                        .setType(new ClassOrInterfaceType().setName(typeName));
                 if (stringValue != null) {
                     expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
                 } else {
@@ -468,7 +468,7 @@ public class Reflect {
 
     private static Variable generateNonArrayVariable(String qualifiedName) {
         return switch (qualifiedName) {
-            case "List", "java.util.List", JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
+            case "List", JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
                     createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", "java.util.Map", "java.util.HashMap" ->
@@ -689,7 +689,7 @@ public class Reflect {
         return null;
     }
 
-    public static Class<?> literalExpressionToTypeString(LiteralExpr lit) {
+    public static Class<?> literalExpressionToClass(LiteralExpr lit) {
         if (lit.isBooleanLiteralExpr()) {
             return boolean.class;
         } else if (lit.isCharLiteralExpr()) {

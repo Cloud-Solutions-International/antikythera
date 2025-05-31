@@ -309,8 +309,8 @@ public class UnitTestGenerator extends TestGenerator {
         if (typeName.startsWith("Set") || typeName.startsWith("java.util.Set")) {
             TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
         }
-        else if (typeName.startsWith("List") || typeName.startsWith("java.util.List")) {
-            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+        else if (typeName.startsWith("List") || typeName.startsWith(Reflect.JAVA_UTIL_LIST)) {
+            TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
         }
         else if (typeName.startsWith("Map") || typeName.startsWith("java.util.Map")) {
             TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
@@ -487,25 +487,27 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         String name = field.getVariable(0).getNameAsString();
         Variable f = eval.getField(name);
-        if (f != null && f.getType() != null && !name.equals("serialVersionUID")) {
-            Object value = f.getValue();
-            if (value != null) {
-                if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
-                    return;
-                }
-                if (value instanceof List) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
-                            nameAsString,
-                            ClassProcessor.instanceToClassName(name)
-                    ));
-                }
-                else {
-                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                            nameAsString,
-                            ClassProcessor.instanceToClassName(name),
-                            value instanceof Long ? value + "L" : value.toString()));
-                }
+        if (f == null || f.getType() == null || name.equals("serialVersionUID")) {
+            return;
+        }
+
+        Object value = f.getValue();
+        if (value != null) {
+            if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
+                return;
+            }
+            if (value instanceof List) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+                        nameAsString,
+                        ClassProcessor.instanceToClassName(name)
+                ));
+            }
+            else {
+                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                        nameAsString,
+                        ClassProcessor.instanceToClassName(name),
+                        value instanceof Long ? value + "L" : value.toString()));
             }
         }
     }
