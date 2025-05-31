@@ -689,7 +689,7 @@ public class Reflect {
         return null;
     }
 
-    public static Class<?> literalExpressionToTypeString(LiteralExpr lit) {
+    public static Class<?> literalExpressionToClass(LiteralExpr lit) {
         if (lit.isBooleanLiteralExpr()) {
             return boolean.class;
         } else if (lit.isCharLiteralExpr()) {

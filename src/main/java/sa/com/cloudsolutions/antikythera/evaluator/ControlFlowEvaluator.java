@@ -357,7 +357,14 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
             }
             else if (argument.isLiteralExpr()) {
-                setter.addArgument(argument.asLiteralExpr());
+                if (entry.getValue() instanceof Boolean b && b) {
+                    setter.addArgument(argument.asLiteralExpr());
+                }
+                else {
+                    Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
+                    Variable v = Reflect.variableFactory(c.getName());
+                    setter.addArgument(v.getInitializer().getFirst());
+                }
             }
         }
     }
@@ -565,12 +572,13 @@ public class ControlFlowEvaluator extends Evaluator {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
         TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, resolvedClass).orElseThrow();
         if (type instanceof ClassOrInterfaceDeclaration cdecl) {
+            String nameAsString = variable.getNameAsString();
+
             MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
             Variable v = new Variable(eval);
-            String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
+            String init = ArgumentGenerator.instantiateClass(cdecl, nameAsString).replace(";","");
             String[] parts = init.split("=");
             v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
-
             return v;
         }
 
