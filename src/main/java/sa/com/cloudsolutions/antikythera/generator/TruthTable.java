@@ -355,13 +355,13 @@ public class TruthTable {
             int maxLiteral = findMaxIntegerLiteral();
             if (maxLiteral > 1) {
                 variables.replaceAll((e, v) ->
-                        new Expectation(new Pair<>(0, maxLiteral)));
+                        new Expectation(0, maxLiteral));
             } else {
                 for(Map.Entry<Expression, Expectation> entry : variables.entrySet()) {
                     Pair<Object, Object> value = entry.getValue().domain;
                     if (value.a instanceof Number || value.b instanceof Number) {
                         variables.put(entry.getKey(),
-                                new Expectation(new Pair<>(0, Math.max(1, variables.size() - 1))));
+                                new Expectation(0, Math.max(1, variables.size() - 1)));
                     }
                 }
             }
@@ -418,7 +418,7 @@ public class TruthTable {
             constraint.getLeft().toString().equals(variable.toString())
         );
 
-        variables.put(variable, new Expectation(new Pair<>(newInterval.min, newInterval.max)));
+        variables.put(variable, new Expectation(newInterval.min, newInterval.max));
     }
 
     private Interval calculateNewInterval(Interval current, int literalValue,
@@ -743,7 +743,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         public void visit(NameExpr n, HashMap<Expression, Expectation> collector) {
             n.getParentNode().ifPresentOrElse(
                     parent -> handleParentNode(n, parent, collector),
-                    () -> collector.put(n, new Expectation(new Pair<>(true, false)))
+                    () -> collector.put(n, new Expectation(true, false))
             );
             super.visit(n, collector);
         }
@@ -754,7 +754,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
             } else if (parent instanceof BinaryExpr b) {
                 findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
             } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
-                collector.put(n, new Expectation(new Pair<>(false, true)));
+                collector.put(n, new Expectation(false, true));
             }
         }
 
@@ -767,10 +767,10 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         private void findDomain(Expression nameExpression, HashMap<Expression,Expectation> collector, Expression compareWith) {
             if (compareWith.isNullLiteralExpr()) {
                 if (allowNullInputs) {
-                    collector.put(nameExpression, new Expectation(new Pair<>(null, "T")));
+                    collector.put(nameExpression, new Expectation(null, "T"));
                 } else {
                     // If null inputs are not allowed, use a non-null domain
-                    collector.put(nameExpression, new Expectation(new Pair<>(false, true)));
+                    collector.put(nameExpression, new Expectation(false, true));
                 }
             }
             else if (compareWith.isIntegerLiteralExpr()) {
@@ -784,18 +784,18 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
             }
             else if (compareWith.isStringLiteralExpr()) {
                 if (allowNullInputs) {
-                    collector.put(nameExpression, new Expectation(new Pair<>(null, compareWith.asStringLiteralExpr().getValue())));
+                    collector.put(nameExpression, new Expectation(null, compareWith.asStringLiteralExpr().getValue()));
                 } else {
                     // If null inputs are not allowed, use a non-null domain for strings
-                    collector.put(nameExpression, new Expectation(new Pair<>("", compareWith.asStringLiteralExpr().getValue())));
+                    collector.put(nameExpression, new Expectation("", compareWith.asStringLiteralExpr().getValue()));
                 }
             }
             else {
                 if (isInequalityPresent()) {
-                    collector.put(nameExpression, new Expectation(new Pair<>(0, 1)));
+                    collector.put(nameExpression, new Expectation(0, 1));
                 }
                 else {
-                    collector.put(nameExpression, new Expectation(new Pair<>(true, false)));
+                    collector.put(nameExpression, new Expectation(true, false));
                 }
             }
         }
@@ -814,7 +814,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 if (isInequality(binaryExpr)) {
                     handleLongInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Expectation(new Pair<>((int)literalValue, (int)literalValue + 1)));
+                    collector.put(n, new Expectation((int)literalValue, (int)literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, (int)literalValue);
@@ -825,15 +825,15 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 long literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
                 case LESS -> collector.put(n,
-                        new Expectation(new Pair<>((int)literalValue - 1, (int)literalValue)));
+                        new Expectation((int)literalValue - 1, (int)literalValue));
                 case LESS_EQUALS -> collector.put(n,
-                        new Expectation(new Pair<>(0, (int)literalValue + 1)));
+                        new Expectation(0, (int)literalValue + 1));
                 case GREATER -> collector.put(n,
-                        new Expectation(new Pair<>((int)literalValue - 1, (int)literalValue + 1)));
+                        new Expectation((int)literalValue - 1, (int)literalValue + 1));
                 case GREATER_EQUALS -> collector.put(n,
-                        new Expectation(new Pair<>((int)literalValue, (int)literalValue + 2)));
+                        new Expectation((int)literalValue, (int)literalValue + 2));
                 default -> collector.put(n,
-                        new Expectation(new Pair<>(0, 1))); // fallback
+                        new Expectation(0, 1)); // fallback
             }
         }
 
@@ -846,7 +846,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 if (isInequality(binaryExpr)) {
                     handleDoubleInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Expectation(new Pair<>(literalValue, literalValue + 1)));
+                    collector.put(n, new Expectation(literalValue, literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, (int)literalValue);
@@ -857,15 +857,15 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 double literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
                 case LESS -> collector.put(n,
-                        new Expectation(new Pair<>(literalValue - 1, literalValue)));
+                        new Expectation(literalValue - 1, literalValue));
                 case LESS_EQUALS -> collector.put(n,
-                        new Expectation(new Pair<>(0, literalValue + 0.0001)));
+                        new Expectation(0, literalValue + 0.0001));
                 case GREATER -> collector.put(n,
-                        new Expectation(new Pair<>(literalValue - 1, literalValue + 0.0001)));
+                        new Expectation(literalValue - 1, literalValue + 0.0001));
                 case GREATER_EQUALS -> collector.put(n,
-                        new Expectation(new Pair<>(literalValue, literalValue + 0.0001)));
+                        new Expectation(literalValue, literalValue + 0.0001));
                 default -> collector.put(n,
-                        new Expectation(new Pair<>(0, 1))); // fallback
+                        new Expectation(0, 1)); // fallback
             }
         }
         private void handleIntegerLiteral(Expression n, HashMap<Expression, Expectation> collector,
@@ -877,7 +877,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 if (isInequality(binaryExpr)) {
                     handleInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Expectation(new Pair<>(literalValue, literalValue + 1)));
+                    collector.put(n, new Expectation(literalValue, literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, literalValue);
@@ -887,11 +887,11 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         private void handleInequalityDomain(Expression n, HashMap<Expression, Expectation> collector,
                 int literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Expectation(new Pair<>(literalValue -1, literalValue)));
-                case LESS_EQUALS -> collector.put(n, new Expectation(new Pair<>(0, literalValue + 1)));
-                case GREATER -> collector.put(n, new Expectation(new Pair<>(literalValue - 1, literalValue + 1)));
-                case GREATER_EQUALS -> collector.put(n, new Expectation(new Pair<>(literalValue, literalValue + 2)));
-                default -> collector.put(n, new Expectation(new Pair<>(0, 1))); // fallback
+                case LESS -> collector.put(n, new Expectation(literalValue -1, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Expectation(0, literalValue + 1));
+                case GREATER -> collector.put(n, new Expectation(literalValue - 1, literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Expectation(literalValue, literalValue + 2));
+                default -> collector.put(n, new Expectation(0, 1)); // fallback
             }
         }
 
@@ -902,14 +902,14 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 Pair<Object, Object> existingBounds = existing.domain;
                 if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
                     if (literalValue < min) {
-                        collector.put(n, new Expectation(new Pair<>(literalValue, max)));
+                        collector.put(n, new Expectation(literalValue, max));
                     } else if (literalValue > max) {
-                        collector.put(n, new Expectation(new Pair<>(min, literalValue)));
+                        collector.put(n, new Expectation(min, literalValue));
                     }
                     // If literalValue is within bounds, no action needed
                 }
             } else {
-                collector.put(n, new Expectation(new Pair<>(literalValue, literalValue)));
+                collector.put(n, new Expectation(literalValue, literalValue));
             }
         }
 
@@ -922,7 +922,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                     List<?> emptyList = new ArrayList<>();
                     List<Integer> nonEmptyList = new ArrayList<>();
                     nonEmptyList.add(1);
-                    collector.put(scope.get(), new Expectation(new Pair<>(emptyList, nonEmptyList)));
+                    collector.put(scope.get(), new Expectation(emptyList, nonEmptyList));
                 }
             } else if (!m.getNameAsString().equals(EQUALS_CALL)) {
                 Optional<Node> parent = m.getParentNode();
@@ -933,7 +933,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                         findDomain(m, collector, b.getLeft());
                     }
                 } else {
-                    collector.put(m, new Expectation(new Pair<>(true, false)));
+                    collector.put(m, new Expectation(true, false));
                 }
             }
             super.visit(m, collector);
@@ -942,10 +942,10 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         @Override
         public void visit(FieldAccessExpr f, HashMap<Expression, Expectation> collector) {
             if(isInequalityPresent()) {
-                collector.put(f, new Expectation(new Pair<>(0, 1)));
+                collector.put(f, new Expectation(0, 1));
             }
             else {
-                collector.put(f, new Expectation(new Pair<>(true, false)));
+                collector.put(f, new Expectation(true, false));
             }
             super.visit(f, collector);
         }
@@ -994,10 +994,10 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
 
     private static class Expectation {
         Pair<Object, Object> domain;
-        boolean expectedResult;
+        boolean result;
 
-        public Expectation(Pair<Object, Object> domain) {
-            this.domain = domain;
+        public Expectation(Object first, Object second) {
+            this.domain = new Pair<>(first, second);
         }
     }
 
