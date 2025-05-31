@@ -801,6 +801,7 @@ public class TruthTable {
             }
             else if (compareWith.isNameExpr()) {
                 collector.put(nameExpression, new Pair<>(true, false));
+                collector.put(compareWith, new Pair<>(true, false));
             }
             else {
                 if (isInequalityPresent()) {
