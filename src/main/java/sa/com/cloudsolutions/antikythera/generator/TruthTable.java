@@ -660,6 +660,9 @@ public class TruthTable {
             if (scopeValue == null) {
                 return argument.isNullLiteralExpr();
             }
+            if (scopeValue instanceof Boolean b) {
+                return b;
+            }
             return scopeValue.equals(getValue(argument, truthValues));
         } else {
             Object arg = truthValues.get(argument);
