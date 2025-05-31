@@ -48,7 +48,7 @@ public class MethodInterceptor {
             return mc.getVariable().getValue();
         }
 
-        if (wrappedClass != null) {
+        if (wrappedClass != null && ! MockingRegistry.isMockTarget(wrappedClass.getName())) {
             try {
                 Method targetMethod = wrappedClass.getMethod(method.getName(), method.getParameterTypes());
                 // Create instance if the method is not static

@@ -6,7 +6,9 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
@@ -36,7 +38,7 @@ public class LineOfCode {
     /**
      * The list of preconditions to be applied before executing this line.
      */
-    private final List<Precondition> preconditions = new ArrayList<>();
+    private final LinkedHashSet<Precondition> preconditions = new LinkedHashSet<>();
     /**
      * The statement that this line of code represents.
      */
@@ -168,7 +170,7 @@ public class LineOfCode {
      *
      * @return The list of preconditions.
      */
-    public List<Precondition> getPreconditions() {
+    public Set<Precondition> getPreconditions() {
         return preconditions;
     }
 

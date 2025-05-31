@@ -1118,7 +1118,20 @@ public class Evaluator {
             if (Optional.class.equals(clazz)) {
                 return handleOptionals(sc);
             }
-            return executeMethod(method);
+            Variable variable = sc.getVariable();
+            MethodCallExpr mce = sc.getMCEWrapper().asMethodCallExpr().orElseThrow();
+            if (variable.getValue() instanceof Evaluator eval) {
+                MethodInterceptor interceptor = new MethodInterceptor(eval);
+                Class<?> c = AKBuddy.createDynamicClass(interceptor);
+                Object instance = AKBuddy.createInstance(c, interceptor);
+                Variable v  = new Variable(instance);
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(mce, this, v);
+                return reflectiveMethodCall(v, reflectionArguments);
+            }
+            else {
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(mce, this, variable);
+                return reflectiveMethodCall(variable, reflectionArguments);
+            }
         }
     }
 
@@ -1481,8 +1494,6 @@ public class Evaluator {
                     }
                 }
             }
-        } catch (EvaluatorException | ReflectiveOperationException ex) {
-            throw ex;
         } catch (Exception e) {
             handleApplicationException(e);
         }
