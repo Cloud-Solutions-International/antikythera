@@ -1192,11 +1192,19 @@ public class Evaluator {
 
         if (methodName.startsWith("is") && hasGetter) {
             String field = AbstractCompiler.classToInstanceName(methodName.replace("is", ""));
-            return getField(field);
+            Variable v = getField(field);
+            if (v == null) {
+                return getField(methodName);
+            }
+            return v;
         }
 
         if (methodName.startsWith("set") && hasSetter) {
             String field = AbstractCompiler.classToInstanceName(methodName.replace("set", ""));
+            Variable old = getField(field);
+            if (old == null) {
+                field = "is" + methodName.replace("set", "");
+            }
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
             return new Variable(null);
