@@ -4,6 +4,9 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.NodeList;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -73,14 +76,23 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                             if (simplest != null) {
                                 Object[] args = new Object[simplest.getParameterCount()];
                                 Class<?>[] paramTypes = simplest.getParameterTypes();
+                                NodeList<com.github.javaparser.ast.expr.Expression> argExprs = new NodeList<>();
                                 for (int i = 0; i < paramTypes.length; i++) {
                                     if (paramTypes[i].equals(String.class)) {
                                         args[i] = "Antikythera";
+                                        argExprs.add(new StringLiteralExpr("Antikythera"));
                                     } else {
                                         args[i] = Reflect.getDefault(paramTypes[i]);
+                                        argExprs.add(Reflect.createLiteralExpression(args[i]));
                                     }
                                 }
                                 v = new Variable(simplest.newInstance(args));
+                                // Set initializer
+                                ObjectCreationExpr oce =
+                                    new ObjectCreationExpr()
+                                        .setType(t.asString())
+                                        .setArguments(argExprs);
+                                v.setInitializer(List.of(oce));
                             } else {
                                 // fallback: cannot instantiate
                                 v = new Variable((Object) null);
