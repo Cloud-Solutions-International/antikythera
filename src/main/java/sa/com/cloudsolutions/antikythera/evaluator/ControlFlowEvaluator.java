@@ -354,7 +354,7 @@ public class ControlFlowEvaluator extends Evaluator {
         Expression key = entry.getKey();
         Optional< Node> parent = entry.getKey().getParentNode();
         if (key.isMethodCallExpr() && parent.isPresent()  && parent.get() instanceof MethodCallExpr mce
-                && mce.getNameAsString().equals("equals")) {
+                        && mce.getNameAsString().equals("equals")) {
             Expression argument = mce.getArgument(0);
             if (argument.isObjectCreationExpr()) {
                 try {

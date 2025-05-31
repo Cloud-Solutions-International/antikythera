@@ -89,9 +89,9 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                                 v = new Variable(simplest.newInstance(args));
                                 // Set initializer
                                 ObjectCreationExpr oce =
-                                        new ObjectCreationExpr()
-                                                .setType(t.asString())
-                                                .setArguments(argExprs);
+                                    new ObjectCreationExpr()
+                                        .setType(t.asString())
+                                        .setArguments(argExprs);
                                 v.setInitializer(List.of(oce));
                             } else {
                                 // fallback: cannot instantiate

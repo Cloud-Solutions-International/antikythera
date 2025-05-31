@@ -356,7 +356,7 @@ public class Reflect {
             case "Long", DOUBLE, INTEGER, FLOAT, BOOLEAN -> {
                 Expression scope = new NameExpr(typeName);
                 Expression mce = new MethodCallExpr(scope, "valueOf")
-                        .addArgument(new StringLiteralExpr(initialValue.toString()));
+                    .addArgument(new StringLiteralExpr(initialValue.toString()));
                 v.setInitializer(List.of(mce));
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {

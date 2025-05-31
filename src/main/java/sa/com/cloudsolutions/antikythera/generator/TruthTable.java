@@ -55,7 +55,7 @@ public class TruthTable {
     private final Set<Expression> conditions;
 
     /**
-     * If any c
+     * If any additional constraints need to be applied, they will be held here.
      */
     private final HashMap<Expression, List<Expression>> constraints;
     /**
@@ -284,7 +284,7 @@ public class TruthTable {
         return totalCombinations;
     }
     /**
-     * <p>Identifies numeric variables from the list and maps them to their upper bounds.</p>
+     * <p>Identifies numeric variables from the list and maps them to their bounds.</p>
      *
      * <p></p>Numeric variables need special treatment and cannot be just treated as [0,1] because
      * certain inequalities can only be filled by considering a wider domain of numbers</p>
@@ -296,9 +296,8 @@ public class TruthTable {
      *   Returns empty map
      *
      * @param variableList Array of Expression objects representing variables
-     * @return Map of numeric variables to their upper bounds
+     * @return Map of numeric variables to their bounds
      */
-
     private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
         Map<Expression, Interval> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
@@ -600,24 +599,24 @@ public class TruthTable {
         return evaluateBasicExpression(condition, truthValues);
     }
 
-private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
-    var leftExpr = binaryExpr.getLeft();
-    var rightExpr = binaryExpr.getRight();
-    Object left = evaluateCondition(leftExpr, truthValues);
-    Object right = evaluateCondition(rightExpr, truthValues);
+    private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
+        var leftExpr = binaryExpr.getLeft();
+        var rightExpr = binaryExpr.getRight();
+        Object left = evaluateCondition(leftExpr, truthValues);
+        Object right = evaluateCondition(rightExpr, truthValues);
 
-    return switch (binaryExpr.getOperator()) {
-        case AND -> ((Boolean) left) && (Boolean) right;
-        case OR -> ((Boolean) left) || (Boolean) right;
-        case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
-        case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
-        case LESS -> NumericComparator.compare(left, right) < 0;
-        case GREATER -> NumericComparator.compare(left, right) > 0;
-        case LESS_EQUALS -> NumericComparator.compare(left, right) <= 0;
-        case GREATER_EQUALS -> NumericComparator.compare(left, right) >= 0;
-        default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-    };
-}
+        return switch (binaryExpr.getOperator()) {
+            case AND -> ((Boolean) left) && (Boolean) right;
+            case OR -> ((Boolean) left) || (Boolean) right;
+            case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
+            case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
+            case LESS -> NumericComparator.compare(left, right) < 0;
+            case GREATER -> NumericComparator.compare(left, right) > 0;
+            case LESS_EQUALS -> NumericComparator.compare(left, right) <= 0;
+            case GREATER_EQUALS -> NumericComparator.compare(left, right) >= 0;
+            default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+        };
+    }
 
     private Object evaluateBasicExpression(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isNameExpr()) {
@@ -653,7 +652,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         return getValue(condition, truthValues);
     }
 
-    private Object evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
+    private boolean evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
         Object scopeValue = truthValues.get(scope);
         Expression argument = condition.getArgument(0);
 
@@ -728,6 +727,9 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
          * Processes variable names found in conditional expressions and determines their value domains.
          * For each name expression encountered:
          * - If part of an equals() comparison with null, sets domain to [null, "T"]
+         *      Truth table does not have any means to determine what should be the reasonable
+         *      default value. That information is only available to evaluators. So the
+         *      evaluator or other users of this class should set the correct default value.
          * - If part of a numeric comparison, sets domain to [0, numberOfVariables ]
          * - If part of a string comparison, sets domain to [null, "literal"]
          * - For boolean conditions, sets domain to [true, false]
