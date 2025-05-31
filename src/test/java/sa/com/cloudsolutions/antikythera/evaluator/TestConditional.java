@@ -219,7 +219,7 @@ class TestConditional extends TestHelper {
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
             "stringCompare, Donno!Hello!Donno!AK!", "fileCompare, tmp!Null!Other!",
-            "numberCompare, One!Two!Other!",
+            "numberCompare, One!Two!Other!", "drinkable, Very good!good!", "clarendon, good!",
             "ternary5, False!True!",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
@@ -234,18 +234,6 @@ class TestConditional extends TestHelper {
         assertEquals(result,s.replaceAll("\\n",""));
     }
 
-    @ParameterizedTest
-    @CsvSource({ "drinkable, Very good!good!", "clarendon, good!"})
-    void testWithNPE(String name, String result) {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
-
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals(name)).orElseThrow();
-
-        assertThrows(EvaluatorException.class, () -> evaluator.visit(method));
-        String s = outContent.toString();
-        assertEquals(result,s.replaceAll("\\n",""));
-    }
 }
 
 class TestConditionalWithOptional extends TestHelper {
