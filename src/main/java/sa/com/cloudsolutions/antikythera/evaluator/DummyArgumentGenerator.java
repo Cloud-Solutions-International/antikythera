@@ -6,6 +6,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,7 +48,44 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                         v = Reflect.variableFactory(fullClassName);
                     } else {
                         Class<?> clazz = Class.forName(fullClassName);
-                        v = new Variable(clazz.getDeclaredConstructor().newInstance());
+                        // Try to find a no-arg constructor first
+                        try {
+                            v = new Variable(clazz.getDeclaredConstructor().newInstance());
+                        } catch (NoSuchMethodException e) {
+                            // No no-arg constructor, find the simplest one
+                            Constructor<?>[] constructors = clazz.getDeclaredConstructors();
+                            Constructor<?> simplest = null;
+                            int minParams = Integer.MAX_VALUE;
+                            for (Constructor<?> ctor : constructors) {
+                                Class<?>[] paramTypes = ctor.getParameterTypes();
+                                boolean allSimple = true;
+                                for (Class<?> pt : paramTypes) {
+                                    if (!(Reflect.isPrimitiveOrBoxed(pt) || pt.equals(String.class))) {
+                                        allSimple = false;
+                                        break;
+                                    }
+                                }
+                                if (allSimple && paramTypes.length < minParams) {
+                                    minParams = paramTypes.length;
+                                    simplest = ctor;
+                                }
+                            }
+                            if (simplest != null) {
+                                Object[] args = new Object[simplest.getParameterCount()];
+                                Class<?>[] paramTypes = simplest.getParameterTypes();
+                                for (int i = 0; i < paramTypes.length; i++) {
+                                    if (paramTypes[i].equals(String.class)) {
+                                        args[i] = "Antikythera";
+                                    } else {
+                                        args[i] = Reflect.getDefault(paramTypes[i]);
+                                    }
+                                }
+                                v = new Variable(simplest.newInstance(args));
+                            } else {
+                                // fallback: cannot instantiate
+                                v = new Variable((Object) null);
+                            }
+                        }
                     }
                 }
             } else {

@@ -8,6 +8,7 @@ import com.github.javaparser.ast.stmt.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
@@ -169,7 +170,7 @@ public class LineOfCode {
      *
      * @return The list of preconditions.
      */
-    public LinkedHashSet<Precondition> getPreconditions() {
+    public Set<Precondition> getPreconditions() {
         return preconditions;
     }
 

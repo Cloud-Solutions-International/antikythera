@@ -143,8 +143,16 @@ public class ControlFlowEvaluator extends Evaluator {
                 return setupNonEmptyCollections(v, name);
             }
         }
-        return List.of(entry.getValue() == null ? new NullLiteralExpr()
-                        : new StringLiteralExpr(entry.getValue().toString()));
+        if (entry.getValue() == null) {
+            return List.of(new NullLiteralExpr());
+        }
+        if (entry.getValue() instanceof Boolean b) {
+            if (b) {
+
+            }
+            return List.of(StaticJavaParser.parseExpression(Boolean.toString(b)));
+        }
+        return List.of(new StringLiteralExpr(entry.getValue().toString()));
     }
 
     /**
