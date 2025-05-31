@@ -146,11 +146,11 @@ public class ControlFlowEvaluator extends Evaluator {
         if (entry.getValue() == null) {
             return List.of(new NullLiteralExpr());
         }
-        if (entry.getValue() instanceof Boolean b) {
-            if (b) {
-
-            }
-            return List.of(StaticJavaParser.parseExpression(Boolean.toString(b)));
+        if (entry.getValue() instanceof ObjectCreationExpr oce) {
+            return List.of(oce);
+        }
+        if (entry.getValue() instanceof MethodCallExpr mce) {
+            return List.of(mce);
         }
         return List.of(new StringLiteralExpr(entry.getValue().toString()));
     }

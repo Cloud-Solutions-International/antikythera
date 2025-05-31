@@ -7,6 +7,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
@@ -793,6 +794,10 @@ public class TruthTable {
                     // If null inputs are not allowed, use a non-null domain for strings
                     collector.put(nameExpression, new Pair<>("", compareWith.asStringLiteralExpr().getValue()));
                 }
+            }
+            else if (compareWith.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = compareWith.asObjectCreationExpr();
+                collector.put(nameExpression, new Pair<>(oce, null));
             }
             else {
                 if (isInequalityPresent()) {
