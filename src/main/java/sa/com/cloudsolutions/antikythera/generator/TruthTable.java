@@ -799,6 +799,9 @@ public class TruthTable {
                 ObjectCreationExpr oce = compareWith.asObjectCreationExpr();
                 collector.put(nameExpression, new Pair<>(oce, null));
             }
+            else if (compareWith.isNameExpr()) {
+                collector.put(nameExpression, new Pair<>(true, false));
+            }
             else {
                 if (isInequalityPresent()) {
                     collector.put(nameExpression, new Pair<>(0, 1));
