@@ -209,6 +209,7 @@ public class LineOfCode {
      *
      * @return The list of preconditions.
      */
+
     public Set<Precondition> getPreconditions() {
         return preconditions;
     }
