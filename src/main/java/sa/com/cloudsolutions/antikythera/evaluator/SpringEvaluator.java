@@ -592,28 +592,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     void setupIfCondition() {
         boolean state = currentConditional.isFalsePath();
-
-        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(currentConditional.getStatement());
         TruthTable tt = new TruthTable();
 
-        for (Expression cond : collectedConditions) {
-            if (cond.isBinaryExpr()) {
-                BinaryExpr bin = cond.asBinaryExpr();
-                if (bin.getLeft().isNameExpr()) {
-                    tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
-                }
-            } else if (cond.isMethodCallExpr()) {
-                MethodCallExpr mce = cond.asMethodCallExpr();
-                Optional<Expression> expr = mce.getScope();
-                if (expr.isPresent()) {
-                    tt.addConstraint(expr.get(), mce);
-                }
-            }
-//            else if (cond.isUnaryExpr()) {
-//                UnaryExpr un = cond.asUnaryExpr();
-//                tt.addConstraint(un, un);
-//            }
-        }
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(currentConditional.getStatement());
+        tt.addConstraints(collectedConditions);
 
         collectedConditions.add(currentConditional.getConditionalExpression());
         tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));

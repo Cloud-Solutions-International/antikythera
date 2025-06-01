@@ -724,6 +724,28 @@ public class TruthTable {
         return table;
     }
 
+
+    public void addConstraints(List<Expression> collectedConditions) {
+        for (Expression cond : collectedConditions) {
+            if (cond.isBinaryExpr()) {
+                BinaryExpr bin = cond.asBinaryExpr();
+                if (bin.getLeft().isNameExpr()) {
+                    addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
+                }
+            } else if (cond.isMethodCallExpr()) {
+                MethodCallExpr mce = cond.asMethodCallExpr();
+                Optional<Expression> expr = mce.getScope();
+                if (expr.isPresent()) {
+                    addConstraint(expr.get(), mce);
+                }
+            }
+//            else if (cond.isUnaryExpr()) {
+//                UnaryExpr un = cond.asUnaryExpr();
+//                tt.addConstraint(un, un);
+//            }
+        }
+    }
+
     public void addConstraint(Expression name, Expression constraint) {
         constraints.computeIfAbsent(name, k -> new ArrayList<>()).add(constraint);
     }
@@ -927,11 +949,7 @@ public class TruthTable {
                     collector.put(chain.getChain().getFirst().getExpression(), domain);
                 }
             } else if (m.getNameAsString().equals(EQUALS_CALL)) {
-                if (chain.isEmpty()) {
-                    findDomain(m, collector, m.getArgument(0));
-                } else {
-                    findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
-                }
+                equalsMethodCall(m, collector, chain);
             } else {
                 Optional<Node> parent = m.getParentNode();
                 if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
@@ -945,6 +963,14 @@ public class TruthTable {
                 }
             }
             super.visit(m, collector);
+        }
+
+        private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector, ScopeChain chain) {
+            if (chain.isEmpty()) {
+                findDomain(m, collector, m.getArgument(0));
+            } else {
+                findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
+            }
         }
 
         @Override
