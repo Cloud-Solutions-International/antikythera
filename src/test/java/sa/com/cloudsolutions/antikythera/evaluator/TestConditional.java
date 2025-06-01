@@ -83,9 +83,9 @@ class TestConditional extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional4, ZERO!Positive!ZERO!Negative!", "conditional5, ZERO!Three!Three!Two!Two!One!",
-            "conditional6, ZERO!Three!Three!Two!Two!One!","conditional7, ZERO!Three!Three!Two!Two!One!",
-            "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!",
+    @CsvSource({"conditional4, ZERO!Positive!Negative!", "conditional5, ZERO!Three!Two!One!",
+            "conditional6, ZERO!Three!Two!One!","conditional7, ZERO!Three!Two!One!",
+            "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
             "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
             "animalFarm, Some animals are more equal!All animals are equal!"
     })
@@ -218,7 +218,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
-            "stringCompare, Donno!Hello!Donno!AK!", "fileCompare, tmp!Other!Other!Null!",
+            "stringCompare, Donno!Hello!AK!", "fileCompare, tmp!Other!Other!Null!",
             "numberCompare, One!Two!Other!", "drinkable, Very good!good!",
             "clarendon, Not drinkable!good!", "ternary5, False!True!",
     })
