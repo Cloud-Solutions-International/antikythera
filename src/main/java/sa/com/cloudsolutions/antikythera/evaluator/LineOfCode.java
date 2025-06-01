@@ -8,7 +8,6 @@ import com.github.javaparser.ast.stmt.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -147,6 +146,21 @@ public class LineOfCode {
         }
     }
 
+
+    /**
+     * State transition method for the line of code.
+     *
+     * <p>For if/else statements, it updates the path state based on the current execution path. The
+     * possible states are defined in UNTRAVELLED, FALSE_PATH, TRUE_PATH, and BOTH_PATHS.</p>
+     *
+     * <p>>When both paths in a branching statement has been traversed, we need to check its parent.
+     * The current state transition may result in all the branching statements of the parent node
+     * to have changed to the BOTH_PATHS state. When that happens the parent's state should change.</p>
+     *
+     * <p>When the child node is in the else block, then the parent's state needs to show that it is
+     * the else path that has been taken. When the child is in the then block the parent needs to
+     * show that the then path has been taken.</p>
+     */
     public void transition() {
         // Step 1: Update current node's state
         if (isFalsePath()) {
