@@ -754,6 +754,179 @@ public class TruthTable {
         this.condition = condition;
     }
 
+
+    private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector, ScopeChain chain) {
+        if (chain.isEmpty()) {
+            findDomain(m, collector, m.getArgument(0));
+        } else {
+            findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
+        }
+    }
+
+    /**
+     * Find the domain for the given name expression
+     * @param nameExpression the name expression for which we need to find the domain
+     * @param collector the collection into which we will put the eligible expressions
+     * @param compareWith the expression that we will compare against.
+     */
+    private void findDomain(Expression nameExpression, HashMap<Expression,
+            Pair<Object, Object>> collector, Expression compareWith) {
+        if (compareWith.isNullLiteralExpr()) {
+            if (allowNullInputs) {
+                collector.put(nameExpression, new Pair<>(null, "T"));
+            } else {
+                // If null inputs are not allowed, use a non-null domain
+                collector.put(nameExpression, new Pair<>(false, true));
+            }
+        }
+        else if (compareWith.isIntegerLiteralExpr()) {
+            handleIntegerLiteral(nameExpression, collector, compareWith);
+        }
+        else if (compareWith.isLongLiteralExpr()) {
+            handleLongLiteral(nameExpression, collector, compareWith);
+        }
+        else if (compareWith.isDoubleLiteralExpr()) {
+            handleDoubleLiteral(nameExpression, collector, compareWith);
+        }
+        else if (compareWith.isStringLiteralExpr()) {
+            if (allowNullInputs) {
+                collector.put(nameExpression, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
+            } else {
+                // If null inputs are not allowed, use a non-null domain for strings
+                collector.put(nameExpression, new Pair<>("", compareWith.asStringLiteralExpr().getValue()));
+            }
+        }
+        else {
+            if (isInequalityPresent()) {
+                collector.put(nameExpression, new Pair<>(0, 1));
+            }
+            else {
+                collector.put(nameExpression, new Pair<>(true, false));
+            }
+        }
+    }
+
+    private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                      Expression compareWith) {
+        int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
+        Node parent = n.getParentNode().orElse(null);
+
+        if (parent instanceof BinaryExpr binaryExpr) {
+            if (isInequality(binaryExpr)) {
+                handleInequalityDomain(n, collector, literalValue, binaryExpr);
+            } else {
+                collector.put(n, new Pair<>(literalValue, literalValue + 1));
+            }
+        } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+            handleEqualsMethodDomain(n, collector, literalValue);
+        }
+    }
+
+    private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                   Expression compareWith) {
+        // Handle the case where the value might have an 'L' suffix
+        String valueStr = compareWith.asLongLiteralExpr().getValue();
+        if (valueStr.endsWith("L") || valueStr.endsWith("l")) {
+            valueStr = valueStr.substring(0, valueStr.length() - 1);
+        }
+        long literalValue = Long.parseLong(valueStr);
+        Node parent = n.getParentNode().orElse(null);
+
+        if (parent instanceof BinaryExpr binaryExpr) {
+            if (isInequality(binaryExpr)) {
+                handleLongInequalityDomain(n, collector, literalValue, binaryExpr);
+            } else {
+                collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 1));
+            }
+        } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+            handleEqualsMethodDomain(n, collector, (int)literalValue);
+        }
+    }
+
+    private void handleLongInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                            long literalValue, BinaryExpr binaryExpr) {
+        switch (binaryExpr.getOperator()) {
+            case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
+            case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
+            case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
+            case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
+            default -> collector.put(n, new Pair<>(0, 1)); // fallback
+        }
+    }
+
+    private void handleDoubleLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                     Expression compareWith) {
+        double literalValue = Double.parseDouble(compareWith.asDoubleLiteralExpr().getValue());
+        Node parent = n.getParentNode().orElse(null);
+
+        if (parent instanceof BinaryExpr binaryExpr) {
+            if (isInequality(binaryExpr)) {
+                handleDoubleInequalityDomain(n, collector, literalValue, binaryExpr);
+            } else {
+                collector.put(n, new Pair<>(literalValue, literalValue + 1));
+            }
+        } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+            handleEqualsMethodDomain(n, collector, (int)literalValue);
+        }
+    }
+
+    private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                              double literalValue, BinaryExpr binaryExpr) {
+        switch (binaryExpr.getOperator()) {
+            case LESS -> collector.put(n, new Pair<>(literalValue - 1, literalValue));
+            case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 0.0001));
+            case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 0.0001));
+            case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 0.0001));
+            default -> collector.put(n, new Pair<>(0, 1)); // fallback
+        }
+    }
+
+    private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                        int literalValue, BinaryExpr binaryExpr) {
+        switch (binaryExpr.getOperator()) {
+            case LESS -> collector.put(n, new Pair<>(literalValue -1, literalValue));
+            case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
+            case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
+            case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
+            default -> collector.put(n, new Pair<>(0, 1)); // fallback
+        }
+    }
+
+    private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                          int literalValue) {
+        if (collector.containsKey(n)) {
+            Pair<Object, Object> existingBounds = collector.get(n);
+            if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
+                if (literalValue < min) {
+                    collector.put(n, new Pair<>(literalValue, max));
+                } else if (literalValue > max) {
+                    collector.put(n, new Pair<>(min, literalValue));
+                }
+                // If literalValue is within bounds, no action needed
+            }
+        } else {
+            collector.put(n, new Pair<>(literalValue, literalValue));
+        }
+    }
+
+    /*
+     * Does this condition have an inequality as a sub expression
+     */
+    private boolean isInequalityPresent() {
+        for(Expression expr : conditions) {
+            if (expr.isBinaryExpr()) {
+                BinaryExpr bin = expr.asBinaryExpr();
+                if (bin.getOperator().equals(BinaryExpr.Operator.LESS) ||
+                        bin.getOperator().equals(BinaryExpr.Operator.GREATER) ||
+                        bin.getOperator().equals(BinaryExpr.Operator.LESS_EQUALS) ||
+                        bin.getOperator().equals(BinaryExpr.Operator.GREATER_EQUALS)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * Collects variable names from the condition expression.
      */
@@ -789,151 +962,6 @@ public class TruthTable {
             super.visit(n, collector);
         }
 
-        /**
-         * Find the domain for the given name expression
-         * @param nameExpression the name expression for which we need to find the domain
-         * @param collector the collection into which we will put the eligible expressions
-         * @param compareWith the expression that we will compare against.
-         */
-        private void findDomain(Expression nameExpression, HashMap<Expression,
-                Pair<Object, Object>> collector, Expression compareWith) {
-            if (compareWith.isNullLiteralExpr()) {
-                if (allowNullInputs) {
-                    collector.put(nameExpression, new Pair<>(null, "T"));
-                } else {
-                    // If null inputs are not allowed, use a non-null domain
-                    collector.put(nameExpression, new Pair<>(false, true));
-                }
-            }
-            else if (compareWith.isIntegerLiteralExpr()) {
-                handleIntegerLiteral(nameExpression, collector, compareWith);
-            }
-            else if (compareWith.isLongLiteralExpr()) {
-                handleLongLiteral(nameExpression, collector, compareWith);
-            }
-            else if (compareWith.isDoubleLiteralExpr()) {
-                handleDoubleLiteral(nameExpression, collector, compareWith);
-            }
-            else if (compareWith.isStringLiteralExpr()) {
-                if (allowNullInputs) {
-                    collector.put(nameExpression, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
-                } else {
-                    // If null inputs are not allowed, use a non-null domain for strings
-                    collector.put(nameExpression, new Pair<>("", compareWith.asStringLiteralExpr().getValue()));
-                }
-            }
-            else {
-                if (isInequalityPresent()) {
-                    collector.put(nameExpression, new Pair<>(0, 1));
-                }
-                else {
-                    collector.put(nameExpression, new Pair<>(true, false));
-                }
-            }
-        }
-
-        private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                Expression compareWith) {
-            // Handle the case where the value might have an 'L' suffix
-            String valueStr = compareWith.asLongLiteralExpr().getValue();
-            if (valueStr.endsWith("L") || valueStr.endsWith("l")) {
-                valueStr = valueStr.substring(0, valueStr.length() - 1);
-            }
-            long literalValue = Long.parseLong(valueStr);
-            Node parent = n.getParentNode().orElse(null);
-
-            if (parent instanceof BinaryExpr binaryExpr) {
-                if (isInequality(binaryExpr)) {
-                    handleLongInequalityDomain(n, collector, literalValue, binaryExpr);
-                } else {
-                    collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 1));
-                }
-            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
-                handleEqualsMethodDomain(n, collector, (int)literalValue);
-            }
-        }
-
-        private void handleLongInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                long literalValue, BinaryExpr binaryExpr) {
-            switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
-                case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
-                default -> collector.put(n, new Pair<>(0, 1)); // fallback
-            }
-        }
-
-        private void handleDoubleLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                Expression compareWith) {
-            double literalValue = Double.parseDouble(compareWith.asDoubleLiteralExpr().getValue());
-            Node parent = n.getParentNode().orElse(null);
-
-            if (parent instanceof BinaryExpr binaryExpr) {
-                if (isInequality(binaryExpr)) {
-                    handleDoubleInequalityDomain(n, collector, literalValue, binaryExpr);
-                } else {
-                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
-                }
-            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
-                handleEqualsMethodDomain(n, collector, (int)literalValue);
-            }
-        }
-
-        private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                double literalValue, BinaryExpr binaryExpr) {
-            switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>(literalValue - 1, literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 0.0001));
-                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 0.0001));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 0.0001));
-                default -> collector.put(n, new Pair<>(0, 1)); // fallback
-            }
-        }
-        private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                Expression compareWith) {
-            int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
-            Node parent = n.getParentNode().orElse(null);
-
-            if (parent instanceof BinaryExpr binaryExpr) {
-                if (isInequality(binaryExpr)) {
-                    handleInequalityDomain(n, collector, literalValue, binaryExpr);
-                } else {
-                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
-                }
-            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
-                handleEqualsMethodDomain(n, collector, literalValue);
-            }
-        }
-
-        private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                int literalValue, BinaryExpr binaryExpr) {
-            switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>(literalValue -1, literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
-                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
-                default -> collector.put(n, new Pair<>(0, 1)); // fallback
-            }
-        }
-
-        private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                int literalValue) {
-            if (collector.containsKey(n)) {
-                Pair<Object, Object> existingBounds = collector.get(n);
-                if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
-                    if (literalValue < min) {
-                        collector.put(n, new Pair<>(literalValue, max));
-                    } else if (literalValue > max) {
-                        collector.put(n, new Pair<>(min, literalValue));
-                    }
-                    // If literalValue is within bounds, no action needed
-                }
-            } else {
-                collector.put(n, new Pair<>(literalValue, literalValue));
-            }
-        }
-
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
             ScopeChain chain = ScopeChain.findScopeChain(m);
@@ -965,13 +993,6 @@ public class TruthTable {
             super.visit(m, collector);
         }
 
-        private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector, ScopeChain chain) {
-            if (chain.isEmpty()) {
-                findDomain(m, collector, m.getArgument(0));
-            } else {
-                findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
-            }
-        }
 
         @Override
         public void visit(FieldAccessExpr f, HashMap<Expression, Pair<Object, Object>> collector) {
@@ -982,24 +1003,6 @@ public class TruthTable {
                 collector.put(f, new Pair<>(true, false));
             }
             super.visit(f, collector);
-        }
-
-        /*
-         * Does this condition have an inequality as a sub expression
-         */
-        private boolean isInequalityPresent() {
-            for(Expression expr : conditions) {
-                if (expr.isBinaryExpr()) {
-                    BinaryExpr bin = expr.asBinaryExpr();
-                    if (bin.getOperator().equals(BinaryExpr.Operator.LESS) ||
-                            bin.getOperator().equals(BinaryExpr.Operator.GREATER) ||
-                            bin.getOperator().equals(BinaryExpr.Operator.LESS_EQUALS) ||
-                            bin.getOperator().equals(BinaryExpr.Operator.GREATER_EQUALS)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
         }
     }
 
