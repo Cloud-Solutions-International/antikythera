@@ -12,6 +12,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
+import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.PrintStream;
@@ -752,21 +753,18 @@ public class TruthTable {
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
-            n.getParentNode().ifPresentOrElse(
-                    parent -> handleParentNode(n, parent, collector),
-                    () -> collector.put(n, new Pair<>(true, false))
-            );
-            super.visit(n, collector);
-        }
-
-        private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS_CALL)) {
-                findDomain(n, collector, mce.getArgument(0));
-            } else if (parent instanceof BinaryExpr b) {
+            Optional<Node> parentNode = n.getParentNode();
+            if (parentNode.isEmpty()) {
+                collector.put(n, new Pair<>(true, false));
+            }
+            else if (parentNode.get() instanceof BinaryExpr b) {
                 findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
-            } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
+            }
+            else if (parentNode.get() instanceof UnaryExpr) {
                 collector.put(n, new Pair<>(false, true));
             }
+
+            super.visit(n, collector);
         }
 
         /**
@@ -916,16 +914,25 @@ public class TruthTable {
 
         @Override
         public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
+            ScopeChain chain = ScopeChain.findScopeChain(m);
             if (m.getNameAsString().equals(IS_EMPTY)) {
-                Optional<Expression> scope = m.getScope();
-                if (scope.isPresent()) {
-                    // For isEmpty(), we want to consider both empty and non-empty collections
-                    List<?> emptyList = new ArrayList<>();
-                    List<Integer> nonEmptyList = new ArrayList<>();
-                    nonEmptyList.add(1);
-                    collector.put(scope.get(), new Pair<>(emptyList, nonEmptyList));
+                // For isEmpty(), we want to consider both empty and non-empty collections
+                List<?> emptyList = new ArrayList<>();
+                List<Integer> nonEmptyList = new ArrayList<>();
+                nonEmptyList.add(1);
+                Pair<Object, Object> domain = new Pair<>(emptyList, nonEmptyList);
+                if (chain.isEmpty()) {
+                    collector.put(m, domain);
+                } else {
+                    collector.put(chain.getChain().getFirst().getExpression(), domain);
                 }
-            } else if (!m.getNameAsString().equals(EQUALS_CALL)) {
+            } else if (m.getNameAsString().equals(EQUALS_CALL)) {
+                if (chain.isEmpty()) {
+                    findDomain(m, collector, m.getArgument(0));
+                } else {
+                    findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
+                }
+            } else {
                 Optional<Node> parent = m.getParentNode();
                 if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
                     if (b.getLeft().equals(m)) {
