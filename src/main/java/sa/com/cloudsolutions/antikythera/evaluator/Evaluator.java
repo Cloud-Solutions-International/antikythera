@@ -1791,7 +1791,17 @@ public class Evaluator {
     public void setupFields() {
         cu.accept(new LazyFieldVisitor(className), null);
         processParentClasses(typeDeclaration, "LazyFieldVisitor");
-
+        if (typeDeclaration != null) {
+            typeDeclaration.getAnnotationByName("Slf4j").ifPresent(annotation -> {
+                try {
+                    Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(this));
+                    Logger log = LoggerFactory.getLogger(clazz);
+                    fields.put("log", new Variable(log));
+                } catch (ClassNotFoundException e) {
+                    throw new AntikytheraException(e);
+                }
+            });
+        }
     }
 
     public void initializeFields() {
