@@ -204,6 +204,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
 
                 executeMethod(md);
+
+                if (md.getType().isVoidType()) {
+                    MethodResponse mr = new MethodResponse();
+                    createTests(mr);
+                }
                 safetyCheck++;
                 if (currentConditional != null) {
                     currentConditional.transition();

@@ -634,22 +634,27 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void addAsserts(MethodResponse response) {
         Type t = methodUnderTest.getType();
+
+        if (t == null) {
+            return;
+        }
+
         BlockStmt body = getBody(testMethod);
-        if (t != null) {
-            addClassImports(t);
-            Variable result = response.getBody();
-            if (result != null && result.getValue() != null) {
+        addClassImports(t);
+        Variable result = response.getBody();
+        if (result != null) {
+            if (result.getValue() != null) {
                 body.addStatement(asserter.assertNotNull("resp"));
                 if (result.getValue() instanceof Collection<?> c) {
                     if (c.isEmpty()) {
                         body.addStatement(asserter.assertEmpty("resp"));
-                    }
-                    else {
+                    } else {
                         body.addStatement(asserter.assertNotEmpty("resp"));
                     }
                 }
                 asserter.addFieldAsserts(response, body);
-            } else {
+            }
+            else {
                 body.addStatement(asserter.assertNull("resp"));
             }
         }
