@@ -228,20 +228,21 @@ public class TruthTable {
 
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
-            if (!truthValues.containsKey(variable)) {
-                return false;
-            }
-
             for (Expression constraintExpr : constraint.getValue()) {
                 if (constraintExpr instanceof BinaryExpr binaryExpr &&
                             !satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
                     return false;
                 }
                 if (constraintExpr instanceof MethodCallExpr mce) {
-                    Optional<Expression> scope = mce.getScope();
-                    if (scope.isPresent() && scope.get().equals(variable)) {
-                        Object value = truthValues.get(variable);
-                        if (value instanceof Boolean b) {
+                    return constraintThroughMethodCall(mce, variable, truthValues);
+                }
+                if (constraintExpr instanceof UnaryExpr unaryExpr) {
+                    Expression e = unaryExpr.getExpression();
+                    if (e instanceof MethodCallExpr mce) {
+                        boolean b = constraintThroughMethodCall(mce, variable, truthValues);
+                        if (unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                            return !b;
+                        } else {
                             return b;
                         }
                     }
@@ -249,6 +250,17 @@ public class TruthTable {
             }
         }
         return true;
+    }
+
+    private boolean constraintThroughMethodCall(MethodCallExpr mce, Expression variable, Map<Expression, Object> truthValues) {
+        Optional<Expression> scope = mce.getScope();
+        if (scope.isPresent() && scope.get().equals(variable)) {
+            Object value = truthValues.get(variable);
+            if (value instanceof Boolean b) {
+                return b;
+            }
+        }
+        return false;
     }
 
     private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
@@ -740,10 +752,10 @@ public class TruthTable {
                     addConstraint(expr.get(), mce);
                 }
             }
-//            else if (cond.isUnaryExpr()) {
-//                UnaryExpr un = cond.asUnaryExpr();
-//                tt.addConstraint(un, un);
-//            }
+            else if (cond.isUnaryExpr()) {
+                UnaryExpr un = cond.asUnaryExpr();
+                addConstraint(un, un);
+            }
         }
     }
 
