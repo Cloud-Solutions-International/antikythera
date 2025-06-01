@@ -218,7 +218,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
-            "stringCompare, Donno!Hello!AK!", "fileCompare, tmp!Other!Other!Null!",
+            "stringCompare, Donno!Hello!AK!", "fileCompare, Other!tmp!Null!",
             "numberCompare, Other!Two!One!", "drinkable, good!Very good!Not drinkable!",
             "clarendon, Not drinkable!good!", "ternary5, False!True!",
     })
