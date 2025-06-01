@@ -231,20 +231,23 @@ public class TruthTable {
             Expression variable = constraint.getKey();
             for (Expression expr : constraint.getValue()) {
                 if (expr instanceof MethodCallExpr mce) {
-                    return constraintThroughMethodCall(mce, variable, truthValues);
+                    return constraintThroughMethodCall(variable, mce, truthValues);
                 }
                 if (expr instanceof UnaryExpr unaryExpr) {
                     Expression e = unaryExpr.getExpression();
                     if (e instanceof MethodCallExpr mce && unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
-                        return !constraintThroughMethodCall(mce, variable, truthValues);
+                        return !constraintThroughMethodCall(variable, mce, truthValues);
                     }
+                }
+                if (expr instanceof BinaryExpr binaryExpr) {
+                    return satisfiesConstraintForVariable(variable, binaryExpr, truthValues);
                 }
             }
         }
         return true;
     }
 
-    private boolean constraintThroughMethodCall(MethodCallExpr mce, Expression variable, Map<Expression, Object> truthValues) {
+    private boolean constraintThroughMethodCall(Expression variable, MethodCallExpr mce, Map<Expression, Object> truthValues) {
         Optional<Expression> scope = mce.getScope();
         if (scope.isPresent()) {
             if (scope.get().equals(variable)) {
@@ -253,12 +256,8 @@ public class TruthTable {
                     return b;
                 }
                 if (value instanceof Integer i && mce.toString().contains(EQUALS_CALL)) {
-                    boolean b =  i == Integer.parseInt(mce.getArgument(0).asIntegerLiteralExpr().getValue());
-                    return b;
+                    return i == Integer.parseInt(mce.getArgument(0).asIntegerLiteralExpr().getValue());
                 }
-            }
-            else {
-                int i = 0;
             }
         }
         return false;
