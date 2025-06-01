@@ -8,6 +8,7 @@ import com.github.javaparser.ast.stmt.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -148,18 +149,69 @@ public class LineOfCode {
 
     public void transition() {
         if (isFalsePath()) {
-            pathTaken = LineOfCode.BOTH_PATHS;
-        } else {
-            pathTaken++;
+            pathTaken |= TRUE_PATH;
         }
-        // Automatically transition parent if all children are fully travelled
-        if (parent != null) {
-            boolean allChildrenFullyTravelled = parent.children.stream()
-                .allMatch(child -> child.isFullyTravelled());
-            if (allChildrenFullyTravelled && !parent.isFullyTravelled()) {
-                parent.transition();
+        else if (isTruePath()) {
+            pathTaken |= FALSE_PATH;
+        }
+        else if (isUntravelled()) {
+            pathTaken = FALSE_PATH;
+        }
+        else {
+            throw new IllegalStateException("Already completed");
+        }
+
+        if (parent != null && parent.statement instanceof IfStmt ifStmt) {
+            boolean allThenChildren = thenFullyTravelled(ifStmt);
+            boolean allElseChildren = elseFullyTravelled(ifStmt);
+
+            int newPathTaken = parent.pathTaken;
+            if (allThenChildren) {
+                newPathTaken |= TRUE_PATH;
+            }
+            if (allElseChildren) {
+                newPathTaken |= FALSE_PATH;
+            }
+
+            if (parent.pathTaken != newPathTaken) {
+                parent.pathTaken = newPathTaken;
             }
         }
+    }
+
+    private boolean thenFullyTravelled(IfStmt ifst) {
+        if (parent.children.isEmpty()) {
+            return false;
+        }
+
+        for (LineOfCode child : parent.children) {
+            if (ConditionVisitor.isNodeInStatement(child.statement, ifst.getThenStmt())) {
+                if (!child.isFullyTravelled()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean elseFullyTravelled(IfStmt ifst) {
+        if (parent.children.isEmpty()) {
+            return false;
+        }
+
+        Optional<Statement> elseStatement = ifst.getElseStmt();
+        if (elseStatement.isPresent()) {
+            for (LineOfCode child : parent.children) {
+                if (ConditionVisitor.isNodeInStatement(child.statement, elseStatement.get())) {
+                    if (!child.isFullyTravelled()) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -263,7 +315,7 @@ public class LineOfCode {
      * @return `true` if in the false path state, otherwise `false`.
      */
     public boolean isFalsePath() {
-        return pathTaken == FALSE_PATH;
+        return (pathTaken & FALSE_PATH) == FALSE_PATH && (pathTaken & TRUE_PATH) == 0;
     }
 
     /**
@@ -272,7 +324,7 @@ public class LineOfCode {
      * @return `true` if in the true path state, otherwise `false`.
      */
     public boolean isTruePath() {
-        return pathTaken == TRUE_PATH;
+        return (pathTaken & TRUE_PATH) == TRUE_PATH && (pathTaken & FALSE_PATH) == 0;
     }
 
     /**
