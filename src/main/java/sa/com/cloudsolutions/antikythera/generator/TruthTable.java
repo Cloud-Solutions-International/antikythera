@@ -223,10 +223,6 @@ public class TruthTable {
     }
 
     private boolean satisfiesConstraints(Map<Expression, Object> truthValues) {
-        if (truthValues == null || truthValues.isEmpty()) {
-            return false;
-        }
-
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
             for (Expression expr : constraint.getValue()) {
@@ -760,28 +756,30 @@ public class TruthTable {
 
     public void addConstraints(List<Expression> collectedConditions) {
         for (Expression cond : collectedConditions) {
-            if (cond.isBinaryExpr()) {
-                BinaryExpr bin = cond.asBinaryExpr();
-                if (bin.getLeft().isNameExpr()) {
-                    addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
-                }
-            } else if (cond.isMethodCallExpr()) {
-                MethodCallExpr mce = cond.asMethodCallExpr();
-                Optional<Expression> expr = mce.getScope();
-                if (expr.isPresent()) {
-                    addConstraint(expr.get(), mce);
-                }
+            addConstraintForCondition(cond);
+        }
+    }
+
+    private void addConstraintForCondition(Expression cond) {
+        if (cond.isBinaryExpr()) {
+            BinaryExpr bin = cond.asBinaryExpr();
+            if (bin.getLeft().isNameExpr()) {
+                addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
             }
-            else if (cond.isUnaryExpr()) {
-                UnaryExpr un = cond.asUnaryExpr();
-                Expression expr = un.getExpression();
-                if (expr instanceof MethodCallExpr mce) {
-                    ScopeChain sc = ScopeChain.findScopeChain(expr);
-                    if (sc.isEmpty()) {
-                        addConstraint(mce.getScope().orElse(new NameExpr("unknown")), mce);
-                    } else {
-                        addConstraint(sc.getChain().getFirst().getExpression(), un);
-                    }
+        } else if (cond.isMethodCallExpr()) {
+            MethodCallExpr mce = cond.asMethodCallExpr();
+            Optional<Expression> expr = mce.getScope();
+            expr.ifPresent(expression -> addConstraint(expression, mce));
+        }
+        else if (cond.isUnaryExpr()) {
+            UnaryExpr un = cond.asUnaryExpr();
+            Expression expr = un.getExpression();
+            if (expr instanceof MethodCallExpr mce) {
+                ScopeChain sc = ScopeChain.findScopeChain(expr);
+                if (sc.isEmpty()) {
+                    addConstraint(mce.getScope().orElse(new NameExpr("unknown")), mce);
+                } else {
+                    addConstraint(sc.getChain().getFirst().getExpression(), un);
                 }
             }
         }
