@@ -7,15 +7,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LoggingEvaluator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestLogs extends TestHelper {
 
@@ -36,9 +37,9 @@ public class TestLogs extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"noisyMethod, This is a noisy method!",
-                "anotherNoisyMethod, This is another noisy method!"})
-    void testNosy(String name, String result) throws ReflectiveOperationException {
+    @CsvSource({"noisyMethod, This is a noisy method!, INFO",
+                "anotherNoisyMethod, This is another noisy method!, WARN"})
+    void testNosy(String name, String result, String level) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals(name)).orElseThrow();
 
@@ -46,10 +47,13 @@ public class TestLogs extends TestHelper {
          * If the logger is not setup this will throw an exception.
          */
         evaluator.executeMethod(method);
-        String[] s = outContent.toString().split("\n");
-        assertEquals(2, s.length);
-        assertEquals(result, s[1].trim());
-        assertTrue(s[0].contains(result));
-        assertTrue(s[0].contains(SAMPLE_CLASS));
+        List<LoggingEvaluator.LogEntry> entries =  LoggingEvaluator.getLogEntries(SAMPLE_CLASS);
+
+        assertEquals(result, outContent.toString().trim());
+        assertFalse(entries.isEmpty());
+        LoggingEvaluator.LogEntry entry = entries.getLast();
+        assertEquals(level, entry.level());
+        assertEquals(result, entry.message());
+
     }
 }
