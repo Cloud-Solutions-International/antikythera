@@ -1,6 +1,4 @@
-package sa.com.cloudsolutions.antikythera.evaluator;
-
-import org.slf4j.Logger;
+package sa.com.cloudsolutions.antikythera.evaluator.logging;
 
 import java.util.ArrayList;
 import java.util.HashMap;
