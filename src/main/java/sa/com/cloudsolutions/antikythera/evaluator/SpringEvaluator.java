@@ -292,6 +292,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
                     parameterAssignment(assignExpr, va);
                     va.setInitializer(List.of(assignExpr));
+            } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
+                createObject(oce, oce);
             }
         }
     }
@@ -610,10 +612,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                 } else if (entry.getKey().isNameExpr()) {
                     setupConditionThroughAssignment(currentConditional.getStatement(), entry);
+                } else if (entry.getKey().isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
+                    setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                 }
             }
         }
-
     }
 
     /**

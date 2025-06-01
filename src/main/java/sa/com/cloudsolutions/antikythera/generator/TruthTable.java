@@ -266,26 +266,29 @@ public class TruthTable {
     private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
             Map<Expression, Object> truthValues) {
         Object value = truthValues.get(variable);
-        if (!(value instanceof Integer intValue)) {
-            return true;
+        if (value instanceof Integer intValue) {
+
+            int literalValue = Integer.parseInt(
+                    binaryExpr.getRight().isIntegerLiteralExpr() ?
+                            binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
+                            binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
+            );
+
+            boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
+            return switch (binaryExpr.getOperator()) {
+                case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
+                case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
+                case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
+                case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
+                case EQUALS -> intValue == literalValue;
+                case NOT_EQUALS -> intValue != literalValue;
+                default -> true;
+            };
         }
-
-        int literalValue = Integer.parseInt(
-                binaryExpr.getRight().isIntegerLiteralExpr() ?
-                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
-                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
-        );
-
-        boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
-        return switch (binaryExpr.getOperator()) {
-            case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
-            case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
-            case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
-            case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
-            case EQUALS -> intValue == literalValue;
-            case NOT_EQUALS -> intValue != literalValue;
-            default -> true;
-        };
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        return true;
     }
 
     /**

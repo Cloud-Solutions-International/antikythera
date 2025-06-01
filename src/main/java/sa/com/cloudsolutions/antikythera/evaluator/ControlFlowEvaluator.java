@@ -298,24 +298,30 @@ public class ControlFlowEvaluator extends Evaluator {
         if (!chain.isEmpty()) {
             Expression expr = chain.getChain().getFirst().getExpression();
             Variable v = getValue(stmt, expr.toString());
-            if (v == null && expr.isNameExpr()) {
-                /*
-                 * This is likely to be a static method.
-                 */
-                String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
-                if (fullname != null) {
+            if (v == null ) {
+                if (expr.isNameExpr()) {
                     /*
-                     * The only other possibility is static access on a class
+                     * This is likely to be a static method.
                      */
-                    try {
-                        Class.forName(fullname);
-
-                    } catch (ReflectiveOperationException e) {
+                    String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
+                    if (fullname != null) {
                         /*
-                         * Can probably be ignored
+                         * The only other possibility is static access on a class
                          */
-                        logger.info("Could not create class for {}", fullname);
+                        try {
+                            Class.forName(fullname);
+
+                        } catch (ReflectiveOperationException e) {
+                            /*
+                             * Can probably be ignored
+                             */
+                            logger.info("Could not create class for {}", fullname);
+                        }
                     }
+                }
+                if (expr.isObjectCreationExpr()) {
+                    ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                    addPreCondition(stmt, oce);
                 }
             }
 
