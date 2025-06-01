@@ -7,6 +7,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -38,7 +39,8 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         Type t = param.getType();
 
         if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
-            String fullClassName = AbstractCompiler.findFullyQualifiedName(param.findCompilationUnit().orElseThrow(), t.asClassOrInterfaceType().getNameAsString());
+            TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
+            String fullClassName = wrapper.getFullyQualifiedName();
             if (fullClassName.startsWith("java")) {
                 /*
                  * However, you can't rule out the possibility that this is a Map or a List or even a
