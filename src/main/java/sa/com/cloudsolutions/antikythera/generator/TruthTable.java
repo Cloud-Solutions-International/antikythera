@@ -271,6 +271,7 @@ public class TruthTable {
             case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
             case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
             case EQUALS -> intValue == literalValue;
+            case NOT_EQUALS -> intValue != literalValue;
             default -> true;
         };
     }
@@ -802,6 +803,7 @@ public class TruthTable {
             }
             else {
                 collector.put(nameExpression, new Pair<>(true, false));
+                collector.put(compareWith, new Pair<>(true, false));
             }
         }
     }
