@@ -148,71 +148,50 @@ public class LineOfCode {
     }
 
     public void transition() {
+        // Step 1: Update current node's state
         if (isFalsePath()) {
             pathTaken |= TRUE_PATH;
-        }
-        else if (isTruePath()) {
+        } else if (isTruePath()) {
             pathTaken |= FALSE_PATH;
-        }
-        else if (isUntravelled()) {
+        } else if (isUntravelled()) {
             pathTaken = FALSE_PATH;
-        }
-        else {
+        } else {
             throw new IllegalStateException("Already completed");
         }
 
+        // Step 2: Update parent state if it exists and is an if statement
         if (parent != null && parent.statement instanceof IfStmt ifStmt) {
-            boolean allThenChildren = thenFullyTravelled(ifStmt);
-            boolean allElseChildren = elseFullyTravelled(ifStmt);
+            List<LineOfCode> siblingsInBlock = parent.children.stream()
+                .filter(child -> isNodeInSameBlock(ifStmt, child.statement, this.statement))
+                .toList();
 
-            int newPathTaken = parent.pathTaken;
-            if (allThenChildren) {
-                newPathTaken |= TRUE_PATH;
-            }
-            if (allElseChildren) {
-                newPathTaken |= FALSE_PATH;
-            }
-
-            if (parent.pathTaken != newPathTaken) {
-                parent.pathTaken = newPathTaken;
-            }
-        }
-    }
-
-    private boolean thenFullyTravelled(IfStmt ifst) {
-        if (parent.children.isEmpty()) {
-            return false;
-        }
-
-        for (LineOfCode child : parent.children) {
-            if (ConditionVisitor.isNodeInStatement(child.statement, ifst.getThenStmt())) {
-                if (!child.isFullyTravelled()) {
-                    return false;
+            // Only update parent if there are actually siblings and all are fully traversed
+            if (!siblingsInBlock.isEmpty() && siblingsInBlock.stream().allMatch(LineOfCode::isFullyTravelled)) {
+                if (isNodeInThenBlock(ifStmt, this.statement)) {
+                    parent.pathTaken |= TRUE_PATH;
+                } else if (isNodeInElseBlock(ifStmt, this.statement)) {
+                    parent.pathTaken |= FALSE_PATH;
                 }
             }
         }
-        return true;
     }
 
-    private boolean elseFullyTravelled(IfStmt ifst) {
-        if (parent.children.isEmpty()) {
-            return false;
-        }
 
-        Optional<Statement> elseStatement = ifst.getElseStmt();
-        if (elseStatement.isPresent()) {
-            for (LineOfCode child : parent.children) {
-                if (ConditionVisitor.isNodeInStatement(child.statement, elseStatement.get())) {
-                    if (!child.isFullyTravelled()) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }
-
-        return false;
+    private boolean isNodeInThenBlock(IfStmt ifStmt, Statement node) {
+        return ConditionVisitor.isNodeInStatement(node, ifStmt.getThenStmt());
     }
+
+    private boolean isNodeInElseBlock(IfStmt ifStmt, Statement node) {
+        return ifStmt.getElseStmt()
+                .map(elseStmt -> ConditionVisitor.isNodeInStatement(node, elseStmt))
+                .orElse(false);
+    }
+
+    private boolean isNodeInSameBlock(IfStmt ifStmt, Statement node1, Statement node2) {
+        return (isNodeInThenBlock(ifStmt, node1) && isNodeInThenBlock(ifStmt, node2)) ||
+                (isNodeInElseBlock(ifStmt, node1) && isNodeInElseBlock(ifStmt, node2));
+    }
+
 
     /**
      * Adds a precondition to this line of code which will determine which path will be taken

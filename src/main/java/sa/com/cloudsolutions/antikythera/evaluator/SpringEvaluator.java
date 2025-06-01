@@ -17,6 +17,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
@@ -608,6 +609,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     tt.addConstraint(expr.get(), mce);
                 }
             }
+//            else if (cond.isUnaryExpr()) {
+//                UnaryExpr un = cond.asUnaryExpr();
+//                tt.addConstraint(un, un);
+//            }
         }
 
         collectedConditions.add(currentConditional.getConditionalExpression());
