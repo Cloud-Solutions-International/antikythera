@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Captures and tracks logging calls made through SLF4J loggers.
  */
-public class LoggingEvaluator {
+public class LogRecorder {
     private static final Map<String, List<LogEntry>> logEntries = new HashMap<>();
 
     public static void clearLogs() {

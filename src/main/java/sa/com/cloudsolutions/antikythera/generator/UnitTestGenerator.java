@@ -37,6 +37,8 @@ import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LoggingAsserter;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -656,6 +658,16 @@ public class UnitTestGenerator extends TestGenerator {
             }
             else {
                 body.addStatement(asserter.assertNull("resp"));
+            }
+        } else {
+            TypeDeclaration<?> type = methodUnderTest.findAncestor(TypeDeclaration.class).orElseThrow();
+            String className = type.getFullyQualifiedName().orElseThrow();
+            List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
+            for (int i = 0 , j = Math.min(5, logs.size()); i < j; i++) {
+                LogRecorder.LogEntry entry = logs.get(i);
+                String level = entry.level();
+                String message = entry.message();
+                body.addStatement(LoggingAsserter.assertLoggedWithLevel(className, level, message));
             }
         }
     }

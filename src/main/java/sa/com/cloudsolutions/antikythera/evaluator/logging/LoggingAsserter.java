@@ -28,46 +28,4 @@ public class LoggingAsserter {
         assertion.addArgument(anyMatch);
         return assertion;
     }
-
-    /**
-     * Verify that a message was logged at INFO level
-     */
-    public static Expression assertLoggedInfo(String className, String expectedMessage) {
-        return assertLoggedWithLevel(className, "INFO", expectedMessage);
-    }
-
-    /**
-     * Verify that a message was logged at ERROR level
-     */
-    public static Expression assertLoggedError(String className, String expectedMessage) {
-        return assertLoggedWithLevel(className, "ERROR", expectedMessage);
-    }
-
-    /**
-     * Verify that a message was logged at DEBUG level
-     */
-    public static Expression assertLoggedDebug(String className, String expectedMessage) {
-        return assertLoggedWithLevel(className, "DEBUG", expectedMessage);
-    }
-
-    /**
-     * Verify that a message was logged at WARN level
-     */
-    public static Expression assertLoggedWarn(String className, String expectedMessage) {
-        return assertLoggedWithLevel(className, "WARN", expectedMessage);
-    }
-
-    /**
-     * Verify that a message was logged at TRACE level
-     */
-    public static Expression assertLoggedTrace(String className, String expectedMessage) {
-        return assertLoggedWithLevel(className, "TRACE", expectedMessage);
-    }
-
-    /**
-     * Clear any captured log entries before running a new test
-     */
-    public static void clearLogs() {
-        LoggingEvaluator.clearLogs();
-    }
 }

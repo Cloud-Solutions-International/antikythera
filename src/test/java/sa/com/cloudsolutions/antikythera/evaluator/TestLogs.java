@@ -7,7 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.evaluator.logging.LoggingEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
@@ -47,11 +47,11 @@ public class TestLogs extends TestHelper {
          * If the logger is not setup this will throw an exception.
          */
         evaluator.executeMethod(method);
-        List<LoggingEvaluator.LogEntry> entries =  LoggingEvaluator.getLogEntries(SAMPLE_CLASS);
+        List<LogRecorder.LogEntry> entries =  LogRecorder.getLogEntries(SAMPLE_CLASS);
 
         assertEquals(result, outContent.toString().trim());
         assertFalse(entries.isEmpty());
-        LoggingEvaluator.LogEntry entry = entries.getLast();
+        LogRecorder.LogEntry entry = entries.getLast();
         assertEquals(level, entry.level());
         assertEquals(result, entry.message());
 
