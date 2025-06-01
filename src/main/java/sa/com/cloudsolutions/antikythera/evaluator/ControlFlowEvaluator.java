@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -291,43 +290,43 @@ public class ControlFlowEvaluator extends Evaluator {
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
         ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
-        setupConditionThroughMethodCalls(stmt, entry, chain);
+        if (!chain.isEmpty()) {
+            setupConditionThroughMethodCalls(stmt, entry, chain);
+        }
     }
 
     private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, ScopeChain chain) {
-        if (!chain.isEmpty()) {
-            Expression expr = chain.getChain().getFirst().getExpression();
-            Variable v = getValue(stmt, expr.toString());
-            if (v == null ) {
-                if (expr.isNameExpr()) {
+        Expression expr = chain.getChain().getFirst().getExpression();
+        Variable v = getValue(stmt, expr.toString());
+        if (v == null ) {
+            if (expr.isNameExpr()) {
+                /*
+                 * This is likely to be a static method.
+                 */
+                String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
+                if (fullname != null) {
                     /*
-                     * This is likely to be a static method.
+                     * The only other possibility is static access on a class
                      */
-                    String fullname = AbstractCompiler.findFullyQualifiedName(cu, expr.asNameExpr().getNameAsString());
-                    if (fullname != null) {
-                        /*
-                         * The only other possibility is static access on a class
-                         */
-                        try {
-                            Class.forName(fullname);
+                    try {
+                        Class.forName(fullname);
 
-                        } catch (ReflectiveOperationException e) {
-                            /*
-                             * Can probably be ignored
-                             */
-                            logger.info("Could not create class for {}", fullname);
-                        }
+                    } catch (ReflectiveOperationException e) {
+                        /*
+                         * Can probably be ignored
+                         */
+                        logger.info("Could not create class for {}", fullname);
                     }
                 }
-                if (expr.isObjectCreationExpr()) {
-                    ObjectCreationExpr oce = expr.asObjectCreationExpr();
-                    addPreCondition(stmt, oce);
-                }
             }
+            if (expr.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                addPreCondition(stmt, oce);
+            }
+        }
 
-            if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariablesWithSetter(stmt, entry, expr);
-            }
+        if (v != null && v.getValue() instanceof Evaluator) {
+            setupConditionalVariablesWithSetter(stmt, entry, expr);
         }
     }
 
@@ -356,6 +355,7 @@ public class ControlFlowEvaluator extends Evaluator {
         addPreCondition(stmt, setter);
     }
 
+    @SuppressWarnings("java:S5411")
     private void createSetterFromGetter(Map.Entry<Expression, Object> entry, MethodCallExpr setter) {
         Expression key = entry.getKey();
         Optional< Node> parent = entry.getKey().getParentNode();
