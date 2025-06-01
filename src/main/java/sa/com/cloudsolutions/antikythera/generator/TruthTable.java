@@ -5,6 +5,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
@@ -228,23 +229,14 @@ public class TruthTable {
 
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
-            for (Expression constraintExpr : constraint.getValue()) {
-                if (constraintExpr instanceof BinaryExpr binaryExpr &&
-                            !satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
-                    return false;
-                }
-                if (constraintExpr instanceof MethodCallExpr mce) {
+            for (Expression expr : constraint.getValue()) {
+                if (expr instanceof MethodCallExpr mce) {
                     return constraintThroughMethodCall(mce, variable, truthValues);
                 }
-                if (constraintExpr instanceof UnaryExpr unaryExpr) {
+                if (expr instanceof UnaryExpr unaryExpr) {
                     Expression e = unaryExpr.getExpression();
-                    if (e instanceof MethodCallExpr mce) {
-                        boolean b = constraintThroughMethodCall(mce, variable, truthValues);
-                        if (unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
-                            return !b;
-                        } else {
-                            return b;
-                        }
+                    if (e instanceof MethodCallExpr mce && unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                        return !constraintThroughMethodCall(mce, variable, truthValues);
                     }
                 }
             }
@@ -254,10 +246,19 @@ public class TruthTable {
 
     private boolean constraintThroughMethodCall(MethodCallExpr mce, Expression variable, Map<Expression, Object> truthValues) {
         Optional<Expression> scope = mce.getScope();
-        if (scope.isPresent() && scope.get().equals(variable)) {
-            Object value = truthValues.get(variable);
-            if (value instanceof Boolean b) {
-                return b;
+        if (scope.isPresent()) {
+            if (scope.get().equals(variable)) {
+                Object value = truthValues.get(variable);
+                if (value instanceof Boolean b) {
+                    return b;
+                }
+                if (value instanceof Integer i && mce.toString().contains(EQUALS_CALL)) {
+                    boolean b =  i == Integer.parseInt(mce.getArgument(0).asIntegerLiteralExpr().getValue());
+                    return b;
+                }
+            }
+            else {
+                int i = 0;
             }
         }
         return false;
@@ -395,6 +396,20 @@ public class TruthTable {
             for (Expression constraintExpr : constraint.getValue()) {
                 if (constraintExpr instanceof BinaryExpr binaryExpr) {
                     adjustDomainForConstraint(variable, binaryExpr);
+                } else if (constraintExpr instanceof UnaryExpr unaryExpr) {
+                    Expression e = unaryExpr.getExpression();
+                    if (e instanceof MethodCallExpr mce && unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                        if (mce.getArgument(0) instanceof IntegerLiteralExpr integerLiteralExpr) {
+                            int c = Integer.parseInt(integerLiteralExpr.getValue());
+                            Pair<Object, Object> currentDomain = variables.get(variable);
+                            if (currentDomain.a instanceof Integer a && a == c) {
+                                variables.put(variable, new Pair<>(a - 1, currentDomain.b));
+                            }
+                            if (currentDomain.b instanceof Integer b && b == c) {
+                                variables.put(variable, new Pair<>(currentDomain.a, b + 1));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -754,7 +769,15 @@ public class TruthTable {
             }
             else if (cond.isUnaryExpr()) {
                 UnaryExpr un = cond.asUnaryExpr();
-                addConstraint(un, un);
+                Expression expr = un.getExpression();
+                if (expr instanceof MethodCallExpr mce) {
+                    ScopeChain sc = ScopeChain.findScopeChain(expr);
+                    if (sc.isEmpty()) {
+                        addConstraint(mce.getScope().orElse(new NameExpr("unknown")), mce);
+                    } else {
+                        addConstraint(sc.getChain().getFirst().getExpression(), un);
+                    }
+                }
             }
         }
     }
