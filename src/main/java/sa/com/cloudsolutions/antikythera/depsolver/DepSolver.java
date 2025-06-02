@@ -134,33 +134,37 @@ public class DepSolver {
      */
      void methodSearch(GraphNode node)  {
         if (node.getEnclosingType() != null && node.getNode() instanceof MethodDeclaration md) {
-            callableSearch(node, md);
+            methodSearchHelper(node, md);
+        }
+    }
 
-            Type returnType = md.getType();
-            String returns = md.getTypeAsString();
-            if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                node.processTypeArgument(returnType.asClassOrInterfaceType());
+    private void methodSearchHelper(GraphNode node, MethodDeclaration md) {
+        callableSearch(node, md);
+
+        Type returnType = md.getType();
+        String returns = md.getTypeAsString();
+        if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
+            node.processTypeArgument(returnType.asClassOrInterfaceType());
+        }
+
+        // Handle generic type parameters
+        for (TypeParameter typeParameter : md.getTypeParameters()) {
+            for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
+                node.processTypeArgument(bound);
             }
+        }
 
-            // Handle generic type parameters
-            for (TypeParameter typeParameter : md.getTypeParameters()) {
-                for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
-                    node.processTypeArgument(bound);
-                }
-            }
+        for (Type thrownException : md.getThrownExceptions()) {
+            ImportUtils.addImport(node, thrownException);
 
-            for (Type thrownException : md.getThrownExceptions()) {
-                ImportUtils.addImport(node, thrownException);
+        }
 
-            }
+        if (md.getAnnotationByName("Override").isPresent()) {
+            findParentMethods(node, md);
+        }
 
-            if (md.getAnnotationByName("Override").isPresent()) {
-                findParentMethods(node, md);
-            }
-
-            if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
-                findImplementations(node, md);
-            }
+        if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
+            findImplementations(node, md);
         }
     }
 
@@ -305,7 +309,14 @@ public class DepSolver {
         }
     }
 
-    private void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
+    /**
+     * Sorts the members of a class or interface declaration.
+     * Fields are sorted alphabetically by their variable name, constructors by their name,
+     * and methods by their name. Inner classes are added at the end.
+     *
+     * @param classOrInterface the class or interface declaration to sort
+     */
+    public static void sortClass(ClassOrInterfaceDeclaration classOrInterface) {
         List<FieldDeclaration> fields = new ArrayList<>();
         List<ConstructorDeclaration> constructors = new ArrayList<>();
         List<MethodDeclaration> methods = new ArrayList<>();
@@ -330,7 +341,19 @@ public class DepSolver {
         }
 
         constructors.sort(Comparator.comparing(ConstructorDeclaration::getNameAsString));
-        methods.sort(Comparator.comparing(MethodDeclaration::getNameAsString));
+        // Sort methods with BeforeEach first, then alphabetically
+        methods.sort((m1, m2) -> {
+            boolean m1HasBeforeEach = m1.getAnnotationByName("BeforeEach").isPresent();
+            boolean m2HasBeforeEach = m2.getAnnotationByName("BeforeEach").isPresent();
+
+            if (m1HasBeforeEach && !m2HasBeforeEach) {
+                return -1;
+            } else if (!m1HasBeforeEach && m2HasBeforeEach) {
+                return 1;
+            } else {
+                return m1.getNameAsString().compareTo(m2.getNameAsString());
+            }
+        });
 
         classOrInterface.getMembers().clear();
         classOrInterface.getMembers().addAll(fields);

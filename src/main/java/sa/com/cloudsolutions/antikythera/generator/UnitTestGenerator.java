@@ -15,9 +15,11 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -29,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
@@ -37,6 +40,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -73,6 +77,7 @@ public class UnitTestGenerator extends TestGenerator {
     private boolean autoWired;
     private String instanceName;
     private CompilationUnit baseTestClass;
+    private ClassOrInterfaceDeclaration testClass;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -153,7 +158,7 @@ public class UnitTestGenerator extends TestGenerator {
             gen.setPackageDeclaration(packageDecl);
         }
 
-        ClassOrInterfaceDeclaration testClass = gen.addClass(className);
+        testClass = gen.addClass(className);
         loadPredefinedBaseClassForTest(testClass);
     }
 
@@ -348,9 +353,10 @@ public class UnitTestGenerator extends TestGenerator {
         });
     }
 
-    @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
-        ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        if (testClass == null) {
+            testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        }
         addImport(new ImportDeclaration("org.mockito.InjectMocks", false, false));
 
         if (!autoWired) {
@@ -634,25 +640,87 @@ public class UnitTestGenerator extends TestGenerator {
 
     private void addAsserts(MethodResponse response) {
         Type t = methodUnderTest.getType();
-        BlockStmt body = getBody(testMethod);
-        if (t != null) {
-            addClassImports(t);
-            Variable result = response.getBody();
-            if (result != null && result.getValue() != null) {
-                body.addStatement(asserter.assertNotNull("resp"));
-                if (result.getValue() instanceof Collection<?> c) {
-                    if (c.isEmpty()) {
-                        body.addStatement(asserter.assertEmpty("resp"));
-                    }
-                    else {
-                        body.addStatement(asserter.assertNotEmpty("resp"));
-                    }
-                }
-                asserter.addFieldAsserts(response, body);
-            } else {
-                body.addStatement(asserter.assertNull("resp"));
-            }
+
+        if (t == null) {
+            return;
         }
+
+        addClassImports(t);
+
+        if (response.getBody() != null) {
+            noSideEffectAsserts(response);
+        } else if (Settings.getProperty("log_appender", String.class).isPresent()) {
+            sideEffectAsserts();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void sideEffectAsserts() {
+        BlockStmt body = getBody(testMethod);
+        TypeDeclaration<?> type = methodUnderTest.findAncestor(TypeDeclaration.class).orElseThrow();
+        String className = type.getFullyQualifiedName().orElseThrow();
+        List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
+
+        if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
+            setupLoggers();
+        }
+        for (int i = 0 , j = Math.min(5, logs.size()); i < j; i++) {
+            LogRecorder.LogEntry entry = logs.get(i);
+            String level = entry.level();
+            String message = entry.message();
+            body.addStatement(assertLoggedWithLevel(className, level, message));
+        }
+    }
+
+    private void noSideEffectAsserts(MethodResponse response) {
+        Variable result = response.getBody();
+        BlockStmt body = getBody(testMethod);
+        if (result.getValue() != null) {
+            body.addStatement(asserter.assertNotNull("resp"));
+            if (result.getValue() instanceof Collection<?> c) {
+                if (c.isEmpty()) {
+                    body.addStatement(asserter.assertEmpty("resp"));
+                } else {
+                    body.addStatement(asserter.assertNotEmpty("resp"));
+                }
+            }
+            asserter.addFieldAsserts(response, body);
+        }
+        else {
+            body.addStatement(asserter.assertNull("resp"));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setupLoggers() {
+        methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(classDeclaration -> {
+            BlockStmt body = new BlockStmt();
+            MethodDeclaration md = new MethodDeclaration().setName("setupLoggers")
+                    .setType(void.class)
+                    .addAnnotation("BeforeEach")
+                    .setJavadocComment("Author : Antikythera")
+                    .setBody(body);
+
+            body.addStatement(String.format("appLogger = (Logger) LoggerFactory.getLogger(%s.class);",
+                    classDeclaration.getFullyQualifiedName().orElseThrow()));
+            body.addStatement("appLogger.setAdditive(false);");
+            body.addStatement("logAppender = new LogAppender();");
+            body.addStatement("logAppender.start();");
+            body.addStatement("appLogger.addAppender(logAppender);");
+            body.addStatement("appLogger.setLevel(Level.INFO);");
+            body.addStatement("LogAppender.events.clear(); // Clear static list from previous tests");
+
+            if (testClass.getFieldByName("appLogger").isEmpty()) {
+                testClass.addPrivateField("Logger", "appLogger");
+                testClass.addPrivateField("LogAppender", "logAppender");
+            }
+
+            testClass.addMember(md);
+            gen.addImport("ch.qos.logback.classic.Logger");
+            gen.addImport("ch.qos.logback.classic.Level");
+            gen.addImport("org.slf4j.LoggerFactory");
+            gen.addImport(Settings.getProperty("log_appender", String.class).orElseThrow());
+        });
     }
 
     @Override
@@ -754,12 +822,6 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectConstructorInjection(CompilationUnit cu, TypeDeclaration<?> decl) {
-        Optional<ClassOrInterfaceDeclaration> suite = findSuite(decl);
-        if (suite.isEmpty()) {
-            return;
-        }
-
-        ClassOrInterfaceDeclaration testClass = suite.get();
         for (ConstructorDeclaration constructor : decl.getConstructors()) {
             Map<String, String> paramToFieldMap = mapParamToFields(constructor);
             for (Parameter param : constructor.getParameters()) {
@@ -813,6 +875,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void save() throws IOException {
+        DepSolver.sortClass(testClass);
         Antikythera.getInstance().writeFile(filePath, gen.toString());
     }
 
@@ -829,5 +892,16 @@ public class UnitTestGenerator extends TestGenerator {
                 }
             }
         });
+    }
+
+    public static Expression assertLoggedWithLevel(String className, String level, String expectedMessage) {
+        MethodCallExpr assertion = new MethodCallExpr("assertTrue");
+        MethodCallExpr condition = new MethodCallExpr("LogAppender.hasMessage")
+                .addArgument(new FieldAccessExpr(new NameExpr("Level"), level))
+                .addArgument(new StringLiteralExpr(className))
+                .addArgument(new StringLiteralExpr(expectedMessage));
+
+        assertion.addArgument(condition);
+        return assertion;
     }
 }
