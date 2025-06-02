@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
+import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
@@ -874,6 +875,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     @Override
     public void save() throws IOException {
+        DepSolver.sortClass(testClass);
         Antikythera.getInstance().writeFile(filePath, gen.toString());
     }
 
