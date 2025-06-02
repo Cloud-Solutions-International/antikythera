@@ -134,33 +134,37 @@ public class DepSolver {
      */
      void methodSearch(GraphNode node)  {
         if (node.getEnclosingType() != null && node.getNode() instanceof MethodDeclaration md) {
-            callableSearch(node, md);
+            methodSearchHelper(node, md);
+        }
+    }
 
-            Type returnType = md.getType();
-            String returns = md.getTypeAsString();
-            if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
-                node.processTypeArgument(returnType.asClassOrInterfaceType());
+    private void methodSearchHelper(GraphNode node, MethodDeclaration md) {
+        callableSearch(node, md);
+
+        Type returnType = md.getType();
+        String returns = md.getTypeAsString();
+        if (!returns.equals("void") && returnType.isClassOrInterfaceType()) {
+            node.processTypeArgument(returnType.asClassOrInterfaceType());
+        }
+
+        // Handle generic type parameters
+        for (TypeParameter typeParameter : md.getTypeParameters()) {
+            for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
+                node.processTypeArgument(bound);
             }
+        }
 
-            // Handle generic type parameters
-            for (TypeParameter typeParameter : md.getTypeParameters()) {
-                for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
-                    node.processTypeArgument(bound);
-                }
-            }
+        for (Type thrownException : md.getThrownExceptions()) {
+            ImportUtils.addImport(node, thrownException);
 
-            for (Type thrownException : md.getThrownExceptions()) {
-                ImportUtils.addImport(node, thrownException);
+        }
 
-            }
+        if (md.getAnnotationByName("Override").isPresent()) {
+            findParentMethods(node, md);
+        }
 
-            if (md.getAnnotationByName("Override").isPresent()) {
-                findParentMethods(node, md);
-            }
-
-            if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
-                findImplementations(node, md);
-            }
+        if(node.getEnclosingType().isClassOrInterfaceDeclaration() && node.getEnclosingType().asClassOrInterfaceDeclaration().isInterface()) {
+            findImplementations(node, md);
         }
     }
 
