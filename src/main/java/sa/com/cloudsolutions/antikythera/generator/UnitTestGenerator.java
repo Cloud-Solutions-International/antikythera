@@ -351,9 +351,10 @@ public class UnitTestGenerator extends TestGenerator {
         });
     }
 
-    @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
-        ClassOrInterfaceDeclaration testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        if (testClass == null) {
+            testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        }
         addImport(new ImportDeclaration("org.mockito.InjectMocks", false, false));
 
         if (!autoWired) {
@@ -815,12 +816,6 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void detectConstructorInjection(CompilationUnit cu, TypeDeclaration<?> decl) {
-        Optional<ClassOrInterfaceDeclaration> suite = findSuite(decl);
-        if (suite.isEmpty()) {
-            return;
-        }
-
-        ClassOrInterfaceDeclaration testClass = suite.get();
         for (ConstructorDeclaration constructor : decl.getConstructors()) {
             Map<String, String> paramToFieldMap = mapParamToFields(constructor);
             for (Parameter param : constructor.getParameters()) {

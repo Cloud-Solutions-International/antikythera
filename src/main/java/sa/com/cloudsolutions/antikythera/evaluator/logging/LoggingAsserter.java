@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator.logging;
 
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 
 /**
@@ -14,18 +16,12 @@ public class LoggingAsserter {
      */
     public static Expression assertLoggedWithLevel(String className, String level, String expectedMessage) {
         MethodCallExpr assertion = new MethodCallExpr("assertTrue");
-        MethodCallExpr condition = new MethodCallExpr("LoggingEvaluator.getLogEntries")
-                .addArgument(new StringLiteralExpr(className));
+        MethodCallExpr condition = new MethodCallExpr("LogAppender.hasMesage")
+                .addArgument(new FieldAccessExpr(new NameExpr("Level"), level))
+                .addArgument(new StringLiteralExpr(className))
+                .addArgument(new StringLiteralExpr(expectedMessage));
 
-        MethodCallExpr streamFilter = new MethodCallExpr("stream")
-                .setScope(condition);
-
-        MethodCallExpr anyMatch = new MethodCallExpr("anyMatch")
-                .setScope(streamFilter)
-                .addArgument(String.format("entry -> entry.getLevel().equals(\"%s\") && entry.getMessage().equals(\"%s\")",
-                        level, expectedMessage));
-
-        assertion.addArgument(anyMatch);
+        assertion.addArgument(condition);
         return assertion;
     }
 }
