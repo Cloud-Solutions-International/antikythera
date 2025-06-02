@@ -5,6 +5,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
@@ -12,6 +13,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
+import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
 import java.io.PrintStream;
@@ -55,7 +57,7 @@ public class TruthTable {
     private final Set<Expression> conditions;
 
     /**
-     * If any c
+     * If any additional constraints need to be applied, they will be held here.
      */
     private final HashMap<Expression, List<Expression>> constraints;
     /**
@@ -221,48 +223,66 @@ public class TruthTable {
     }
 
     private boolean satisfiesConstraints(Map<Expression, Object> truthValues) {
-        if (truthValues == null || truthValues.isEmpty()) {
-            return false;
-        }
-
         for (Map.Entry<Expression, List<Expression>> constraint : constraints.entrySet()) {
             Expression variable = constraint.getKey();
-            if (!truthValues.containsKey(variable)) {
-                return false;
-            }
-
-            for (Expression constraintExpr : constraint.getValue()) {
-                if (constraintExpr instanceof BinaryExpr binaryExpr &&
-                            !satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
-                    return false;
+            for (Expression expr : constraint.getValue()) {
+                if (expr instanceof MethodCallExpr mce) {
+                    return constraintThroughMethodCall(variable, mce, truthValues);
+                }
+                if (expr instanceof UnaryExpr unaryExpr) {
+                    Expression e = unaryExpr.getExpression();
+                    if (e instanceof MethodCallExpr mce && unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                        return !constraintThroughMethodCall(variable, mce, truthValues);
+                    }
+                }
+                if (expr instanceof BinaryExpr binaryExpr) {
+                    return satisfiesConstraintForVariable(variable, binaryExpr, truthValues);
                 }
             }
         }
         return true;
     }
 
+    private boolean constraintThroughMethodCall(Expression variable, MethodCallExpr mce, Map<Expression, Object> truthValues) {
+        Optional<Expression> scope = mce.getScope();
+        if (scope.isPresent() && scope.get().equals(variable)) {
+            Object value = truthValues.get(variable);
+            if (value instanceof Boolean b) {
+                return b;
+            }
+            if (value instanceof Integer i && mce.toString().contains(EQUALS_CALL)) {
+                return i == Integer.parseInt(mce.getArgument(0).asIntegerLiteralExpr().getValue());
+            }
+        }
+        return false;
+    }
+
     private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
             Map<Expression, Object> truthValues) {
         Object value = truthValues.get(variable);
-        if (!(value instanceof Integer intValue)) {
-            return true;
+        if (value instanceof Integer intValue) {
+
+            int literalValue = Integer.parseInt(
+                    binaryExpr.getRight().isIntegerLiteralExpr() ?
+                            binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
+                            binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
+            );
+
+            boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
+            return switch (binaryExpr.getOperator()) {
+                case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
+                case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
+                case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
+                case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
+                case EQUALS -> intValue == literalValue;
+                case NOT_EQUALS -> intValue != literalValue;
+                default -> true;
+            };
         }
-
-        int literalValue = Integer.parseInt(
-                binaryExpr.getRight().isIntegerLiteralExpr() ?
-                        binaryExpr.getRight().asIntegerLiteralExpr().getValue() :
-                        binaryExpr.getLeft().asIntegerLiteralExpr().getValue()
-        );
-
-        boolean varOnLeft = binaryExpr.getLeft().toString().equals(variable.toString());
-        return switch (binaryExpr.getOperator()) {
-            case GREATER -> varOnLeft ? intValue > literalValue : intValue < literalValue;
-            case GREATER_EQUALS -> varOnLeft ? intValue >= literalValue : intValue <= literalValue;
-            case LESS -> varOnLeft ? intValue < literalValue : intValue > literalValue;
-            case LESS_EQUALS -> varOnLeft ? intValue <= literalValue : intValue >= literalValue;
-            case EQUALS -> intValue == literalValue;
-            default -> true;
-        };
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        return true;
     }
 
     /**
@@ -284,7 +304,7 @@ public class TruthTable {
         return totalCombinations;
     }
     /**
-     * <p>Identifies numeric variables from the list and maps them to their upper bounds.</p>
+     * <p>Identifies numeric variables from the list and maps them to their bounds.</p>
      *
      * <p></p>Numeric variables need special treatment and cannot be just treated as [0,1] because
      * certain inequalities can only be filled by considering a wider domain of numbers</p>
@@ -296,9 +316,8 @@ public class TruthTable {
      *   Returns empty map
      *
      * @param variableList Array of Expression objects representing variables
-     * @return Map of numeric variables to their upper bounds
+     * @return Map of numeric variables to their bounds
      */
-
     private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
         Map<Expression, Interval> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
@@ -373,7 +392,25 @@ public class TruthTable {
             for (Expression constraintExpr : constraint.getValue()) {
                 if (constraintExpr instanceof BinaryExpr binaryExpr) {
                     adjustDomainForConstraint(variable, binaryExpr);
+                } else if (constraintExpr instanceof UnaryExpr unaryExpr) {
+                    Expression e = unaryExpr.getExpression();
+                    if (e instanceof MethodCallExpr mce && unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
+                        adjustDomainForLogicalComplement(mce, variable);
+                    }
                 }
+            }
+        }
+    }
+
+    private void adjustDomainForLogicalComplement(MethodCallExpr mce, Expression variable) {
+        if (mce.getArgument(0) instanceof IntegerLiteralExpr integerLiteralExpr) {
+            int c = Integer.parseInt(integerLiteralExpr.getValue());
+            Pair<Object, Object> currentDomain = variables.get(variable);
+            if (currentDomain.a instanceof Integer a && a == c) {
+                variables.put(variable, new Pair<>(a - 1, currentDomain.b));
+            }
+            if (currentDomain.b instanceof Integer b && b == c) {
+                variables.put(variable, new Pair<>(currentDomain.a, b + 1));
             }
         }
     }
@@ -488,35 +525,36 @@ public class TruthTable {
     private void writeTruthTable(PrintStream out) {
         out.println("Truth Table for condition: " + condition);
 
-        if (!table.isEmpty()) {
-            Map<Expression, Object> firstRow = table.get(0);
-            final String FORMAT = "%-11s";
+        if (table.isEmpty()) {
+            out.println("No data to display.");
+            return;
+        }
 
-            // Sort the keys alphabetically
-            List<String> sortedKeys = firstRow.keySet().stream()
-                    .map(Expression::toString)
-                    .sorted()
-                    .toList();
+        Map<Expression, Object> firstRow = table.get(0);
+        final String FORMAT = "%-11s";
 
+        // Sort the keys alphabetically
+        List<String> sortedKeys = firstRow.keySet().stream()
+                .map(Expression::toString)
+                .sorted()
+                .toList();
+
+        for (String key : sortedKeys) {
+            if (!key.equals(RESULT.toString())) {
+                out.printf(FORMAT, key);
+            }
+        }
+        out.printf(FORMAT, RESULT);
+        out.println();
+
+        for (Map<Expression, Object> row : table) {
             for (String key : sortedKeys) {
                 if (!key.equals(RESULT.toString())) {
-                    out.printf(FORMAT, key);
+                    out.printf(FORMAT, row.get(new NameExpr(key)));
                 }
             }
-            out.printf(FORMAT, RESULT);
+            out.printf(FORMAT, row.get(RESULT));
             out.println();
-
-            for (Map<Expression, Object> row : table) {
-                for (String key : sortedKeys) {
-                    if (!key.equals(RESULT.toString())) {
-                        out.printf(FORMAT, row.get(new NameExpr(key)));
-                    }
-                }
-                out.printf(FORMAT, row.get(RESULT));
-                out.println();
-            }
-        } else {
-            out.println("No data to display.");
         }
     }
 
@@ -600,24 +638,24 @@ public class TruthTable {
         return evaluateBasicExpression(condition, truthValues);
     }
 
-private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
-    var leftExpr = binaryExpr.getLeft();
-    var rightExpr = binaryExpr.getRight();
-    Object left = evaluateCondition(leftExpr, truthValues);
-    Object right = evaluateCondition(rightExpr, truthValues);
+    private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
+        var leftExpr = binaryExpr.getLeft();
+        var rightExpr = binaryExpr.getRight();
+        Object left = evaluateCondition(leftExpr, truthValues);
+        Object right = evaluateCondition(rightExpr, truthValues);
 
-    return switch (binaryExpr.getOperator()) {
-        case AND -> ((Boolean) left) && (Boolean) right;
-        case OR -> ((Boolean) left) || (Boolean) right;
-        case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
-        case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
-        case LESS -> NumericComparator.compare(left, right) < 0;
-        case GREATER -> NumericComparator.compare(left, right) > 0;
-        case LESS_EQUALS -> NumericComparator.compare(left, right) <= 0;
-        case GREATER_EQUALS -> NumericComparator.compare(left, right) >= 0;
-        default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
-    };
-}
+        return switch (binaryExpr.getOperator()) {
+            case AND -> ((Boolean) left) && (Boolean) right;
+            case OR -> ((Boolean) left) || (Boolean) right;
+            case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
+            case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
+            case LESS -> NumericComparator.compare(left, right) < 0;
+            case GREATER -> NumericComparator.compare(left, right) > 0;
+            case LESS_EQUALS -> NumericComparator.compare(left, right) <= 0;
+            case GREATER_EQUALS -> NumericComparator.compare(left, right) >= 0;
+            default -> throw new UnsupportedOperationException("Unsupported operator: " + binaryExpr.getOperator());
+        };
+    }
 
     private Object evaluateBasicExpression(Expression condition, Map<Expression, Object> truthValues) {
         if (condition.isNameExpr()) {
@@ -653,13 +691,16 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         return getValue(condition, truthValues);
     }
 
-    private Object evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
+    private boolean evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
         Object scopeValue = truthValues.get(scope);
         Expression argument = condition.getArgument(0);
 
         if (argument.isLiteralExpr()) {
             if (scopeValue == null) {
                 return argument.isNullLiteralExpr();
+            }
+            if (scopeValue instanceof Boolean b) {
+                return b;
             }
             return scopeValue.equals(getValue(argument, truthValues));
         } else {
@@ -712,7 +753,39 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         return table;
     }
 
-    public void addConstraint(NameExpr name, BinaryExpr constraint) {
+
+    public void addConstraints(List<Expression> collectedConditions) {
+        for (Expression cond : collectedConditions) {
+            addConstraintForCondition(cond);
+        }
+    }
+
+    private void addConstraintForCondition(Expression cond) {
+        if (cond.isBinaryExpr()) {
+            BinaryExpr bin = cond.asBinaryExpr();
+            if (bin.getLeft().isNameExpr()) {
+                addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
+            }
+        } else if (cond.isMethodCallExpr()) {
+            MethodCallExpr mce = cond.asMethodCallExpr();
+            Optional<Expression> expr = mce.getScope();
+            expr.ifPresent(expression -> addConstraint(expression, mce));
+        }
+        else if (cond.isUnaryExpr()) {
+            UnaryExpr un = cond.asUnaryExpr();
+            Expression expr = un.getExpression();
+            if (expr instanceof MethodCallExpr mce) {
+                ScopeChain sc = ScopeChain.findScopeChain(expr);
+                if (sc.isEmpty()) {
+                    addConstraint(mce.getScope().orElse(new NameExpr("unknown")), mce);
+                } else {
+                    addConstraint(sc.getChain().getFirst().getExpression(), un);
+                }
+            }
+        }
+    }
+
+    public void addConstraint(Expression name, Expression constraint) {
         constraints.computeIfAbsent(name, k -> new ArrayList<>()).add(constraint);
     }
 
@@ -728,6 +801,9 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
          * Processes variable names found in conditional expressions and determines their value domains.
          * For each name expression encountered:
          * - If part of an equals() comparison with null, sets domain to [null, "T"]
+         *      Truth table does not have any means to determine what should be the reasonable
+         *      default value. That information is only available to evaluators. So the
+         *      evaluator or other users of this class should set the correct default value.
          * - If part of a numeric comparison, sets domain to [0, numberOfVariables ]
          * - If part of a string comparison, sets domain to [null, "literal"]
          * - For boolean conditions, sets domain to [true, false]
@@ -738,20 +814,68 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
          */
         @Override
         public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
-            n.getParentNode().ifPresentOrElse(
-                    parent -> handleParentNode(n, parent, collector),
-                    () -> collector.put(n, new Pair<>(true, false))
-            );
+            Optional<Node> parentNode = n.getParentNode();
+            if (parentNode.isEmpty()) {
+                collector.put(n, new Pair<>(true, false));
+            }
+            else if (parentNode.get() instanceof BinaryExpr b) {
+                findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
+            }
+            else if (parentNode.get() instanceof UnaryExpr) {
+                collector.put(n, new Pair<>(false, true));
+            }
+
             super.visit(n, collector);
         }
 
-        private void handleParentNode(NameExpr n, Node parent, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (parent instanceof MethodCallExpr mce && mce.getNameAsString().equals(EQUALS_CALL)) {
-                findDomain(n, collector, mce.getArgument(0));
-            } else if (parent instanceof BinaryExpr b) {
-                findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
-            } else if (!(parent instanceof FieldAccessExpr || parent instanceof MethodCallExpr)) {
-                collector.put(n, new Pair<>(false, true));
+        @Override
+        public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
+            ScopeChain chain = ScopeChain.findScopeChain(m);
+            if (m.getNameAsString().equals(IS_EMPTY)) {
+                // For isEmpty(), we want to consider both empty and non-empty collections
+                List<?> emptyList = new ArrayList<>();
+                List<Integer> nonEmptyList = new ArrayList<>();
+                nonEmptyList.add(1);
+                Pair<Object, Object> domain = new Pair<>(emptyList, nonEmptyList);
+                if (chain.isEmpty()) {
+                    collector.put(m, domain);
+                } else {
+                    collector.put(chain.getChain().getFirst().getExpression(), domain);
+                }
+            } else if (m.getNameAsString().equals(EQUALS_CALL)) {
+                equalsMethodCall(m, collector, chain);
+            } else {
+                Optional<Node> parent = m.getParentNode();
+                if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
+                    if (b.getLeft().equals(m)) {
+                        findDomain(m, collector, b.getRight());
+                    } else {
+                        findDomain(m, collector, b.getLeft());
+                    }
+                } else {
+                    collector.put(m, new Pair<>(true, false));
+                }
+            }
+            super.visit(m, collector);
+        }
+
+
+        @Override
+        public void visit(FieldAccessExpr f, HashMap<Expression, Pair<Object, Object>> collector) {
+            if(isInequalityPresent()) {
+                collector.put(f, new Pair<>(0, 1));
+            }
+            else {
+                collector.put(f, new Pair<>(true, false));
+            }
+            super.visit(f, collector);
+        }
+
+        private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector, ScopeChain chain) {
+            if (chain.isEmpty()) {
+                findDomain(m, collector, m.getArgument(0));
+            } else {
+                findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
             }
         }
 
@@ -794,12 +918,29 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 }
                 else {
                     collector.put(nameExpression, new Pair<>(true, false));
+                    collector.put(compareWith, new Pair<>(true, false));
                 }
             }
         }
 
+        private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+                                          Expression compareWith) {
+            int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
+            Node parent = n.getParentNode().orElse(null);
+
+            if (parent instanceof BinaryExpr binaryExpr) {
+                if (isInequality(binaryExpr)) {
+                    handleInequalityDomain(n, collector, literalValue, binaryExpr);
+                } else {
+                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
+                }
+            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
+                handleEqualsMethodDomain(n, collector, literalValue);
+            }
+        }
+
         private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                Expression compareWith) {
+                                       Expression compareWith) {
             // Handle the case where the value might have an 'L' suffix
             String valueStr = compareWith.asLongLiteralExpr().getValue();
             if (valueStr.endsWith("L") || valueStr.endsWith("l")) {
@@ -820,7 +961,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         }
 
         private void handleLongInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                long literalValue, BinaryExpr binaryExpr) {
+                                                long literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
                 case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
                 case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
@@ -831,7 +972,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         }
 
         private void handleDoubleLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                Expression compareWith) {
+                                         Expression compareWith) {
             double literalValue = Double.parseDouble(compareWith.asDoubleLiteralExpr().getValue());
             Node parent = n.getParentNode().orElse(null);
 
@@ -847,7 +988,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         }
 
         private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                double literalValue, BinaryExpr binaryExpr) {
+                                                  double literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
                 case LESS -> collector.put(n, new Pair<>(literalValue - 1, literalValue));
                 case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 0.0001));
@@ -856,24 +997,9 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
                 default -> collector.put(n, new Pair<>(0, 1)); // fallback
             }
         }
-        private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                Expression compareWith) {
-            int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
-            Node parent = n.getParentNode().orElse(null);
-
-            if (parent instanceof BinaryExpr binaryExpr) {
-                if (isInequality(binaryExpr)) {
-                    handleInequalityDomain(n, collector, literalValue, binaryExpr);
-                } else {
-                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
-                }
-            } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
-                handleEqualsMethodDomain(n, collector, literalValue);
-            }
-        }
 
         private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                int literalValue, BinaryExpr binaryExpr) {
+                                            int literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
                 case LESS -> collector.put(n, new Pair<>(literalValue -1, literalValue));
                 case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
@@ -884,7 +1010,7 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
         }
 
         private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
-                int literalValue) {
+                                              int literalValue) {
             if (collector.containsKey(n)) {
                 Pair<Object, Object> existingBounds = collector.get(n);
                 if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
@@ -898,43 +1024,6 @@ private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, O
             } else {
                 collector.put(n, new Pair<>(literalValue, literalValue));
             }
-        }
-
-        @Override
-        public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
-            if (m.getNameAsString().equals(IS_EMPTY)) {
-                Optional<Expression> scope = m.getScope();
-                if (scope.isPresent()) {
-                    // For isEmpty(), we want to consider both empty and non-empty collections
-                    List<?> emptyList = new ArrayList<>();
-                    List<Integer> nonEmptyList = new ArrayList<>();
-                    nonEmptyList.add(1);
-                    collector.put(scope.get(), new Pair<>(emptyList, nonEmptyList));
-                }
-            } else if (!m.getNameAsString().equals(EQUALS_CALL)) {
-                Optional<Node> parent = m.getParentNode();
-                if (parent.isPresent() && parent.get() instanceof BinaryExpr b) {
-                    if (b.getLeft().equals(m)) {
-                        findDomain(m, collector, b.getRight());
-                    } else {
-                        findDomain(m, collector, b.getLeft());
-                    }
-                } else {
-                    collector.put(m, new Pair<>(true, false));
-                }
-            }
-            super.visit(m, collector);
-        }
-
-        @Override
-        public void visit(FieldAccessExpr f, HashMap<Expression, Pair<Object, Object>> collector) {
-            if(isInequalityPresent()) {
-                collector.put(f, new Pair<>(0, 1));
-            }
-            else {
-                collector.put(f, new Pair<>(true, false));
-            }
-            super.visit(f, collector);
         }
 
         /*

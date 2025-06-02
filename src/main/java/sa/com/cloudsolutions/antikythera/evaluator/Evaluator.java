@@ -287,7 +287,7 @@ public class Evaluator {
         } else if (expr.isAssignExpr()) {
             return evaluateAssignment(expr);
         } else if (expr.isObjectCreationExpr()) {
-            return createObject(expr, expr.asObjectCreationExpr());
+            return createObject(expr.asObjectCreationExpr());
         } else if (expr.isFieldAccessExpr()) {
             return evaluateFieldAccessExpression(expr);
         } else if (expr.isArrayInitializerExpr()) {
@@ -614,14 +614,10 @@ public class Evaluator {
 
     /**
      * Create an object using reflection or an evaluator
-     *
-     * @param instructionPointer a node representing the current statement. This will in most cases be an expression.
-     *                           We recursively fetch it's parent until we reach the start of the block. This is
-     *                           needed because local variables are local to a block rather than a method.
      * @param oce                The expression to be evaluated and assigned as the initial value
      * @return The object that's created will be in the value field of the Variable
      */
-    Variable createObject(Node instructionPointer, ObjectCreationExpr oce) throws ReflectiveOperationException {
+    Variable createObject(ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
         TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
         if (wrapper == null) {
@@ -916,7 +912,7 @@ public class Evaluator {
                     variable.setClazz(clazz);
                 }
             } else if (expr2.isObjectCreationExpr()) {
-                variable = createObject(expr2, expr2.asObjectCreationExpr());
+                variable = createObject(expr2.asObjectCreationExpr());
             } else if (expr2.isArrayAccessExpr()) {
                 variable = evaluateArrayAccess(expr2);
             }
@@ -1118,7 +1114,20 @@ public class Evaluator {
             if (Optional.class.equals(clazz)) {
                 return handleOptionals(sc);
             }
-            return executeMethod(method);
+            Variable variable = sc.getVariable();
+            MethodCallExpr mce = sc.getMCEWrapper().asMethodCallExpr().orElseThrow();
+            if (variable.getValue() instanceof Evaluator eval) {
+                MethodInterceptor interceptor = new MethodInterceptor(eval);
+                Class<?> c = AKBuddy.createDynamicClass(interceptor);
+                Object instance = AKBuddy.createInstance(c, interceptor);
+                Variable v  = new Variable(instance);
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(mce, this, v);
+                return reflectiveMethodCall(v, reflectionArguments);
+            }
+            else {
+                ReflectionArguments reflectionArguments = Reflect.buildArguments(mce, this, variable);
+                return reflectiveMethodCall(variable, reflectionArguments);
+            }
         }
     }
 
@@ -1362,7 +1371,7 @@ public class Evaluator {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             if (init.get().isObjectCreationExpr()) {
-                Variable v = createObject(variable, init.get().asObjectCreationExpr());
+                Variable v = createObject(init.get().asObjectCreationExpr());
                 v.setType(variable.getType());
                 return v;
             } else {
@@ -1655,7 +1664,7 @@ public class Evaluator {
         ThrowStmt t = stmt.asThrowStmt();
         if (t.getExpression().isObjectCreationExpr()) {
             ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
-            Variable v = createObject(stmt, oce);
+            Variable v = createObject(oce);
             if (v.getValue() instanceof Exception ex) {
                 throw ex;
             } else {

@@ -376,7 +376,7 @@ public class Reflect {
             }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(typeName));
+                        .setType(new ClassOrInterfaceType().setName(typeName));
                 if (stringValue != null) {
                     expr.setArguments(NodeList.nodeList(new StringLiteralExpr(stringValue)));
                 } else {
@@ -689,7 +689,7 @@ public class Reflect {
         return null;
     }
 
-    public static Class<?> literalExpressionToTypeString(LiteralExpr lit) {
+    public static Class<?> literalExpressionToClass(LiteralExpr lit) {
         if (lit.isBooleanLiteralExpr()) {
             return boolean.class;
         } else if (lit.isCharLiteralExpr()) {

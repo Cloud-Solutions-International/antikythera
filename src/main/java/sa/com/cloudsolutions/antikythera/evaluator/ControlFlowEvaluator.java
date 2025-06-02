@@ -1,8 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -142,8 +142,16 @@ public class ControlFlowEvaluator extends Evaluator {
                 return setupNonEmptyCollections(v, name);
             }
         }
-        return List.of(entry.getValue() == null ? new NullLiteralExpr()
-                        : new StringLiteralExpr(entry.getValue().toString()));
+        if (entry.getValue() == null) {
+            return List.of(new NullLiteralExpr());
+        }
+        if (entry.getValue() instanceof ObjectCreationExpr oce) {
+            return List.of(oce);
+        }
+        if (entry.getValue() instanceof MethodCallExpr mce) {
+            return List.of(mce);
+        }
+        return List.of(new StringLiteralExpr(entry.getValue().toString()));
     }
 
     /**
@@ -282,14 +290,16 @@ public class ControlFlowEvaluator extends Evaluator {
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
         ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
-        setupConditionThroughMethodCalls(stmt, entry, chain);
+        if (!chain.isEmpty()) {
+            setupConditionThroughMethodCalls(stmt, entry, chain);
+        }
     }
 
     private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, ScopeChain chain) {
-        if (!chain.isEmpty()) {
-            Expression expr = chain.getChain().getFirst().getExpression();
-            Variable v = getValue(stmt, expr.toString());
-            if (v == null && expr.isNameExpr()) {
+        Expression expr = chain.getChain().getFirst().getExpression();
+        Variable v = getValue(stmt, expr.toString());
+        if (v == null ) {
+            if (expr.isNameExpr()) {
                 /*
                  * This is likely to be a static method.
                  */
@@ -309,10 +319,14 @@ public class ControlFlowEvaluator extends Evaluator {
                     }
                 }
             }
-
-            if (v != null && v.getValue() instanceof Evaluator) {
-                setupConditionalVariablesWithSetter(stmt, entry, expr);
+            if (expr.isObjectCreationExpr()) {
+                ObjectCreationExpr oce = expr.asObjectCreationExpr();
+                addPreCondition(stmt, oce);
             }
+        }
+
+        if (v != null && v.getValue() instanceof Evaluator) {
+            setupConditionalVariablesWithSetter(stmt, entry, expr);
         }
     }
 
@@ -332,10 +346,41 @@ public class ControlFlowEvaluator extends Evaluator {
             if (entry.getValue().equals("T")) {
                 setupConditionalNotNullValue(stmt, entry, name, setter);
             } else {
+                createSetterFromGetter(entry, setter);
+            }
+            if (setter.getArguments().isEmpty()) {
                 setter.addArgument(entry.getValue().toString());
             }
         }
         addPreCondition(stmt, setter);
+    }
+
+    @SuppressWarnings("java:S5411")
+    private void createSetterFromGetter(Map.Entry<Expression, Object> entry, MethodCallExpr setter) {
+        Expression key = entry.getKey();
+        Optional< Node> parent = entry.getKey().getParentNode();
+        if (key.isMethodCallExpr() && parent.isPresent()  && parent.get() instanceof MethodCallExpr mce
+                        && mce.getNameAsString().equals("equals")) {
+            Expression argument = mce.getArgument(0);
+            if (argument.isObjectCreationExpr()) {
+                try {
+                    Variable v = evaluateExpression(argument);
+                    setter.addArgument(v.getInitializer().getFirst());
+                } catch (ReflectiveOperationException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
+            else if (argument.isLiteralExpr()) {
+                if (entry.getValue() instanceof Boolean b && b) {
+                    setter.addArgument(argument.asLiteralExpr());
+                }
+                else {
+                    Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
+                    Variable v = Reflect.variableFactory(c.getName());
+                    setter.addArgument(v.getInitializer().getFirst());
+                }
+            }
+        }
     }
 
     private void setupConditionalNotNullValue(Statement stmt, Map.Entry<Expression, Object> entry, String name, MethodCallExpr setter) {
@@ -538,15 +583,15 @@ public class ControlFlowEvaluator extends Evaluator {
 
     @Override
     Variable resolveVariableRepresentedByCode(VariableDeclarator variable, String resolvedClass) throws ReflectiveOperationException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(resolvedClass);
-        TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, resolvedClass).orElseThrow();
+        TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(resolvedClass).orElseThrow();
         if (type instanceof ClassOrInterfaceDeclaration cdecl) {
+            String nameAsString = variable.getNameAsString();
+
             MockingEvaluator eval = EvaluatorFactory.create(resolvedClass, MockingEvaluator.class);
             Variable v = new Variable(eval);
-            String init = ArgumentGenerator.instantiateClass(cdecl, variable.getNameAsString()).replace(";","");
+            String init = ArgumentGenerator.instantiateClass(cdecl, nameAsString).replace(";","");
             String[] parts = init.split("=");
             v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
-
             return v;
         }
 

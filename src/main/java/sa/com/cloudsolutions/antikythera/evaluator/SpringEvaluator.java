@@ -10,7 +10,6 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -291,6 +290,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
                     parameterAssignment(assignExpr, va);
                     va.setInitializer(List.of(assignExpr));
+            } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
+                va.setValue(createObject(oce).getValue());
+                va.setInitializer(List.of(oce));
             }
         }
     }
@@ -589,20 +591,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * Set up an if condition so that it will evaluate to true or false in future executions.
      */
+    @SuppressWarnings("java:S5411")
     void setupIfCondition() {
         boolean state = currentConditional.isFalsePath();
-
-        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(currentConditional.getStatement());
         TruthTable tt = new TruthTable();
 
-        for (Expression cond : collectedConditions) {
-            if (cond.isBinaryExpr()) {
-                BinaryExpr bin = cond.asBinaryExpr();
-                if (bin.getLeft().isNameExpr()) {
-                    tt.addConstraint(cond.asBinaryExpr().getLeft().asNameExpr(), cond.asBinaryExpr());
-                }
-            }
-        }
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(currentConditional.getStatement());
+        tt.addConstraints(collectedConditions);
 
         collectedConditions.add(currentConditional.getConditionalExpression());
         tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
@@ -617,10 +612,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                 } else if (entry.getKey().isNameExpr()) {
                     setupConditionThroughAssignment(currentConditional.getStatement(), entry);
+                } else if (entry.getKey().isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
+                    setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+                    break;
                 }
             }
         }
-
     }
 
     /**
@@ -671,7 +668,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         Variable variable = Reflect.variableFactory(fullyQualifiedName);
                         if (mainType.endsWith("List") || mainType.endsWith("Map") || mainType.endsWith("Set")) {
                             for (int i = 0; i < 10; i++) {
-                                Variable row = createObject(stmt, objectCreationExpr);
+                                Variable row = createObject(objectCreationExpr);
                                 if (SpringEvaluator.resultToEntity(row, rs)) {
                                     ((Collection) variable.getValue()).add(row);
                                 } else {
@@ -683,7 +680,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     }
                 } else {
                     ObjectCreationExpr objectCreationExpr = new ObjectCreationExpr(null, classType, new NodeList<>());
-                    Variable row = createObject(stmt, objectCreationExpr);
+                    Variable row = createObject(objectCreationExpr);
                     if (SpringEvaluator.resultToEntity(row, rs)) {
                         return row;
                     } else {
@@ -736,8 +733,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    Variable createObject(Node instructionPointer, ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
-        Variable v = super.createObject(instructionPointer, oce);
+    Variable createObject(ObjectCreationExpr oce) throws AntikytheraException, ReflectiveOperationException {
+        Variable v = super.createObject(oce);
         ClassOrInterfaceType type = oce.getType();
         if (type.toString().contains("ResponseEntity")) {
             MethodResponse response = new MethodResponse(v);

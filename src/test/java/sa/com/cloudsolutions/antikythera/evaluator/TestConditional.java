@@ -20,7 +20,6 @@ import java.io.PrintStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.expr.Expression;
 
@@ -81,9 +80,9 @@ class TestConditional extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"conditional4, ZERO!Positive!ZERO!Negative!", "conditional5, ZERO!Three!Three!Two!Two!One!",
-            "conditional6, ZERO!Three!Three!Two!Two!One!","conditional7, ZERO!Three!Three!Two!Two!One!",
-            "conditional8, ZERO!Three!ZERO!Two!ZERO!One!", "smallDiff, One!Nearly 2!",
+    @CsvSource({"conditional4, ZERO!Positive!Negative!", "conditional5, ZERO!Three!Two!One!",
+            "conditional6, ZERO!Three!Two!One!","conditional7, ZERO!Three!Two!One!",
+            "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
             "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
             "animalFarm, Some animals are more equal!All animals are equal!"
     })
@@ -187,7 +186,7 @@ class TestConditional extends TestHelper {
 
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals("Bee!Zero!Zero!Aargh!Antikythera!Bee!",s.replaceAll("\\n",""));
+        assertEquals("Bee!Zero!Antikythera!Aargh!",s.replaceAll("\\n",""));
     }
 
 
@@ -216,7 +215,9 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
-            "ternary5, False!True!"
+            "stringCompare, Donno!Hello!AK!", "fileCompare, Other!tmp!Null!",
+            "numberCompare, Other!Two!One!", "drinkable, good!Very good!Not drinkable!",
+            "clarendon, Not drinkable!good!", "ternary5, False!True!",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -229,6 +230,7 @@ class TestConditional extends TestHelper {
         String s = outContent.toString();
         assertEquals(result,s.replaceAll("\\n",""));
     }
+
 }
 
 class TestConditionalWithOptional extends TestHelper {

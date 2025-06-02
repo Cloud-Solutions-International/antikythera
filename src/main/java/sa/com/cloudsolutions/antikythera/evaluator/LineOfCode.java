@@ -8,6 +8,7 @@ import com.github.javaparser.ast.stmt.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 
@@ -145,13 +146,66 @@ public class LineOfCode {
         }
     }
 
+
+    /**
+     * State transition method for the line of code.
+     *
+     * <p>For if/else statements, it updates the path state based on the current execution path. The
+     * possible states are defined in UNTRAVELLED, FALSE_PATH, TRUE_PATH, and BOTH_PATHS.</p>
+     *
+     * <p>>When both paths in a branching statement has been traversed, we need to check its parent.
+     * The current state transition may result in all the branching statements of the parent node
+     * to have changed to the BOTH_PATHS state. When that happens the parent's state should change.</p>
+     *
+     * <p>When the child node is in the else block, then the parent's state needs to show that it is
+     * the else path that has been taken. When the child is in the then block the parent needs to
+     * show that the then path has been taken.</p>
+     */
     public void transition() {
+        // Step 1: Update current node's state
         if (isFalsePath()) {
-            pathTaken = LineOfCode.BOTH_PATHS;
+            pathTaken |= TRUE_PATH;
+        } else if (isTruePath()) {
+            pathTaken |= FALSE_PATH;
+        } else if (isUntravelled()) {
+            pathTaken = FALSE_PATH;
         } else {
-            pathTaken++;
+            throw new IllegalStateException("Already completed");
+        }
+
+        // Step 2: Update parent state if it exists and is an if statement
+        if (parent != null && parent.statement instanceof IfStmt ifStmt) {
+            List<LineOfCode> siblingsInBlock = parent.children.stream()
+                .filter(child -> isNodeInSameBlock(ifStmt, child.statement, this.statement))
+                .toList();
+
+            // Only update parent if there are actually siblings and all are fully traversed
+            if (!siblingsInBlock.isEmpty() && siblingsInBlock.stream().allMatch(LineOfCode::isFullyTravelled)) {
+                if (isNodeInThenBlock(ifStmt, this.statement)) {
+                    parent.pathTaken |= TRUE_PATH;
+                } else if (isNodeInElseBlock(ifStmt, this.statement)) {
+                    parent.pathTaken |= FALSE_PATH;
+                }
+            }
         }
     }
+
+
+    private boolean isNodeInThenBlock(IfStmt ifStmt, Statement node) {
+        return ConditionVisitor.isNodeInStatement(node, ifStmt.getThenStmt());
+    }
+
+    private boolean isNodeInElseBlock(IfStmt ifStmt, Statement node) {
+        return ifStmt.getElseStmt()
+                .map(elseStmt -> ConditionVisitor.isNodeInStatement(node, elseStmt))
+                .orElse(false);
+    }
+
+    private boolean isNodeInSameBlock(IfStmt ifStmt, Statement node1, Statement node2) {
+        return (isNodeInThenBlock(ifStmt, node1) && isNodeInThenBlock(ifStmt, node2)) ||
+                (isNodeInElseBlock(ifStmt, node1) && isNodeInElseBlock(ifStmt, node2));
+    }
+
 
     /**
      * Adds a precondition to this line of code which will determine which path will be taken
@@ -169,7 +223,8 @@ public class LineOfCode {
      *
      * @return The list of preconditions.
      */
-    public LinkedHashSet<Precondition> getPreconditions() {
+
+    public Set<Precondition> getPreconditions() {
         return preconditions;
     }
 
@@ -254,7 +309,7 @@ public class LineOfCode {
      * @return `true` if in the false path state, otherwise `false`.
      */
     public boolean isFalsePath() {
-        return pathTaken == FALSE_PATH;
+        return (pathTaken & FALSE_PATH) == FALSE_PATH && (pathTaken & TRUE_PATH) == 0;
     }
 
     /**
@@ -263,7 +318,7 @@ public class LineOfCode {
      * @return `true` if in the true path state, otherwise `false`.
      */
     public boolean isTruePath() {
-        return pathTaken == TRUE_PATH;
+        return (pathTaken & TRUE_PATH) == TRUE_PATH && (pathTaken & FALSE_PATH) == 0;
     }
 
     /**

@@ -379,7 +379,7 @@ public class GraphNode {
                 for (int i = 0 ; i < paramTypes.length ; i++) {
                     Expression arg = enumConstant.getArguments().get(i);
                     if (arg.isLiteralExpr()) {
-                        paramTypes[i] = Reflect.literalExpressionToTypeString(arg.asLiteralExpr());
+                        paramTypes[i] = Reflect.literalExpressionToClass(arg.asLiteralExpr());
                     }
                 }
 
