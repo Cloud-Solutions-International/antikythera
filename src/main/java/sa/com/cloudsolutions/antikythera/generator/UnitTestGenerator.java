@@ -75,6 +75,7 @@ public class UnitTestGenerator extends TestGenerator {
     private boolean autoWired;
     private String instanceName;
     private CompilationUnit baseTestClass;
+    private ClassOrInterfaceDeclaration testClass;
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -155,7 +156,7 @@ public class UnitTestGenerator extends TestGenerator {
             gen.setPackageDeclaration(packageDecl);
         }
 
-        ClassOrInterfaceDeclaration testClass = gen.addClass(className);
+        testClass = gen.addClass(className);
         loadPredefinedBaseClassForTest(testClass);
     }
 
@@ -641,35 +642,78 @@ public class UnitTestGenerator extends TestGenerator {
             return;
         }
 
-        BlockStmt body = getBody(testMethod);
         addClassImports(t);
-        Variable result = response.getBody();
-        if (result != null) {
-            if (result.getValue() != null) {
-                body.addStatement(asserter.assertNotNull("resp"));
-                if (result.getValue() instanceof Collection<?> c) {
-                    if (c.isEmpty()) {
-                        body.addStatement(asserter.assertEmpty("resp"));
-                    } else {
-                        body.addStatement(asserter.assertNotEmpty("resp"));
-                    }
-                }
-                asserter.addFieldAsserts(response, body);
-            }
-            else {
-                body.addStatement(asserter.assertNull("resp"));
-            }
+
+        if (response.getBody() != null) {
+            noSideEffectAsserts(response);
         } else {
-            TypeDeclaration<?> type = methodUnderTest.findAncestor(TypeDeclaration.class).orElseThrow();
-            String className = type.getFullyQualifiedName().orElseThrow();
-            List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
-            for (int i = 0 , j = Math.min(5, logs.size()); i < j; i++) {
-                LogRecorder.LogEntry entry = logs.get(i);
-                String level = entry.level();
-                String message = entry.message();
-                body.addStatement(LoggingAsserter.assertLoggedWithLevel(className, level, message));
-            }
+            sideEffectAsserts();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void sideEffectAsserts() {
+        BlockStmt body = getBody(testMethod);
+        TypeDeclaration<?> type = methodUnderTest.findAncestor(TypeDeclaration.class).orElseThrow();
+        String className = type.getFullyQualifiedName().orElseThrow();
+        List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
+
+        if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
+            setupLoggers();
+        }
+        for (int i = 0 , j = Math.min(5, logs.size()); i < j; i++) {
+            LogRecorder.LogEntry entry = logs.get(i);
+            String level = entry.level();
+            String message = entry.message();
+            body.addStatement(LoggingAsserter.assertLoggedWithLevel(className, level, message));
+        }
+    }
+
+    private void noSideEffectAsserts(MethodResponse response) {
+        Variable result = response.getBody();
+        BlockStmt body = getBody(testMethod);
+        if (result.getValue() != null) {
+            body.addStatement(asserter.assertNotNull("resp"));
+            if (result.getValue() instanceof Collection<?> c) {
+                if (c.isEmpty()) {
+                    body.addStatement(asserter.assertEmpty("resp"));
+                } else {
+                    body.addStatement(asserter.assertNotEmpty("resp"));
+                }
+            }
+            asserter.addFieldAsserts(response, body);
+        }
+        else {
+            body.addStatement(asserter.assertNull("resp"));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setupLoggers() {
+        methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(classDeclaration -> {
+            BlockStmt body = new BlockStmt();
+            MethodDeclaration md = new MethodDeclaration().setName("setupLoggers")
+                    .setType(void.class)
+                    .addAnnotation("BeforeEach")
+                    .setJavadocComment("Author : Antikythera")
+                    .setBody(body);
+
+            body.addStatement(String.format("appLogger = (Logger) LoggerFactory.getLogger(%s.class);",
+                    classDeclaration.getFullyQualifiedName().orElseThrow()));
+            body.addStatement("appLogger.setAdditive(false);");
+            body.addStatement("logAppender = new LogAppender();");
+            body.addStatement("logAppender.start();");
+            body.addStatement("appLogger.addAppender(testLogAppender);");
+            body.addStatement("appLogger.setLevel(Level.INFO);");
+            body.addStatement("LogAppender.events.clear(); // Clear static list from previous tests");
+
+            classDeclaration.addPrivateField("Logger", "appLogger");
+            classDeclaration.addPrivateField("LogAppender", "logAppender");
+
+            testClass.addMember(md);
+            TestGenerator.addImport(new ImportDeclaration("ch.qos.logback.classic.Logger", false, false));
+            TestGenerator.addImport(new ImportDeclaration("ch.qos.logback.classic.Level", false, false));
+        });
     }
 
     @Override
