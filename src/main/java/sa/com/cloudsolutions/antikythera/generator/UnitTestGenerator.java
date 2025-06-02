@@ -15,9 +15,11 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -38,7 +40,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.TestSuiteEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
-import sa.com.cloudsolutions.antikythera.evaluator.logging.LoggingAsserter;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -647,7 +648,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (response.getBody() != null) {
             noSideEffectAsserts(response);
-        } else {
+        } else if (Settings.getProperty("log_appender", String.class).isPresent()) {
             sideEffectAsserts();
         }
     }
@@ -666,7 +667,7 @@ public class UnitTestGenerator extends TestGenerator {
             LogRecorder.LogEntry entry = logs.get(i);
             String level = entry.level();
             String message = entry.message();
-            body.addStatement(LoggingAsserter.assertLoggedWithLevel(className, level, message));
+            body.addStatement(assertLoggedWithLevel(className, level, message));
         }
     }
 
@@ -704,16 +705,20 @@ public class UnitTestGenerator extends TestGenerator {
             body.addStatement("appLogger.setAdditive(false);");
             body.addStatement("logAppender = new LogAppender();");
             body.addStatement("logAppender.start();");
-            body.addStatement("appLogger.addAppender(testLogAppender);");
+            body.addStatement("appLogger.addAppender(logAppender);");
             body.addStatement("appLogger.setLevel(Level.INFO);");
             body.addStatement("LogAppender.events.clear(); // Clear static list from previous tests");
 
-            classDeclaration.addPrivateField("Logger", "appLogger");
-            classDeclaration.addPrivateField("LogAppender", "logAppender");
+            if (testClass.getFieldByName("appLogger").isEmpty()) {
+                testClass.addPrivateField("Logger", "appLogger");
+                testClass.addPrivateField("LogAppender", "logAppender");
+            }
 
             testClass.addMember(md);
-            TestGenerator.addImport(new ImportDeclaration("ch.qos.logback.classic.Logger", false, false));
-            TestGenerator.addImport(new ImportDeclaration("ch.qos.logback.classic.Level", false, false));
+            gen.addImport("ch.qos.logback.classic.Logger");
+            gen.addImport("ch.qos.logback.classic.Level");
+            gen.addImport("org.slf4j.LoggerFactory");
+            gen.addImport(Settings.getProperty("log_appender", String.class).orElseThrow());
         });
     }
 
@@ -885,5 +890,16 @@ public class UnitTestGenerator extends TestGenerator {
                 }
             }
         });
+    }
+
+    public static Expression assertLoggedWithLevel(String className, String level, String expectedMessage) {
+        MethodCallExpr assertion = new MethodCallExpr("assertTrue");
+        MethodCallExpr condition = new MethodCallExpr("LogAppender.hasMessage")
+                .addArgument(new FieldAccessExpr(new NameExpr("Level"), level))
+                .addArgument(new StringLiteralExpr(className))
+                .addArgument(new StringLiteralExpr(expectedMessage));
+
+        assertion.addArgument(condition);
+        return assertion;
     }
 }
