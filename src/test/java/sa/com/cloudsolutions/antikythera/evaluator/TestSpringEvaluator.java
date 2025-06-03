@@ -41,6 +41,7 @@ import static org.mockito.Mockito.verify;
 class TestSpringEvaluator {
 
     public static final String PERSON_REPO = "sa.com.cloudsolutions.repository.PersonRepository";
+    public static final String SERVICE_CLASS = "sa.com.cloudsolutions.service.PersonService";
 
     @BeforeAll
     static void setup() throws IOException {
@@ -158,7 +159,7 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithAutowiredField() {
-        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.PersonService", SpringEvaluator.class);
+        SpringEvaluator evaluator = EvaluatorFactory.create(SERVICE_CLASS, SpringEvaluator.class);
         CompilationUnit cu = evaluator.getCompilationUnit();
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
@@ -171,7 +172,7 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithMock() {
-        final String sample = "sa.com.cloudsolutions.service.PersonService";
+        final String sample = SERVICE_CLASS;
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(sample);
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
