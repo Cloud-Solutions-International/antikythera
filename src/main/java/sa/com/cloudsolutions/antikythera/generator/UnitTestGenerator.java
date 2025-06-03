@@ -649,7 +649,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (response.getBody() != null) {
             noSideEffectAsserts(response);
-        } else if (Settings.getProperty("log_appender", String.class).isPresent()) {
+        } else {
             sideEffectAsserts();
         }
     }
@@ -661,14 +661,16 @@ public class UnitTestGenerator extends TestGenerator {
         String className = type.getFullyQualifiedName().orElseThrow();
         List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
 
-        if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
-            setupLoggers();
-        }
-        for (int i = 0 , j = Math.min(5, logs.size()); i < j; i++) {
-            LogRecorder.LogEntry entry = logs.get(i);
-            String level = entry.level();
-            String message = entry.message();
-            body.addStatement(assertLoggedWithLevel(className, level, message));
+        if (Settings.getProperty("log_appender", String.class).isPresent()) {
+            if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
+                setupLoggers();
+            }
+            for (int i = 0, j = Math.min(5, logs.size()); i < j; i++) {
+                LogRecorder.LogEntry entry = logs.get(i);
+                String level = entry.level();
+                String message = entry.message();
+                body.addStatement(assertLoggedWithLevel(className, level, message));
+            }
         }
     }
 
