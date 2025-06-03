@@ -25,5 +25,31 @@ public class LogRecorder {
     }
 
     public record LogEntry(String level, String message, Object[] args) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            LogEntry logEntry = (LogEntry) o;
+            return level.equals(logEntry.level) &&
+                   message.equals(logEntry.message) &&
+                   java.util.Arrays.equals(args, logEntry.args);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = level.hashCode();
+            result = 31 * result + message.hashCode();
+            result = 31 * result + java.util.Arrays.hashCode(args);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "LogEntry{" +
+                    "level='" + level + '\'' +
+                    ", message='" + message + '\'' +
+                    ", args=" + java.util.Arrays.toString(args) +
+                    '}';
+        }
     }
 }
