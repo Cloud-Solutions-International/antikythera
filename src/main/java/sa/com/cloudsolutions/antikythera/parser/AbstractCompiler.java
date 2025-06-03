@@ -270,7 +270,7 @@ public class AbstractCompiler {
     private void findContainedTypes(TypeDeclaration<?> declaration, CompilationUnit cu) {
         for(TypeDeclaration<?> type : declaration.findAll(TypeDeclaration.class)) {
             TypeWrapper typeWrapper = new TypeWrapper(type);
-            if(type.isAnnotationPresent("Service")) {
+            if(type.isAnnotationPresent("Service") || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
                 typeWrapper.setService(true);
             } else if(type.isAnnotationPresent("RestController")
                     || type.isAnnotationPresent("Controller")) {

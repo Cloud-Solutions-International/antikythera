@@ -158,7 +158,7 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithAutowiredField() {
-        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.Service", SpringEvaluator.class);
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.PersonService", SpringEvaluator.class);
         CompilationUnit cu = evaluator.getCompilationUnit();
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
@@ -171,7 +171,7 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithMock() {
-        final String sample = "sa.com.cloudsolutions.service.Service";
+        final String sample = "sa.com.cloudsolutions.service.PersonService";
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(sample);
 
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();

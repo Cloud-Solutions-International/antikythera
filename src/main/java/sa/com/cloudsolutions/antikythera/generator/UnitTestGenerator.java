@@ -344,7 +344,8 @@ public class UnitTestGenerator extends TestGenerator {
     @SuppressWarnings("unchecked")
     void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
-            if (c.getAnnotationByName("Service").isPresent()) {
+            if (c.getAnnotationByName("Service").isPresent()
+                    || c.getAnnotationByName("org.springframework.stereotype.Service").isPresent()) {
                 injectMocks(c);
             } else {
                 instanceName = AbstractCompiler.classToInstanceName(c.getNameAsString());
@@ -789,8 +790,11 @@ public class UnitTestGenerator extends TestGenerator {
     private void identifyFieldsToBeMocked(CompilationUnit cu) {
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
-            decl.getAnnotationByName("Service")
-                    .ifPresent(b -> detectConstructorInjection(cu, decl));
+            if (decl.isAnnotationPresent("org.springframework.stereotype.Service")
+                    || decl.isAnnotationPresent("Service")) {
+                detectConstructorInjection(cu, decl);
+            }
+
             identifyAutoWiring(cu, decl);
         }
     }
