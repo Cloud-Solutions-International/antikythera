@@ -57,6 +57,6 @@ class TestInheritance extends TestHelper {
 
         v = evaluator.evaluateExpression(mce);
         assertNotNull(v);
-        assertEquals(1, v.getValue());
+        assertEquals(1L, v.getValue());
     }
 }
