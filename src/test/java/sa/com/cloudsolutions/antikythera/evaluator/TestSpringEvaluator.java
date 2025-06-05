@@ -162,7 +162,9 @@ class TestSpringEvaluator {
         SpringEvaluator evaluator = EvaluatorFactory.create(SERVICE_CLASS, SpringEvaluator.class);
         CompilationUnit cu = evaluator.getCompilationUnit();
 
-        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
+        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class,
+                fd -> fd.getVariable(0).getNameAsString().equals("personRepository")
+        ).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         assertNotNull(evaluator.autoWire(variable,
                 List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
@@ -175,7 +177,9 @@ class TestSpringEvaluator {
         final String sample = SERVICE_CLASS;
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(sample);
 
-        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
+        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class,
+                fd -> fd.getVariable(0).getNameAsString().equals("personRepository")
+        ).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(variable);
         MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
