@@ -423,32 +423,53 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
         if (!v.getInitializer().isEmpty()) {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
-                    v.getInitializer().getFirst() + ";");
+            mockWhenInitializerIsPresent(param, v, body, nameAsString, t);
         }
         else {
-            if (param.findCompilationUnit().isPresent()) {
-                CompilationUnit cu = param.findCompilationUnit().orElseThrow();
-                if (t instanceof ArrayType) {
-                    Variable mocked = Reflect.variableFactory(t.asString());
-                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
-                    mockParameterFields(v, nameAsString);
-                    return;
-                }
-                if (AbstractCompiler.isFinalClass(param.getType(), cu)) {
-                    cantMockFinalClass(param, v, cu);
-                    return;
-                }
-            }
-            if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                        " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
-            } else {
-                body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                        " = Mockito.mock(" + param.getTypeAsString() + ".class);");
-            }
+            if (mockWhenInitializerIsAbsent(param, v, t, body, nameAsString)) return;
         }
         mockParameterFields(v, nameAsString);
+    }
+
+    private boolean mockWhenInitializerIsAbsent(Parameter param, Variable v, Type t, BlockStmt body, String nameAsString) {
+        if (param.findCompilationUnit().isPresent()) {
+            CompilationUnit cu = param.findCompilationUnit().orElseThrow();
+            if (t instanceof ArrayType) {
+                Variable mocked = Reflect.variableFactory(t.asString());
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
+                mockParameterFields(v, nameAsString);
+                return true;
+            }
+            if (AbstractCompiler.isFinalClass(param.getType(), cu)) {
+                cantMockFinalClass(param, v, cu);
+                return true;
+            }
+        }
+        if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+            body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
+        } else {
+            body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+        }
+        return false;
+    }
+
+    private static void mockWhenInitializerIsPresent(Parameter param, Variable v, BlockStmt body, String nameAsString, Type t) {
+        if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr()) {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString +
+                    " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
+        }
+        else {
+            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                    v.getInitializer().getFirst() + ";");
+
+            for (int i = 1; i < v.getInitializer().size() ; i++) {
+                body.addStatement(v.getInitializer().get(i));
+            }
+        }
+    }
+
+    private static String buildMockDeclaration(String type, String variableName) {
+        return String.format("%s %s = Mockito.mock(%s.class);", type, variableName, type);
     }
 
     private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
