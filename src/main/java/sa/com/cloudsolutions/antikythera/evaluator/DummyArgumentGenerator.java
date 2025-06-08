@@ -64,10 +64,10 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         return v;
     }
 
-    private Variable mockNonPrimitiveParameter(Parameter param, TypeWrapper wrapper) throws ClassNotFoundException, InstantiationException, IllegalAccessException, InvocationTargetException {
+    private Variable mockNonPrimitiveParameter(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
         String fullClassName = wrapper.getFullyQualifiedName();
         Type t = param.getType();
-        Variable v;
+
 
         if (fullClassName.startsWith("java.util")) {
             return Reflect.variableFactory(fullClassName);
@@ -76,10 +76,10 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         Class<?> clazz = wrapper.getClazz();
         // Try to find a no-arg constructor first
         try {
-            v = new Variable(clazz.getDeclaredConstructor().newInstance());
+            return new Variable(clazz.getDeclaredConstructor().newInstance());
         } catch (NoSuchMethodException e) {
             // No no-arg constructor, find the simplest one
-            Constructor<?> simplest = getConstructor(clazz);
+            Constructor<?> simplest = findConstructor(clazz);
             if (simplest != null) {
                 Object[] args = new Object[simplest.getParameterCount()];
                 Class<?>[] paramTypes = simplest.getParameterTypes();
@@ -93,23 +93,21 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                         argExprs.add(Reflect.createLiteralExpression(args[i]));
                     }
                 }
-                v = new Variable(simplest.newInstance(args));
+                Variable v = new Variable(simplest.newInstance(args));
                 // Set initializer
                 ObjectCreationExpr oce =
                     new ObjectCreationExpr()
                         .setType(t.asString())
                         .setArguments(argExprs);
                 v.setInitializer(List.of(oce));
-            } else {
-                // fallback: cannot instantiate
-                v = new Variable((Object) null);
+                return v;
             }
         }
 
-        return v;
+        return new Variable((Object) null);
     }
 
-    private static Constructor<?> getConstructor(Class<?> clazz) {
+    private static Constructor<?> findConstructor(Class<?> clazz) {
         Constructor<?>[] constructors = clazz.getDeclaredConstructors();
         Constructor<?> simplest = null;
         int minParams = Integer.MAX_VALUE;
