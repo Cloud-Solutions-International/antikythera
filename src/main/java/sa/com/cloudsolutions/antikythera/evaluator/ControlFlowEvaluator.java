@@ -352,10 +352,15 @@ public class ControlFlowEvaluator extends Evaluator {
                     Variable v = getValue(stmt, scope.asNameExpr().getNameAsString());
                     if (v != null && v.getValue() instanceof Evaluator evaluator) {
                         Variable value = evaluator.getField(AbstractCompiler.classToInstanceName(setter.getNameAsString().substring(3)));
-                        if (value != null && ! (value.getValue() instanceof Boolean)) {
+                        if (value != null && ! (value.getValue() instanceof Boolean || value.getType().asClassOrInterfaceType().getNameAsString().equals("Boolean"))) {
                             if (b) {
-                                Variable newValue = Reflect.variableFactory(value.getClazz().getName());
-                                setter.addArgument(newValue.getInitializer().getFirst());
+                                if (value.getInitializer().isEmpty()) {
+                                    Variable newValue = Reflect.variableFactory(value.getClazz().getName());
+                                    setter.addArgument(newValue.getInitializer().getFirst());
+                                }
+                                else {
+                                    createSetterFromGetter(entry, setter);
+                                }
                             } else {
                                 setter.addArgument(new NullLiteralExpr());
                             }
