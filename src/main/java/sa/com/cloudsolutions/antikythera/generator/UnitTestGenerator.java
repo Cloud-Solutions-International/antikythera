@@ -542,29 +542,31 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         Object value = f.getValue();
-        if (value != null) {
-            if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
-                return;
-            }
-            if (value instanceof List) {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
-                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+        if (value == null) {
+            return;
+        }
+
+        if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
+            return;
+        }
+        if (value instanceof List) {
+            TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+            body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+                    nameAsString,
+                    ClassProcessor.instanceToClassName(name)
+            ));
+        }
+        else {
+            if (value instanceof String) {
+                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(\"%s\");",
                         nameAsString,
-                        ClassProcessor.instanceToClassName(name)
-                ));
+                        ClassProcessor.instanceToClassName(name), value));
             }
             else {
-                if (value instanceof String) {
-                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(\"%s\");",
-                            nameAsString,
-                            ClassProcessor.instanceToClassName(name), value));
-                }
-                else {
-                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                            nameAsString,
-                            ClassProcessor.instanceToClassName(name),
-                            value instanceof Long ? value + "L" : value.toString()));
-                }
+                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                        nameAsString,
+                        ClassProcessor.instanceToClassName(name),
+                        value instanceof Long ? value + "L" : value.toString()));
             }
         }
     }
