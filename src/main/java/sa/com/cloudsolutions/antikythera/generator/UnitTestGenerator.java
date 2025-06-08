@@ -118,7 +118,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     /**
      * Loads any existing test class that has been generated previously.
-     * This code is typically not available through the AntikythereRunTime class because we are
+     * This code is typically not available through the {@link AntikytheraRunTime} class because we are
      * processing only the src/main and mostly ignoring src/test
      *
      * @param file the file name
@@ -354,6 +354,7 @@ public class UnitTestGenerator extends TestGenerator {
         });
     }
 
+    @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         if (testClass == null) {
             testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
@@ -386,52 +387,64 @@ public class UnitTestGenerator extends TestGenerator {
             String nameAsString = param.getNameAsString();
             if (paramType.isPrimitiveType() ||
                     (paramType.isClassOrInterfaceType() && paramType.asClassOrInterfaceType().isBoxedType())) {
-                VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
-                VariableDeclarator v = new VariableDeclarator();
-                v.setType(param.getType());
-                v.setName(nameAsString);
-
-                String typeName = paramType.asString();
-
-                switch (typeName) {
-                    case "Integer" -> v.setInitializer("0");
-                    case "Long" -> v.setInitializer("0L");
-                    case "Double" -> v.setInitializer("0.0");
-                    case "Float" -> v.setInitializer("0.0f");
-                    case "boolean", "Boolean" -> v.setInitializer("false");
-                    case "Character" -> v.setInitializer("'\\0'");
-                    case "Byte" -> v.setInitializer("(byte)0");
-                    case "Short" -> v.setInitializer("(short)0");
-                    default -> v.setInitializer("null");
-                }
-
-
-                varDecl.addVariable(v);
-                getBody(testMethod).addStatement(varDecl);
+                mockSimpleArgument(param, nameAsString, paramType);
             } else {
                 addClassImports(paramType);
-                Variable value = argumentGenerator.getArguments().get(nameAsString);
-                if (value != null) {
-                    mockWithMockito(param, value);
+                Variable v = argumentGenerator.getArguments().get(nameAsString);
+                if (v != null) {
+                    if (v.getValue() != null && v.getValue().getClass().getName().startsWith("java.util")) {
+                        gen.addImport(v.getValue().getClass().getName());
+                        mockWithoutMockito(param, v);
+                    }
+                    else {
+                        mockWithMockito(param, v);
+                    }
                 }
             }
         }
     }
 
+    private void mockSimpleArgument(Parameter param, String nameAsString, Type paramType) {
+        VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
+        VariableDeclarator v = new VariableDeclarator();
+        v.setType(param.getType());
+        v.setName(nameAsString);
+
+        String typeName = paramType.asString();
+
+        switch (typeName) {
+            case "Integer" -> v.setInitializer("0");
+            case "Long" -> v.setInitializer("0L");
+            case "Double" -> v.setInitializer("0.0");
+            case "Float" -> v.setInitializer("0.0f");
+            case "boolean", "Boolean" -> v.setInitializer("false");
+            case "Character" -> v.setInitializer("'\\0'");
+            case "Byte" -> v.setInitializer("(byte)0");
+            case "Short" -> v.setInitializer("(short)0");
+            default -> v.setInitializer("null");
+        }
+
+
+        varDecl.addVariable(v);
+        getBody(testMethod).addStatement(varDecl);
+    }
+
     void mockWithMockito(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
-        BlockStmt body = getBody(testMethod);
-        Type t = param.getType();
         if (!v.getInitializer().isEmpty()) {
-            mockWhenInitializerIsPresent(param, v, body, nameAsString, t);
+            mockWhenInitializerIsPresent(param, v);
         }
         else {
-            if (mockWhenInitializerIsAbsent(param, v, t, body, nameAsString)) return;
+            if (mockWhenInitializerIsAbsent(param, v)) return;
         }
         mockParameterFields(v, nameAsString);
     }
 
-    private boolean mockWhenInitializerIsAbsent(Parameter param, Variable v, Type t, BlockStmt body, String nameAsString) {
+    private boolean mockWhenInitializerIsAbsent(Parameter param, Variable v) {
+        BlockStmt body = getBody(testMethod);
+        String nameAsString = param.getNameAsString();
+        Type t = param.getType();
+
         if (param.findCompilationUnit().isPresent()) {
             CompilationUnit cu = param.findCompilationUnit().orElseThrow();
             if (t instanceof ArrayType) {
@@ -453,19 +466,29 @@ public class UnitTestGenerator extends TestGenerator {
         return false;
     }
 
-    private static void mockWhenInitializerIsPresent(Parameter param, Variable v, BlockStmt body, String nameAsString, Type t) {
+    private void mockWhenInitializerIsPresent(Parameter param, Variable v) {
+        String nameAsString = param.getNameAsString();
+        BlockStmt body = getBody(testMethod);
+        Type t = param.getType();
+
         if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr()) {
             body.addStatement(param.getTypeAsString() + " " + nameAsString +
                     " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
         }
         else {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
-                    v.getInitializer().getFirst() + ";");
+            mockWithoutMockito(param, v);
 
             for (int i = 1; i < v.getInitializer().size() ; i++) {
                 body.addStatement(v.getInitializer().get(i));
             }
         }
+    }
+
+    private void mockWithoutMockito(Parameter param, Variable v) {
+        BlockStmt body = getBody(testMethod);
+        String nameAsString = param.getNameAsString();
+        body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                v.getInitializer().getFirst() + ";");
     }
 
     private static String buildMockDeclaration(String type, String variableName) {

@@ -73,7 +73,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             return Reflect.variableFactory(fullClassName);
         }
 
-        Class<?> clazz = Class.forName(fullClassName);
+        Class<?> clazz = wrapper.getClazz();
         // Try to find a no-arg constructor first
         try {
             v = new Variable(clazz.getDeclaredConstructor().newInstance());
