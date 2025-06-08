@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -23,6 +24,7 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
+import org.aspectj.weaver.ast.Call;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -346,6 +348,22 @@ public class ControlFlowEvaluator extends Evaluator {
             if (entry.getValue().equals("T")) {
                 setupConditionalNotNullValue(stmt, entry, name, setter);
             } else {
+                if (entry.getValue() instanceof Boolean b && scope.isNameExpr()) {
+                    Variable v = getValue(stmt, scope.asNameExpr().getNameAsString());
+                    if (v != null && v.getValue() instanceof Evaluator evaluator) {
+                        Variable value = evaluator.getField(AbstractCompiler.classToInstanceName(setter.getNameAsString().substring(3)));
+                        if (value != null && ! (value.getValue() instanceof Boolean)) {
+                            if (b) {
+                                Variable newValue = Reflect.variableFactory(value.getClazz().getName());
+                                setter.addArgument(newValue.getInitializer().getFirst());
+                            } else {
+                                setter.addArgument(new NullLiteralExpr());
+                            }
+                            addPreCondition(stmt, setter);
+                            return;
+                        }
+                    }
+                }
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {

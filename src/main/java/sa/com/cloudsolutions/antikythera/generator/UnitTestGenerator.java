@@ -472,8 +472,7 @@ public class UnitTestGenerator extends TestGenerator {
         Type t = param.getType();
 
         if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr()) {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                    " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
+           body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
         }
         else {
             mockWithoutMockito(param, v);
@@ -555,10 +554,17 @@ public class UnitTestGenerator extends TestGenerator {
                 ));
             }
             else {
-                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
-                        nameAsString,
-                        ClassProcessor.instanceToClassName(name),
-                        value instanceof Long ? value + "L" : value.toString()));
+                if (value instanceof String) {
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(\"%s\");",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(name), value));
+                }
+                else {
+                    body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
+                            nameAsString,
+                            ClassProcessor.instanceToClassName(name),
+                            value instanceof Long ? value + "L" : value.toString()));
+                }
             }
         }
     }
