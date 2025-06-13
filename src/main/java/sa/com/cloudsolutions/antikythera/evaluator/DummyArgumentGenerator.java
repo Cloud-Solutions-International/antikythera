@@ -48,7 +48,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             if (wrapper.getClazz() != null) {
                 return mockNonPrimitiveParameter(param, wrapper);
             }
-            Evaluator o = EvaluatorFactory.create(fullClassName, SpringEvaluator.class);
+            Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
             v = new Variable(o);
             v.setType(t);
             Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
