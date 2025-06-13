@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
@@ -348,27 +349,6 @@ public class ControlFlowEvaluator extends Evaluator {
             if (entry.getValue().equals("T")) {
                 setupConditionalNotNullValue(stmt, entry, name, setter);
             } else {
-                if (entry.getValue() instanceof Boolean b && scope.isNameExpr()) {
-                    Variable v = getValue(stmt, scope.asNameExpr().getNameAsString());
-                    if (v != null && v.getValue() instanceof Evaluator evaluator) {
-                        Variable value = evaluator.getField(AbstractCompiler.classToInstanceName(setter.getNameAsString().substring(3)));
-                        if (value != null && ! (value.getValue() instanceof Boolean || value.getType().asClassOrInterfaceType().getNameAsString().equals("Boolean"))) {
-                            if (b) {
-                                if (value.getInitializer().isEmpty()) {
-                                    Variable newValue = Reflect.variableFactory(value.getClazz().getName());
-                                    setter.addArgument(newValue.getInitializer().getFirst());
-                                }
-                                else {
-                                    createSetterFromGetter(entry, setter);
-                                }
-                            } else {
-                                setter.addArgument(new NullLiteralExpr());
-                            }
-                            addPreCondition(stmt, setter);
-                            return;
-                        }
-                    }
-                }
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {
@@ -382,26 +362,59 @@ public class ControlFlowEvaluator extends Evaluator {
     private void createSetterFromGetter(Map.Entry<Expression, Object> entry, MethodCallExpr setter) {
         Expression key = entry.getKey();
         Optional< Node> parent = entry.getKey().getParentNode();
-        if (key.isMethodCallExpr() && parent.isPresent()  && parent.get() instanceof MethodCallExpr mce
-                        && mce.getNameAsString().equals("equals")) {
-            Expression argument = mce.getArgument(0);
-            if (argument.isObjectCreationExpr()) {
-                try {
-                    Variable v = evaluateExpression(argument);
-                    setter.addArgument(v.getInitializer().getFirst());
-                } catch (ReflectiveOperationException e) {
-                    throw new AntikytheraException(e);
-                }
+        if (key.isMethodCallExpr() && parent.isPresent()) {
+            if (parent.get() instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
+                createSetterFromGetterForMCE(entry, setter, mce);
+            } else if (parent.get() instanceof BinaryExpr binaryExpr && entry.getValue() instanceof Boolean b) {
+                createSetterFromGetterForBinaryExpr(setter, binaryExpr, key);
             }
-            else if (argument.isLiteralExpr()) {
-                if (entry.getValue() instanceof Boolean b && b) {
-                    setter.addArgument(argument.asLiteralExpr());
-                }
-                else {
-                    Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
-                    Variable v = Reflect.variableFactory(c.getName());
+        }
+    }
+
+    private void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
+        if (binaryExpr.getLeft().equals(key)) {
+            Expression right = binaryExpr.getRight();
+            if (right.isLiteralExpr()) {
+                setter.addArgument(right.asLiteralExpr());
+            } else if (right.isNameExpr()) {
+                Variable v = getValue(binaryExpr, right.asNameExpr().getNameAsString());
+                if (v != null) {
                     setter.addArgument(v.getInitializer().getFirst());
                 }
+            } else if (right.isMethodCallExpr()) {
+                setter.addArgument(right);
+            }
+        } else if (binaryExpr.getRight().equals(key)) {
+            Expression left = binaryExpr.getLeft();
+            if (left.isLiteralExpr()) {
+                setter.addArgument(left.asLiteralExpr());
+            } else if (left.isNameExpr()) {
+                Variable v = getValue(binaryExpr, left.asNameExpr().getNameAsString());
+                if (v != null) {
+                    setter.addArgument(v.getInitializer().getFirst());
+                }
+            } else if (left.isMethodCallExpr()) {
+                setter.addArgument(left);
+            }
+        }
+    }
+
+    private void createSetterFromGetterForMCE(Map.Entry<Expression, Object> entry, MethodCallExpr setter, MethodCallExpr mce) {
+        Expression argument = mce.getArgument(0);
+        if (argument.isObjectCreationExpr()) {
+            try {
+                Variable v = evaluateExpression(argument);
+                setter.addArgument(v.getInitializer().getFirst());
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
+            }
+        } else if (argument.isLiteralExpr()) {
+            if (entry.getValue() instanceof Boolean b && b) {
+                setter.addArgument(argument.asLiteralExpr());
+            } else {
+                Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
+                Variable v = Reflect.variableFactory(c.getName());
+                setter.addArgument(v.getInitializer().getFirst());
             }
         }
     }
