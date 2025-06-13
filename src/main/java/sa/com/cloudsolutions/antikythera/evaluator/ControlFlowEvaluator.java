@@ -344,7 +344,7 @@ public class ControlFlowEvaluator extends Evaluator {
         setter.setScope(scope);
 
         if (entry.getValue() == null) {
-            setter.addArgument("null");
+            setter.addArgument(new NullLiteralExpr());
         } else {
             if (entry.getValue().equals("T")) {
                 setupConditionalNotNullValue(stmt, entry, name, setter);

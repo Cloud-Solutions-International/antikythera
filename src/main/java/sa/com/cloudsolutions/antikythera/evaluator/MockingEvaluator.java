@@ -231,7 +231,14 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return null;
         }
 
-        Variable result;
+        if (md.getNameAsString().startsWith("get") && md.getBody().isPresent() && md.getBody().get().getStatements().size() == 1) {
+            Variable f = getField(AbstractCompiler.classToInstanceName(md.getNameAsString().substring(3)));
+            if (f != null) {
+                return f;
+            }
+        }
+
+        Variable result ;
         if (returnType.isClassOrInterfaceType()) {
             result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
             if (result != null) {
