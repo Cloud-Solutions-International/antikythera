@@ -373,29 +373,22 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
         if (binaryExpr.getLeft().equals(key)) {
-            Expression right = binaryExpr.getRight();
-            if (right.isLiteralExpr()) {
-                setter.addArgument(right.asLiteralExpr());
-            } else if (right.isNameExpr()) {
-                Variable v = getValue(binaryExpr, right.asNameExpr().getNameAsString());
-                if (v != null) {
-                    setter.addArgument(v.getInitializer().getFirst());
-                }
-            } else if (right.isMethodCallExpr()) {
-                setter.addArgument(right);
-            }
+            processBinaryExpressionSide(setter, binaryExpr.getRight());
         } else if (binaryExpr.getRight().equals(key)) {
-            Expression left = binaryExpr.getLeft();
-            if (left.isLiteralExpr()) {
-                setter.addArgument(left.asLiteralExpr());
-            } else if (left.isNameExpr()) {
-                Variable v = getValue(binaryExpr, left.asNameExpr().getNameAsString());
-                if (v != null) {
-                    setter.addArgument(v.getInitializer().getFirst());
-                }
-            } else if (left.isMethodCallExpr()) {
-                setter.addArgument(left);
+            processBinaryExpressionSide(setter, binaryExpr.getLeft());
+        }
+    }
+
+    private void processBinaryExpressionSide(MethodCallExpr setter, Expression side) {
+        if (side.isLiteralExpr()) {
+            setter.addArgument(side.asLiteralExpr());
+        } else if (side.isNameExpr()) {
+            Variable v = getValue(side, side.asNameExpr().getNameAsString());
+            if (v != null) {
+                setter.addArgument(v.getInitializer().getFirst());
             }
+        } else if (side.isMethodCallExpr()) {
+            setter.addArgument(side);
         }
     }
 

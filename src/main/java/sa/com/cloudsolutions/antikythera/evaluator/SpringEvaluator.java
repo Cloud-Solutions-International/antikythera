@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -238,6 +239,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         });
 
+        LogRecorder.clearLogs();
         Branching.clear();
         AntikytheraRunTime.reset();
 
