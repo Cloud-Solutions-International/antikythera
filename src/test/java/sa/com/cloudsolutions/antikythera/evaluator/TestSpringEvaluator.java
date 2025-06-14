@@ -41,6 +41,7 @@ import static org.mockito.Mockito.verify;
 class TestSpringEvaluator {
 
     public static final String PERSON_REPO = "sa.com.cloudsolutions.repository.PersonRepository";
+    public static final String SERVICE_CLASS = "sa.com.cloudsolutions.service.PersonService";
 
     @BeforeAll
     static void setup() throws IOException {
@@ -158,10 +159,12 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithAutowiredField() {
-        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.Service", SpringEvaluator.class);
+        SpringEvaluator evaluator = EvaluatorFactory.create(SERVICE_CLASS, SpringEvaluator.class);
         CompilationUnit cu = evaluator.getCompilationUnit();
 
-        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
+        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class,
+                fd -> fd.getVariable(0).getNameAsString().equals("personRepository")
+        ).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         assertNotNull(evaluator.autoWire(variable,
                 List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
@@ -171,10 +174,12 @@ class TestSpringEvaluator {
 
     @Test
     void testAutoWireWithMock() {
-        final String sample = "sa.com.cloudsolutions.service.Service";
+        final String sample = SERVICE_CLASS;
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(sample);
 
-        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
+        FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class,
+                fd -> fd.getVariable(0).getNameAsString().equals("personRepository")
+        ).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(variable);
         MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());

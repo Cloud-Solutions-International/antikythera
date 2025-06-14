@@ -363,8 +363,8 @@ public class DepSolver {
     }
 
     private void writeFiles() throws IOException {
-        Files.copy(Paths.get(Settings.getProperty("base_path").toString().replace("src/main/java",""), "pom.xml"),
-                Paths.get(Settings.getProperty("output_path").toString().replace("src/main/java",""), "pom.xml"),
+        Files.copy(Paths.get(Settings.getProperty(Settings.BASE_PATH).toString().replace("src/main/java",""), "pom.xml"),
+                Paths.get(Settings.getProperty(Settings.OUTPUT_PATH).toString().replace("src/main/java",""), "pom.xml"),
                 StandardCopyOption.REPLACE_EXISTING);
 
         for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {

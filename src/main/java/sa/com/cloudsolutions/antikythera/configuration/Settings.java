@@ -27,7 +27,9 @@ import java.util.Scanner;
  */
 public class Settings {
     public static final String APPLICATION_HOST = "application.host";
+    public static final String LOG_APPENDER = "log_appender";
     private static final String VARIABLES = "variables";
+    public static final String EXTRA_IMPORTS = "extra_imports";
     /**
      * In the generated tests, mocking will be through this framework.
      */
@@ -36,13 +38,15 @@ public class Settings {
      * While evaluating expressions, any mocking will be done through this framework.
      */
     public static final String MOCK_WITH_INTERNAL = "mock_with_internal";
-
+    public static final String BASE_TEST_CLASS = "base_test_class";
     public static final String BASE_PACKAGE = "base_package";
     public static final String BASE_PATH = "base_path";
     public static final String OUTPUT_PATH = "output_path";
     public static final String CONTROLLERS = "controllers";
     public static final String DEPENDENCIES = "dependencies";
     public static final String SERVICES = "services";
+    private static final String ARTIFACT_IDS = "artifact_ids";
+    private static final String JAR_FILES = "jar_files";
 
     /**
      * HashMap to store the configurations.
@@ -293,7 +297,7 @@ public class Settings {
     }
 
     public static String[] getArtifacts() {
-        return getDependencies("artifact_ids");
+        return getDependencies(ARTIFACT_IDS);
     }
 
     private static String[] getDependencies(String artifactIds) {

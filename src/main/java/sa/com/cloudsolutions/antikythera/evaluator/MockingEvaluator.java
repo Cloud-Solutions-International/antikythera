@@ -9,11 +9,13 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -88,8 +90,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
         returnFrom = null;
+
         if (callable.isMethodDeclaration()) {
-            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+            if (isRepository()) {
                 MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
                 Type t = md.getType();
                 if (!t.isPrimitiveType() && !t.isVoidType()) {
@@ -104,11 +107,26 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return super.executeCallable(sc, callable);
         }
         else {
-            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+            if (isRepository()) {
                 return mockRepositoryMethod(sc, callable);
             }
             return mockBinaryMethodExecution(sc, callable);
         }
+    }
+
+    private boolean isRepository() {
+        if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+            return true;
+        }
+        if (typeDeclaration instanceof ClassOrInterfaceDeclaration cdecl) {
+            for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
+                if (t.getNameAsString().equals("JpaRepository") || t.getNameAsString().equals("CrudRepository")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
@@ -221,17 +239,35 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (!(cd instanceof MethodDeclaration md)) {
             return null;
         }
+        Optional<BlockStmt> body = md.getBody();
+        String methodName = md.getNameAsString();
 
         Variable v = getIdField();
-        if (v != null) return v;
+        if (v != null) {
+            setupParameters(md);
+            return v;
+        }
 
-        setupParameters(md);
         Type returnType = md.getType();
         if (returnType.isVoidType()) {
+            if (methodName.startsWith("set") && body.isPresent() && body.get().getStatements().size() == 1) {
+                super.executeMethod(cd);
+            }
+            else {
+                setupParameters(md);
+            }
             return null;
         }
 
-        Variable result;
+        setupParameters(md);
+        if (methodName.startsWith("get") && body.isPresent() && body.get().getStatements().size() == 1) {
+            Variable f = getField(AbstractCompiler.classToInstanceName(methodName.substring(3)));
+            if (f != null) {
+                return f;
+            }
+        }
+
+        Variable result ;
         if (returnType.isClassOrInterfaceType()) {
             result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
             if (result != null) {
@@ -327,11 +363,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                         typeEval.initializeFields();
                         TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                         return new Variable(Optional.of(typeEval));
-                    } else {
-                        Variable v = optionalByteBuddy(ciType.getNameAsString());
-                        if (v != null) {
-                            return v;
-                        }
+                    }
+                    Variable v = optionalByteBuddy(ciType.getNameAsString());
+                    if (v != null) {
+                        return v;
                     }
                 }
             }
@@ -482,5 +517,18 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return v;
         }
         return null;
+    }
+
+    @Override
+    void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, variableDeclarator.getType().toString());
+        if (wrapper != null && !wrapper.getFullyQualifiedName().equals(Reflect.JAVA_LANG_STRING)) {
+            Variable v = Reflect.variableFactory(wrapper.getFullyQualifiedName());
+            v.setType(variableDeclarator.getType());
+            fields.put(variableDeclarator.getNameAsString(), v);
+        }
+        else {
+            super.setupFieldWithoutInitializer(variableDeclarator);
+        }
     }
 }

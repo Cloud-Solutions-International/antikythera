@@ -214,7 +214,7 @@ public class AbstractCompiler {
         return findWrappedTypes(cu.get(), type);
     }
 
-    private static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
+    public static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
             if (classType.getTypeArguments().isPresent()) {
@@ -270,7 +270,7 @@ public class AbstractCompiler {
     private void findContainedTypes(TypeDeclaration<?> declaration, CompilationUnit cu) {
         for(TypeDeclaration<?> type : declaration.findAll(TypeDeclaration.class)) {
             TypeWrapper typeWrapper = new TypeWrapper(type);
-            if(type.isAnnotationPresent("Service")) {
+            if(type.isAnnotationPresent("Service") || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
                 typeWrapper.setService(true);
             } else if(type.isAnnotationPresent("RestController")
                     || type.isAnnotationPresent("Controller")) {
@@ -368,6 +368,7 @@ public class AbstractCompiler {
      * @param className the name of the class to find
      * @return An optional of the type declaration
      */
+    @SuppressWarnings("java:S1452")
     public static Optional<TypeDeclaration<?>> getMatchingType(CompilationUnit cu, String className) {
         for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
             if (type.getNameAsString().equals(className)
@@ -506,7 +507,14 @@ public class AbstractCompiler {
     }
     public static TypeWrapper findType(CompilationUnit cu, Type type) {
         if (type instanceof ClassOrInterfaceType ctype) {
-            return findType(cu, ctype.getNameAsString());
+            TypeWrapper wrapper = findType(cu, ctype.getNameAsString());
+            if (wrapper == null && ctype.getScope().isPresent()) {
+                String fullName = ctype.getScope().orElseThrow().asString() + "." + ctype.getNameAsString();
+                if (!fullName.equals(ctype.getNameAsString())) {
+                    return findType(cu, fullName);
+                }
+            }
+            return wrapper;
         }
         return findType(cu, type.asString());
     }
@@ -542,7 +550,7 @@ public class AbstractCompiler {
             return new TypeWrapper(p);
         }
         if (AntikytheraRunTime.getTypeDeclaration(className).isPresent()) {
-            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).get());
+            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).orElseThrow());
         }
 
         ImportWrapper imp = findImport(cu, className);

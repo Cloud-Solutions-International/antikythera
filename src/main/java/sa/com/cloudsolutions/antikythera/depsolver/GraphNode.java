@@ -188,7 +188,7 @@ public class GraphNode {
              */
             for (ClassOrInterfaceType ifc : enclosingDeclaration.getExtendedTypes()) {
                 cdecl.addExtendedType(ifc.clone());
-                TypeWrapper wrapper = AbstractCompiler.findType(ifc.findCompilationUnit().get(),ifc.getNameAsString());
+                TypeWrapper wrapper = AbstractCompiler.findType(compilationUnit,ifc);
                 if (wrapper != null) {
                     Class<?> clz = wrapper.getClazz();
                     if (clz != null && Modifier.isAbstract(clz.getModifiers())) {

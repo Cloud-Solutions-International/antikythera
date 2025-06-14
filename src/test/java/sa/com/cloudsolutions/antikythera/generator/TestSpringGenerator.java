@@ -115,7 +115,7 @@ class TestSpringGenerator {
             "int, 1",
             "Boolean, true",
             "float, 1.0",
-            "Long, 1"
+            "Long, 0"
     })
     void handleURIVariablesTestPath(String paramType, String paramValue) throws ReflectiveOperationException {
         Parameter param = new Parameter();

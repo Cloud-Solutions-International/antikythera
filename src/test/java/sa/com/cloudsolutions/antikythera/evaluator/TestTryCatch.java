@@ -17,7 +17,9 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,4 +100,12 @@ class TestTryCatch extends TestHelper {
         assertThrows(Exception.class, () -> evaluator.executeMethod(doStuff));
     }
 
+    @Test
+    void testCallNPE() throws ReflectiveOperationException {
+        MethodDeclaration doStuff = cu
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("callNPEmethod")).orElseThrow();
+        Variable v = evaluator.executeMethod(doStuff);
+        assertNotNull(v);
+        assertEquals(2, v.getValue());
+    }
 }

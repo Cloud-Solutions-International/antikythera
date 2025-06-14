@@ -71,7 +71,7 @@ class UnitTestGeneratorTest {
 
     @BeforeEach
     void setUp() {
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.PersonService");
         assertNotNull(cu);
         classUnderTest = cu.getType(0).asClassOrInterfaceDeclaration();
 
@@ -182,6 +182,27 @@ class UnitTestGeneratorTest {
         Mockito.when(argumentGenerator.getArguments()).thenReturn(map);
         unitTestGenerator.createTests(methodUnderTest, new MethodResponse());
         assertTrue(unitTestGenerator.getCompilationUnit().toString().contains(name + "Test"));
+    }
+
+    @Test
+    void testLogger() throws ReflectiveOperationException {
+        Settings.setProperty(Settings.LOG_APPENDER,"sa.com.cloudsolutions.antikythera.generator.LogHandler");
+        MethodDeclaration md = classUnderTest.getMethodsByName("queries5").getFirst();
+        argumentGenerator = new DummyArgumentGenerator();
+        unitTestGenerator.setArgumentGenerator(argumentGenerator);
+        unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
+
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.PersonService", SpringEvaluator.class);
+        evaluator.setOnTest(true);
+        evaluator.addGenerator(unitTestGenerator);
+        evaluator.setArgumentGenerator(argumentGenerator);
+        evaluator.visit(md);
+        CompilationUnit gen  = unitTestGenerator.getCompilationUnit();
+        assertNotNull(gen);
+        MethodDeclaration testMethod = gen.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("queries5Test")).orElseThrow();
+        assertTrue(testMethod.toString().contains("Query5 executed"),
+                "The logger should be present in the test method.");
     }
 
     @Test

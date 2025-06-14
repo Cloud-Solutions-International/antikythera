@@ -360,13 +360,13 @@ public class Reflect {
                 v.setInitializer(List.of(mce));
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
-                MethodCallExpr init = new MethodCallExpr("of");
-                init.setScope(new NameExpr("List"));
+                ObjectCreationExpr init = new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName("ArrayList"));
                 v.setInitializer(List.of(init));
             }
             case "java.util.Set", JAVA_UTIL_HASH_SET -> {
-                MethodCallExpr init = new MethodCallExpr("of");
-                init.setScope(new NameExpr("Set"));
+                ObjectCreationExpr init = new ObjectCreationExpr()
+                        .setType(new ClassOrInterfaceType().setName("HashSet"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> {
@@ -482,7 +482,7 @@ public class Reflect {
             case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE ->
                     createVariable(1.0, DOUBLE, "1.0");
             case INTEGER, "int", JAVA_LANG_INTEGER -> createVariable(1, INTEGER, "1");
-            case "Long", "long", JAVA_LANG_LONG -> createVariable(1L, "Long", "1");
+            case "Long", "long", JAVA_LANG_LONG -> createVariable(0L, "Long", "0");
             case STRING, JAVA_LANG_STRING -> {
                 Variable result = createVariable(ANTIKYTHERA, STRING, ANTIKYTHERA);
                 result.setInitializer(List.of(new StringLiteralExpr(ANTIKYTHERA)));
