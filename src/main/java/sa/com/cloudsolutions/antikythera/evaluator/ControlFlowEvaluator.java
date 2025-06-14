@@ -405,7 +405,9 @@ public class ControlFlowEvaluator extends Evaluator {
             } else {
                 Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
                 Variable v = Reflect.variableFactory(c.getName());
-                setter.addArgument(v.getInitializer().getFirst());
+                if (!v.getInitializer().isEmpty()) {
+                    setter.addArgument(v.getInitializer().getFirst());
+                }
             }
         }
     }

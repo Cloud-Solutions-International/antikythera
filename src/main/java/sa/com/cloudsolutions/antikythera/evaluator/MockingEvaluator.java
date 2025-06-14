@@ -506,7 +506,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, variableDeclarator.getType().toString());
-        if (wrapper != null) {
+        if (wrapper != null && !wrapper.getFullyQualifiedName().equals(Reflect.JAVA_LANG_STRING)) {
             Variable v = Reflect.variableFactory(wrapper.getFullyQualifiedName());
             v.setType(variableDeclarator.getType());
             fields.put(variableDeclarator.getNameAsString(), v);
