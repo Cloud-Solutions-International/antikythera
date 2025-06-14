@@ -186,8 +186,9 @@ class UnitTestGeneratorTest {
 
     @Test
     void testLogger() throws ReflectiveOperationException {
+        Settings.setProperty("log_appender","sa.com.cloudsolutions.antikythera.generator.LogHandler");
         MethodDeclaration md = classUnderTest.getMethodsByName("queries5").getFirst();
-        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
@@ -197,6 +198,11 @@ class UnitTestGeneratorTest {
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
         evaluator.visit(md);
+        CompilationUnit gen  = unitTestGenerator.getCompilationUnit();
+        assertNotNull(gen);
+        MethodDeclaration testMethod = gen.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("queries5Test")).orElseThrow();
+        assertTrue(testMethod.toString().contains("Query5 executed"),
+                "The logger should be present in the test method.");
     }
 
     @Test

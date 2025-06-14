@@ -196,6 +196,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             int safetyCheck = 0;
             while (safetyCheck < 16) {
                 getLocals().clear();
+                LogRecorder.clearLogs();
                 setupFields();
                 mockMethodArguments(md);
 
@@ -239,7 +240,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         });
 
-        LogRecorder.clearLogs();
         Branching.clear();
         AntikytheraRunTime.reset();
 
@@ -395,7 +395,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * This process needs to be carried out before executing any code.
      *
      * @param field the field declaration
-     * @throws IOException                  if the file cannot be read
      * @throws AntikytheraException         if there is an error in the code
      * @throws ReflectiveOperationException if a reflection operation fails
      */

@@ -828,9 +828,7 @@ public class Evaluator {
 
     Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
-        if (methodCall.toString().startsWith("logger")) {
-            return null;
-        }
+
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(chain);
@@ -1336,13 +1334,21 @@ public class Evaluator {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
-            v = evaluateExpression(init.get());
-            if (v == null && init.get().isNameExpr()) {
+            Expression initExpr = init.get();
+            if (initExpr instanceof MethodCallExpr mce && mce.getScope().isPresent()
+                    && mce.getScope().get() instanceof NameExpr nameExpr && nameExpr.getNameAsString().equals("LoggerFactory")) {
+                Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(this));
+                Logger log = new AKLogger(clazz);
+                return new Variable(log);
+            }
+
+            v = evaluateExpression(initExpr);
+            if (v == null && initExpr.isNameExpr()) {
                 /*
                  * This path is usually taken when we are trying to initializer a field to have
                  * a value defined in an external constant.
                  */
-                NameExpr nameExpr = init.get().asNameExpr();
+                NameExpr nameExpr = initExpr.asNameExpr();
                 String name = nameExpr.getNameAsString();
 
                 ImportWrapper importWrapper = AbstractCompiler.findImport(cu, name);

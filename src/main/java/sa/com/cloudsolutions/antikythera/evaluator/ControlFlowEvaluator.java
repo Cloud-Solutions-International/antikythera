@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -25,7 +24,6 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
-import org.aspectj.weaver.ast.Call;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -365,7 +363,7 @@ public class ControlFlowEvaluator extends Evaluator {
         if (key.isMethodCallExpr() && parent.isPresent()) {
             if (parent.get() instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
                 createSetterFromGetterForMCE(entry, setter, mce);
-            } else if (parent.get() instanceof BinaryExpr binaryExpr && entry.getValue() instanceof Boolean b) {
+            } else if (parent.get() instanceof BinaryExpr binaryExpr && entry.getValue() instanceof Boolean) {
                 createSetterFromGetterForBinaryExpr(setter, binaryExpr, key);
             }
         }
