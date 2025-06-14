@@ -186,7 +186,7 @@ class UnitTestGeneratorTest {
 
     @Test
     void testLogger() throws ReflectiveOperationException {
-        Settings.setProperty("log_appender","sa.com.cloudsolutions.antikythera.generator.LogHandler");
+        Settings.setProperty(Settings.LOG_APPENDER,"sa.com.cloudsolutions.antikythera.generator.LogHandler");
         MethodDeclaration md = classUnderTest.getMethodsByName("queries5").getFirst();
         argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);

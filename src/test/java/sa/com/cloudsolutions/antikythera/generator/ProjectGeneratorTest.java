@@ -59,7 +59,7 @@ class ProjectGeneratorTest {
 
     @Test
     void writeFilesToTestCreatesFileWithContent() throws IOException {
-        String belongingPackage = Settings.getProperty("base_package")  + ".controller";
+        String belongingPackage = Settings.getProperty(Settings.BASE_PACKAGE)  + ".controller";
         String filename = "TestDummyFile.java";
         String content = "public class TestDummyFile {}";
         generator.writeFilesToTest(belongingPackage, filename, content);

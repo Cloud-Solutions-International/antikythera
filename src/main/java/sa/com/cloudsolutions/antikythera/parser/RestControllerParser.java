@@ -85,7 +85,7 @@ public class RestControllerParser extends DepsolvingParser {
         generator.addBeforeClass();
 
         gen.addImport("com.fasterxml.jackson.core.JsonProcessingException");
-        List<String> otherImports = (List<String>) Settings.getProperty("extra_imports");
+        List<String> otherImports = (List<String>) Settings.getProperty(Settings.EXTRA_IMPORTS);
         if(otherImports != null) {
             for (String s : otherImports) {
                 gen.addImport(s);

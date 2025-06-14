@@ -173,7 +173,7 @@ public class UnitTestGenerator extends TestGenerator {
      */
     @SuppressWarnings("unchecked")
     private void loadPredefinedBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
-        String base = Settings.getProperty("base_test_class", String.class).orElse(null);
+        String base = Settings.getProperty(Settings.BASE_TEST_CLASS, String.class).orElse(null);
         if (base != null && testClass.getExtendedTypes().isEmpty()) {
             testClass.addExtendedType(base);
             loadPredefinedBaseClassForTest(base);
@@ -714,7 +714,7 @@ public class UnitTestGenerator extends TestGenerator {
         String className = type.getFullyQualifiedName().orElseThrow();
         List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
 
-        if (Settings.getProperty("log_appender", String.class).isPresent()) {
+        if (Settings.getProperty(Settings.LOG_APPENDER, String.class).isPresent()) {
             if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
                 setupLoggers();
             }
@@ -774,7 +774,7 @@ public class UnitTestGenerator extends TestGenerator {
             gen.addImport("ch.qos.logback.classic.Logger");
             gen.addImport("ch.qos.logback.classic.Level");
             gen.addImport("org.slf4j.LoggerFactory");
-            gen.addImport(Settings.getProperty("log_appender", String.class).orElseThrow());
+            gen.addImport(Settings.getProperty(Settings.LOG_APPENDER, String.class).orElseThrow());
         });
     }
 
