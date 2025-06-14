@@ -17,6 +17,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -305,7 +306,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+    protected void handleApplicationException(Exception e, BlockStmt parent) throws AntikytheraException, ReflectiveOperationException {
         if (!(e instanceof AntikytheraException ae)) {
             if (catching.isEmpty()) {
                 EvaluatorException ex = new EvaluatorException(e.getMessage(), e);
@@ -313,7 +314,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 testForInternalError(null, ex);
                 throw new AUTException(e);
             } else {
-                super.handleApplicationException(e);
+                super.handleApplicationException(e, parent);
             }
         } else {
             throw ae;

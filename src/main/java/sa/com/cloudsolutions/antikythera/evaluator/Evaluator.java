@@ -134,6 +134,8 @@ public class Evaluator {
 
     private static long sequence = 0;
 
+    private static Exception lastException;
+
     protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
@@ -1492,8 +1494,15 @@ public class Evaluator {
      */
     @SuppressWarnings("unchecked")
     protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException {
+        if (statements.isEmpty()) {
+            return;
+        }
         try {
+            Evaluator.setLastException(null);
             for (Statement stmt : statements) {
+                if (lastException != null) {
+                    throw lastException;
+                }
                 if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
                     executeStatement(stmt);
                     if (returnFrom != null) {
@@ -1506,16 +1515,16 @@ public class Evaluator {
                 }
             }
         } catch (Exception e) {
-            handleApplicationException(e);
+            handleApplicationException(e, statements.getFirst().findAncestor(BlockStmt.class).orElse(null));
         }
     }
 
     /**
      * Execute a statement.
-     * In the java parser architecture a statement is not always a single line of code. They can be
+     * In the java parser architecture, a statement is not always a single line of code. They can be
      * block statements as well. For example, when an IF condition is encountered, that counts as
-     * a statement. The child elements of the if statement happen to be a Then and an Else both of
-     * which can be block statements.
+     * a statement. The child elements of the if statement is considered a statement but that's a
+     * block as well. The same goes for the else part.
      *
      * @param stmt the statement to execute
      * @throws Exception if the execution fails.
@@ -1745,35 +1754,48 @@ public class Evaluator {
         }
     }
 
-    protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
+    @SuppressWarnings("unchecked")
+    protected void handleApplicationException(Exception e, BlockStmt parent) throws ReflectiveOperationException {
+        returnValue = null;
         if (catching.isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
 
         TryStmt t = catching.pollLast();
-        boolean matchFound = false;
+        Optional<TryStmt> tryStmt = parent.findAncestor(TryStmt.class);
+        if (tryStmt.isPresent() && tryStmt.get().equals(t)) {
+            boolean matchFound = false;
 
-        for (CatchClause clause : t.getCatchClauses()) {
-            if (clause.getParameter().getType().isClassOrInterfaceType()) {
-                TypeWrapper wrapper = AbstractCompiler.findType(cu,
-                        clause.getParameter().getType().asClassOrInterfaceType().getNameAsString());
+            for (CatchClause clause : t.getCatchClauses()) {
+                if (clause.getParameter().getType().isClassOrInterfaceType()) {
+                    TypeWrapper wrapper = AbstractCompiler.findType(cu,
+                            clause.getParameter().getType().asClassOrInterfaceType().getNameAsString());
 
-                if (wrapper != null && isExceptionMatch(wrapper, e)) {
-                    setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
-                    executeBlock(clause.getBody().getStatements());
-                    matchFound = true;
-                    break;
+                    if (wrapper != null && isExceptionMatch(wrapper, e)) {
+                        setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                        executeBlock(clause.getBody().getStatements());
+                        matchFound = true;
+                        break;
+                    }
                 }
             }
-        }
 
-        if (t.getFinallyBlock().isPresent()) {
-            executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
-        }
+            if (t.getFinallyBlock().isPresent()) {
+                executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
+            }
 
-        if (!matchFound && t.getFinallyBlock().isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            if (!matchFound && t.getFinallyBlock().isEmpty()) {
+                throw new AUTException("Unhandled exception", e);
+            }
         }
+        else {
+            catching.addLast(t);
+            Evaluator.setLastException(e);
+        }
+    }
+
+    private static void setLastException(Exception e) {
+        lastException = e;
     }
 
     private boolean isExceptionMatch(TypeWrapper wrapper, Exception e) {
