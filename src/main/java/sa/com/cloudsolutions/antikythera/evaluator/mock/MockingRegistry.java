@@ -86,7 +86,7 @@ public class MockingRegistry {
     }
 
     /**
-     * Creates p 'Mockito.when().then()' style setup.
+     * Creates a 'Mockito.when().then()' style setup.
      * This may or may not translate to a real Mockito call. That depends on the mocking framework
      * being used.
      *
@@ -151,6 +151,10 @@ public class MockingRegistry {
 
     public static Variable createMockitoMockInstance(String className) throws ClassNotFoundException {
         Class<?> cls = AbstractCompiler.loadClass(className);
+        return createMockitoMockInstance(cls);
+    }
+
+    public static Variable createMockitoMockInstance(Class<?> cls) {
         Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
         v.setClazz(cls);
         return v;

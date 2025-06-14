@@ -671,7 +671,7 @@ public class Evaluator {
     protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
-        Deque<Type> args = new ArrayDeque<>();
+        Deque<Type> args = new LinkedList<>();
         mce.setArgumentTypes(argTypes);
 
         for (int i = oce.getArguments().size() - 1; i >= 0; i--) {

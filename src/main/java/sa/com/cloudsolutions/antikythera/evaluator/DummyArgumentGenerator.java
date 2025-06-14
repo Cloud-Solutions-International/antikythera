@@ -7,6 +7,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -68,12 +69,16 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         String fullClassName = wrapper.getFullyQualifiedName();
         Type t = param.getType();
 
-
         if (fullClassName.startsWith("java.util")) {
             return Reflect.variableFactory(fullClassName);
         }
 
         Class<?> clazz = wrapper.getClazz();
+        if (clazz.isInterface()) {
+            /* this is an interface so no point in looking for a constructor  */
+            return MockingRegistry.createMockitoMockInstance(clazz);
+        }
+
         // Try to find a no-arg constructor first
         try {
             return new Variable(clazz.getDeclaredConstructor().newInstance());
