@@ -1332,6 +1332,7 @@ public class Evaluator {
         return null;
     }
 
+    @SuppressWarnings("java:S3655")
     protected Variable resolvePrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
@@ -1498,24 +1499,29 @@ public class Evaluator {
             return;
         }
         try {
-            Evaluator.setLastException(null);
-            for (Statement stmt : statements) {
-                if (lastException != null) {
-                    throw lastException;
-                }
-                if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
-                    executeStatement(stmt);
-                    if (returnFrom != null) {
-                        MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
-                        MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
-                        if (method == null || method.equals(parent)) {
-                            break;
-                        }
+            executeBlockHelper(statements);
+        } catch (Exception e) {
+            handleApplicationException(e, statements.getFirst().findAncestor(BlockStmt.class).orElse(null));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void executeBlockHelper(List<Statement> statements) throws Exception {
+        Evaluator.setLastException(null);
+        for (Statement stmt : statements) {
+            if (lastException != null) {
+                throw lastException;
+            }
+            if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                executeStatement(stmt);
+                if (returnFrom != null) {
+                    MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
+                    MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
+                    if (method == null || method.equals(parent)) {
+                        break;
                     }
                 }
             }
-        } catch (Exception e) {
-            handleApplicationException(e, statements.getFirst().findAncestor(BlockStmt.class).orElse(null));
         }
     }
 
@@ -1764,33 +1770,37 @@ public class Evaluator {
         TryStmt t = catching.pollLast();
         Optional<TryStmt> tryStmt = parent.findAncestor(TryStmt.class);
         if (tryStmt.isPresent() && tryStmt.get().equals(t)) {
-            boolean matchFound = false;
-
-            for (CatchClause clause : t.getCatchClauses()) {
-                if (clause.getParameter().getType().isClassOrInterfaceType()) {
-                    TypeWrapper wrapper = AbstractCompiler.findType(cu,
-                            clause.getParameter().getType().asClassOrInterfaceType().getNameAsString());
-
-                    if (wrapper != null && isExceptionMatch(wrapper, e)) {
-                        setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
-                        executeBlock(clause.getBody().getStatements());
-                        matchFound = true;
-                        break;
-                    }
-                }
-            }
-
-            if (t.getFinallyBlock().isPresent()) {
-                executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
-            }
-
-            if (!matchFound && t.getFinallyBlock().isEmpty()) {
-                throw new AUTException("Unhandled exception", e);
-            }
+            handleApplicationException(e, t);
         }
         else {
             catching.addLast(t);
             Evaluator.setLastException(e);
+        }
+    }
+
+    private void handleApplicationException(Exception e, TryStmt t) throws ReflectiveOperationException {
+        boolean matchFound = false;
+
+        for (CatchClause clause : t.getCatchClauses()) {
+            if (clause.getParameter().getType().isClassOrInterfaceType()) {
+                TypeWrapper wrapper = AbstractCompiler.findType(cu,
+                        clause.getParameter().getType().asClassOrInterfaceType().getNameAsString());
+
+                if (wrapper != null && isExceptionMatch(wrapper, e)) {
+                    setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
+                    executeBlock(clause.getBody().getStatements());
+                    matchFound = true;
+                    break;
+                }
+            }
+        }
+
+        if (t.getFinallyBlock().isPresent()) {
+            executeBlock(t.getFinallyBlock().orElseThrow().getStatements());
+        }
+
+        if (!matchFound && t.getFinallyBlock().isEmpty()) {
+            throw new AUTException("Unhandled exception", e);
         }
     }
 
