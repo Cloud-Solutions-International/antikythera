@@ -214,7 +214,7 @@ public class AbstractCompiler {
         return findWrappedTypes(cu.get(), type);
     }
 
-    private static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
+    public static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
             if (classType.getTypeArguments().isPresent()) {
@@ -506,7 +506,14 @@ public class AbstractCompiler {
     }
     public static TypeWrapper findType(CompilationUnit cu, Type type) {
         if (type instanceof ClassOrInterfaceType ctype) {
-            return findType(cu, ctype.getNameAsString());
+            TypeWrapper wrapper = findType(cu, ctype.getNameAsString());
+            if (wrapper == null && ctype.getScope().isPresent()) {
+                String fullName = ctype.getScope().orElseThrow().asString() + "." + ctype.getNameAsString();
+                if (!fullName.equals(ctype.getNameAsString())) {
+                    return findType(cu, fullName);
+                }
+            }
+            return wrapper;
         }
         return findType(cu, type.asString());
     }
