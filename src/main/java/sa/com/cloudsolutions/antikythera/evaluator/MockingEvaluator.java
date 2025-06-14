@@ -223,19 +223,28 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return null;
         }
         Optional<BlockStmt> body = md.getBody();
+        String methodName = md.getNameAsString();
 
         Variable v = getIdField();
-        if (v != null) return v;
+        if (v != null) {
+            setupParameters(md);
+            return v;
+        }
 
-        setupParameters(md);
         Type returnType = md.getType();
         if (returnType.isVoidType()) {
-
+            if (methodName.startsWith("set") && body.isPresent() && body.get().getStatements().size() == 1) {
+                super.executeMethod(cd);
+            }
+            else {
+                setupParameters(md);
+            }
             return null;
         }
 
-        if (md.getNameAsString().startsWith("get") && body.isPresent() && body.get().getStatements().size() == 1) {
-            Variable f = getField(AbstractCompiler.classToInstanceName(md.getNameAsString().substring(3)));
+        setupParameters(md);
+        if (methodName.startsWith("get") && body.isPresent() && body.get().getStatements().size() == 1) {
+            Variable f = getField(AbstractCompiler.classToInstanceName(methodName.substring(3)));
             if (f != null) {
                 return f;
             }
