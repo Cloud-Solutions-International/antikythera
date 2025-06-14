@@ -14,6 +14,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -221,6 +222,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (!(cd instanceof MethodDeclaration md)) {
             return null;
         }
+        Optional<BlockStmt> body = md.getBody();
 
         Variable v = getIdField();
         if (v != null) return v;
@@ -228,10 +230,11 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         setupParameters(md);
         Type returnType = md.getType();
         if (returnType.isVoidType()) {
+
             return null;
         }
 
-        if (md.getNameAsString().startsWith("get") && md.getBody().isPresent() && md.getBody().get().getStatements().size() == 1) {
+        if (md.getNameAsString().startsWith("get") && body.isPresent() && body.get().getStatements().size() == 1) {
             Variable f = getField(AbstractCompiler.classToInstanceName(md.getNameAsString().substring(3)));
             if (f != null) {
                 return f;
@@ -334,11 +337,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                         typeEval.initializeFields();
                         TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                         return new Variable(Optional.of(typeEval));
-                    } else {
-                        Variable v = optionalByteBuddy(ciType.getNameAsString());
-                        if (v != null) {
-                            return v;
-                        }
+                    }
+                    Variable v = optionalByteBuddy(ciType.getNameAsString());
+                    if (v != null) {
+                        return v;
                     }
                 }
             }
