@@ -368,6 +368,7 @@ public class AbstractCompiler {
      * @param className the name of the class to find
      * @return An optional of the type declaration
      */
+    @SuppressWarnings("java:S1452")
     public static Optional<TypeDeclaration<?>> getMatchingType(CompilationUnit cu, String className) {
         for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
             if (type.getNameAsString().equals(className)
@@ -549,7 +550,7 @@ public class AbstractCompiler {
             return new TypeWrapper(p);
         }
         if (AntikytheraRunTime.getTypeDeclaration(className).isPresent()) {
-            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).get());
+            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).orElseThrow());
         }
 
         ImportWrapper imp = findImport(cu, className);
