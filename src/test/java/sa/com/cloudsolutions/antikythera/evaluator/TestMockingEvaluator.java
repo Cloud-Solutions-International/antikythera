@@ -29,6 +29,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TestMockingEvaluator {
 
+    public static final String FAKE_ENTITY = "sa.com.cloudsolutions.antikythera.evaluator.FakeEntity";
+    public static final String FAKE_REPOSITORY = "sa.com.cloudsolutions.antikythera.evaluator.FakeRepository";
+    public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.evaluator.FakeService";
     private MockingEvaluator mockingEvaluator;
     private MethodDeclaration voidMethod;
     private MethodDeclaration intMethod;
@@ -186,9 +189,8 @@ class TestMockingEvaluator {
 
     @Test
     void testRepositorySaveMethodCreatesEvaluator() throws ReflectiveOperationException {
-        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
-                SpringEvaluator eval = EvaluatorFactory.create(
-                "sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        MockingRegistry.markAsMocked(FAKE_REPOSITORY);
+        SpringEvaluator eval = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
 
         MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("saveFakeData")).orElseThrow();
@@ -202,9 +204,9 @@ class TestMockingEvaluator {
 
     @Test
     void testSearchFakeData() throws ReflectiveOperationException {
-        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
+        MockingRegistry.markAsMocked(FAKE_REPOSITORY);
         SpringEvaluator eval = EvaluatorFactory.create(
-                "sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+                FAKE_SERVICE, SpringEvaluator.class);
 
         MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("searchFakeData")).orElseThrow();
@@ -219,7 +221,7 @@ class TestMockingEvaluator {
     void testResolveExpressionHelperWithFakeEntity() {
         // Get TypeDeclaration for FakeEntity from AntikytheraRunTime
         TypeDeclaration<?> fakeEntityType = AntikytheraRunTime.getTypeDeclaration(
-                "sa.com.cloudsolutions.antikythera.evaluator.FakeEntity").orElseThrow();
+                FAKE_ENTITY).orElseThrow();
 
         // Create TypeWrapper with the TypeDeclaration
         TypeWrapper wrapper = new TypeWrapper(fakeEntityType);
@@ -231,7 +233,7 @@ class TestMockingEvaluator {
         assertNotNull(result);
         assertNotNull(result.getValue());
         assertInstanceOf(Evaluator.class, result.getValue());
-        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity",
+        assertEquals(FAKE_ENTITY,
                 ((Evaluator)result.getValue()).getClassName());
     }
 
@@ -261,13 +263,12 @@ class TestMockingEvaluator {
 
     @Test
     void testOptionalByteBuddy() throws ReflectiveOperationException {
-        cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity");
+        cu = AntikytheraRunTime.getCompilationUnit(FAKE_ENTITY);
         assertNotNull(cu);
 
-        mockingEvaluator = EvaluatorFactory.create(
-                "sa.com.cloudsolutions.antikythera.evaluator.FakeService", MockingEvaluator.class);
+        mockingEvaluator = EvaluatorFactory.create(FAKE_SERVICE, MockingEvaluator.class);
 
-        Variable result = mockingEvaluator.optionalByteBuddy("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity");
+        Variable result = mockingEvaluator.optionalByteBuddy(FAKE_ENTITY);
 
         // Verify
         assertNotNull(result);
@@ -287,11 +288,11 @@ class TestMockingEvaluator {
         assertNull(result1);
 
         // Test with FakeEntity (should return non-null)
-        mockingEvaluator = EvaluatorFactory.create(
-                "sa.com.cloudsolutions.antikythera.evaluator.FakeEntity", MockingEvaluator.class);
+        mockingEvaluator = EvaluatorFactory.create(FAKE_ENTITY, MockingEvaluator.class);
 
         Variable result2 = mockingEvaluator.getIdField();
         assertNotNull(result2);
         assertNotNull(result2.getValue());
     }
+
 }

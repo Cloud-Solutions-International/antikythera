@@ -1857,12 +1857,7 @@ public class Evaluator {
                         && field.getAnnotationByName("Autowired").isEmpty()
                         && !isSequenceField(field, variableDeclarator)
             ) {
-                Variable nullVariable = new Variable(null);
-                if (variableDeclarator.getType().isPrimitiveType()) {
-                    nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
-                }
-                nullVariable.setType(variableDeclarator.getType());
-                fields.put(variableDeclarator.getNameAsString(), nullVariable);
+                setupFieldWithoutInitializer(variableDeclarator);
                 return;
             }
             Variable v = resolveVariableDeclaration(variableDeclarator);
@@ -1880,6 +1875,15 @@ public class Evaluator {
         } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
         }
+    }
+
+    void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
+        Variable nullVariable = new Variable(null);
+        if (variableDeclarator.getType().isPrimitiveType()) {
+            nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
+        }
+        nullVariable.setType(variableDeclarator.getType());
+        fields.put(variableDeclarator.getNameAsString(), nullVariable);
     }
 
     private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
