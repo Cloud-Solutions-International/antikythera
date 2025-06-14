@@ -93,22 +93,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         if (callable.isMethodDeclaration()) {
             if (isRepository()) {
-                MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
-                Type t = md.getType();
-                if (!t.isPrimitiveType() && !t.isVoidType()) {
-                    List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
-                    ImportWrapper imp = imports.getLast();
-                    String s = imp.getNameAsString();
-                    if (collectionTypes.contains(s)) {
-                        return handleRepositoryCollectionHelper(sc, s);
-                    }
-                }
+                return mockRepositoryMethodCall(sc, callable);
             }
             return super.executeCallable(sc, callable);
         }
         else {
             if (isRepository()) {
-                return mockRepositoryMethod(sc, callable);
+                return mockRepositoryMethodCall(sc, callable);
             }
             return mockBinaryMethodExecution(sc, callable);
         }
@@ -153,9 +144,35 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return executeMethod(method);
     }
 
+    private Variable mockRepositoryMethodCall(Scope sc, Callable callable) throws ReflectiveOperationException {
+        Method method = callable.getMethod();
+        if (method != null) {
+            return mockRepositoryMethod(sc, callable);
+        }
+        else {
+            return mockRepositoryMethodDeclaration(sc, callable);
+        }
+    }
+
+    private Variable mockRepositoryMethodDeclaration(Scope sc, Callable callable) throws ReflectiveOperationException {
+        MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
+        Type t = md.getType();
+        if (t.isClassOrInterfaceType() && t.asClassOrInterfaceType().isBoxedType()) {
+            return null;
+        }
+        if (!t.isPrimitiveType() && !t.isVoidType()) {
+            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+            ImportWrapper imp = imports.getLast();
+            String s = imp.getNameAsString();
+            if (collectionTypes.contains(s)) {
+                return handleRepositoryCollectionHelper(sc, s);
+            }
+        }
+        return super.executeCallable(sc, callable);
+    }
+
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-
         if (method.getName().equals("save")) {
             return mockRepositorySave(callable, method);
         }
