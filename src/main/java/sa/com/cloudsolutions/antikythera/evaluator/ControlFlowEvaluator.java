@@ -210,7 +210,7 @@ public class ControlFlowEvaluator extends Evaluator {
             Expression expr = StaticJavaParser.parseStatement(
                     String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
             ).asExpressionStmt().getExpression();
-
+            TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             mocks.add(expr);
             for (Expression e : fieldIntializers) {
                 if (e.isMethodCallExpr()) {

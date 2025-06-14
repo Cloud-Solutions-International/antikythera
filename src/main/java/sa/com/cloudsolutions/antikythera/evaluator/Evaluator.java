@@ -1937,9 +1937,21 @@ public class Evaluator {
 
     public List<Expression> getFieldInitializers() {
         List<Expression> fi = new ArrayList<>();
-        for (Variable v : fields.values()) {
-            if (v != null) {
-                fi.addAll(v.getInitializer());
+        for (Map.Entry<String, Variable> entry : fields.entrySet()) {
+            Variable v = entry.getValue();
+            if (v != null && !v.getInitializer().isEmpty()) {
+                Expression first = v.getInitializer().getFirst();
+                if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {
+                    MethodCallExpr mce = new MethodCallExpr().setName("set" + ClassProcessor.instanceToClassName(entry.getKey()));
+                    mce.addArgument(first);
+                    fi.add(mce);
+                    for (int i = 1; i < v.getInitializer().size(); i++) {
+                        mce.addArgument(v.getInitializer().get(i));
+                    }
+                }
+                else {
+                    fi.addAll(v.getInitializer());
+                }
             }
         }
         return fi;
