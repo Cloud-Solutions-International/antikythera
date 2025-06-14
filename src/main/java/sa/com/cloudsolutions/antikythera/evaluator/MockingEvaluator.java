@@ -90,8 +90,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     protected Variable executeCallable(Scope sc, Callable callable) throws ReflectiveOperationException {
         returnFrom = null;
+
         if (callable.isMethodDeclaration()) {
-            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+            if (isRepository()) {
                 MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
                 Type t = md.getType();
                 if (!t.isPrimitiveType() && !t.isVoidType()) {
@@ -106,11 +107,26 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return super.executeCallable(sc, callable);
         }
         else {
-            if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+            if (isRepository()) {
                 return mockRepositoryMethod(sc, callable);
             }
             return mockBinaryMethodExecution(sc, callable);
         }
+    }
+
+    private boolean isRepository() {
+        if (typeDeclaration.getAnnotationByName("Repository").isPresent()) {
+            return true;
+        }
+        if (typeDeclaration instanceof ClassOrInterfaceDeclaration cdecl) {
+            for (ClassOrInterfaceType t : cdecl.getExtendedTypes()) {
+                if (t.getNameAsString().equals("JpaRepository") || t.getNameAsString().equals("CrudRepository")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
