@@ -34,6 +34,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -109,29 +110,32 @@ public class MockingRegistry {
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
 
-        String fqn = resolvedTypes.getFirst().getFullyQualifiedName();
-        Variable v;
-        if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
-            if (resolvedTypes.size() == 1) {
-                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
-                eval.setVariableName(variable.getNameAsString());
-                v = new Variable(eval);
+        for(TypeWrapper wrapper : resolvedTypes) {
+            if (wrapper.getClazz() != null && Modifier.isFinal(wrapper.getClazz().getModifiers())) {
+                continue;
             }
-            else {
-                return mockCollection(resolvedTypes, fqn);
+            String fqn = wrapper.getFullyQualifiedName();
+            Variable v;
+            if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
+                if (resolvedTypes.size() == 1) {
+                    Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
+                    eval.setVariableName(variable.getNameAsString());
+                    v = new Variable(eval);
+                } else {
+                    return mockCollection(resolvedTypes, fqn);
+                }
+            } else {
+                String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
+                if (mocker.equals(MOCKITO)) {
+                    v = MockingRegistry.createMockitoMockInstance(fqn);
+                } else {
+                    v = MockingRegistry.createByteBuddyMockInstance(fqn);
+                }
             }
+            v.setType(variable.getType());
+            return v;
         }
-        else {
-            String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
-            if (mocker.equals(MOCKITO)) {
-                v = MockingRegistry.createMockitoMockInstance(fqn);
-            }
-            else {
-                v = MockingRegistry.createByteBuddyMockInstance(fqn);
-            }
-        }
-        v.setType(variable.getType());
-        return v;
+        return null;
     }
 
     @SuppressWarnings("unchecked")
