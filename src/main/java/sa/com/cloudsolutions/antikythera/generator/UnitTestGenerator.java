@@ -26,6 +26,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.ReferenceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,7 +110,7 @@ public class UnitTestGenerator extends TestGenerator {
                     fd.getAnnotationByName("Mock").isPresent()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
                 if(!wrappers.isEmpty() && wrappers.getLast() != null){
-                    MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                    MockingRegistry.markAsMocked(MockingRegistry.generateRegistryKey(wrappers));
                 }
             }
         }
@@ -242,6 +243,9 @@ public class UnitTestGenerator extends TestGenerator {
         if (response.getException() == null) {
             getBody(testMethod).addStatement(invocation);
             addAsserts(response);
+            for (ReferenceType t : md.getThrownExceptions()) {
+                testMethod.addThrownException(t);
+            }
         } else {
             String[] parts = invocation.split("=");
             assertThrows(parts.length == 2 ? parts[1] : parts[0], response);
@@ -820,7 +824,7 @@ public class UnitTestGenerator extends TestGenerator {
             for (FieldDeclaration fd : t.getFields()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
                 if (!wrappers.isEmpty() && wrappers.getLast() != null) {
-                    MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
+                    MockingRegistry.markAsMocked(MockingRegistry.generateRegistryKey(wrappers));
                 }
             }
         }

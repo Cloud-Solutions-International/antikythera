@@ -115,6 +115,7 @@ public class MockingRegistry {
                 continue;
             }
             String fqn = wrapper.getFullyQualifiedName();
+            TestGenerator.addImport(new ImportDeclaration(fqn, false, false));
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
                 if (resolvedTypes.size() == 1) {
