@@ -480,8 +480,8 @@ public class Reflect {
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> createVariable(Optional.empty(), JAVA_UTIL_OPTIONAL, null);
             case BOOLEAN, PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> createVariable(true, BOOLEAN, "true");
             case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE ->
-                    createVariable(1.0, DOUBLE, "1.0");
-            case INTEGER, "int", JAVA_LANG_INTEGER -> createVariable(1, INTEGER, "1");
+                    createVariable(0.0, DOUBLE, "0.0");
+            case INTEGER, "int", JAVA_LANG_INTEGER -> createVariable(0, INTEGER, "0");
             case "Long", "long", JAVA_LANG_LONG -> createVariable(0L, "Long", "0");
             case STRING, JAVA_LANG_STRING -> {
                 Variable result = createVariable(ANTIKYTHERA, STRING, ANTIKYTHERA);

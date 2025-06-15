@@ -112,9 +112,10 @@ class TestSpringGenerator {
     @ParameterizedTest
     @CsvSource({
             "String, Antikythera",
-            "int, 1",
+            "int, 0",
+            "Double, 0.0",
             "Boolean, true",
-            "float, 1.0",
+            "float, 0.0",
             "Long, 0"
     })
     void handleURIVariablesTestPath(String paramType, String paramValue) throws ReflectiveOperationException {
@@ -142,7 +143,7 @@ class TestSpringGenerator {
     @CsvSource({
             "String, med, Antikythera",
             "Boolean, flag, true",
-            "int, number, 1",
+            "int, number, 0",
             "java.util.List, dto, []",
     })
     void handleURIVariablesTestQueryString(String paramType, String paramName, String paramValue) throws ReflectiveOperationException {

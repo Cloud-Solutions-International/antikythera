@@ -83,7 +83,7 @@ class TestConditional extends TestHelper {
     @CsvSource({"conditional4, ZERO!Positive!Negative!", "conditional5, ZERO!Three!Two!One!",
             "conditional6, ZERO!Three!Two!One!","conditional7, ZERO!Three!Two!One!",
             "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
-            "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
+            "booleanWorks, False!True!", "printMap, Map is empty!Key: 0 -> Value: null",
             "animalFarm, Some animals are more equal!All animals are equal!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {

@@ -64,7 +64,7 @@ class TestMockingEvaluator {
     void executeMethodReturnsDefaultForPrimitiveType() throws ReflectiveOperationException {
         Variable result = mockingEvaluator.executeMethod(intMethod);
         assertNotNull(result);
-        assertEquals(1, result.getValue());
+        assertEquals(0, result.getValue());
     }
 
     @Test
