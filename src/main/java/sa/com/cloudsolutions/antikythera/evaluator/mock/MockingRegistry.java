@@ -125,7 +125,7 @@ public class MockingRegistry {
                     return mockCollection(resolvedTypes, fqn);
                 }
             } else {
-                String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
+                String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse(MOCKITO);
                 if (mocker.equals(MOCKITO)) {
                     v = MockingRegistry.createMockitoMockInstance(fqn);
                 } else {

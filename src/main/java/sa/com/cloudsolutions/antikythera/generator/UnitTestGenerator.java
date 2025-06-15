@@ -819,7 +819,7 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-                if (!wrappers.isEmpty()) {
+                if (!wrappers.isEmpty() && wrappers.getLast() != null) {
                     MockingRegistry.markAsMocked(wrappers.getLast().getFullyQualifiedName());
                 }
             }

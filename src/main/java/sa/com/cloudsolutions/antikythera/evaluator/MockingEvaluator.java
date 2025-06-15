@@ -512,8 +512,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
      * @param sc scope of the method call
      * @param stmt the statement that involves the method call
      * @param collectionTypeName the type of collection that is required
-     * @return a collection of the type that matches collectionTypeName which will contain a
-     *      single entity.
+     * @return A variable instance that is a collection of the `type` that matches
+     *      collectionTypeName which will contain a single entity.
      */
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
