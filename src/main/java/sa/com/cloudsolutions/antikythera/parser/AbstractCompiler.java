@@ -580,7 +580,10 @@ public class AbstractCompiler {
         }
 
         try {
-            return new TypeWrapper(Class.forName(className));
+            Class<?> clazz = AbstractCompiler.loadClass(className);
+            if (clazz != null) {
+                return new TypeWrapper(clazz);
+            }
         } catch (ClassNotFoundException e) {
             /*
              * It's ok to silently ignore this one. It just means that the class cannot be

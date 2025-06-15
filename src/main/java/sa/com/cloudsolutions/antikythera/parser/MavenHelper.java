@@ -233,28 +233,32 @@ public class MavenHelper {
         }
 
         if (version != null) {
-            Path p = Paths.get(m2, groupIdPath, artifactId, version,
-                    artifactId + "-" + version + ".jar");
-            if (Files.exists(p)) {
-                Artifact artifact = artifacts.get(artifactId);
-                if (artifact != null) {
-                    artifact.jarFile = p.toString();
-                    artifact.version = version;
-                }
-                else {
-                    artifacts.put(artifactId, new Artifact(artifactId, version, p.toString()));
+            addDependency(m2, groupIdPath, artifactId, version);
+        }
+    }
 
-                    Path pom = Paths.get(m2, groupIdPath, artifactId, version,
-                            artifactId + "-" + version + ".pom");
-                    if (Files.exists(pom)) {
-                        MavenHelper pomHelper = new MavenHelper();
-                        pomHelper.readPomFile(pom);
-                        pomHelper.buildJarPaths();
-                    }
-                }
-            } else {
-                logger.debug("Jar not found: {}", p);
+    private static void addDependency(String m2, String groupIdPath, String artifactId, String version) throws IOException, XmlPullParserException {
+        Path p = Paths.get(m2, groupIdPath, artifactId, version,
+                artifactId + "-" + version + ".jar");
+        if (Files.exists(p)) {
+            Artifact artifact = artifacts.get(artifactId);
+            if (artifact != null) {
+                artifact.jarFile = p.toString();
+                artifact.version = version;
             }
+            else {
+                artifacts.put(artifactId, new Artifact(artifactId, version, p.toString()));
+
+                Path pom = Paths.get(m2, groupIdPath, artifactId, version,
+                        artifactId + "-" + version + ".pom");
+                if (Files.exists(pom)) {
+                    MavenHelper pomHelper = new MavenHelper();
+                    pomHelper.readPomFile(pom);
+                    pomHelper.buildJarPaths();
+                }
+            }
+        } else {
+            logger.debug("Jar not found: {}", p);
         }
     }
 
