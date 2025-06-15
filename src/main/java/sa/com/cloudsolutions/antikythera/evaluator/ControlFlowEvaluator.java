@@ -504,11 +504,11 @@ public class ControlFlowEvaluator extends Evaluator {
         if (v.getValue() instanceof Optional<?> optional) {
             if (optional.isPresent()) {
                 ReturnStmt nonEmptyReturn = findReturnStatement(method, false);
-                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, false);
+                expressions = setupConditionalsForOptional(nonEmptyReturn, method, stmt, true);
                 l.setPathTaken(LineOfCode.TRUE_PATH);
             } else {
                 ReturnStmt emptyReturn = findReturnStatement(method, true);
-                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, true);
+                expressions = setupConditionalsForOptional(emptyReturn, method, stmt, false);
                 l.setPathTaken(LineOfCode.FALSE_PATH);
             }
             for (Expression expr : expressions) {

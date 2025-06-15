@@ -252,7 +252,7 @@ class TestConditionalWithOptional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({
-        "ifEmpty, ID: 1\\nID not found",
+        "ifEmpty, ID not found\\nID: 1",
         "ifPresent, ID: 1", "binOptionals, x is not 10\\nx is 10",
         "optionalString, ANTIKYTHERA\\nDEFAULT"
     })
