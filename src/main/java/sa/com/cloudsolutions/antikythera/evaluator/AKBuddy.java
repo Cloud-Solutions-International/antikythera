@@ -15,6 +15,7 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -208,9 +209,14 @@ public class AKBuddy {
                         builder = builder.defineField(fieldName, wrapper.getClazz(), Visibility.PRIVATE);
                     }
                     else {
-                        Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
-                        Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                        builder = builder.defineField(fieldName, clazz, Visibility.PRIVATE);
+                        if (MockingRegistry.isMockTarget(wrapper.getFullyQualifiedName())) {
+                            // todo : fix this
+                        }
+                        else {
+                            Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
+                            Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                            builder = builder.defineField(fieldName, clazz, Visibility.PRIVATE);
+                        }
                     }
                 }
             }
