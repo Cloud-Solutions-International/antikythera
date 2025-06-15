@@ -877,14 +877,18 @@ public class UnitTestGenerator extends TestGenerator {
             }
             String registryKey = MockingRegistry.generateRegistryKey(wrappers);
             if (fd.getAnnotationByName("Autowired").isPresent() && !MockingRegistry.isMockTarget(registryKey)) {
-                MockingRegistry.markAsMocked(registryKey);
-                FieldDeclaration field = testSuite.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-                field.addAnnotation("Mock");
-                ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
-                if (wrapper != null) {
-                    addImport(wrapper.getImport());
-                }
+                addMockedField(cu, testSuite, fd, registryKey);
             }
+        }
+    }
+
+    private static void addMockedField(CompilationUnit cu, ClassOrInterfaceDeclaration testSuite, FieldDeclaration fd, String registryKey) {
+        MockingRegistry.markAsMocked(registryKey);
+        FieldDeclaration field = testSuite.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
+        field.addAnnotation("Mock");
+        ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
+        if (wrapper != null) {
+            addImport(wrapper.getImport());
         }
     }
 

@@ -646,7 +646,15 @@ public class TruthTable {
 
         return switch (binaryExpr.getOperator()) {
             case AND -> ((Boolean) left) && (Boolean) right;
-            case OR -> ((Boolean) left) || (Boolean) right;
+            case OR -> {
+                if (left instanceof Integer l) {
+                    left = l != 0;
+                }
+                if (right instanceof Integer r) {
+                    right = r != 0;
+                }
+                yield ((Boolean) left) || (Boolean) right;
+            }
             case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
             case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
             case LESS -> NumericComparator.compare(left, right) < 0;
