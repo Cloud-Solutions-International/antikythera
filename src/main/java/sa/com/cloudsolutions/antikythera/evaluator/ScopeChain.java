@@ -1,9 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +40,15 @@ public class ScopeChain {
                 if (scopeD.isEmpty()) {
                     break;
                 }
+                Optional<CompilationUnit> cu = expr.findCompilationUnit();
+                if (cu.isPresent()) {
+                    TypeWrapper wrapper = AbstractCompiler.findType(cu.get(), scopeD.get().toString());
+                    if (wrapper != null) {
+                        chain.addLast(scopeD.get()).setTypeWrapper(wrapper);
+                        break;
+                    }
+                }
+
                 chain.addLast(scopeD.get());
                 expr = scopeD.get();
             }
@@ -56,8 +68,10 @@ public class ScopeChain {
         return chain;
     }
 
-    private void addLast(Expression expressions) {
-        chain.addLast(new Scope(this, expressions));
+    private Scope addLast(Expression expressions) {
+        Scope scope = new Scope(this, expressions);
+        chain.addLast(scope);
+        return scope;
     }
 
     public boolean isEmpty() {

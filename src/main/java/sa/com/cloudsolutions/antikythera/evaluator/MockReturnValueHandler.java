@@ -20,6 +20,9 @@ public class MockReturnValueHandler implements Answer<Object> {
     public Object answer(InvocationOnMock invocation) throws Throwable {
         Class<?> returnType = invocation.getMethod().getReturnType();
         String clsName = returnType.getName();
+        if (clsName.equals("void")) {
+            return null;
+        }
 
         Object result;
         if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {

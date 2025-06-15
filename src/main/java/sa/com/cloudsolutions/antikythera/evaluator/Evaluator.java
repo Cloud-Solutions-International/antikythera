@@ -898,12 +898,24 @@ public class Evaluator {
             Expression expr2 = scope.getExpression();
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());
-            } else if (expr2.isFieldAccessExpr() && variable != null) {
-                /*
-                 * getValue should have returned to us a valid field. That means
-                 * we will have an evaluator instance as the 'value' in the variable v
-                 */
-                variable = evaluateScopedFieldAccess(variable, expr2);
+            } else if (expr2.isFieldAccessExpr()) {
+                if (variable != null) {
+                    /*
+                     * getValue should have returned to us a valid field. That means
+                     * we will have an evaluator instance as the 'value' in the variable v
+                     */
+                    variable = evaluateScopedFieldAccess(variable, expr2);
+                }
+                else if (scope.getTypeWrapper() != null){
+                    if (scope.getTypeWrapper().getClazz() != null) {
+                        variable = new Variable(scope.getTypeWrapper().getClazz());
+                        variable.setClazz(scope.getTypeWrapper().getClazz());
+                    }
+                    else {
+                        variable = new Variable(EvaluatorFactory.create(scope.getTypeWrapper().getFullyQualifiedName(), this));
+                    }
+                    break;
+                }
             } else if (expr2.isMethodCallExpr()) {
                 scope.setVariable(variable);
                 scope.setScopedMethodCall(expr2.asMethodCallExpr());
