@@ -42,15 +42,18 @@ public class MockReturnValueHandler implements Answer<Object> {
     void whenThen(InvocationOnMock invocation, Object result, String clsName) {
         if (result != null) {
             try {
-                String mockName = invocation.getMock().getClass().getInterfaces()[0]
-                        .getSimpleName();
-                mockName = Character.toLowerCase(mockName.charAt(0)) +
-                        mockName.substring(1);
+                Class<?>[] interfaces = invocation.getMock().getClass().getInterfaces();
+                if (interfaces.length > 0) {
+                    String mockName = interfaces[0]
+                            .getSimpleName();
+                    mockName = Character.toLowerCase(mockName.charAt(0)) +
+                            mockName.substring(1);
 
-                if (!mockName.equals("traceable")) {
+                    if (!mockName.equals("traceable")) {
 
-                    MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(invocation.getMethod().getName(),clsName,mockName);
-                    methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(invocation.getMethod()));
+                        MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(invocation.getMethod().getName(), clsName, mockName);
+                        methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(invocation.getMethod()));
+                    }
                 }
             } catch (Exception ex) {
                 logger.warn(ex.getMessage());

@@ -53,18 +53,13 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             v = new Variable(o);
             v.setType(t);
             Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-            if (opt.isPresent()) {
-                if (opt.get().isClassOrInterfaceDeclaration()) {
-                    String init = ArgumentGenerator.instantiateClass(
-                            opt.get().asClassOrInterfaceDeclaration(),
-                            param.getNameAsString()
-                    ).replace(";", "");
-                    String[] parts = init.split("=");
-                    v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
-                }
-                else {
-                    v.setInitializer(List.of());
-                }
+            if (opt.isPresent() && opt.get().isClassOrInterfaceDeclaration()) {
+                String init = ArgumentGenerator.instantiateClass(
+                        opt.get().asClassOrInterfaceDeclaration(),
+                        param.getNameAsString()
+                ).replace(";", "");
+                String[] parts = init.split("=");
+                v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
             }
         }
         return v;
