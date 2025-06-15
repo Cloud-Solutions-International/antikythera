@@ -17,6 +17,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator extends TestHelper {
@@ -190,6 +192,33 @@ class TestEvaluator extends TestHelper {
         Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
         assertNotNull(result);
         assertEquals("sa.com.cloudsolutions.antikythera.evaluator.Evaluator", ((Class<?>) result.getValue()).getName());
+    }
+
+
+    @Test
+    void evaluateClassExpressionReturnsClassObject3() throws AntikytheraException, ReflectiveOperationException {
+        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository"));
+        Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
+        assertNotNull(result);
+        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository", ((Class<?>) result.getValue()).getName());
+    }
+
+    @Test
+    void validateReflectiveMethodThrowsExceptionWhenMethodIsNull() {
+        Variable nullVariable = new Variable(null);
+        ReflectionArguments args = new ReflectionArguments("missingMethod", new Object[]{}, new Class[]{});
+
+        EvaluatorException ex = assertThrows(EvaluatorException.class, () -> {
+            Evaluator.validateReflectiveMethod(nullVariable, args, null);
+        });
+        assertEquals("Application NPE: missingMethod", ex.getMessage());
+
+        Variable notNullVariable = new Variable("not null value");
+        ex = assertThrows(EvaluatorException.class, () -> {
+            Evaluator.validateReflectiveMethod(notNullVariable, args, null);
+        });
+        assertEquals("Error evaluating method call: missingMethod", ex.getMessage());
     }
 }
 
