@@ -309,7 +309,7 @@ public class Evaluator {
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {
-            return evaluateClassExpression(expr);
+            return evaluateClassExpression(expr.asClassExpr());
         } else if (expr.isLambdaExpr()) {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
         } else if (expr.isArrayAccessExpr()) {
@@ -334,22 +334,26 @@ public class Evaluator {
         return null;
     }
 
-    Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
-        ClassExpr classExpr = expr.asClassExpr();
+    Variable evaluateClassExpression(ClassExpr classExpr) throws ClassNotFoundException {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, classExpr.getType().asString());
 
         if (wrapper != null) {
-            if (wrapper.getClazz() != null) {
-                return new Variable(wrapper.getClazz());
-            }
-            if (wrapper.getType() != null) {
-                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), Evaluator.class);
-                Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+            return evaluateClassExpression(wrapper);
+        }
+        return null;
+    }
 
-                Variable v = new Variable(dynamicClass);
-                v.setClazz(Class.class);
-                return v;
-            }
+    protected Variable evaluateClassExpression(TypeWrapper wrapper) throws ClassNotFoundException {
+        if (wrapper.getClazz() != null) {
+            return new Variable(wrapper.getClazz());
+        }
+        if (wrapper.getType() != null) {
+            Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), Evaluator.class);
+            Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+
+            Variable v = new Variable(dynamicClass);
+            v.setClazz(Class.class);
+            return v;
         }
         return null;
     }

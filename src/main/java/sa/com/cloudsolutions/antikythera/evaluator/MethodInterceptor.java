@@ -88,6 +88,7 @@ public class MethodInterceptor {
             this.sourceMethod = sourceMethod;
         }
 
+        @SuppressWarnings("java:S3011")
         @RuntimeType
         public Object intercept(@This Object instance, @Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
