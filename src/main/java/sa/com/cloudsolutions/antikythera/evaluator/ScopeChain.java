@@ -33,9 +33,8 @@ public class ScopeChain {
     public static ScopeChain findScopeChain(Expression expr) {
         ScopeChain chain = new ScopeChain(expr);
         Optional<CompilationUnit> cu = expr.findCompilationUnit();
-        if (cu.isPresent() && expr instanceof MethodCallExpr mce) {
-            Optional<Expression> scopeD = mce.getScope();
-            Expression scopeExpression = scopeD.orElseThrow();
+        if (cu.isPresent() && expr instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            Expression scopeExpression = mce.getScope().orElseThrow();
             TypeWrapper wrapper = AbstractCompiler.findType(cu.get(), scopeExpression.toString());
             if (wrapper != null) {
                 chain.addLast(scopeExpression).setTypeWrapper(wrapper);
