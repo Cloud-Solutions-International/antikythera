@@ -1,10 +1,13 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.expr.Expression;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockConfigReader;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -22,6 +25,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 @SuppressWarnings("java:S6548")
 public class Antikythera {
@@ -52,6 +57,14 @@ public class Antikythera {
                 throw new AntikytheraException("Failed to initialize Antikythera", e);
             } catch (XmlPullParserException xe) {
                 logger.error("Could not parse the POM file", xe);
+            }
+            try {
+                Map<String, List<Expression>> customMocks = MockConfigReader.readDefaultMockExpressions();
+                if (!customMocks.isEmpty()) {
+                    MockingRegistry.setCustomMockExpressions(customMocks);
+                }
+            } catch (IllegalArgumentException e) {
+                // can safely ignore this exception, as it is thrown when no mock configuration is found
             }
         }
         return instance;

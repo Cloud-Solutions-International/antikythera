@@ -49,6 +49,8 @@ import static org.mockito.Mockito.withSettings;
  */
 public class MockingRegistry {
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
+    private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
+
     public static final String MOCKITO = "Mockito";
 
     private MockingRegistry() {
@@ -343,5 +345,18 @@ public class MockingRegistry {
         );
         mce.setScope(new NameExpr(MOCKITO));
         return mce;
+    }
+
+    public static void addCustomMockExpression(String className, Expression expr) {
+        customMockExpressions.computeIfAbsent(className, k -> new ArrayList<>()).add(expr);
+    }
+    public static List<Expression> getCustomMockExpressions(String className) {
+        return customMockExpressions.getOrDefault(className, new ArrayList<>());
+    }
+    public static void clearCustomMockExpressions() {
+        customMockExpressions.clear();
+    }
+    public static void setCustomMockExpressions(Map<String, List<Expression>> customMockExpressions) {
+        MockingRegistry.customMockExpressions = customMockExpressions;
     }
 }
