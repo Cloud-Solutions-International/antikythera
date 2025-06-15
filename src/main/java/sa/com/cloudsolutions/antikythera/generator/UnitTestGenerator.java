@@ -731,12 +731,17 @@ public class UnitTestGenerator extends TestGenerator {
         Variable result = response.getBody();
         BlockStmt body = getBody(testMethod);
         if (result.getValue() != null) {
-            body.addStatement(asserter.assertNotNull("resp"));
-            if (result.getValue() instanceof Collection<?> c) {
-                if (c.isEmpty()) {
-                    body.addStatement(asserter.assertEmpty("resp"));
-                } else {
-                    body.addStatement(asserter.assertNotEmpty("resp"));
+            if (result.getType() != null && result.getType().isPrimitiveType()) {
+                body.addStatement(asserter.assertEquals(String.valueOf(result.getValue()), "resp"));
+            }
+            else {
+                body.addStatement(asserter.assertNotNull("resp"));
+                if (result.getValue() instanceof Collection<?> c) {
+                    if (c.isEmpty()) {
+                        body.addStatement(asserter.assertEmpty("resp"));
+                    } else {
+                        body.addStatement(asserter.assertNotEmpty("resp"));
+                    }
                 }
             }
             asserter.addFieldAsserts(response, body);

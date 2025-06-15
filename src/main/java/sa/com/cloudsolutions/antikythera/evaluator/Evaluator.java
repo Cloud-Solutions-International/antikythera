@@ -334,7 +334,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
+    Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
         ClassExpr classExpr = expr.asClassExpr();
         TypeWrapper wrapper = AbstractCompiler.findType(cu, classExpr.getType().asString());
 
