@@ -27,31 +27,10 @@ public class MockReturnValueHandler implements Answer<Object> {
         Object result = null;
 
         // Check if this is a generic method with a Class parameter that specifies the return type
-        Object[] arguments = invocation.getArguments();
-        for (Object arg : arguments) {
-            if (arg instanceof Class) {
-                Class<?> typeArg = (Class<?>) arg;
-                // This argument might be specifying the return type
-                clsName = typeArg.getName();
-                returnType = typeArg;
-                break;
-            } else if (arg instanceof java.lang.reflect.Type) {
-                // Handle TypeReference or other Type instances
-                try {
-                    java.lang.reflect.Type typeArg = (java.lang.reflect.Type) arg;
-                    if (typeArg instanceof java.lang.reflect.ParameterizedType) {
-                        java.lang.reflect.ParameterizedType pType = (java.lang.reflect.ParameterizedType) typeArg;
-                        java.lang.reflect.Type rawType = pType.getRawType();
-                        if (rawType instanceof Class) {
-                            clsName = ((Class<?>) rawType).getName();
-                            returnType = (Class<?>) rawType;
-                            break;
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.debug("Failed to extract type from TypeReference", e);
-                }
-            }
+        Class<?> better = findBetterReturnType(invocation);
+        if (better != null) {
+            returnType = better;
+            clsName = returnType.getName();
         }
 
         if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
@@ -69,6 +48,28 @@ public class MockReturnValueHandler implements Answer<Object> {
         whenThen(invocation, result, clsName);
 
         return result;
+    }
+
+    private static Class<?> findBetterReturnType(InvocationOnMock invocation) {
+        Object[] arguments = invocation.getArguments();
+        for (Object arg : arguments) {
+            if (arg instanceof Class<?> clazz) {
+                return clazz;
+            } else if (arg instanceof java.lang.reflect.Type typeArg) {
+                // Handle TypeReference or other Type instances
+                try {
+                    if (typeArg instanceof java.lang.reflect.ParameterizedType pType) {
+                        java.lang.reflect.Type rawType = pType.getRawType();
+                        if (rawType instanceof Class<?> clazz) {
+                            return clazz;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Failed to extract type from TypeReference", e);
+                }
+            }
+        }
+        return null;
     }
 
     void whenThen(InvocationOnMock invocation, Object result, String clsName) {
