@@ -4,6 +4,9 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -58,4 +61,18 @@ public class InnerClassEvaluator extends Evaluator {
         return null;
     }
 
+    @Override
+    Variable createObject(ObjectCreationExpr oce) throws ReflectiveOperationException {
+        ClassOrInterfaceType type = oce.getType();
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
+        if (wrapper == null) {
+            if (enclosure != null && enclosure.getCompilationUnit() != null) {
+                wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), type.getNameAsString());
+            }
+        }
+        if (wrapper == null) {
+            return null;
+        }
+        return super.createObject(oce, wrapper);
+    }
 }

@@ -76,7 +76,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -627,6 +626,10 @@ public class Evaluator {
             return null;
         }
 
+        return createObject(oce, wrapper);
+    }
+
+    protected Variable createObject(ObjectCreationExpr oce, TypeWrapper wrapper) throws ReflectiveOperationException {
         if (wrapper.getType() != null) {
             return createUsingEvaluator(wrapper.getType(), oce);
         }
