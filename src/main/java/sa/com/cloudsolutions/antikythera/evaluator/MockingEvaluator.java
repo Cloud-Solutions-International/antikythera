@@ -162,13 +162,15 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             MethodCallExpr methodCall = sc.getScopedMethodCall();
             Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
             LineOfCode l = Branching.get(stmt.hashCode());
-            Variable v =new Variable(Reflect.getDefault(t.asClassOrInterfaceType().getNameAsString()));
+            Variable v;
             if (l == null) {
                 l = new LineOfCode(stmt);
                 Branching.add(l);
+                v = Reflect.generateDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
             }
             else {
                 l.setPathTaken(LineOfCode.TRUE_PATH);
+                v = Reflect.generateNonDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
             }
             MethodCallExpr when = createWhenExpression(methodCall);
             MockingCall then = createThenExpression(sc, v, when);
