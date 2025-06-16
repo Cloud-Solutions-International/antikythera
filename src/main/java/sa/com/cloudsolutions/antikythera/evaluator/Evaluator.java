@@ -134,6 +134,8 @@ public class Evaluator {
 
     private static long sequence = 0;
 
+    private static Exception lastException;
+
     protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
@@ -828,9 +830,7 @@ public class Evaluator {
 
     Variable evaluateScopedMethodCall(ScopeChain chain) throws ReflectiveOperationException {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
-        if (methodCall.toString().startsWith("logger")) {
-            return null;
-        }
+
         Variable variable = evaluateScopeChain(chain);
         if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(chain);
@@ -1332,17 +1332,26 @@ public class Evaluator {
         return null;
     }
 
+    @SuppressWarnings("java:S3655")
     protected Variable resolvePrimitiveOrBoxedVariable(VariableDeclarator variable, Type t) throws ReflectiveOperationException {
         Variable v;
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
-            v = evaluateExpression(init.get());
-            if (v == null && init.get().isNameExpr()) {
+            Expression initExpr = init.get();
+            if (initExpr instanceof MethodCallExpr mce && mce.getScope().isPresent()
+                    && mce.getScope().get() instanceof NameExpr nameExpr && nameExpr.getNameAsString().equals("LoggerFactory")) {
+                Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(this));
+                Logger log = new AKLogger(clazz);
+                return new Variable(log);
+            }
+
+            v = evaluateExpression(initExpr);
+            if (v == null && initExpr.isNameExpr()) {
                 /*
                  * This path is usually taken when we are trying to initializer a field to have
                  * a value defined in an external constant.
                  */
-                NameExpr nameExpr = init.get().asNameExpr();
+                NameExpr nameExpr = initExpr.asNameExpr();
                 String name = nameExpr.getNameAsString();
 
                 ImportWrapper importWrapper = AbstractCompiler.findImport(cu, name);
@@ -1486,30 +1495,42 @@ public class Evaluator {
      */
     @SuppressWarnings("unchecked")
     protected void executeBlock(List<Statement> statements) throws ReflectiveOperationException {
+        if (statements.isEmpty()) {
+            return;
+        }
         try {
-            for (Statement stmt : statements) {
-                if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
-                    executeStatement(stmt);
-                    if (returnFrom != null) {
-                        MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
-                        MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
-                        if (method == null || method.equals(parent)) {
-                            break;
-                        }
+            executeBlockHelper(statements);
+        } catch (Exception e) {
+            handleApplicationException(e, statements.getFirst().findAncestor(BlockStmt.class).orElse(null));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void executeBlockHelper(List<Statement> statements) throws Exception {
+        Evaluator.setLastException(null);
+        for (Statement stmt : statements) {
+            if (lastException != null) {
+                throw lastException;
+            }
+            if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
+                executeStatement(stmt);
+                if (returnFrom != null) {
+                    MethodDeclaration parent = returnFrom.findAncestor(MethodDeclaration.class).orElse(null);
+                    MethodDeclaration method = stmt.findAncestor(MethodDeclaration.class).orElse(null);
+                    if (method == null || method.equals(parent)) {
+                        break;
                     }
                 }
             }
-        } catch (Exception e) {
-            handleApplicationException(e);
         }
     }
 
     /**
      * Execute a statement.
-     * In the java parser architecture a statement is not always a single line of code. They can be
+     * In the java parser architecture, a statement is not always a single line of code. They can be
      * block statements as well. For example, when an IF condition is encountered, that counts as
-     * a statement. The child elements of the if statement happen to be a Then and an Else both of
-     * which can be block statements.
+     * a statement. The child elements of the if statement is considered a statement but that's a
+     * block as well. The same goes for the else part.
      *
      * @param stmt the statement to execute
      * @throws Exception if the execution fails.
@@ -1739,12 +1760,25 @@ public class Evaluator {
         }
     }
 
-    protected void handleApplicationException(Exception e) throws ReflectiveOperationException {
+    @SuppressWarnings("unchecked")
+    protected void handleApplicationException(Exception e, BlockStmt parent) throws ReflectiveOperationException {
+        returnValue = null;
         if (catching.isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
 
         TryStmt t = catching.pollLast();
+        Optional<TryStmt> tryStmt = parent.findAncestor(TryStmt.class);
+        if (tryStmt.isPresent() && tryStmt.get().equals(t)) {
+            handleApplicationException(e, t);
+        }
+        else {
+            catching.addLast(t);
+            Evaluator.setLastException(e);
+        }
+    }
+
+    private void handleApplicationException(Exception e, TryStmt t) throws ReflectiveOperationException {
         boolean matchFound = false;
 
         for (CatchClause clause : t.getCatchClauses()) {
@@ -1768,6 +1802,10 @@ public class Evaluator {
         if (!matchFound && t.getFinallyBlock().isEmpty()) {
             throw new AUTException("Unhandled exception", e);
         }
+    }
+
+    private static void setLastException(Exception e) {
+        lastException = e;
     }
 
     private boolean isExceptionMatch(TypeWrapper wrapper, Exception e) {
@@ -1851,12 +1889,7 @@ public class Evaluator {
                         && field.getAnnotationByName("Autowired").isEmpty()
                         && !isSequenceField(field, variableDeclarator)
             ) {
-                Variable nullVariable = new Variable(null);
-                if (variableDeclarator.getType().isPrimitiveType()) {
-                    nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
-                }
-                nullVariable.setType(variableDeclarator.getType());
-                fields.put(variableDeclarator.getNameAsString(), nullVariable);
+                setupFieldWithoutInitializer(variableDeclarator);
                 return;
             }
             Variable v = resolveVariableDeclaration(variableDeclarator);
@@ -1874,6 +1907,15 @@ public class Evaluator {
         } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
         }
+    }
+
+    void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
+        Variable nullVariable = new Variable(null);
+        if (variableDeclarator.getType().isPrimitiveType()) {
+            nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
+        }
+        nullVariable.setType(variableDeclarator.getType());
+        fields.put(variableDeclarator.getNameAsString(), nullVariable);
     }
 
     private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
@@ -1895,9 +1937,21 @@ public class Evaluator {
 
     public List<Expression> getFieldInitializers() {
         List<Expression> fi = new ArrayList<>();
-        for (Variable v : fields.values()) {
-            if (v != null) {
-                fi.addAll(v.getInitializer());
+        for (Map.Entry<String, Variable> entry : fields.entrySet()) {
+            Variable v = entry.getValue();
+            if (v != null && !v.getInitializer().isEmpty()) {
+                Expression first = v.getInitializer().getFirst();
+                if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {
+                    MethodCallExpr mce = new MethodCallExpr().setName("set" + ClassProcessor.instanceToClassName(entry.getKey()));
+                    mce.addArgument(first);
+                    fi.add(mce);
+                    for (int i = 1; i < v.getInitializer().size(); i++) {
+                        mce.addArgument(v.getInitializer().get(i));
+                    }
+                }
+                else {
+                    fi.addAll(v.getInitializer());
+                }
             }
         }
         return fi;

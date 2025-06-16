@@ -51,7 +51,7 @@ class ITRepositoryParser {
         tp.processTypes();
         tp.buildQueries();
 
-        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.PersonService");
         assertNotNull(cu);
         TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
 
@@ -99,7 +99,7 @@ class ITRepositoryParser {
         tp.processTypes();
         tp.buildQueries();
 
-        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.Service");
+        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.PersonService");
         assertNotNull(cu);
 
         TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);

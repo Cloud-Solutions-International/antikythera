@@ -8,7 +8,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Random;
 
 public class Variable {
@@ -39,6 +38,7 @@ public class Variable {
      * Represents the name of a parameter, field or local variable that this may represent
      */
     private String name;
+
     /**
      * Create an object having the given value and java parser type.
      * @param type the identified java parser type

@@ -11,6 +11,7 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,83 +42,90 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
             TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
             String fullClassName = wrapper.getFullyQualifiedName();
-            if (fullClassName.startsWith("java")) {
-                /*
-                 * However, you can't rule out the possibility that this is a Map or a List or even a
-                 * boxed type.
-                 */
-                if (t.asClassOrInterfaceType().isBoxedType()) {
-                    v = mockParameter(param);
-                } else {
-                    if (fullClassName.startsWith("java.util")) {
-                        v = Reflect.variableFactory(fullClassName);
-                    } else {
-                        Class<?> clazz = Class.forName(fullClassName);
-                        // Try to find a no-arg constructor first
-                        try {
-                            v = new Variable(clazz.getDeclaredConstructor().newInstance());
-                        } catch (NoSuchMethodException e) {
-                            // No no-arg constructor, find the simplest one
-                            Constructor<?>[] constructors = clazz.getDeclaredConstructors();
-                            Constructor<?> simplest = null;
-                            int minParams = Integer.MAX_VALUE;
-                            for (Constructor<?> ctor : constructors) {
-                                Class<?>[] paramTypes = ctor.getParameterTypes();
-                                boolean allSimple = true;
-                                for (Class<?> pt : paramTypes) {
-                                    if (!(Reflect.isPrimitiveOrBoxed(pt) || pt.equals(String.class))) {
-                                        allSimple = false;
-                                        break;
-                                    }
-                                }
-                                if (allSimple && paramTypes.length < minParams) {
-                                    minParams = paramTypes.length;
-                                    simplest = ctor;
-                                }
-                            }
-                            if (simplest != null) {
-                                Object[] args = new Object[simplest.getParameterCount()];
-                                Class<?>[] paramTypes = simplest.getParameterTypes();
-                                NodeList<com.github.javaparser.ast.expr.Expression> argExprs = new NodeList<>();
-                                for (int i = 0; i < paramTypes.length; i++) {
-                                    if (paramTypes[i].equals(String.class)) {
-                                        args[i] = "Antikythera";
-                                        argExprs.add(new StringLiteralExpr("Antikythera"));
-                                    } else {
-                                        args[i] = Reflect.getDefault(paramTypes[i]);
-                                        argExprs.add(Reflect.createLiteralExpression(args[i]));
-                                    }
-                                }
-                                v = new Variable(simplest.newInstance(args));
-                                // Set initializer
-                                ObjectCreationExpr oce =
-                                    new ObjectCreationExpr()
-                                        .setType(t.asString())
-                                        .setArguments(argExprs);
-                                v.setInitializer(List.of(oce));
-                            } else {
-                                // fallback: cannot instantiate
-                                v = new Variable((Object) null);
-                            }
-                        }
-                    }
-                }
-            } else {
-                Evaluator o = EvaluatorFactory.create(fullClassName, SpringEvaluator.class);
-                v = new Variable(o);
-                v.setType(t);
-                Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-                if (opt.isPresent()) {
-                    String init = ArgumentGenerator.instantiateClass(
-                            opt.get().asClassOrInterfaceDeclaration(),
-                            param.getNameAsString()
-                    ).replace(";","");
-                    String[] parts = init.split("=");
-                    v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
-                }
+            if (t.asClassOrInterfaceType().isBoxedType()) {
+                return mockParameter(param);
+            }
+            if (wrapper.getClazz() != null) {
+                return mockNonPrimitiveParameter(param, wrapper);
+            }
+            Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
+            v = new Variable(o);
+            v.setType(t);
+            Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
+            if (opt.isPresent()) {
+                String init = ArgumentGenerator.instantiateClass(
+                        opt.get().asClassOrInterfaceDeclaration(),
+                        param.getNameAsString()
+                ).replace(";","");
+                String[] parts = init.split("=");
+                v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
             }
         }
         return v;
+    }
+
+    private Variable mockNonPrimitiveParameter(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
+        String fullClassName = wrapper.getFullyQualifiedName();
+        Type t = param.getType();
+
+
+        if (fullClassName.startsWith("java.util")) {
+            return Reflect.variableFactory(fullClassName);
+        }
+
+        Class<?> clazz = wrapper.getClazz();
+        // Try to find a no-arg constructor first
+        try {
+            return new Variable(clazz.getDeclaredConstructor().newInstance());
+        } catch (NoSuchMethodException e) {
+            // No no-arg constructor, find the simplest one
+            Constructor<?> simplest = findConstructor(clazz);
+            if (simplest != null) {
+                Object[] args = new Object[simplest.getParameterCount()];
+                Class<?>[] paramTypes = simplest.getParameterTypes();
+                NodeList<com.github.javaparser.ast.expr.Expression> argExprs = new NodeList<>();
+                for (int i = 0; i < paramTypes.length; i++) {
+                    if (paramTypes[i].equals(String.class)) {
+                        args[i] = "Antikythera";
+                        argExprs.add(new StringLiteralExpr("Antikythera"));
+                    } else {
+                        args[i] = Reflect.getDefault(paramTypes[i]);
+                        argExprs.add(Reflect.createLiteralExpression(args[i]));
+                    }
+                }
+                Variable v = new Variable(simplest.newInstance(args));
+                // Set initializer
+                ObjectCreationExpr oce =
+                    new ObjectCreationExpr()
+                        .setType(t.asString())
+                        .setArguments(argExprs);
+                v.setInitializer(List.of(oce));
+                return v;
+            }
+        }
+
+        return new Variable((Object) null);
+    }
+
+    private static Constructor<?> findConstructor(Class<?> clazz) {
+        Constructor<?>[] constructors = clazz.getDeclaredConstructors();
+        Constructor<?> simplest = null;
+        int minParams = Integer.MAX_VALUE;
+        for (Constructor<?> ctor : constructors) {
+            Class<?>[] paramTypes = ctor.getParameterTypes();
+            boolean allSimple = true;
+            for (Class<?> pt : paramTypes) {
+                if (!(Reflect.isPrimitiveOrBoxed(pt) || pt.equals(String.class))) {
+                    allSimple = false;
+                    break;
+                }
+            }
+            if (allSimple && paramTypes.length < minParams) {
+                minParams = paramTypes.length;
+                simplest = ctor;
+            }
+        }
+        return simplest;
     }
 
     protected Variable mockParameter(Parameter param) {

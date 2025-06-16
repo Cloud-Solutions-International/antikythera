@@ -26,7 +26,7 @@ class TestDummyArgumentGenerator {
     }
 
     @ParameterizedTest
-    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 1"})
+    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 0"})
     void testGenerateArgument(String type, Object value) throws ReflectiveOperationException {
         MethodDeclaration md = new MethodDeclaration();
         Parameter parameter = new Parameter();
@@ -34,7 +34,7 @@ class TestDummyArgumentGenerator {
     }
 
     @ParameterizedTest
-    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 1," +
+    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 0," +
             "List, java.util.ArrayList", "Map, {}", "Set, []"})
     void testGenerateArgumentBody(String type, Object value) throws ReflectiveOperationException{
 

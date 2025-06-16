@@ -118,7 +118,7 @@ public class UnitTestGenerator extends TestGenerator {
 
     /**
      * Loads any existing test class that has been generated previously.
-     * This code is typically not available through the AntikythereRunTime class because we are
+     * This code is typically not available through the {@link AntikytheraRunTime} class because we are
      * processing only the src/main and mostly ignoring src/test
      *
      * @param file the file name
@@ -173,7 +173,7 @@ public class UnitTestGenerator extends TestGenerator {
      */
     @SuppressWarnings("unchecked")
     private void loadPredefinedBaseClassForTest(ClassOrInterfaceDeclaration testClass) {
-        String base = Settings.getProperty("base_test_class", String.class).orElse(null);
+        String base = Settings.getProperty(Settings.BASE_TEST_CLASS, String.class).orElse(null);
         if (base != null && testClass.getExtendedTypes().isEmpty()) {
             testClass.addExtendedType(base);
             loadPredefinedBaseClassForTest(base);
@@ -344,7 +344,8 @@ public class UnitTestGenerator extends TestGenerator {
     @SuppressWarnings("unchecked")
     void createInstance() {
         methodUnderTest.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c -> {
-            if (c.getAnnotationByName("Service").isPresent()) {
+            if (c.getAnnotationByName("Service").isPresent()
+                    || c.getAnnotationByName("org.springframework.stereotype.Service").isPresent()) {
                 injectMocks(c);
             } else {
                 instanceName = AbstractCompiler.classToInstanceName(c.getNameAsString());
@@ -353,6 +354,7 @@ public class UnitTestGenerator extends TestGenerator {
         });
     }
 
+    @SuppressWarnings("unchecked")
     private void injectMocks(ClassOrInterfaceDeclaration classUnderTest) {
         if (testClass == null) {
             testClass = testMethod.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
@@ -385,69 +387,111 @@ public class UnitTestGenerator extends TestGenerator {
             String nameAsString = param.getNameAsString();
             if (paramType.isPrimitiveType() ||
                     (paramType.isClassOrInterfaceType() && paramType.asClassOrInterfaceType().isBoxedType())) {
-                VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
-                VariableDeclarator v = new VariableDeclarator();
-                v.setType(param.getType());
-                v.setName(nameAsString);
-
-                String typeName = paramType.asString();
-
-                switch (typeName) {
-                    case "Integer" -> v.setInitializer("0");
-                    case "Long" -> v.setInitializer("0L");
-                    case "Double" -> v.setInitializer("0.0");
-                    case "Float" -> v.setInitializer("0.0f");
-                    case "boolean", "Boolean" -> v.setInitializer("false");
-                    case "Character" -> v.setInitializer("'\\0'");
-                    case "Byte" -> v.setInitializer("(byte)0");
-                    case "Short" -> v.setInitializer("(short)0");
-                    default -> v.setInitializer("null");
-                }
-
-
-                varDecl.addVariable(v);
-                getBody(testMethod).addStatement(varDecl);
+                mockSimpleArgument(param, nameAsString, paramType);
             } else {
                 addClassImports(paramType);
-                Variable value = argumentGenerator.getArguments().get(nameAsString);
-                if (value != null) {
-                    mockWithMockito(param, value);
+                Variable v = argumentGenerator.getArguments().get(nameAsString);
+                if (v != null) {
+                    if (v.getValue() != null && v.getValue().getClass().getName().startsWith("java.util")) {
+                        gen.addImport(v.getValue().getClass().getName());
+                        mockWithoutMockito(param, v);
+                    }
+                    else {
+                        mockWithMockito(param, v);
+                    }
                 }
             }
         }
     }
 
+    private void mockSimpleArgument(Parameter param, String nameAsString, Type paramType) {
+        VariableDeclarationExpr varDecl = new VariableDeclarationExpr();
+        VariableDeclarator v = new VariableDeclarator();
+        v.setType(param.getType());
+        v.setName(nameAsString);
+
+        String typeName = paramType.asString();
+
+        switch (typeName) {
+            case "Integer" -> v.setInitializer("0");
+            case "Long" -> v.setInitializer("0L");
+            case "Double" -> v.setInitializer("0.0");
+            case "Float" -> v.setInitializer("0.0f");
+            case "boolean", "Boolean" -> v.setInitializer("false");
+            case "Character" -> v.setInitializer("'\\0'");
+            case "Byte" -> v.setInitializer("(byte)0");
+            case "Short" -> v.setInitializer("(short)0");
+            default -> v.setInitializer("null");
+        }
+
+
+        varDecl.addVariable(v);
+        getBody(testMethod).addStatement(varDecl);
+    }
+
     void mockWithMockito(Parameter param, Variable v) {
+        String nameAsString = param.getNameAsString();
+        if (!v.getInitializer().isEmpty()) {
+            mockWhenInitializerIsPresent(param, v);
+        }
+        else {
+            if (mockWhenInitializerIsAbsent(param, v)) return;
+        }
+        mockParameterFields(v, nameAsString);
+    }
+
+    private boolean mockWhenInitializerIsAbsent(Parameter param, Variable v) {
+        BlockStmt body = getBody(testMethod);
+        String nameAsString = param.getNameAsString();
+        Type t = param.getType();
+
+        if (param.findCompilationUnit().isPresent()) {
+            CompilationUnit cu = param.findCompilationUnit().orElseThrow();
+            if (t instanceof ArrayType) {
+                Variable mocked = Reflect.variableFactory(t.asString());
+                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
+                mockParameterFields(v, nameAsString);
+                return true;
+            }
+            if (AbstractCompiler.isFinalClass(param.getType(), cu)) {
+                cantMockFinalClass(param, v, cu);
+                return true;
+            }
+        }
+        if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
+            body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
+        } else {
+            body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+        }
+        return false;
+    }
+
+    private void mockWhenInitializerIsPresent(Parameter param, Variable v) {
         String nameAsString = param.getNameAsString();
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
-        if (!v.getInitializer().isEmpty()) {
-            body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
-                    v.getInitializer().getFirst() + ";");
+
+        if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr()) {
+           body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
         }
         else {
-            if (param.findCompilationUnit().isPresent()) {
-                CompilationUnit cu = param.findCompilationUnit().orElseThrow();
-                if (t instanceof ArrayType) {
-                    Variable mocked = Reflect.variableFactory(t.asString());
-                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
-                    mockParameterFields(v, nameAsString);
-                    return;
-                }
-                if (AbstractCompiler.isFinalClass(param.getType(), cu)) {
-                    cantMockFinalClass(param, v, cu);
-                    return;
-                }
-            }
-            if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-                body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                        " = Mockito.mock(" + t.asClassOrInterfaceType().getNameAsString() + ".class);");
-            } else {
-                body.addStatement(param.getTypeAsString() + " " + nameAsString +
-                        " = Mockito.mock(" + param.getTypeAsString() + ".class);");
+            mockWithoutMockito(param, v);
+
+            for (int i = 1; i < v.getInitializer().size() ; i++) {
+                body.addStatement(v.getInitializer().get(i));
             }
         }
-        mockParameterFields(v, nameAsString);
+    }
+
+    private void mockWithoutMockito(Parameter param, Variable v) {
+        BlockStmt body = getBody(testMethod);
+        String nameAsString = param.getNameAsString();
+        body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " +
+                v.getInitializer().getFirst() + ";");
+    }
+
+    private static String buildMockDeclaration(String type, String variableName) {
+        return String.format("%s %s = Mockito.mock(%s.class);", type, variableName, type);
     }
 
     private void cantMockFinalClass(Parameter param, Variable v, CompilationUnit cu) {
@@ -498,16 +542,25 @@ public class UnitTestGenerator extends TestGenerator {
         }
 
         Object value = f.getValue();
-        if (value != null) {
-            if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
-                return;
-            }
-            if (value instanceof List) {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
-                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+        if (value == null) {
+            return;
+        }
+
+        if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
+            return;
+        }
+        if (value instanceof List) {
+            TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+            body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
+                    nameAsString,
+                    ClassProcessor.instanceToClassName(name)
+            ));
+        }
+        else {
+            if (value instanceof String) {
+                body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(\"%s\");",
                         nameAsString,
-                        ClassProcessor.instanceToClassName(name)
-                ));
+                        ClassProcessor.instanceToClassName(name), value));
             }
             else {
                 body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
@@ -649,7 +702,7 @@ public class UnitTestGenerator extends TestGenerator {
 
         if (response.getBody() != null) {
             noSideEffectAsserts(response);
-        } else if (Settings.getProperty("log_appender", String.class).isPresent()) {
+        } else {
             sideEffectAsserts();
         }
     }
@@ -661,14 +714,16 @@ public class UnitTestGenerator extends TestGenerator {
         String className = type.getFullyQualifiedName().orElseThrow();
         List<LogRecorder.LogEntry> logs = LogRecorder.getLogEntries(className);
 
-        if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
-            setupLoggers();
-        }
-        for (int i = 0 , j = Math.min(5, logs.size()); i < j; i++) {
-            LogRecorder.LogEntry entry = logs.get(i);
-            String level = entry.level();
-            String message = entry.message();
-            body.addStatement(assertLoggedWithLevel(className, level, message));
+        if (Settings.getProperty(Settings.LOG_APPENDER, String.class).isPresent()) {
+            if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
+                setupLoggers();
+            }
+            for (int i = 0, j = Math.min(5, logs.size()); i < j; i++) {
+                LogRecorder.LogEntry entry = logs.get(i);
+                String level = entry.level();
+                String message = entry.message();
+                body.addStatement(assertLoggedWithLevel(className, level, message));
+            }
         }
     }
 
@@ -719,7 +774,7 @@ public class UnitTestGenerator extends TestGenerator {
             gen.addImport("ch.qos.logback.classic.Logger");
             gen.addImport("ch.qos.logback.classic.Level");
             gen.addImport("org.slf4j.LoggerFactory");
-            gen.addImport(Settings.getProperty("log_appender", String.class).orElseThrow());
+            gen.addImport(Settings.getProperty(Settings.LOG_APPENDER, String.class).orElseThrow());
         });
     }
 
@@ -787,8 +842,11 @@ public class UnitTestGenerator extends TestGenerator {
     private void identifyFieldsToBeMocked(CompilationUnit cu) {
 
         for (TypeDeclaration<?> decl : cu.getTypes()) {
-            decl.getAnnotationByName("Service")
-                    .ifPresent(b -> detectConstructorInjection(cu, decl));
+            if (decl.isAnnotationPresent("org.springframework.stereotype.Service")
+                    || decl.isAnnotationPresent("Service")) {
+                detectConstructorInjection(cu, decl);
+            }
+
             identifyAutoWiring(cu, decl);
         }
     }

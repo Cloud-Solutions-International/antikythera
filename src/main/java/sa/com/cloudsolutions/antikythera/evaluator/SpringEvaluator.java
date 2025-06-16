@@ -17,6 +17,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -27,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -195,6 +197,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             int safetyCheck = 0;
             while (safetyCheck < 16) {
                 getLocals().clear();
+                LogRecorder.clearLogs();
                 setupFields();
                 mockMethodArguments(md);
 
@@ -303,7 +306,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     @Override
-    protected void handleApplicationException(Exception e) throws AntikytheraException, ReflectiveOperationException {
+    protected void handleApplicationException(Exception e, BlockStmt parent) throws AntikytheraException, ReflectiveOperationException {
         if (!(e instanceof AntikytheraException ae)) {
             if (catching.isEmpty()) {
                 EvaluatorException ex = new EvaluatorException(e.getMessage(), e);
@@ -311,7 +314,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 testForInternalError(null, ex);
                 throw new AUTException(e);
             } else {
-                super.handleApplicationException(e);
+                super.handleApplicationException(e, parent);
             }
         } else {
             throw ae;
@@ -393,7 +396,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * This process needs to be carried out before executing any code.
      *
      * @param field the field declaration
-     * @throws IOException                  if the file cannot be read
      * @throws AntikytheraException         if there is an error in the code
      * @throws ReflectiveOperationException if a reflection operation fails
      */

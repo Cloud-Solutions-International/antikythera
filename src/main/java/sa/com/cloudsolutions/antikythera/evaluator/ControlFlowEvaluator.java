@@ -10,6 +10,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
@@ -209,7 +210,7 @@ public class ControlFlowEvaluator extends Evaluator {
             Expression expr = StaticJavaParser.parseStatement(
                     String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
             ).asExpressionStmt().getExpression();
-
+            TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             mocks.add(expr);
             for (Expression e : fieldIntializers) {
                 if (e.isMethodCallExpr()) {
@@ -341,7 +342,7 @@ public class ControlFlowEvaluator extends Evaluator {
         setter.setScope(scope);
 
         if (entry.getValue() == null) {
-            setter.addArgument("null");
+            setter.addArgument(new NullLiteralExpr());
         } else {
             if (entry.getValue().equals("T")) {
                 setupConditionalNotNullValue(stmt, entry, name, setter);
@@ -359,24 +360,52 @@ public class ControlFlowEvaluator extends Evaluator {
     private void createSetterFromGetter(Map.Entry<Expression, Object> entry, MethodCallExpr setter) {
         Expression key = entry.getKey();
         Optional< Node> parent = entry.getKey().getParentNode();
-        if (key.isMethodCallExpr() && parent.isPresent()  && parent.get() instanceof MethodCallExpr mce
-                        && mce.getNameAsString().equals("equals")) {
-            Expression argument = mce.getArgument(0);
-            if (argument.isObjectCreationExpr()) {
-                try {
-                    Variable v = evaluateExpression(argument);
-                    setter.addArgument(v.getInitializer().getFirst());
-                } catch (ReflectiveOperationException e) {
-                    throw new AntikytheraException(e);
-                }
+        if (key.isMethodCallExpr() && parent.isPresent()) {
+            if (parent.get() instanceof MethodCallExpr mce && mce.getNameAsString().equals("equals")) {
+                createSetterFromGetterForMCE(entry, setter, mce);
+            } else if (parent.get() instanceof BinaryExpr binaryExpr && entry.getValue() instanceof Boolean) {
+                createSetterFromGetterForBinaryExpr(setter, binaryExpr, key);
             }
-            else if (argument.isLiteralExpr()) {
-                if (entry.getValue() instanceof Boolean b && b) {
-                    setter.addArgument(argument.asLiteralExpr());
-                }
-                else {
-                    Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
-                    Variable v = Reflect.variableFactory(c.getName());
+        }
+    }
+
+    private void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
+        if (binaryExpr.getLeft().equals(key)) {
+            processBinaryExpressionSide(setter, binaryExpr.getRight());
+        } else if (binaryExpr.getRight().equals(key)) {
+            processBinaryExpressionSide(setter, binaryExpr.getLeft());
+        }
+    }
+
+    private void processBinaryExpressionSide(MethodCallExpr setter, Expression side) {
+        if (side.isLiteralExpr()) {
+            setter.addArgument(side.asLiteralExpr());
+        } else if (side.isNameExpr()) {
+            Variable v = getValue(side, side.asNameExpr().getNameAsString());
+            if (v != null) {
+                setter.addArgument(v.getInitializer().getFirst());
+            }
+        } else if (side.isMethodCallExpr()) {
+            setter.addArgument(side);
+        }
+    }
+
+    private void createSetterFromGetterForMCE(Map.Entry<Expression, Object> entry, MethodCallExpr setter, MethodCallExpr mce) {
+        Expression argument = mce.getArgument(0);
+        if (argument.isObjectCreationExpr()) {
+            try {
+                Variable v = evaluateExpression(argument);
+                setter.addArgument(v.getInitializer().getFirst());
+            } catch (ReflectiveOperationException e) {
+                throw new AntikytheraException(e);
+            }
+        } else if (argument.isLiteralExpr()) {
+            if (entry.getValue() instanceof Boolean b && b) {
+                setter.addArgument(argument.asLiteralExpr());
+            } else {
+                Class<?> c = Reflect.literalExpressionToClass(argument.asLiteralExpr());
+                Variable v = Reflect.variableFactory(c.getName());
+                if (!v.getInitializer().isEmpty()) {
                     setter.addArgument(v.getInitializer().getFirst());
                 }
             }
