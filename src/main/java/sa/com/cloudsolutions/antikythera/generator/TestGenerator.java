@@ -11,10 +11,12 @@ import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Iterator;
 
 public abstract class TestGenerator {
     protected ArgumentGenerator argumentGenerator;
@@ -155,7 +157,49 @@ public abstract class TestGenerator {
         });
     }
 
+    /**
+     * Removes duplicate test methods from the generated test class.
+     * Only the first occurrence of each unique test method is preserved.
+     * 
+     * @return true if any duplicates were removed, false otherwise
+     */
+    public boolean removeDuplicateTests() {
+        if (gen == null) {
+            return false;
+        }
+        
+        boolean removed = false;
+        for (TypeDeclaration<?> type : gen.getTypes()) {
+            Set<String> methodFingerprints = new HashSet<>();
+            List<MethodDeclaration> methodsToRemove = new ArrayList<>();
+            
+            for (MethodDeclaration method : type.getMethods()) {
+                if (method.getAnnotationByName("Test").isPresent()) {
+                    MethodDeclaration m = method.clone();
+                    m.setName("DUMMY");
+                    String fingerprint = m.toString();
+                    
+                    if (methodFingerprints.contains(fingerprint)) {
+                        methodsToRemove.add(method);
+                        removed = true;
+                    } else {
+                        methodFingerprints.add(fingerprint);
+                    }
+                }
+            }
+            
+            // Remove the duplicate methods
+            for (MethodDeclaration method : methodsToRemove) {
+                type.remove(method);
+            }
+        }
+        
+        return removed;
+    }
+
     public void save() throws IOException {
+        // Remove any duplicate test methods before saving
+        removeDuplicateTests();
     }
 
     public void setAsserter(Asserter asserter) {

@@ -968,6 +968,11 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void save() throws IOException {
         DepSolver.sortClass(testClass);
+        // Remove duplicate tests before saving
+        boolean removedDuplicates = removeDuplicateTests();
+        if (removedDuplicates) {
+            logger.info("Removed duplicate test methods from {}", filePath);
+        }
         Antikythera.getInstance().writeFile(filePath, gen.toString());
     }
 
