@@ -735,11 +735,19 @@ public class UnitTestGenerator extends TestGenerator {
             if (testClass.getMethodsByName("setupLoggers").isEmpty()) {
                 setupLoggers();
             }
-            for (int i = 0, j = Math.min(5, logs.size()); i < j; i++) {
-                LogRecorder.LogEntry entry = logs.get(i);
-                String level = entry.level();
-                String message = entry.message();
-                body.addStatement(assertLoggedWithLevel(className, level, message));
+            if (logs.isEmpty()) {
+                MethodCallExpr assertion = new MethodCallExpr("assertTrue");
+                MethodCallExpr condition = new MethodCallExpr("LogAppender.events.isEmpty");
+                assertion.addArgument(condition);
+                body.addStatement(assertion);
+            }
+            else {
+                for (int i = 0, j = Math.min(5, logs.size()); i < j; i++) {
+                    LogRecorder.LogEntry entry = logs.get(i);
+                    String level = entry.level();
+                    String message = entry.message();
+                    body.addStatement(assertLoggedWithLevel(className, level, message));
+                }
             }
         }
     }
