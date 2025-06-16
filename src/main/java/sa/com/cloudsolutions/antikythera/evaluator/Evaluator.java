@@ -24,6 +24,7 @@ import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -85,6 +86,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 
 
 /**
@@ -318,8 +320,29 @@ public class Evaluator {
             return evaluateExpression(
                     FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), new Variable(this)
                     ));
+        } else if (expr.isInstanceOfExpr()) {
+            return evaluateInstanceOf(expr.asInstanceOfExpr());
+        } else {
+            logger.warn("Unsupported expression: {}", expr.getClass().getSimpleName());
         }
         return null;
+    }
+
+    private Variable evaluateInstanceOf(InstanceOfExpr expr) throws ReflectiveOperationException {
+        Expression left = expr.getExpression();
+        Variable l = evaluateExpression(left);
+        Type t = expr.getType();
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, t);
+        if (wrapper != null) {
+            if (wrapper.getClazz() != null) {
+                return new Variable(wrapper.getClazz().isAssignableFrom(l.getClazz()));
+            }
+            else {
+                Set<String> subs = AntikytheraRunTime.findSubClasses(wrapper.getFullyQualifiedName());
+                return new Variable(subs.contains(l.getClazz().getName()));
+            }
+        }
+        return new Variable(false);
     }
 
     private Variable evaluateArrayAccess(Expression expr) throws ReflectiveOperationException {
