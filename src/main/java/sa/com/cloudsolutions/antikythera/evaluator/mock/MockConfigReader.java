@@ -68,7 +68,7 @@ public class MockConfigReader {
      * @return Map with class names as keys and list of parsed expressions as values
      */
     public static Map<String, List<Expression>> readDefaultMockExpressions() {
-        return readMockExpressions("mocks.yaml");
+        return readMockExpressions("mocks.yml");
     }
 
     /**

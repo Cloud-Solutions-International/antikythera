@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -47,7 +48,20 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 return mockParameter(param);
             }
             if (wrapper.getClazz() != null) {
-                return mockNonPrimitiveParameter(param, wrapper);
+                List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
+                if (customized.isEmpty()) {
+                    return mockNonPrimitiveParameter(param, wrapper);
+                }
+                for (Expression expr : customized) {
+                    if (expr instanceof ObjectCreationExpr oce) {
+                        ReflectionArguments args = Reflect.buildArguments(oce,
+                                EvaluatorFactory.createLazily("", Evaluator.class), null);
+                        Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
+                        v = new Variable(constructor.newInstance(args.getArguments()));
+                        v.setInitializer(customized);
+                        return v;
+                    }
+                }
             }
             Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
             v = new Variable(o);

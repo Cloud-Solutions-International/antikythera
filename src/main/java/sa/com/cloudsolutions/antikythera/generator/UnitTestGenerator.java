@@ -28,6 +28,7 @@ import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.ReferenceType;
 import com.github.javaparser.ast.type.Type;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -475,15 +476,27 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
 
-        if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr()) {
-           body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
+        if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr() &&
+                    isMockitoMock(v.getValue())) {
+            body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
+            return;
         }
-        else {
-            mockWithoutMockito(param, v);
 
-            for (int i = 1; i < v.getInitializer().size() ; i++) {
-                body.addStatement(v.getInitializer().get(i));
-            }
+        mockWithoutMockito(param, v);
+
+        for (int i = 1; i < v.getInitializer().size() ; i++) {
+            body.addStatement(v.getInitializer().get(i));
+        }
+    }
+
+    public static boolean isMockitoMock(Object object) {
+        if (object == null) {
+            return false;
+        }
+        try {
+            return Mockito.mockingDetails(object).isMock();
+        } catch (Exception e) {
+            return false;
         }
     }
 
