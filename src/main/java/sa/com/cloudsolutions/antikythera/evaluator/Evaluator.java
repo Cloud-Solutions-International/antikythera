@@ -334,13 +334,21 @@ public class Evaluator {
         Type t = expr.getType();
         TypeWrapper wrapper = AbstractCompiler.findType(cu, t);
         if (wrapper != null) {
+            boolean assignable;
             if (wrapper.getClazz() != null) {
-                return new Variable(wrapper.getClazz().isAssignableFrom(l.getClazz()));
+                assignable = wrapper.getClazz().isAssignableFrom(l.getClazz());
             }
             else {
                 Set<String> subs = AntikytheraRunTime.findSubClasses(wrapper.getFullyQualifiedName());
-                return new Variable(subs.contains(l.getClazz().getName()));
+                assignable = subs.contains(l.getClazz().getName());
             }
+            if (assignable && expr.getPattern().isPresent()) {
+                Expression pattern = expr.getPattern().get();
+                if (pattern.isTypePatternExpr()) {
+                    setLocal(expr, pattern.asTypePatternExpr().getNameAsString(), l);
+                }
+            }
+            return new Variable(assignable);
         }
         return new Variable(false);
     }

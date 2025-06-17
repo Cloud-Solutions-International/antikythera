@@ -98,7 +98,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional5, One!","conditional6, One!","conditional7, One!",
-            "conditional8, ZERO!", "smallDiff, ''"
+            "conditional8, ZERO!", "smallDiff, '',", "whatInstance, Integer: 1!Unknown!",
     })
     void testConditionals(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
