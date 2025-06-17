@@ -10,6 +10,8 @@ import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.ReferenceType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Pair;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
@@ -874,7 +876,8 @@ public class TruthTable {
                 collector.put(n, new Domain(false, true));
             }
             else if (parentNode.get() instanceof InstanceOfExpr instanceOfExpr) {
-
+                Domain d = new Domain(instanceOfExpr.getType(), new ClassOrInterfaceType());
+                collector.put(n, d);
             }
 
             super.visit(n, collector);

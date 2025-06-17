@@ -107,6 +107,9 @@ public class ControlFlowEvaluator extends Evaluator {
         List<Expression> valueExpressions;
         if (v.getType() instanceof PrimitiveType) {
             valueExpressions = List.of(Reflect.createLiteralExpression(entry.getValue()));
+        } else if (entry.getValue() instanceof ClassOrInterfaceType cType) {
+            Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
+            valueExpressions = vx.getInitializer();
         } else {
             valueExpressions = setupConditionForNonPrimitive(entry, v);
         }

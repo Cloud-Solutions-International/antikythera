@@ -85,7 +85,7 @@ class TestConditional extends TestHelper {
             "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
             "booleanWorks, False!True!", "printMap, Map is empty!Key: 0 -> Value: null",
             "animalFarm, Some animals are more equal!All animals are equal!",
-            "whatInstance, Integer: 1!Unknown!"
+            "whatInstance, Integer: 0!Unknown!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -94,7 +94,7 @@ class TestConditional extends TestHelper {
                 md -> md.getNameAsString().equals(name)).orElseThrow();
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals(value,s);
+        assertEquals(value,s.toString());
     }
 
     @ParameterizedTest
