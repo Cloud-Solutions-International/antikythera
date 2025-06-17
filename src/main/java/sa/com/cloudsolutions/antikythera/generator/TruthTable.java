@@ -208,7 +208,7 @@ public class TruthTable {
      * @param variableList all the variables in the conditional.
      */
     private void generateCombinations(Expression[] variableList) {
-        Map<Expression, Interval> numericRanges = collectNumericRanges(variableList);
+        Map<Expression, Domain> numericRanges = collectNumericRanges(variableList);
         int totalCombinations = calculateTotalCombinations(variableList, numericRanges);
         table = new ArrayList<>();
 
@@ -293,7 +293,7 @@ public class TruthTable {
      * @return the total number of combinations that are available to us.
      */
     private int calculateTotalCombinations(Expression[] variableList,
-            Map<Expression, Interval> domain) {
+            Map<Expression, Domain> domain) {
         int totalCombinations = 1;
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
@@ -319,12 +319,12 @@ public class TruthTable {
      * @param variableList Array of Expression objects representing variables
      * @return Map of numeric variables to their bounds
      */
-    private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
-        Map<Expression, Interval> numericRanges = new HashMap<>();
+    private Map<Expression, Domain> collectNumericRanges(Expression[] variableList) {
+        Map<Expression, Domain> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
             Domain domain = variables.get(v);
             if (domain.getLowerBound() instanceof Integer min && domain.getUpperBound() instanceof Integer max) {
-                numericRanges.put(v, new Interval(min, max));
+                numericRanges.put(v, new Domain(min, max));
             }
         }
         return numericRanges;
@@ -350,13 +350,13 @@ public class TruthTable {
      * @return Map of variable expressions to their assigned values
      */
     private Map<Expression, Object> generateRowValues(Expression[] variableList,
-                                                      Map<Expression, Interval> domain, int combination) {
+                                                      Map<Expression, Domain> domain, int combination) {
         Map<Expression, Object> truthValues = new HashMap<>();
         int product = 1;
 
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
-                Interval range = domain.get(v);
+                Domain range = domain.get(v);
                 int value = range.min + (combination / product) % range.width;
                 truthValues.put(v, value);
                 product *= range.width;
@@ -449,32 +449,32 @@ public class TruthTable {
             return;
         }
 
-        Interval newInterval = calculateNewInterval(
-            new Interval((Integer) currentDomain.getLowerBound(), (Integer) currentDomain.getUpperBound()),
+        Domain newInterval = calculateNewInterval(
+            new Domain((Integer) currentDomain.getLowerBound(), (Integer) currentDomain.getUpperBound()),
             literalValue,
             constraint.getOperator(),
             constraint.getLeft().toString().equals(variable.toString())
         );
 
-        variables.put(variable, new Domain(newInterval.min, newInterval.max));
+        variables.put(variable, newInterval);
     }
 
-    private Interval calculateNewInterval(Interval current, int literalValue,
+    private Domain calculateNewInterval(Domain current, int literalValue,
             BinaryExpr.Operator operator, boolean varOnLeft) {
         return switch (operator) {
             case GREATER -> varOnLeft ?
-                new Interval(literalValue + 1, Math.max(current.max, literalValue + 2)) :
-                new Interval(Math.min(current.min, literalValue - 2), literalValue - 1);
+                new Domain(literalValue + 1, Math.max(current.max, literalValue + 2)) :
+                new Domain(Math.min(current.min, literalValue - 2), literalValue - 1);
             case GREATER_EQUALS -> varOnLeft ?
-                new Interval(literalValue, Math.max(current.max, literalValue + 1)) :
-                new Interval(Math.min(current.min, literalValue - 1), literalValue);
+                new Domain(literalValue, Math.max(current.max, literalValue + 1)) :
+                new Domain(Math.min(current.min, literalValue - 1), literalValue);
             case LESS -> varOnLeft ?
-                new Interval(Math.min(current.min, literalValue - 1), literalValue - 1) :
-                new Interval(literalValue + 1, Math.max(current.max, literalValue + 1));
+                new Domain(Math.min(current.min, literalValue - 1), literalValue - 1) :
+                new Domain(literalValue + 1, Math.max(current.max, literalValue + 1));
             case LESS_EQUALS -> varOnLeft ?
-                new Interval(Math.min(current.min, literalValue), literalValue) :
-                new Interval(literalValue, Math.max(current.max, literalValue));
-            case EQUALS -> new Interval(literalValue, literalValue);
+                new Domain(Math.min(current.min, literalValue), literalValue) :
+                new Domain(literalValue, Math.max(current.max, literalValue));
+            case EQUALS -> new Domain(literalValue, literalValue);
             default -> current;
         };
     }
@@ -1066,14 +1066,14 @@ public class TruthTable {
                 Domain existingDomain = collector.get(n);
                 if (existingDomain.getLowerBound() instanceof Integer min && existingDomain.getUpperBound() instanceof Integer max) {
                     if (literalValue < min) {
-                        collector.put(n, new Domain(literalValue, max));
+                        collector.put(n, new Domain((Integer)literalValue, max));
                     } else if (literalValue > max) {
-                        collector.put(n, new Domain(min, literalValue));
+                        collector.put(n, new Domain(min, (Integer)literalValue));
                     }
                     // If literalValue is within bounds, no action needed
                 }
             } else {
-                collector.put(n, new Domain(literalValue, literalValue));
+                collector.put(n, new Domain((Integer)literalValue, (Integer)literalValue));
             }
         }
 
@@ -1133,15 +1133,34 @@ public class TruthTable {
     private static class Domain {
         private final Object lowerBound;
         private final Object upperBound;
+        final int min;
+        final int max;
+        final int width;
 
         Domain(Object lowerBound, Object upperBound) {
             this.lowerBound = lowerBound;
             this.upperBound = upperBound;
+
+            // Initialize integer fields if bounds are integers
+            if (lowerBound instanceof Integer && upperBound instanceof Integer) {
+                this.min = (Integer) lowerBound;
+                this.max = (Integer) upperBound;
+                this.width = max - min + 1;
+            } else {
+                // Default values for non-integer bounds
+                this.min = 0;
+                this.max = 0;
+                this.width = 0;
+            }
         }
 
-        Domain(Pair<Object, Object> bounds) {
-            this.lowerBound = bounds.a;
-            this.upperBound = bounds.b;
+        // Constructor matching the old Interval constructor
+        Domain(int min, int max) {
+            this.lowerBound = min;
+            this.upperBound = max;
+            this.min = min;
+            this.max = max;
+            this.width = max - min + 1;
         }
 
         public Object getLowerBound() {
@@ -1150,23 +1169,6 @@ public class TruthTable {
 
         public Object getUpperBound() {
             return upperBound;
-        }
-
-        public Pair<Object, Object> getBounds() {
-            return new Pair<>(lowerBound, upperBound);
-        }
-    }
-
-
-    private static class Interval {
-        final int min;
-        final int max;
-        final int width;
-
-        Interval(int min, int max) {
-            this.min = min;
-            this.max = max;
-            this.width = max - min + 1;
         }
     }
 }
