@@ -11,9 +11,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.ReferenceType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.github.javaparser.utils.Pair;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
@@ -452,7 +450,7 @@ public class TruthTable {
         }
 
         Domain newInterval = calculateNewInterval(
-            new Domain((Integer) currentDomain.getLowerBound(), (Integer) currentDomain.getUpperBound()),
+            new Domain(currentDomain.getLowerBound(), currentDomain.getUpperBound()),
             literalValue,
             constraint.getOperator(),
             constraint.getLeft().toString().equals(variable.toString())
@@ -1145,9 +1143,9 @@ public class TruthTable {
             this.upperBound = upperBound;
 
             // Initialize integer fields if bounds are integers
-            if (lowerBound instanceof Integer && upperBound instanceof Integer) {
-                this.min = (Integer) lowerBound;
-                this.max = (Integer) upperBound;
+            if (lowerBound instanceof Integer lb && upperBound instanceof Integer ub) {
+                this.min = lb;
+                this.max = ub;
                 this.width = max - min + 1;
             } else {
                 // Default values for non-integer bounds
