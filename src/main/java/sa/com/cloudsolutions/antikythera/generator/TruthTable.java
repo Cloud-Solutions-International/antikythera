@@ -5,6 +5,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -633,9 +634,46 @@ public class TruthTable {
             }
         } else if (condition.isMethodCallExpr()) {
             return evaluateMethodCall(condition.asMethodCallExpr(), truthValues);
+        } else if (condition.isInstanceOfExpr()) {
+            return evaluateInstanceOf(condition.asInstanceOfExpr(), truthValues);
         }
 
         return evaluateBasicExpression(condition, truthValues);
+    }
+
+    /**
+     * Evaluates an instanceof expression with the provided truth values.
+     *
+     * @param instanceOfExpr The instanceof expression to evaluate
+     * @param truthValues The truth values for variables
+     * @return Boolean result of the instanceof check
+     */
+    private Object evaluateInstanceOf(InstanceOfExpr instanceOfExpr, Map<Expression, Object> truthValues) {
+        Expression expr = instanceOfExpr.getExpression();
+        Object value = truthValues.get(expr);
+
+        // If the value is null, instanceof always returns false
+        if (value == null) {
+            return false;
+        }
+
+        String typeNameStr = instanceOfExpr.getType().asString();
+
+        // Check if the value is an instance of the specified type
+        return switch (typeNameStr) {
+            case "String" -> value instanceof String;
+            case "Integer", "int" -> value instanceof Integer;
+            case "Boolean", "boolean" -> value instanceof Boolean;
+            case "Double", "double" -> value instanceof Double;
+            case "Long", "long" -> value instanceof Long;
+            case "Collection", "List", "ArrayList" -> value instanceof Collection;
+            case "Map", "HashMap" -> value instanceof Map;
+            default -> {
+                // For other types, try to match the simple class name
+                String valueClassName = value.getClass().getSimpleName();
+                yield valueClassName.equals(typeNameStr);
+            }
+        };
     }
 
     private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
@@ -831,6 +869,9 @@ public class TruthTable {
             }
             else if (parentNode.get() instanceof UnaryExpr) {
                 collector.put(n, new Pair<>(false, true));
+            }
+            else if (parentNode.get() instanceof InstanceOfExpr instanceOfExpr) {
+
             }
 
             super.visit(n, collector);
@@ -1073,6 +1114,17 @@ public class TruthTable {
                 collector.add(m);
             }
             super.visit(m, collector);
+        }
+
+        /**
+         * Collect instanceof expressions as conditions
+         * @param instanceOfExpr the instanceof expression
+         * @param collector set of expressions collected
+         */
+        @Override
+        public void visit(InstanceOfExpr instanceOfExpr, Set<Expression> collector) {
+            collector.add(instanceOfExpr);
+            super.visit(instanceOfExpr, collector);
         }
     }
 

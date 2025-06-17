@@ -84,7 +84,8 @@ class TestConditional extends TestHelper {
             "conditional6, ZERO!Three!Two!One!","conditional7, ZERO!Three!Two!One!",
             "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
             "booleanWorks, False!True!", "printMap, Map is empty!Key: 0 -> Value: null",
-            "animalFarm, Some animals are more equal!All animals are equal!"
+            "animalFarm, Some animals are more equal!All animals are equal!",
+            "whatInstance, Integer: 1!Unknown!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -98,7 +99,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional5, One!","conditional6, One!","conditional7, One!",
-            "conditional8, ZERO!", "smallDiff, '',", "whatInstance, Integer: 1!Unknown!",
+            "conditional8, ZERO!", "smallDiff, '',",
     })
     void testConditionals(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
