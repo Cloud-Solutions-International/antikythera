@@ -1025,9 +1025,7 @@ public class AbstractCompiler {
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullClassName);
             if (cu != null) {
                 TypeDeclaration<?> type = AbstractCompiler.getMatchingType(cu, t.asString()).orElse(null);
-                if (type != null && type.getModifiers().contains(Modifier.FINAL)) {
-                    return true;
-                }
+                return  (type != null && type.getModifiers().contains(com.github.javaparser.ast.Modifier.finalModifier()));
             } else {
                 try {
                     Class<?> clazz = AbstractCompiler.loadClass(fullClassName);
