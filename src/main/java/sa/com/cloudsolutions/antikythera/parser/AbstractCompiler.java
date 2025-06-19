@@ -430,43 +430,47 @@ public class AbstractCompiler {
         Optional<MethodCallExpr> mce = methodCall.asMethodCallExpr();
 
         if (mce.isPresent() && mce.get().findCompilationUnit().isPresent()) {
-            CompilationUnit callerSource = mce.orElseThrow().findCompilationUnit().orElseThrow();
-            CompilationUnit declarationSource = param.findCompilationUnit().orElseThrow();
+            return parametersVsArgumentsDeepCompare(param, argumentType, paramType, mce.get());
+        }
 
-            List<TypeWrapper> callerTypes = findWrappedTypes(callerSource, argumentType);
-            List<TypeWrapper> declarationTypes = findWrappedTypes(declarationSource, paramType);
+        ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
+        ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
 
-            if (callerTypes.isEmpty()) {
-                return false;
+        if (pt.getNameAsString().equals(at.getNameAsString())) {
+            Optional<NodeList<Type>> args1 = pt.getTypeArguments();
+            Optional<NodeList<Type>> args2 = at.getTypeArguments();
+            if (args1.isPresent()) {
+                if (args2.isPresent()) {
+                    return args1.get().size() == args2.get().size();
+                }
+            } else {
+                return args2.isEmpty();
             }
-            TypeWrapper wp = callerTypes.getLast();
-            TypeWrapper ap = declarationTypes.getLast();
-            if (wp.getType() != null && ap.getType() != null) {
-                return (wp.getType().getFullyQualifiedName().orElseThrow().equals(ap.getType().getFullyQualifiedName().orElseThrow()));
-            }
-            if (wp.getClazz() != null && ap.getClazz() != null) {
-                return wp.getClazz().isAssignableFrom(ap.getClazz()) || ap.getClazz().isAssignableFrom(wp.getClazz());
-            }
+            return true;
+        }
 
+        return false;
+    }
+
+    private static boolean parametersVsArgumentsDeepCompare(Parameter param, Type argumentType, Type paramType, MethodCallExpr mce) {
+        CompilationUnit callerSource = mce.findCompilationUnit().orElseThrow();
+        CompilationUnit declarationSource = param.findCompilationUnit().orElseThrow();
+
+        List<TypeWrapper> callerTypes = findWrappedTypes(callerSource, argumentType);
+        List<TypeWrapper> declarationTypes = findWrappedTypes(declarationSource, paramType);
+
+        if (callerTypes.isEmpty()) {
             return false;
         }
-        else {
-            ClassOrInterfaceType at = argumentType.asClassOrInterfaceType();
-            ClassOrInterfaceType pt = paramType.asClassOrInterfaceType();
-
-            if (pt.getNameAsString().equals(at.getNameAsString())) {
-                Optional<NodeList<Type>> args1 = pt.getTypeArguments();
-                Optional<NodeList<Type>> args2 = at.getTypeArguments();
-                if (args1.isPresent()) {
-                    if (args2.isPresent()) {
-                        return args1.get().size() == args2.get().size();
-                    }
-                } else {
-                    return args2.isEmpty();
-                }
-                return true;
-            }
+        TypeWrapper wp = callerTypes.getLast();
+        TypeWrapper ap = declarationTypes.getLast();
+        if (wp.getType() != null && ap.getType() != null) {
+            return (wp.getType().getFullyQualifiedName().orElseThrow().equals(ap.getType().getFullyQualifiedName().orElseThrow()));
         }
+        if (wp.getClazz() != null && ap.getClazz() != null) {
+            return wp.getClazz().isAssignableFrom(ap.getClazz()) || ap.getClazz().isAssignableFrom(wp.getClazz());
+        }
+
         return false;
     }
 
