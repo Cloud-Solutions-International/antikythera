@@ -102,7 +102,6 @@
                     <argLine>@{argLine} -XX:+EnableDynamicAgentLoading
                         --add-opens java.base/java.nio.charset=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
-                        --add-opens java.base/java.util=ALL-UNNAMED
                         --add-opens java.base/java.util.stream=ALL-UNNAMED
                     </argLine>
                     <!--  FIXME: REmove below line after fixing the test failures -->
