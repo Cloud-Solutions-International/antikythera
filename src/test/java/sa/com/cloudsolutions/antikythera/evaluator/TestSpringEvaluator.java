@@ -46,14 +46,12 @@ class TestSpringEvaluator extends TestHelper {
 
     @BeforeAll
     static void setup() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.preProcess();
     }
 
     @BeforeEach
     void each() {
-        AntikytheraRunTime.reset();
-        MockingRegistry.reset();
         System.setOut(new PrintStream(outContent));
     }
 

@@ -41,41 +41,44 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         Variable v = null;
         Type t = param.getType();
 
-        if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
-            TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
-            String fullClassName = wrapper.getFullyQualifiedName();
-            if (t.asClassOrInterfaceType().isBoxedType()) {
-                return mockParameter(param);
+        if (!t.isClassOrInterfaceType() || param.findCompilationUnit().isEmpty()) {
+            return v;
+        }
+
+        TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
+        String fullClassName = wrapper.getFullyQualifiedName();
+        if (t.asClassOrInterfaceType().isBoxedType()) {
+            return mockParameter(param);
+        }
+        if (wrapper.getClazz() != null) {
+            List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
+            if (customized.isEmpty()) {
+                return mockNonPrimitiveParameter(param, wrapper);
             }
-            if (wrapper.getClazz() != null) {
-                List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
-                if (customized.isEmpty()) {
-                    return mockNonPrimitiveParameter(param, wrapper);
+            for (Expression expr : customized) {
+                if (expr instanceof ObjectCreationExpr oce) {
+                    ReflectionArguments args = Reflect.buildArguments(oce,
+                            EvaluatorFactory.createLazily("", Evaluator.class), null);
+                    Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
+                    v = new Variable(constructor.newInstance(args.getArguments()));
+                    v.setInitializer(customized);
+                    return v;
                 }
-                for (Expression expr : customized) {
-                    if (expr instanceof ObjectCreationExpr oce) {
-                        ReflectionArguments args = Reflect.buildArguments(oce,
-                                EvaluatorFactory.createLazily("", Evaluator.class), null);
-                        Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
-                        v = new Variable(constructor.newInstance(args.getArguments()));
-                        v.setInitializer(customized);
-                        return v;
-                    }
-                }
-            }
-            Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
-            v = new Variable(o);
-            v.setType(t);
-            Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-            if (opt.isPresent() && opt.get().isClassOrInterfaceDeclaration()) {
-                String init = ArgumentGenerator.instantiateClass(
-                        opt.get().asClassOrInterfaceDeclaration(),
-                        param.getNameAsString()
-                ).replace(";", "");
-                String[] parts = init.split("=");
-                v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
             }
         }
+        Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
+        v = new Variable(o);
+        v.setType(t);
+        Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
+        if (opt.isPresent() && opt.get().isClassOrInterfaceDeclaration()) {
+            String init = ArgumentGenerator.instantiateClass(
+                    opt.get().asClassOrInterfaceDeclaration(),
+                    param.getNameAsString()
+            ).replace(";", "");
+            String[] parts = init.split("=");
+            v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
+        }
+
         return v;
     }
 

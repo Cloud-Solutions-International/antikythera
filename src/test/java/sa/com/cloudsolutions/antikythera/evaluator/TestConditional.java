@@ -94,7 +94,7 @@ class TestConditional extends TestHelper {
                 md -> md.getNameAsString().equals(name)).orElseThrow();
         evaluator.visit(method);
         String s = outContent.toString();
-        assertEquals(value,s.toString());
+        assertEquals(value,s);
     }
 
     @ParameterizedTest

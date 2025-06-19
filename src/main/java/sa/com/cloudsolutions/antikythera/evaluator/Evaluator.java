@@ -342,12 +342,11 @@ public class Evaluator {
                 Set<String> subs = AntikytheraRunTime.findSubClasses(wrapper.getFullyQualifiedName());
                 assignable = subs.contains(l.getClazz().getName());
             }
-            if (assignable && expr.getPattern().isPresent()) {
-                Expression pattern = expr.getPattern().get();
+            expr.getPattern().ifPresent(pattern -> {
                 if (pattern.isTypePatternExpr()) {
                     setLocal(expr, pattern.asTypePatternExpr().getNameAsString(), l);
                 }
-            }
+            });
             return new Variable(assignable);
         }
         return new Variable(false);

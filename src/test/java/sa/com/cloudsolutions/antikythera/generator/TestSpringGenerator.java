@@ -15,6 +15,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.File;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,8 +29,9 @@ class TestSpringGenerator {
 
     @BeforeAll
     static void beforeClass() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @BeforeEach

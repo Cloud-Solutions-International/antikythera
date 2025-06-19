@@ -24,6 +24,7 @@ class ITDTOHandler {
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @Test
