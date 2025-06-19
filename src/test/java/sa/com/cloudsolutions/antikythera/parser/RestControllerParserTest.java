@@ -18,7 +18,7 @@ class RestControllerParserTest {
     @BeforeEach
     void setUp() throws IOException {
         AntikytheraRunTime.reset();
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         outputPath = Settings.getProperty(Settings.OUTPUT_PATH).toString();
 
         parser = new RestControllerParser("sa.com.cloudsolutions.controller.ComplexController");
