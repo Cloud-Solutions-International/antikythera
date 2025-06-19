@@ -164,25 +164,23 @@ public class AKBuddy {
                 // Create an empty array of the correct type
                 return Array.newInstance(componentType, 0).getClass();
 
-            } else {
-                // Handle non-array types as before
-                if (p.getType().isPrimitiveType()) {
-                    return Reflect.getComponentClass(p.getTypeAsString());
-                } else {
-                    TypeWrapper t;
-                    if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
-                        t = AbstractCompiler.findType(cu, ctype.getNameAsString());
-                    }
-                    else {
-                        t = AbstractCompiler.findType(cu, p.getType().asString());
-                    }
-                    if (t.getClazz() != null) {
-                        return t.getClazz();
-                    }
-                    return Reflect.getComponentClass(t.getFullyQualifiedName());
-                }
             }
 
+            if (p.getType().isPrimitiveType()) {
+                return Reflect.getComponentClass(p.getTypeAsString());
+            }
+
+            TypeWrapper t;
+            if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
+                t = AbstractCompiler.findType(cu, ctype.getNameAsString());
+            }
+            else {
+                t = AbstractCompiler.findType(cu, p.getType().asString());
+            }
+            if (t.getClazz() != null) {
+                return t.getClazz();
+            }
+            return Reflect.getComponentClass(t.getFullyQualifiedName());
         } catch (ClassNotFoundException e) {
             /*
              * TODO : fix this temporary hack.

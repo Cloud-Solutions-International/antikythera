@@ -21,6 +21,8 @@ import java.util.Map;
  */
 public class MockConfigReader {
 
+    private MockConfigReader() {}
+
     /**
      * Reads the specified YAML file and returns its content as a Map of parsed Java expressions.
      * All values are converted to Lists of parsed Expression objects.

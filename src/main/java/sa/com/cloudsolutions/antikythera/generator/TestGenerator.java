@@ -11,12 +11,10 @@ import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.Iterator;
 
 public abstract class TestGenerator {
     protected ArgumentGenerator argumentGenerator;
@@ -197,8 +195,8 @@ public abstract class TestGenerator {
         return removed;
     }
 
+    @SuppressWarnings("java:S1130") // this exception will be thrown by subclasses hence the need to declare here
     public void save() throws IOException {
-        // Remove any duplicate test methods before saving
         removeDuplicateTests();
     }
 
