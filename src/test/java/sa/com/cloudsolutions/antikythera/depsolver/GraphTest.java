@@ -8,6 +8,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.File;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,7 +20,9 @@ class GraphTest {
     @BeforeAll
     static void setup() throws IOException {
         DepSolver.reset();
-        Settings.loadConfigMap();
+        DepSolver.reset();
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
         AbstractCompiler.reset();
     }
 
