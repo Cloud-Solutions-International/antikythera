@@ -29,8 +29,9 @@ class TestSpringGenerator {
 
     @BeforeAll
     static void beforeClass() throws IOException {
-        AbstractCompiler.reset();
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     @BeforeEach

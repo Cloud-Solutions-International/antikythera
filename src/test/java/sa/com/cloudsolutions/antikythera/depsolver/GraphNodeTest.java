@@ -16,12 +16,13 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GraphNodeTest  {
     @BeforeAll
     static void setupClass() throws IOException {
-        DepSolver.reset();
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
 
@@ -32,6 +33,7 @@ class GraphNodeTest  {
 
     @Test
     void testGraphNode() throws AntikytheraException {
+        assertTrue(Graph.getNodes().isEmpty());
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.ReturnValue");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
@@ -44,6 +46,7 @@ class GraphNodeTest  {
 
     @Test
     void testKitchenSink() throws AntikytheraException {
+        assertTrue(Graph.getNodes().isEmpty());
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getSomething")).orElseThrow();
@@ -52,7 +55,13 @@ class GraphNodeTest  {
         assertEquals(md, gn.getNode());
         assertEquals("KitchenSink",gn.getEnclosingType().getNameAsString());
         assertNotNull(gn.getDestination());
-        assertEquals(0, gn.getDestination().getImports().size());
+        assertEquals(
+            0,
+            gn.getDestination().getImports().size(),
+            "Imports should be empty for KitchenSink but was:\n" +
+                String.join("\n\t", gn.getDestination().getImports().stream()
+                    .map(i -> i.getNameAsString()).toList())
+        );
 
         FieldDeclaration vdecl = gn.getEnclosingType().findFirst(FieldDeclaration.class,
             fd -> fd.toString().contains("itsComplicated")).orElseThrow();
