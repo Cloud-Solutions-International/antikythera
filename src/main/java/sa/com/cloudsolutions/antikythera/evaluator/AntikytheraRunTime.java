@@ -166,4 +166,12 @@ public class AntikytheraRunTime {
         Map<String, Variable> map = statics.computeIfAbsent(fqn, k -> new TreeMap<>());
         map.put(field, variable);
     }
+
+    public static Map<String, TypeWrapper> getResolvedTypes() {
+        return resolvedTypes;
+    }
+
+    public static Map<String, CompilationUnit> getResolvedCompilationUnits() {
+        return resolved;
+    }
 }
