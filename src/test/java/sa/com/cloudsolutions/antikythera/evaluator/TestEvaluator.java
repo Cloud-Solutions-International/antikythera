@@ -106,12 +106,14 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void executeViaDataAnnotation() throws ReflectiveOperationException {
+        evaluator.setCompilationUnit(evaluator.getCompilationUnit().clone());
         evaluator.getCompilationUnit().getType(0).addAnnotation("Data");
         annotationHelper();
     }
 
     @Test
     void executeViaGetterSetterAnnotation() throws ReflectiveOperationException {
+        evaluator.setCompilationUnit(evaluator.getCompilationUnit().clone());
         evaluator.getCompilationUnit().getType(0).addAnnotation("Getter");
         evaluator.getCompilationUnit().getType(0).addAnnotation("Setter");
         annotationHelper();

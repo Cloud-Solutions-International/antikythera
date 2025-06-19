@@ -17,7 +17,6 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestInheritance extends TestHelper {
 
@@ -46,6 +45,7 @@ class TestInheritance extends TestHelper {
 
     @Test
     void testGetterSetterAnnotation() throws ReflectiveOperationException {
+        evaluator.setCompilationUnit(evaluator.getCompilationUnit().clone());
         evaluator.getCompilationUnit().getType(0).addAnnotation("Getter");
         evaluator.getCompilationUnit().getType(0).addAnnotation("Setter");
 
