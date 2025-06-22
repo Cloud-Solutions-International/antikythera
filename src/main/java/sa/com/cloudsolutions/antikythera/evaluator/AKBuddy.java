@@ -210,19 +210,25 @@ public class AKBuddy {
                 }
             }
 
-            DynamicType.Builder.FieldDefinition.Optional.Valuable<?> fieldDef = builder.defineField(fieldName, fieldType, Visibility.PRIVATE);
-            builder = fieldDef;
-            // Add binary annotations except Lombok
-            for (var ann : field.getAnnotations()) {
-                TypeWrapper annType = AbstractCompiler.findType(cu, ann.getNameAsString());
-                if (annType != null && annType.getClazz() != null) {
-                    String annFqn = annType.getFullyQualifiedName();
+            builder = addFieldAnnotations(cu, builder, field, fieldName, fieldType);
+        }
+        return builder;
+    }
 
-                    if (annFqn != null && !annFqn.startsWith("lombok.")) {
-                        builder = fieldDef.annotateField(
-                                AnnotationDescription.Builder.ofType((Class<? extends Annotation>) annType.getClazz()).build()
-                        );
-                    }
+    @SuppressWarnings("unchecked")
+    private static DynamicType.Builder<?> addFieldAnnotations(CompilationUnit cu, DynamicType.Builder<?> builder, FieldDeclaration field, String fieldName, Class<?> fieldType) {
+        DynamicType.Builder.FieldDefinition.Optional.Valuable<?> fieldDef = builder.defineField(fieldName, fieldType, Visibility.PRIVATE);
+        builder = fieldDef;
+        // Add binary annotations except Lombok
+        for (var ann : field.getAnnotations()) {
+            TypeWrapper annType = AbstractCompiler.findType(cu, ann.getNameAsString());
+            if (annType != null && annType.getClazz() != null) {
+                String annFqn = annType.getFullyQualifiedName();
+
+                if (annFqn != null && !annFqn.startsWith("lombok.")) {
+                    builder = fieldDef.annotateField(
+                            AnnotationDescription.Builder.ofType((Class<? extends Annotation>) annType.getClazz()).build()
+                    );
                 }
             }
         }
