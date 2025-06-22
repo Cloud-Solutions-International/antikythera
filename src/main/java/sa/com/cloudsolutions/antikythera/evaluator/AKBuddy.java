@@ -90,6 +90,8 @@ public class AKBuddy {
         TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
         String className = eval.getClassName();
 
+        List<FieldDeclaration> fields = dtoType.getFields();
+
         ByteBuddy byteBuddy = new ByteBuddy();
         DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
                 .method(ElementMatchers.any())
@@ -105,8 +107,9 @@ public class AKBuddy {
             }
         }
 
-        builder = addFields(dtoType, cu, builder);
+        builder = addFields(fields, cu, builder);
         builder = addMethods(dtoType.getMethods(), cu, builder);
+        builder = addLombokAccessors(dtoType, cu, builder);
 
         DynamicType.Unloaded<?> unloaded = builder.make();
 
@@ -189,37 +192,20 @@ public class AKBuddy {
         }
     }
 
-    private static DynamicType.Builder<?> addFields(TypeDeclaration<?> dtoType, CompilationUnit cu, DynamicType.Builder<?> builder) throws ClassNotFoundException {
-        List<FieldDeclaration> fields = dtoType.getFields();
-        boolean classHasGetter = dtoType.getAnnotationByName("Getter").isPresent();
-        boolean classHasSetter = dtoType.getAnnotationByName("Setter").isPresent();
-        boolean classHasData = dtoType.getAnnotationByName("Data").isPresent();
-
+    private static DynamicType.Builder<?> addFields(List<FieldDeclaration> fields, CompilationUnit cu, DynamicType.Builder<?> builder) throws ClassNotFoundException {
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
-            String capitalized = Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-            String getterName = (vd.getType().asString().equals("boolean") ? "is" : "get") + capitalized;
-            String setterName = "set" + capitalized;
-            boolean fieldHasGetter = field.getAnnotationByName("Getter").isPresent();
-            boolean fieldHasSetter = field.getAnnotationByName("Setter").isPresent();
-            boolean needGetter = classHasGetter || classHasData || fieldHasGetter;
-            boolean needSetter = classHasSetter || classHasData || fieldHasSetter;
-
-            Class<?> returnType = null;
-
             if (vd.getType().isPrimitiveType()) {
                 builder = builder.defineField(fieldName, Reflect.getComponentClass(vd.getTypeAsString()),
                         Visibility.PRIVATE);
-                returnType = Reflect.getComponentClass(vd.getTypeAsString());
             }
             else {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
                 if (wrapper != null) {
                     if (wrapper.getClazz() != null) {
                         builder = builder.defineField(fieldName, wrapper.getClazz(), Visibility.PRIVATE);
-                        returnType = wrapper.getClazz();
                     }
                     else {
                         if (MockingRegistry.isMockTarget(wrapper.getFullyQualifiedName())) {
@@ -229,27 +215,63 @@ public class AKBuddy {
                             Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
                             Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
                             builder = builder.defineField(fieldName, clazz, Visibility.PRIVATE);
-                            returnType = clazz;
                         }
                     }
                 }
             }
+        }
+        return builder;
+    }
 
-            if (returnType != null) {
-                // Only add getter if not already present
-                if (needGetter && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(getterName))) {
-                    builder = builder.defineMethod(getterName, returnType, Visibility.PUBLIC)
-                            .intercept(net.bytebuddy.implementation.FieldAccessor.ofField(fieldName));
-                }
-                // Only add setter if not already present and field is not final
-                if (needSetter && !field.isFinal() && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(setterName))) {
-                    builder = builder.defineMethod(setterName, void.class, Visibility.PUBLIC)
-                            .withParameters(returnType)
-                            .intercept(net.bytebuddy.implementation.FieldAccessor.ofField(fieldName));
-                }
+    /**
+     * Add getter/setter methods for fields based on Lombok annotations (@Getter, @Setter, @Data)
+     */
+    private static DynamicType.Builder<?> addLombokAccessors(TypeDeclaration<?> dtoType, CompilationUnit cu, DynamicType.Builder<?> builder) {
+        boolean classHasGetter = dtoType.getAnnotationByName("Getter").isPresent();
+        boolean classHasSetter = dtoType.getAnnotationByName("Setter").isPresent();
+        boolean classHasData = dtoType.getAnnotationByName("Data").isPresent();
+
+        for (FieldDeclaration field : dtoType.getFields()) {
+            VariableDeclarator vd = field.getVariable(0);
+            String fieldName = vd.getNameAsString();
+            String capitalized = Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            String getterName = (vd.getType().asString().equals("boolean") ? "is" : "get") + capitalized;
+            String setterName = "set" + capitalized;
+            boolean fieldHasGetter = field.getAnnotationByName("Getter").isPresent();
+            boolean fieldHasSetter = field.getAnnotationByName("Setter").isPresent();
+            boolean needGetter = classHasGetter || classHasData || fieldHasGetter;
+            boolean needSetter = classHasSetter || classHasData || fieldHasSetter;
+
+            // Only add getter if not already present
+            if (needGetter && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(getterName))) {
+                Class<?> returnType = getFieldType(cu, vd);
+                builder = builder.defineMethod(getterName, returnType, Visibility.PUBLIC)
+                        .intercept(net.bytebuddy.implementation.FieldAccessor.ofField(fieldName));
+            }
+            // Only add setter if not already present and field is not final
+            if (needSetter && !field.isFinal() && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(setterName))) {
+                Class<?> paramType = getFieldType(cu, vd);
+                builder = builder.defineMethod(setterName, void.class, Visibility.PUBLIC)
+                        .withParameters(paramType)
+                        .intercept(net.bytebuddy.implementation.FieldAccessor.ofField(fieldName));
             }
         }
         return builder;
+    }
+
+    private static Class<?> getFieldType(CompilationUnit cu, VariableDeclarator vd) {
+        try {
+            if (vd.getType().isPrimitiveType()) {
+                return Reflect.getComponentClass(vd.getTypeAsString());
+            }
+            TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
+            if (wrapper != null && wrapper.getClazz() != null) {
+                return wrapper.getClazz();
+            }
+            return Object.class;
+        } catch (Exception e) {
+            return Object.class;
+        }
     }
 
     @SuppressWarnings("java:S3011")
@@ -285,5 +307,3 @@ public class AKBuddy {
         return instance;
     }
 }
-
-
