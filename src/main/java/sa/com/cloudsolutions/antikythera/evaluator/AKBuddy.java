@@ -10,15 +10,16 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.annotation.AnnotationDescription;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
-import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -31,14 +32,15 @@ import java.util.Map;
  * This will be primarily used in mocking.
  */
 public class AKBuddy {
-    private static final Map<String, Class<?>> registry = new HashMap<>();
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
+    private static final Map<String, Class<?>> registry = new HashMap<>();
 
-    protected AKBuddy() {}
+    protected AKBuddy() {
+    }
 
     /**
      * <p>Dynamically create a class matching a given type declaration and then create an instance</p>
-     *
+     * <p>
      * We will iterate through all the fields declared in the source code and make fake fields
      * accordingly so that they show up in reflective inspections. Similarly, we will add fake
      * methods for all the method declarations in the source code
@@ -126,7 +128,7 @@ public class AKBuddy {
     }
 
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
-                                                     DynamicType.Builder<?> builder)  {
+                                                     DynamicType.Builder<?> builder) {
 
         for (MethodDeclaration method : methods) {
             String methodName = method.getNameAsString();
@@ -174,8 +176,7 @@ public class AKBuddy {
             TypeWrapper t;
             if (p.getType() instanceof ClassOrInterfaceType ctype && ctype.getTypeArguments().isPresent()) {
                 t = AbstractCompiler.findType(cu, ctype.getNameAsString());
-            }
-            else {
+            } else {
                 t = AbstractCompiler.findType(cu, p.getType().asString());
             }
             if (t.getClazz() != null) {
@@ -197,25 +198,30 @@ public class AKBuddy {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
+            Class<?> fieldType;
             if (vd.getType().isPrimitiveType()) {
-                builder = builder.defineField(fieldName, Reflect.getComponentClass(vd.getTypeAsString()),
-                        Visibility.PRIVATE);
-            }
-            else {
+                fieldType = Reflect.getComponentClass(vd.getTypeAsString());
+            } else {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
-                if (wrapper != null) {
-                    if (wrapper.getClazz() != null) {
-                        builder = builder.defineField(fieldName, wrapper.getClazz(), Visibility.PRIVATE);
-                    }
-                    else {
-                        if (MockingRegistry.isMockTarget(wrapper.getFullyQualifiedName())) {
-                            // todo : fix this
-                        }
-                        else {
-                            Evaluator eval = EvaluatorFactory.create(wrapper.getFullyQualifiedName(), SpringEvaluator.class);
-                            Class<?> clazz = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                            builder = builder.defineField(fieldName, clazz, Visibility.PRIVATE);
-                        }
+                if (wrapper != null && wrapper.getClazz() != null) {
+                    fieldType = wrapper.getClazz();
+                } else {
+                    fieldType = Object.class;
+                }
+            }
+
+            DynamicType.Builder.FieldDefinition.Optional.Valuable<?> fieldDef = builder.defineField(fieldName, fieldType, Visibility.PRIVATE);
+            builder = fieldDef;
+            // Add binary annotations except Lombok
+            for (var ann : field.getAnnotations()) {
+                TypeWrapper annType = AbstractCompiler.findType(cu, ann.getNameAsString());
+                if (annType != null && annType.getClazz() != null) {
+                    String annFqn = annType.getFullyQualifiedName();
+
+                    if (annFqn != null && !annFqn.startsWith("lombok.")) {
+                        builder = fieldDef.annotateField(
+                                AnnotationDescription.Builder.ofType((Class<? extends Annotation>) annType.getClazz()).build()
+                        );
                     }
                 }
             }
@@ -289,15 +295,14 @@ public class AKBuddy {
                 f.setAccessible(true);
 
                 Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
-                if(v != null) {
+                if (v != null) {
                     Object value = v.getValue();
 
                     if (value instanceof Evaluator eval) {
                         MethodInterceptor interceptor1 = new MethodInterceptor(eval);
                         Class<?> c = AKBuddy.createDynamicClass(interceptor1);
                         f.set(instance, AKBuddy.createInstance(c, interceptor1));
-                    }
-                    else {
+                    } else {
                         f.set(instance, value);
                     }
                 }
