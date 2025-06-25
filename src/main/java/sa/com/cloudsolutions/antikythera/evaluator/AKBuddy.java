@@ -16,6 +16,8 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -34,6 +36,7 @@ import java.util.Map;
 public class AKBuddy {
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
     private static final Map<String, Class<?>> registry = new HashMap<>();
+    private static final Logger logger = LoggerFactory.getLogger(AKBuddy.class);
 
     protected AKBuddy() {
     }
@@ -224,11 +227,15 @@ public class AKBuddy {
             TypeWrapper annType = AbstractCompiler.findType(cu, ann.getNameAsString());
             if (annType != null && annType.getClazz() != null) {
                 String annFqn = annType.getFullyQualifiedName();
-
                 if (annFqn != null && !annFqn.startsWith("lombok.")) {
-                    builder = fieldDef.annotateField(
-                            AnnotationDescription.Builder.ofType((Class<? extends Annotation>) annType.getClazz()).build()
-                    );
+                    try {
+                        builder = fieldDef.annotateField(
+                                AnnotationDescription.Builder.ofType((Class<? extends Annotation>) annType.getClazz()).build()
+                        );
+                    } catch (IllegalStateException e) {
+                        logger.warn("Could not add annotation {} to field {}: {}",
+                                annType.getFullyQualifiedName(), fieldName, e.getMessage());
+                    }
                 }
             }
         }
