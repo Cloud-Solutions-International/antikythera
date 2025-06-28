@@ -99,6 +99,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <runOrder>alphabetical</runOrder>
                     <argLine>@{argLine} -XX:+EnableDynamicAgentLoading
                         --add-opens java.base/java.nio.charset=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
