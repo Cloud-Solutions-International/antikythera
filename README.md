@@ -23,5 +23,14 @@ The code is divided into several modules:
             based on the return value. For void methods, assertions will be based on logging statements and side effects.
 
             The test generator will also ensure that the proper preconditions are setup before the test is actually run.
-    
-    
+
+
+Running the tests
+--
+Antikythera itself is tested by around 450 unit and integration tests. In order for you to be able to execute them you need to clone the two repos at
+
+- https://github.com/Cloud-Solutions-International/antikythera-sample-project
+- https://github.com/Cloud-Solutions-International/antikythera-test-helper
+
+If you maintain the folder structutre described in the antikythera-test-helper; chances are that you will not need to edit the yaml files in the src/test/resources
+folder of this project. Running the tests will also require the --add-opens VM argument
