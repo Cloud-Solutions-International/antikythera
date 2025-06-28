@@ -39,7 +39,8 @@ class TestDummyArgumentGenerator {
     void testGenerateArgumentBody(String type, Object value) throws ReflectiveOperationException{
 
 
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                "sa.com.cloudsolutions.antikythera.evaluator.Hello").clone();
         cu.addImport("java.util.Map");
         cu.addImport("java.util.Set");
         MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).orElseThrow();
@@ -73,7 +74,8 @@ class TestDummyArgumentGenerator {
         "LinkedList, []"
     })
     void testMockNonPrimitiveParameter(String type, String expectedValue) throws ReflectiveOperationException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                "sa.com.cloudsolutions.antikythera.evaluator.Hello").clone();
         cu.addImport("java.util." + type);
 
         MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).orElseThrow();
