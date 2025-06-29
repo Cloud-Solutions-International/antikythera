@@ -567,16 +567,15 @@ public class UnitTestGenerator extends TestGenerator {
                 TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
                 body.addStatement(String.format("%s.set%s(new ArrayList());", nameAsString, ClassProcessor.instanceToClassName(name)));
             } else {
-                if (!fieldVar.getInitializer().isEmpty()) {
-                    Expression first = fieldVar.getInitializer().getFirst();
-                    if (first.isMethodCallExpr() && first.toString().startsWith("set")) {
-                        body.addStatement(String.format("%s.%s;",
-                                nameAsString, first));
-                    }
-                    else {
-                        body.addStatement(String.format("%s.set%s(%s);",
-                                nameAsString, ClassProcessor.instanceToClassName(name), first));
-                    }
+                // the only caller has checked whether initializer is empty
+                Expression first = fieldVar.getInitializer().getFirst();
+                if (first.isMethodCallExpr() && first.toString().startsWith("set")) {
+                    body.addStatement(String.format("%s.%s;",
+                            nameAsString, first));
+                }
+                else {
+                    body.addStatement(String.format("%s.set%s(%s);",
+                            nameAsString, ClassProcessor.instanceToClassName(name), first));
                 }
             }
         }
