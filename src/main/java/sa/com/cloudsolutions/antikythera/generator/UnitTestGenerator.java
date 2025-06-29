@@ -278,6 +278,16 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }, vars);
 
+        testClass.accept(new VoidVisitorAdapter<Set<String>>() {
+            @Override
+            public void visit(FieldDeclaration fd, Set<String> vars) {
+                for (VariableDeclarator v : fd.getVariables()) {
+                    vars.add(v.getNameAsString());
+                }
+                super.visit(fd, vars);
+            }
+        }, vars);
+
         for (Expression expr : whenThen) {
             if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce, vars)) {
                 continue;
@@ -298,7 +308,9 @@ public class UnitTestGenerator extends TestGenerator {
                     if (mockedByBaseTestClass(optScope.orElseThrow())) {
                         return true;
                     }
-                    return !vars.contains(optScope.get().toString());
+                    if (!vars.contains(optScope.get().toString())) {
+                        return true;
+                    }
                 }
                 addImportsForCasting(argMethod);
             }
@@ -1057,4 +1069,5 @@ public class UnitTestGenerator extends TestGenerator {
         assertion.addArgument(condition);
         return assertion;
     }
+
 }
