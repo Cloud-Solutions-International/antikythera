@@ -567,15 +567,16 @@ public class UnitTestGenerator extends TestGenerator {
                 TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
                 body.addStatement(String.format("%s.set%s(new ArrayList());", nameAsString, ClassProcessor.instanceToClassName(name)));
             } else {
-                // the only caller has checked whether initializer is empty
-                Expression first = fieldVar.getInitializer().getFirst();
-                if (first.isMethodCallExpr() && first.toString().startsWith("set")) {
-                    body.addStatement(String.format("%s.%s;",
-                            nameAsString, first));
-                }
-                else {
-                    body.addStatement(String.format("%s.set%s(%s);",
-                            nameAsString, ClassProcessor.instanceToClassName(name), first));
+                if (!fieldVar.getInitializer().isEmpty()) {
+                    Expression first = fieldVar.getInitializer().getFirst();
+                    if (first.isMethodCallExpr() && first.toString().startsWith("set")) {
+                        body.addStatement(String.format("%s.%s;",
+                                nameAsString, first));
+                    }
+                    else {
+                        body.addStatement(String.format("%s.set%s(%s);",
+                                nameAsString, ClassProcessor.instanceToClassName(name), first));
+                    }
                 }
             }
         }
@@ -592,10 +593,8 @@ public class UnitTestGenerator extends TestGenerator {
             return false;
         }
 
-        if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
-            return false;
-        }
-        return true;
+        return (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz())));
+
     }
 
     private void mockFieldWithMockito(String nameAsString, Evaluator eval, FieldDeclaration field) {
