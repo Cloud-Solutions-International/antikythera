@@ -29,6 +29,7 @@ import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.ReferenceType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,9 +58,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * <p>Unit test generator.</p>
@@ -264,8 +267,19 @@ public class UnitTestGenerator extends TestGenerator {
      * Deals with adding Mockito.when().then() type expressions to the generated tests.
      */
     private void addWhens() {
+        Set<String> vars = new HashSet<>();
+        testMethod.accept(new VoidVisitorAdapter<Set<String>>() {
+            @Override
+            public void visit(VariableDeclarationExpr decl, Set<String> vars) {
+                for (VariableDeclarator v : decl.getVariables()) {
+                    vars.add(v.getNameAsString());
+                }
+                super.visit(decl, vars);
+            }
+        }, vars);
+
         for (Expression expr : whenThen) {
-            if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce)) {
+            if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce, vars)) {
                 continue;
             }
             getBody(testMethod).addStatement(expr);
@@ -273,15 +287,18 @@ public class UnitTestGenerator extends TestGenerator {
         whenThen.clear();
     }
 
-    private boolean skipWhenUsage(MethodCallExpr mce) {
+    private boolean skipWhenUsage(MethodCallExpr mce, Set<String> vars) {
         Optional<Expression> scope = mce.getScope();
         if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped) {
 
             Optional<Expression> arg = scoped.getArguments().getFirst();
-            if (arg.isPresent() && baseTestClass != null
-                    && arg.get() instanceof MethodCallExpr argMethod) {
-                if (argMethod.getScope().isPresent() && mockedByBaseTestClass(argMethod.getScope().orElseThrow())) {
-                    return true;
+            if (arg.isPresent() && baseTestClass != null && arg.get() instanceof MethodCallExpr argMethod) {
+                Optional<Expression> optScope = argMethod.getScope();
+                if (optScope.isPresent()) {
+                    if (mockedByBaseTestClass(optScope.orElseThrow())) {
+                        return true;
+                    }
+                    return !vars.contains(optScope.get().toString());
                 }
                 addImportsForCasting(argMethod);
             }
