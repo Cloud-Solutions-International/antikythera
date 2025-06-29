@@ -593,7 +593,7 @@ public class UnitTestGenerator extends TestGenerator {
             return false;
         }
 
-        return (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz())));
+        return !(f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz())));
 
     }
 
