@@ -18,6 +18,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
@@ -544,28 +545,68 @@ public class UnitTestGenerator extends TestGenerator {
             if (typeDeclarationOpt.isPresent()) {
                 TypeDeclaration<?> t = typeDeclarationOpt.get();
                 for (FieldDeclaration field : t.getFields()) {
-                    mockFieldHelper(nameAsString, eval, field);
+                    if (!v.getInitializer().isEmpty() && v.getInitializer().getFirst() instanceof ObjectCreationExpr) {
+                        mockFieldWithSetter(nameAsString, eval, field);
+                    }
+                    else {
+                        mockFieldWithMockito(nameAsString, eval, field);
+                    }
                 }
             }
         }
     }
 
-    private void mockFieldHelper(String nameAsString, Evaluator eval, FieldDeclaration field) {
+    private void mockFieldWithSetter(String nameAsString, Evaluator eval, FieldDeclaration field) {
         BlockStmt body = getBody(testMethod);
         String name = field.getVariable(0).getNameAsString();
+
+        if (doesFieldNeedMocking(eval, name)) {
+            Variable fieldVar = eval.getField(name);
+            Object value = fieldVar.getValue();
+            if (value instanceof List) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+                body.addStatement(String.format("%s.set%s(new ArrayList());", nameAsString, ClassProcessor.instanceToClassName(name)));
+            } else {
+                if (!fieldVar.getInitializer().isEmpty()) {
+                    Expression first = fieldVar.getInitializer().getFirst();
+                    if (first.isMethodCallExpr() && first.toString().startsWith("set")) {
+                        body.addStatement(String.format("%s.%s;",
+                                nameAsString, first));
+                    }
+                    else {
+                        body.addStatement(String.format("%s.set%s(%s);",
+                                nameAsString, ClassProcessor.instanceToClassName(name), first));
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean doesFieldNeedMocking(Evaluator eval, String name) {
         Variable f = eval.getField(name);
         if (f == null || f.getType() == null || name.equals("serialVersionUID")) {
-            return;
+            return false;
         }
 
         Object value = f.getValue();
         if (value == null) {
-            return;
+            return false;
         }
 
         if (f.getType().isPrimitiveType() && f.getValue().equals(Reflect.getDefault(f.getClazz()))) {
+            return false;
+        }
+        return true;
+    }
+
+    private void mockFieldWithMockito(String nameAsString, Evaluator eval, FieldDeclaration field) {
+        BlockStmt body = getBody(testMethod);
+        String name = field.getVariable(0).getNameAsString();
+
+        if (!doesFieldNeedMocking(eval, name)) {
             return;
         }
+        Object value = eval.getField(name).getValue();
         if (value instanceof List) {
             TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
             body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
