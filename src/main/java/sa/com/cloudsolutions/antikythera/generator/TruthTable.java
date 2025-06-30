@@ -5,12 +5,13 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.github.javaparser.utils.Pair;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
@@ -46,10 +47,10 @@ public class TruthTable {
     private Expression condition;
     /**
      * Collection of variables involved in the condition.
-     * the key will be the expression representing the variable and the value will be a Pair
+     * the key will be the expression representing the variable and the value will be a Domain
      * representing the lower and upper bounds for the expression
      */
-    private final HashMap<Expression, Pair<Object, Object>> variables;
+    private final HashMap<Expression, Domain> variables;
 
     /**
      * All the sub conditions that make up the condition.
@@ -207,7 +208,7 @@ public class TruthTable {
      * @param variableList all the variables in the conditional.
      */
     private void generateCombinations(Expression[] variableList) {
-        Map<Expression, Interval> numericRanges = collectNumericRanges(variableList);
+        Map<Expression, Domain> numericRanges = collectNumericRanges(variableList);
         int totalCombinations = calculateTotalCombinations(variableList, numericRanges);
         table = new ArrayList<>();
 
@@ -292,7 +293,7 @@ public class TruthTable {
      * @return the total number of combinations that are available to us.
      */
     private int calculateTotalCombinations(Expression[] variableList,
-            Map<Expression, Interval> domain) {
+            Map<Expression, Domain> domain) {
         int totalCombinations = 1;
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
@@ -318,12 +319,12 @@ public class TruthTable {
      * @param variableList Array of Expression objects representing variables
      * @return Map of numeric variables to their bounds
      */
-    private Map<Expression, Interval> collectNumericRanges(Expression[] variableList) {
-        Map<Expression, Interval> numericRanges = new HashMap<>();
+    private Map<Expression, Domain> collectNumericRanges(Expression[] variableList) {
+        Map<Expression, Domain> numericRanges = new HashMap<>();
         for (Expression v : variableList) {
-            Pair<Object, Object> bounds = variables.get(v);
-            if (bounds.a instanceof Integer min && bounds.b instanceof Integer max) {
-                numericRanges.put(v, new Interval(min, max));
+            Domain domain = variables.get(v);
+            if (domain.getLowerBound() instanceof Integer min && domain.getUpperBound() instanceof Integer max) {
+                numericRanges.put(v, new Domain(min, max));
             }
         }
         return numericRanges;
@@ -349,20 +350,20 @@ public class TruthTable {
      * @return Map of variable expressions to their assigned values
      */
     private Map<Expression, Object> generateRowValues(Expression[] variableList,
-                                                      Map<Expression, Interval> domain, int combination) {
+                                                      Map<Expression, Domain> domain, int combination) {
         Map<Expression, Object> truthValues = new HashMap<>();
         int product = 1;
 
         for (Expression v : variableList) {
             if (domain.containsKey(v)) {
-                Interval range = domain.get(v);
+                Domain range = domain.get(v);
                 int value = range.min + (combination / product) % range.width;
                 truthValues.put(v, value);
                 product *= range.width;
             } else {
-                Pair<Object, Object> bounds = variables.get(v);
+                Domain domainObj = variables.get(v);
                 boolean value = ((combination / product) % 2) == 1;
-                truthValues.put(v, value ? bounds.b : bounds.a);
+                truthValues.put(v, value ? domainObj.getUpperBound() : domainObj.getLowerBound());
                 product *= 2;
             }
         }
@@ -373,12 +374,12 @@ public class TruthTable {
         if (isDefaultDomain()) {
             int maxLiteral = findMaxIntegerLiteral();
             if (maxLiteral > 1) {
-                variables.replaceAll((e, v) -> new Pair<>(0, maxLiteral));
+                variables.replaceAll((e, v) -> new Domain(0, maxLiteral));
             } else {
-                for(Map.Entry<Expression, Pair<Object, Object>> entry : variables.entrySet()) {
-                    Pair<Object, Object> value = entry.getValue();
-                    if (value.a instanceof Number || value.b instanceof Number) {
-                        variables.put(entry.getKey(), new Pair<>(0, Math.max(1, variables.size() - 1)));
+                for(Map.Entry<Expression, Domain> entry : variables.entrySet()) {
+                    Domain value = entry.getValue();
+                    if (value.getLowerBound() instanceof Number || value.getUpperBound() instanceof Number) {
+                        variables.put(entry.getKey(), new Domain(0, Math.max(1, variables.size() - 1)));
                     }
                 }
             }
@@ -405,22 +406,25 @@ public class TruthTable {
     private void adjustDomainForLogicalComplement(MethodCallExpr mce, Expression variable) {
         if (mce.getArgument(0) instanceof IntegerLiteralExpr integerLiteralExpr) {
             int c = Integer.parseInt(integerLiteralExpr.getValue());
-            Pair<Object, Object> currentDomain = variables.get(variable);
-            if (currentDomain.a instanceof Integer a && a == c) {
-                variables.put(variable, new Pair<>(a - 1, currentDomain.b));
+            Domain currentDomain = variables.get(variable);
+            if (currentDomain.getLowerBound() instanceof Integer a && a == c) {
+                variables.put(variable, new Domain(a - 1, currentDomain.getUpperBound()));
             }
-            if (currentDomain.b instanceof Integer b && b == c) {
-                variables.put(variable, new Pair<>(currentDomain.a, b + 1));
+            if (currentDomain.getUpperBound() instanceof Integer b && b == c) {
+                variables.put(variable, new Domain(currentDomain.getLowerBound(), b + 1));
             }
         }
     }
 
     private boolean isDefaultDomain() {
-        for(Pair<Object, Object> p : variables.values()) {
-            if (p.a instanceof Collection<?> || p.b instanceof Collection<?> || p.a instanceof Map<?,?> || p.b instanceof Map<?,?>) {
+        for(Domain domain : variables.values()) {
+            Object lowerBound = domain.getLowerBound();
+            Object upperBound = domain.getUpperBound();
+            if (lowerBound instanceof Collection<?> || upperBound instanceof Collection<?> || 
+                lowerBound instanceof Map<?,?> || upperBound instanceof Map<?,?>) {
                 continue;
             }
-            if (!(p.a instanceof Integer a && p.b instanceof Integer b && a == 0 && b == 1)) {
+            if (!(lowerBound instanceof Integer a && upperBound instanceof Integer b && a == 0 && b == 1)) {
                 return false;
             }
         }
@@ -439,38 +443,38 @@ public class TruthTable {
         }
 
         int literalValue = Integer.parseInt(value.asIntegerLiteralExpr().getValue());
-        Pair<Object, Object> currentDomain = variables.get(variable);
+        Domain currentDomain = variables.get(variable);
 
-        if (!(currentDomain.a instanceof Integer && currentDomain.b instanceof Integer)) {
+        if (!(currentDomain.getLowerBound() instanceof Integer && currentDomain.getUpperBound() instanceof Integer)) {
             return;
         }
 
-        Interval newInterval = calculateNewInterval(
-            new Interval((Integer) currentDomain.a, (Integer) currentDomain.b),
+        Domain newInterval = calculateNewInterval(
+            new Domain(currentDomain.getLowerBound(), currentDomain.getUpperBound()),
             literalValue,
             constraint.getOperator(),
             constraint.getLeft().toString().equals(variable.toString())
         );
 
-        variables.put(variable, new Pair<>(newInterval.min, newInterval.max));
+        variables.put(variable, newInterval);
     }
 
-    private Interval calculateNewInterval(Interval current, int literalValue,
+    private Domain calculateNewInterval(Domain current, int literalValue,
             BinaryExpr.Operator operator, boolean varOnLeft) {
         return switch (operator) {
             case GREATER -> varOnLeft ?
-                new Interval(literalValue + 1, Math.max(current.max, literalValue + 2)) :
-                new Interval(Math.min(current.min, literalValue - 2), literalValue - 1);
+                new Domain(literalValue + 1, Math.max(current.max, literalValue + 2)) :
+                new Domain(Math.min(current.min, literalValue - 2), literalValue - 1);
             case GREATER_EQUALS -> varOnLeft ?
-                new Interval(literalValue, Math.max(current.max, literalValue + 1)) :
-                new Interval(Math.min(current.min, literalValue - 1), literalValue);
+                new Domain(literalValue, Math.max(current.max, literalValue + 1)) :
+                new Domain(Math.min(current.min, literalValue - 1), literalValue);
             case LESS -> varOnLeft ?
-                new Interval(Math.min(current.min, literalValue - 1), literalValue - 1) :
-                new Interval(literalValue + 1, Math.max(current.max, literalValue + 1));
+                new Domain(Math.min(current.min, literalValue - 1), literalValue - 1) :
+                new Domain(literalValue + 1, Math.max(current.max, literalValue + 1));
             case LESS_EQUALS -> varOnLeft ?
-                new Interval(Math.min(current.min, literalValue), literalValue) :
-                new Interval(literalValue, Math.max(current.max, literalValue));
-            case EQUALS -> new Interval(literalValue, literalValue);
+                new Domain(Math.min(current.min, literalValue), literalValue) :
+                new Domain(literalValue, Math.max(current.max, literalValue));
+            case EQUALS -> new Domain(literalValue, literalValue);
             default -> current;
         };
     }
@@ -633,9 +637,46 @@ public class TruthTable {
             }
         } else if (condition.isMethodCallExpr()) {
             return evaluateMethodCall(condition.asMethodCallExpr(), truthValues);
+        } else if (condition.isInstanceOfExpr()) {
+            return evaluateInstanceOf(condition.asInstanceOfExpr(), truthValues);
         }
 
         return evaluateBasicExpression(condition, truthValues);
+    }
+
+    /**
+     * Evaluates an instanceof expression with the provided truth values.
+     *
+     * @param instanceOfExpr The instanceof expression to evaluate
+     * @param truthValues The truth values for variables
+     * @return Boolean result of the instanceof check
+     */
+    private Object evaluateInstanceOf(InstanceOfExpr instanceOfExpr, Map<Expression, Object> truthValues) {
+        Expression expr = instanceOfExpr.getExpression();
+        Object value = truthValues.get(expr);
+
+        // If the value is null, instanceof always returns false
+        if (value == null) {
+            return false;
+        }
+
+        String typeNameStr = instanceOfExpr.getType().asString();
+
+        // Check if the value is an instance of the specified type
+        return switch (typeNameStr) {
+            case "String" -> value instanceof String;
+            case "Integer", "int" -> value instanceof Integer;
+            case "Boolean", "boolean" -> value instanceof Boolean;
+            case "Double", "double" -> value instanceof Double;
+            case "Long", "long" -> value instanceof Long;
+            case "Collection", "List", "ArrayList" -> value instanceof Collection;
+            case "Map", "HashMap" -> value instanceof Map;
+            default -> {
+                // For other types, try to match the simple class name
+                String valueClassName = value.getClass().getSimpleName();
+                yield valueClassName.equals(typeNameStr);
+            }
+        };
     }
 
     private Object evaluateBinaryExpression(BinaryExpr binaryExpr, Map<Expression, Object> truthValues) {
@@ -646,7 +687,15 @@ public class TruthTable {
 
         return switch (binaryExpr.getOperator()) {
             case AND -> ((Boolean) left) && (Boolean) right;
-            case OR -> ((Boolean) left) || (Boolean) right;
+            case OR -> {
+                if (left instanceof Integer l) {
+                    left = l != 0;
+                }
+                if (right instanceof Integer r) {
+                    right = r != 0;
+                }
+                yield ((Boolean) left) || (Boolean) right;
+            }
             case EQUALS -> (left == null || right == null) ? left == right : left.equals(right);
             case NOT_EQUALS -> (left == null || right == null) ? left != right : !left.equals(right);
             case LESS -> NumericComparator.compare(left, right) < 0;
@@ -796,7 +845,7 @@ public class TruthTable {
     /**
      * Collects variable names from the condition expression.
      */
-    private class VariableCollector extends VoidVisitorAdapter<HashMap<Expression, Pair<Object, Object>>> {
+    private class VariableCollector extends VoidVisitorAdapter<HashMap<Expression, Domain>> {
         /**
          * Processes variable names found in conditional expressions and determines their value domains.
          * For each name expression encountered:
@@ -813,30 +862,34 @@ public class TruthTable {
          * @param collector Map storing variable domains as Pairs of lower/upper bounds
          */
         @Override
-        public void visit(NameExpr n, HashMap<Expression, Pair<Object, Object>> collector) {
+        public void visit(NameExpr n, HashMap<Expression, Domain> collector) {
             Optional<Node> parentNode = n.getParentNode();
             if (parentNode.isEmpty()) {
-                collector.put(n, new Pair<>(true, false));
+                collector.put(n, new Domain(true, false));
             }
             else if (parentNode.get() instanceof BinaryExpr b) {
                 findDomain(n, collector, b.getLeft().equals(n) ? b.getRight() : b.getLeft());
             }
             else if (parentNode.get() instanceof UnaryExpr) {
-                collector.put(n, new Pair<>(false, true));
+                collector.put(n, new Domain(false, true));
+            }
+            else if (parentNode.get() instanceof InstanceOfExpr instanceOfExpr) {
+                Domain d = new Domain(instanceOfExpr.getType(), new ClassOrInterfaceType());
+                collector.put(n, d);
             }
 
             super.visit(n, collector);
         }
 
         @Override
-        public void visit(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector) {
+        public void visit(MethodCallExpr m, HashMap<Expression, Domain> collector) {
             ScopeChain chain = ScopeChain.findScopeChain(m);
             if (m.getNameAsString().equals(IS_EMPTY)) {
                 // For isEmpty(), we want to consider both empty and non-empty collections
                 List<?> emptyList = new ArrayList<>();
                 List<Integer> nonEmptyList = new ArrayList<>();
                 nonEmptyList.add(1);
-                Pair<Object, Object> domain = new Pair<>(emptyList, nonEmptyList);
+                Domain domain = new Domain(emptyList, nonEmptyList);
                 if (chain.isEmpty()) {
                     collector.put(m, domain);
                 } else {
@@ -853,7 +906,7 @@ public class TruthTable {
                         findDomain(m, collector, b.getLeft());
                     }
                 } else {
-                    collector.put(m, new Pair<>(true, false));
+                    collector.put(m, new Domain(true, false));
                 }
             }
             super.visit(m, collector);
@@ -861,17 +914,17 @@ public class TruthTable {
 
 
         @Override
-        public void visit(FieldAccessExpr f, HashMap<Expression, Pair<Object, Object>> collector) {
+        public void visit(FieldAccessExpr f, HashMap<Expression, Domain> collector) {
             if(isInequalityPresent()) {
-                collector.put(f, new Pair<>(0, 1));
+                collector.put(f, new Domain(0, 1));
             }
             else {
-                collector.put(f, new Pair<>(true, false));
+                collector.put(f, new Domain(true, false));
             }
             super.visit(f, collector);
         }
 
-        private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Pair<Object, Object>> collector, ScopeChain chain) {
+        private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Domain> collector, ScopeChain chain) {
             if (chain.isEmpty()) {
                 findDomain(m, collector, m.getArgument(0));
             } else {
@@ -885,14 +938,13 @@ public class TruthTable {
          * @param collector the collection into which we will put the eligible expressions
          * @param compareWith the expression that we will compare against.
          */
-        private void findDomain(Expression nameExpression, HashMap<Expression,
-                Pair<Object, Object>> collector, Expression compareWith) {
+        private void findDomain(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
             if (compareWith.isNullLiteralExpr()) {
                 if (allowNullInputs) {
-                    collector.put(nameExpression, new Pair<>(null, "T"));
+                    collector.put(nameExpression, new Domain(null, "T"));
                 } else {
                     // If null inputs are not allowed, use a non-null domain
-                    collector.put(nameExpression, new Pair<>(false, true));
+                    collector.put(nameExpression, new Domain(false, true));
                 }
             }
             else if (compareWith.isIntegerLiteralExpr()) {
@@ -906,24 +958,24 @@ public class TruthTable {
             }
             else if (compareWith.isStringLiteralExpr()) {
                 if (allowNullInputs) {
-                    collector.put(nameExpression, new Pair<>(null, compareWith.asStringLiteralExpr().getValue()));
+                    collector.put(nameExpression, new Domain(null, compareWith.asStringLiteralExpr().getValue()));
                 } else {
                     // If null inputs are not allowed, use a non-null domain for strings
-                    collector.put(nameExpression, new Pair<>("", compareWith.asStringLiteralExpr().getValue()));
+                    collector.put(nameExpression, new Domain("", compareWith.asStringLiteralExpr().getValue()));
                 }
             }
             else {
                 if (isInequalityPresent()) {
-                    collector.put(nameExpression, new Pair<>(0, 1));
+                    collector.put(nameExpression, new Domain(0, 1));
                 }
                 else {
-                    collector.put(nameExpression, new Pair<>(true, false));
-                    collector.put(compareWith, new Pair<>(true, false));
+                    collector.put(nameExpression, new Domain(true, false));
+                    collector.put(compareWith, new Domain(true, false));
                 }
             }
         }
 
-        private void handleIntegerLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleIntegerLiteral(Expression n, HashMap<Expression, Domain> collector,
                                           Expression compareWith) {
             int literalValue = Integer.parseInt(compareWith.asIntegerLiteralExpr().getValue());
             Node parent = n.getParentNode().orElse(null);
@@ -932,14 +984,14 @@ public class TruthTable {
                 if (isInequality(binaryExpr)) {
                     handleInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
+                    collector.put(n, new Domain(literalValue, literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, literalValue);
             }
         }
 
-        private void handleLongLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleLongLiteral(Expression n, HashMap<Expression, Domain> collector,
                                        Expression compareWith) {
             // Handle the case where the value might have an 'L' suffix
             String valueStr = compareWith.asLongLiteralExpr().getValue();
@@ -953,25 +1005,25 @@ public class TruthTable {
                 if (isInequality(binaryExpr)) {
                     handleLongInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 1));
+                    collector.put(n, new Domain((int)literalValue, (int)literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, (int)literalValue);
             }
         }
 
-        private void handleLongInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleLongInequalityDomain(Expression n, HashMap<Expression, Domain> collector,
                                                 long literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, (int)literalValue + 1));
-                case GREATER -> collector.put(n, new Pair<>((int)literalValue - 1, (int)literalValue + 1));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>((int)literalValue, (int)literalValue + 2));
-                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+                case LESS -> collector.put(n, new Domain((int)literalValue - 1, (int)literalValue));
+                case LESS_EQUALS -> collector.put(n, new Domain(0, (int)literalValue + 1));
+                case GREATER -> collector.put(n, new Domain((int)literalValue - 1, (int)literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Domain((int)literalValue, (int)literalValue + 2));
+                default -> collector.put(n, new Domain(0, 1)); // fallback
             }
         }
 
-        private void handleDoubleLiteral(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleDoubleLiteral(Expression n, HashMap<Expression, Domain> collector,
                                          Expression compareWith) {
             double literalValue = Double.parseDouble(compareWith.asDoubleLiteralExpr().getValue());
             Node parent = n.getParentNode().orElse(null);
@@ -980,49 +1032,49 @@ public class TruthTable {
                 if (isInequality(binaryExpr)) {
                     handleDoubleInequalityDomain(n, collector, literalValue, binaryExpr);
                 } else {
-                    collector.put(n, new Pair<>(literalValue, literalValue + 1));
+                    collector.put(n, new Domain(literalValue, literalValue + 1));
                 }
             } else if (parent instanceof MethodCallExpr methodCallExpr && methodCallExpr.getNameAsString().equals(EQUALS_CALL)) {
                 handleEqualsMethodDomain(n, collector, (int)literalValue);
             }
         }
 
-        private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleDoubleInequalityDomain(Expression n, HashMap<Expression, Domain> collector,
                                                   double literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>(literalValue - 1, literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 0.0001));
-                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 0.0001));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 0.0001));
-                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+                case LESS -> collector.put(n, new Domain(literalValue - 1, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Domain(0, literalValue + 0.0001));
+                case GREATER -> collector.put(n, new Domain(literalValue - 1, literalValue + 0.0001));
+                case GREATER_EQUALS -> collector.put(n, new Domain(literalValue, literalValue + 0.0001));
+                default -> collector.put(n, new Domain(0, 1)); // fallback
             }
         }
 
-        private void handleInequalityDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleInequalityDomain(Expression n, HashMap<Expression, Domain> collector,
                                             int literalValue, BinaryExpr binaryExpr) {
             switch (binaryExpr.getOperator()) {
-                case LESS -> collector.put(n, new Pair<>(literalValue -1, literalValue));
-                case LESS_EQUALS -> collector.put(n, new Pair<>(0, literalValue + 1));
-                case GREATER -> collector.put(n, new Pair<>(literalValue - 1, literalValue + 1));
-                case GREATER_EQUALS -> collector.put(n, new Pair<>(literalValue, literalValue + 2));
-                default -> collector.put(n, new Pair<>(0, 1)); // fallback
+                case LESS -> collector.put(n, new Domain(literalValue -1, literalValue));
+                case LESS_EQUALS -> collector.put(n, new Domain(0, literalValue + 1));
+                case GREATER -> collector.put(n, new Domain(literalValue - 1, literalValue + 1));
+                case GREATER_EQUALS -> collector.put(n, new Domain(literalValue, literalValue + 2));
+                default -> collector.put(n, new Domain(0, 1)); // fallback
             }
         }
 
-        private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Pair<Object, Object>> collector,
+        private void handleEqualsMethodDomain(Expression n, HashMap<Expression, Domain> collector,
                                               int literalValue) {
             if (collector.containsKey(n)) {
-                Pair<Object, Object> existingBounds = collector.get(n);
-                if (existingBounds.a instanceof Integer min && existingBounds.b instanceof Integer max) {
+                Domain existingDomain = collector.get(n);
+                if (existingDomain.getLowerBound() instanceof Integer min && existingDomain.getUpperBound() instanceof Integer max) {
                     if (literalValue < min) {
-                        collector.put(n, new Pair<>(literalValue, max));
+                        collector.put(n, new Domain((Integer)literalValue, max));
                     } else if (literalValue > max) {
-                        collector.put(n, new Pair<>(min, literalValue));
+                        collector.put(n, new Domain(min, (Integer)literalValue));
                     }
                     // If literalValue is within bounds, no action needed
                 }
             } else {
-                collector.put(n, new Pair<>(literalValue, literalValue));
+                collector.put(n, new Domain((Integer)literalValue, (Integer)literalValue));
             }
         }
 
@@ -1066,17 +1118,58 @@ public class TruthTable {
             }
             super.visit(m, collector);
         }
+
+        /**
+         * Collect instanceof expressions as conditions
+         * @param instanceOfExpr the instanceof expression
+         * @param collector set of expressions collected
+         */
+        @Override
+        public void visit(InstanceOfExpr instanceOfExpr, Set<Expression> collector) {
+            collector.add(instanceOfExpr);
+            super.visit(instanceOfExpr, collector);
+        }
     }
 
-    private static class Interval {
+    private static class Domain {
+        private final Object lowerBound;
+        private final Object upperBound;
         final int min;
         final int max;
         final int width;
 
-        Interval(int min, int max) {
+        Domain(Object lowerBound, Object upperBound) {
+            this.lowerBound = lowerBound;
+            this.upperBound = upperBound;
+
+            // Initialize integer fields if bounds are integers
+            if (lowerBound instanceof Integer lb && upperBound instanceof Integer ub) {
+                this.min = lb;
+                this.max = ub;
+                this.width = max - min + 1;
+            } else {
+                // Default values for non-integer bounds
+                this.min = 0;
+                this.max = 0;
+                this.width = 0;
+            }
+        }
+
+        // Constructor matching the old Interval constructor
+        Domain(int min, int max) {
+            this.lowerBound = min;
+            this.upperBound = max;
             this.min = min;
             this.max = max;
             this.width = max - min + 1;
+        }
+
+        public Object getLowerBound() {
+            return lowerBound;
+        }
+
+        public Object getUpperBound() {
+            return upperBound;
         }
     }
 }

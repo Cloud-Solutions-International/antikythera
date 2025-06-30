@@ -7,6 +7,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
@@ -27,6 +28,6 @@ public class TestHelper {
 
     @BeforeAll
     static void setup() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
     }
 }

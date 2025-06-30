@@ -8,6 +8,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.parser.MavenHelper;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,8 +40,11 @@ class TestMockingEvaluator {
     private CompilationUnit cu;
 
     @BeforeAll
-    static void setup() throws IOException {
+    static void setup() throws IOException, XmlPullParserException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        MavenHelper mavenHelper = new MavenHelper();
+        mavenHelper.readPomFile();
+        mavenHelper.buildJarPaths();
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
@@ -64,7 +69,7 @@ class TestMockingEvaluator {
     void executeMethodReturnsDefaultForPrimitiveType() throws ReflectiveOperationException {
         Variable result = mockingEvaluator.executeMethod(intMethod);
         assertNotNull(result);
-        assertEquals(1, result.getValue());
+        assertEquals(0, result.getValue());
     }
 
     @Test

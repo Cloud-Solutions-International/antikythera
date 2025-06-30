@@ -19,6 +19,9 @@ public class Arithmetics {
             if (right.getValue() == null) {
                 return new Variable(left.getValue().toString() + "null");
             }
+            if (left.getValue() == null && right.getValue() instanceof String) {
+                return new Variable("null" + right.getValue().toString());
+            }
             return new Variable(left.getValue().toString() + right.getValue().toString());
         }
         if (left.getValue() instanceof Number l && right.getValue() instanceof Number r) {

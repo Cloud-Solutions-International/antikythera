@@ -24,7 +24,6 @@ public class TestRepository extends TestHelper {
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
-        AntikytheraRunTime.reset();
         MockingRegistry.reset();
     }
 
@@ -37,7 +36,8 @@ public class TestRepository extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"searchByName, Found 1 matches!No Matches!", "findById, Found!Not Found!"})
+    @CsvSource({"searchByName, Found 1 matches!No Matches!", "findById, Found!Not Found!",
+            "countItems, No items!Found 1 item!"})
     void testSearchByName(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 

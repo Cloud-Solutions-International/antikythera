@@ -1,9 +1,12 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +32,15 @@ public class ScopeChain {
      */
     public static ScopeChain findScopeChain(Expression expr) {
         ScopeChain chain = new ScopeChain(expr);
+        Optional<CompilationUnit> cu = expr.findCompilationUnit();
+        if (cu.isPresent() && expr instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            Expression scopeExpression = mce.getScope().orElseThrow();
+            TypeWrapper wrapper = AbstractCompiler.findType(cu.get(), scopeExpression.toString());
+            if (wrapper != null) {
+                chain.addLast(scopeExpression).setTypeWrapper(wrapper);
+                return chain;
+            }
+        }
 
         while (expr != null) {
             if (expr.isMethodCallExpr()) {
@@ -56,8 +68,10 @@ public class ScopeChain {
         return chain;
     }
 
-    private void addLast(Expression expressions) {
-        chain.addLast(new Scope(this, expressions));
+    private Scope addLast(Expression expressions) {
+        Scope scope = new Scope(this, expressions);
+        chain.addLast(scope);
+        return scope;
     }
 
     public boolean isEmpty() {

@@ -14,6 +14,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
@@ -390,14 +391,59 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     }
 
     @Test
-    void identifyFieldsToBeMocked() {
+    void mockParameterFields1() {
         setupMethod(CONDITIONAL,"main");
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
         Evaluator eval = EvaluatorFactory.create(PERSON, Evaluator.class);
         unitTestGenerator.mockParameterFields(new Variable(eval),  "bada");
-        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"),
-            "Default primitive values should not be mocked.");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"));
         assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getAge()).thenReturn(0);"));
+    }
+
+    @Test
+    void mockParameterFields2() {
+        setupMethod(CONDITIONAL,"main");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        Evaluator eval = EvaluatorFactory.create(PERSON, Evaluator.class);
+        Variable v = mockParameterFieldsHelper(eval);
+        v.setInitializer(List.of());
+        unitTestGenerator.mockParameterFields(v,  "bada");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getId()).thenReturn(0);"));
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getAge()).thenReturn(0);"));
+        assertTrue(unitTestGenerator.testMethod.toString().contains("Mockito.when(bada.getName()).thenReturn(\"Shagrat\")"));
+    }
+
+    @Test
+    void mockParameterFields3() {
+        setupMethod(CONDITIONAL,"main");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        Evaluator eval = EvaluatorFactory.create(PERSON, Evaluator.class);
+        Variable v = new Variable(eval);
+        ObjectCreationExpr oce = new ObjectCreationExpr();
+        v.setInitializer(List.of(oce));
+        unitTestGenerator.mockParameterFields(v,  "bada");
+        assertTrue(unitTestGenerator.testMethod.getBody().orElseThrow().isEmpty());
+    }
+
+    @Test
+    void mockParameterFields4() {
+        setupMethod(CONDITIONAL,"main");
+        assertFalse(unitTestGenerator.testMethod.toString().contains("Mockito"));
+        Evaluator eval = EvaluatorFactory.create(PERSON, Evaluator.class);
+        Variable v = mockParameterFieldsHelper(eval);
+        unitTestGenerator.mockParameterFields(v,  "bada");
+        assertFalse(unitTestGenerator.testMethod.getBody().orElseThrow().isEmpty());
+    }
+
+    private static Variable mockParameterFieldsHelper(Evaluator eval) {
+        Variable v = new Variable(eval);
+        Variable shagrat = new Variable("Shagrat");
+        MethodCallExpr setter = new MethodCallExpr("setName", new StringLiteralExpr("Shagrat"));
+        shagrat.setInitializer(List.of(setter));
+        eval.setField("name", shagrat);
+        ObjectCreationExpr oce = new ObjectCreationExpr();
+        v.setInitializer(List.of(oce));
+        return v;
     }
 
     @Test

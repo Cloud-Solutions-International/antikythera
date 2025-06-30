@@ -155,7 +155,49 @@ public abstract class TestGenerator {
         });
     }
 
+    /**
+     * Removes duplicate test methods from the generated test class.
+     * Only the first occurrence of each unique test method is preserved.
+     * 
+     * @return true if any duplicates were removed, false otherwise
+     */
+    public boolean removeDuplicateTests() {
+        if (gen == null) {
+            return false;
+        }
+        
+        boolean removed = false;
+        for (TypeDeclaration<?> type : gen.getTypes()) {
+            Set<String> methodFingerprints = new HashSet<>();
+            List<MethodDeclaration> methodsToRemove = new ArrayList<>();
+            
+            for (MethodDeclaration method : type.getMethods()) {
+                if (method.getAnnotationByName("Test").isPresent()) {
+                    MethodDeclaration m = method.clone();
+                    m.setName("DUMMY");
+                    String fingerprint = m.toString();
+                    
+                    if (methodFingerprints.contains(fingerprint)) {
+                        methodsToRemove.add(method);
+                        removed = true;
+                    } else {
+                        methodFingerprints.add(fingerprint);
+                    }
+                }
+            }
+            
+            // Remove the duplicate methods
+            for (MethodDeclaration method : methodsToRemove) {
+                type.remove(method);
+            }
+        }
+        
+        return removed;
+    }
+
+    @SuppressWarnings("java:S1130") // this exception will be thrown by subclasses hence the need to declare here
     public void save() throws IOException {
+        removeDuplicateTests();
     }
 
     public void setAsserter(Asserter asserter) {

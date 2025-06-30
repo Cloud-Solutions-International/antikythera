@@ -8,6 +8,7 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
@@ -16,6 +17,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.finch.Finch;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -29,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator extends TestHelper {
@@ -103,12 +106,14 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void executeViaDataAnnotation() throws ReflectiveOperationException {
+        evaluator.setCompilationUnit(evaluator.getCompilationUnit().clone());
         evaluator.getCompilationUnit().getType(0).addAnnotation("Data");
         annotationHelper();
     }
 
     @Test
     void executeViaGetterSetterAnnotation() throws ReflectiveOperationException {
+        evaluator.setCompilationUnit(evaluator.getCompilationUnit().clone());
         evaluator.getCompilationUnit().getType(0).addAnnotation("Getter");
         evaluator.getCompilationUnit().getType(0).addAnnotation("Setter");
         annotationHelper();
@@ -163,6 +168,59 @@ class TestEvaluator extends TestHelper {
         assertTrue(v.getInitializer().getFirst().toString().startsWith("setId("));
 
         assertEquals(1, evaluator.getFieldInitializers().size());
+    }
+
+    @Test
+    void evaluateClassExpressionReturnsClassObject1() throws AntikytheraException, ReflectiveOperationException {
+        Evaluator eval = EvaluatorFactory.create("", Evaluator.class);
+
+        // Test with a standard Java class
+        ClassExpr stringClassExpr = new ClassExpr(StaticJavaParser.parseType("String"));
+        Variable result = eval.evaluateClassExpression(stringClassExpr);
+        assertNotNull(result);
+        assertEquals(String.class, result.getValue());
+
+        // Test with a class from the project
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.Evaluator"));
+        result = eval.evaluateClassExpression(evaluatorClassExpr);
+        assertNull(result);
+
+    }
+
+    @Test
+    void evaluateClassExpressionReturnsClassObject2() throws AntikytheraException, ReflectiveOperationException {
+        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.evaluator.Evaluator");
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.Evaluator"));
+        Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
+        assertNotNull(result);
+        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.Evaluator", ((Class<?>) result.getValue()).getName());
+    }
+
+
+    @Test
+    void evaluateClassExpressionReturnsClassObject3() throws AntikytheraException, ReflectiveOperationException {
+        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository"));
+        Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
+        assertNotNull(result);
+        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository", ((Class<?>) result.getValue()).getName());
+    }
+
+    @Test
+    void validateReflectiveMethodThrowsExceptionWhenMethodIsNull() {
+        Variable nullVariable = new Variable(null);
+        ReflectionArguments args = new ReflectionArguments("missingMethod", new Object[]{}, new Class[]{});
+
+        EvaluatorException ex = assertThrows(EvaluatorException.class, () -> {
+            Evaluator.validateReflectiveMethod(nullVariable, args, null);
+        });
+        assertEquals("Application NPE: missingMethod", ex.getMessage());
+
+        Variable notNullVariable = new Variable("not null value");
+        ex = assertThrows(EvaluatorException.class, () -> {
+            Evaluator.validateReflectiveMethod(notNullVariable, args, null);
+        });
+        assertEquals("Error evaluating method call: missingMethod", ex.getMessage());
     }
 }
 
