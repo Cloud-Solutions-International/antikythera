@@ -58,11 +58,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * <p>Unit test generator.</p>
@@ -78,12 +76,20 @@ import java.util.Set;
 public class UnitTestGenerator extends TestGenerator {
     private static final Logger logger = LoggerFactory.getLogger(UnitTestGenerator.class);
     public static final String TEST_NAME_SUFFIX = "AKTest";
+    public static final String MOCK_BEAN = "MockBean";
+    public static final String MOCK = "Mock";
     private final String filePath;
 
     private boolean autoWired;
     private String instanceName;
     private CompilationUnit baseTestClass;
     private ClassOrInterfaceDeclaration testClass;
+    /**
+     * Keeps track of variables that have been mocked.
+     * in the case of a variable created with mockito the value will be true. For non mockito
+     * variables, it will be false.
+     */
+    private Map<String, Boolean> variables = new HashMap<>();
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -111,8 +117,8 @@ public class UnitTestGenerator extends TestGenerator {
      */
     private static void identifyExistingMocks(TypeDeclaration<?> t) {
         for (FieldDeclaration fd : t.getFields()) {
-            if (fd.getAnnotationByName("MockBean").isPresent() ||
-                    fd.getAnnotationByName("Mock").isPresent()) {
+            if (fd.getAnnotationByName(MOCK_BEAN).isPresent() ||
+                    fd.getAnnotationByName(MOCK).isPresent()) {
                 List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
                 if(!wrappers.isEmpty() && wrappers.getLast() != null){
                     MockingRegistry.markAsMocked(MockingRegistry.generateRegistryKey(wrappers));
@@ -238,6 +244,7 @@ public class UnitTestGenerator extends TestGenerator {
         gen.getType(0).addMember(testMethod);
         createInstance();
         mockArguments();
+        identifyVariables();
         applyPreconditions();
         addWhens();
         String invocation = invokeMethod();
@@ -267,29 +274,8 @@ public class UnitTestGenerator extends TestGenerator {
      * Deals with adding Mockito.when().then() type expressions to the generated tests.
      */
     private void addWhens() {
-        Set<String> vars = new HashSet<>();
-        testMethod.accept(new VoidVisitorAdapter<Set<String>>() {
-            @Override
-            public void visit(VariableDeclarationExpr decl, Set<String> vars) {
-                for (VariableDeclarator v : decl.getVariables()) {
-                    vars.add(v.getNameAsString());
-                }
-                super.visit(decl, vars);
-            }
-        }, vars);
-
-        testClass.accept(new VoidVisitorAdapter<Set<String>>() {
-            @Override
-            public void visit(FieldDeclaration fd, Set<String> vars) {
-                for (VariableDeclarator v : fd.getVariables()) {
-                    vars.add(v.getNameAsString());
-                }
-                super.visit(fd, vars);
-            }
-        }, vars);
-
         for (Expression expr : whenThen) {
-            if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce, vars)) {
+            if (expr instanceof MethodCallExpr mce && skipWhenUsage(mce)) {
                 continue;
             }
             getBody(testMethod).addStatement(expr);
@@ -297,7 +283,33 @@ public class UnitTestGenerator extends TestGenerator {
         whenThen.clear();
     }
 
-    private boolean skipWhenUsage(MethodCallExpr mce, Set<String> vars) {
+    private void identifyVariables() {
+        variables.clear();
+        testMethod.accept(new VoidVisitorAdapter<Map<String, Boolean>>() {
+            @Override
+            public void visit(VariableDeclarationExpr decl, Map<String, Boolean> vars) {
+                for (VariableDeclarator v : decl.getVariables()) {
+                    boolean isMockito = !(v.getInitializer().isPresent() && v.getInitializer().orElseThrow().isObjectCreationExpr());
+                    variables.put(v.getNameAsString(), isMockito);
+                }
+                super.visit(decl, vars);
+            }
+        }, variables);
+
+        testClass.accept(new VoidVisitorAdapter<Map<String, Boolean>>() {
+            @Override
+            public void visit(FieldDeclaration fd, Map<String, Boolean> vars) {
+                for (VariableDeclarator v : fd.getVariables()) {
+                    boolean isMockito = fd.getAnnotationByName(MOCK).isPresent() ||
+                                        fd.getAnnotationByName(MOCK_BEAN).isPresent();
+                    variables.put(v.getNameAsString(), isMockito);
+                }
+                super.visit(fd, vars);
+            }
+        }, variables);
+    }
+
+    private boolean skipWhenUsage(MethodCallExpr mce) {
         Optional<Expression> scope = mce.getScope();
         if (scope.isPresent() && scope.get() instanceof MethodCallExpr scoped) {
 
@@ -308,7 +320,7 @@ public class UnitTestGenerator extends TestGenerator {
                     if (mockedByBaseTestClass(optScope.orElseThrow())) {
                         return true;
                     }
-                    if (!vars.contains(optScope.get().toString())) {
+                    if (!variables.containsKey(optScope.get().toString())) {
                         return true;
                     }
                 }
@@ -363,8 +375,8 @@ public class UnitTestGenerator extends TestGenerator {
     private boolean mockedByBaseTestClass(Expression arg) {
         for (TypeDeclaration<?> t : baseTestClass.getTypes()) {
             for (FieldDeclaration fd : t.getFields()) {
-                if ((fd.getAnnotationByName("MockBean").isPresent() ||
-                        fd.getAnnotationByName("Mock").isPresent()) &&
+                if ((fd.getAnnotationByName(MOCK_BEAN).isPresent() ||
+                        fd.getAnnotationByName(MOCK).isPresent()) &&
                         fd.getVariable(0).getNameAsString().equals(arg.toString())) {
                     return true;
                 }
@@ -723,6 +735,7 @@ public class UnitTestGenerator extends TestGenerator {
         return methodCall;
     }
 
+    @SuppressWarnings("java:S5411")
     private void applyPreconditionWithMockito(Expression expr) {
         BlockStmt body = getBody(testMethod);
         if (expr.isMethodCallExpr()) {
@@ -731,11 +744,16 @@ public class UnitTestGenerator extends TestGenerator {
                 String name = mce.getNameAsString();
 
                 if (expr.toString().contains("set")) {
-                    body.addStatement("Mockito.when(%s.%s()).thenReturn(%s);".formatted(
-                            scope.toString(),
-                            name.replace("set", "get"),
-                            mce.getArguments().get(0).toString()
-                    ));
+                    if (variables.getOrDefault(scope.toString(), false)) {
+                        body.addStatement("Mockito.when(%s.%s()).thenReturn(%s);".formatted(
+                                scope.toString(),
+                                name.replace("set", "get"),
+                                mce.getArguments().get(0).toString()
+                        ));
+                    }
+                    else {
+                        body.addStatement(expr);
+                    }
                 }
             });
         }
@@ -974,7 +992,7 @@ public class UnitTestGenerator extends TestGenerator {
     private static void addMockedField(CompilationUnit cu, ClassOrInterfaceDeclaration testSuite, FieldDeclaration fd, String registryKey) {
         MockingRegistry.markAsMocked(registryKey);
         FieldDeclaration field = testSuite.addField(fd.getElementType(), fd.getVariable(0).getNameAsString());
-        field.addAnnotation("Mock");
+        field.addAnnotation(MOCK);
         ImportWrapper wrapper = AbstractCompiler.findImport(cu, field.getElementType().asString());
         if (wrapper != null) {
             addImport(wrapper.getImport());
@@ -1000,7 +1018,7 @@ public class UnitTestGenerator extends TestGenerator {
         if (!MockingRegistry.isMockTarget(registryKey) && suite.getFieldByName(fieldName).isEmpty()) {
             MockingRegistry.markAsMocked(registryKey);
             FieldDeclaration field = suite.addField(param.getType(), fieldName);
-            field.addAnnotation("Mock");
+            field.addAnnotation(MOCK);
 
             for (TypeWrapper wrapper : wrappers) {
                 ImportWrapper imp = AbstractCompiler.findImport(cu, wrapper.getFullyQualifiedName());
