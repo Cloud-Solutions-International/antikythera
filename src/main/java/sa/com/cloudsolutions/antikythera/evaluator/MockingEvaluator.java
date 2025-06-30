@@ -93,22 +93,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         if (callable.isMethodDeclaration()) {
             if (isRepository()) {
-                MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
-                Type t = md.getType();
-                if (!t.isPrimitiveType() && !t.isVoidType()) {
-                    List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
-                    ImportWrapper imp = imports.getLast();
-                    String s = imp.getNameAsString();
-                    if (collectionTypes.contains(s)) {
-                        return handleRepositoryCollectionHelper(sc, s);
-                    }
-                }
+                return mockRepositoryMethodCall(sc, callable);
             }
             return super.executeCallable(sc, callable);
         }
         else {
             if (isRepository()) {
-                return mockRepositoryMethod(sc, callable);
+                return mockRepositoryMethodCall(sc, callable);
             }
             return mockBinaryMethodExecution(sc, callable);
         }
@@ -153,9 +144,53 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return executeMethod(method);
     }
 
+    private Variable mockRepositoryMethodCall(Scope sc, Callable callable) throws ReflectiveOperationException {
+        Method method = callable.getMethod();
+        if (method != null) {
+            return mockRepositoryMethod(sc, callable);
+        }
+        else {
+            return mockRepositoryMethodDeclaration(sc, callable);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Variable mockRepositoryMethodDeclaration(Scope sc, Callable callable) throws ReflectiveOperationException {
+        MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
+        Type t = md.getType();
+        if (t.isClassOrInterfaceType() && t.asClassOrInterfaceType().isBoxedType()) {
+            MethodCallExpr methodCall = sc.getScopedMethodCall();
+            Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+            LineOfCode l = Branching.get(stmt.hashCode());
+            Variable v;
+            if (l == null) {
+                l = new LineOfCode(stmt);
+                Branching.add(l);
+                v = Reflect.generateDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
+            }
+            else {
+                l.setPathTaken(LineOfCode.TRUE_PATH);
+                v = Reflect.generateNonDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
+            }
+            MethodCallExpr when = createWhenExpression(methodCall);
+            MockingCall then = createThenExpression(sc, v, when);
+            MockingRegistry.when(className, then);
+
+            return v;
+        }
+        if (!t.isPrimitiveType() && !t.isVoidType()) {
+            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+            ImportWrapper imp = imports.getLast();
+            String s = imp.getNameAsString();
+            if (collectionTypes.contains(s)) {
+                return handleRepositoryCollectionHelper(sc, s);
+            }
+        }
+        return super.executeCallable(sc, callable);
+    }
+
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-
         if (method.getName().equals("save")) {
             return mockRepositorySave(callable, method);
         }
@@ -411,21 +446,16 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
 
-        MethodCallExpr mce = new MethodCallExpr(methodCall.getNameAsString());
-        methodCall.getScope().ifPresent(mce::setScope);
-
-        List<Expression> args = new ArrayList<>();
-        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
-            Variable v = AntikytheraRunTime.pop();
-            args.add(MockingRegistry.createMockitoArgument(v.getType().asString()));
-        }
-
-        for (Expression e : args.reversed()) {
-            mce.addArgument(e);
-        }
-
         Variable v = (l == null) ? repositoryFullPath(sc, stmt, collectionTypeName)
                 : repositoryEmptyPath(collectionTypeName);
+
+        MethodCallExpr when = createWhenExpression(methodCall);
+        MockingCall then = createThenExpression(sc, v, when);
+        MockingRegistry.when(className, then);
+        return v;
+    }
+
+    private MockingCall createThenExpression(Scope sc, Variable v, MethodCallExpr mce) {
         MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
         then.setVariableName(variableName);
 
@@ -443,13 +473,26 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         );
         mocks.add(when);
         then.setExpression(mocks);
-
-
-        MockingRegistry.when(className, then);
-        return v;
+        return then;
     }
 
-     Variable repositoryEmptyPath(String collectionTypeName) {
+    private static MethodCallExpr createWhenExpression(MethodCallExpr methodCall) {
+        MethodCallExpr mce = new MethodCallExpr(methodCall.getNameAsString());
+        methodCall.getScope().ifPresent(mce::setScope);
+
+        List<Expression> args = new ArrayList<>();
+        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
+            Variable v = AntikytheraRunTime.pop();
+            args.add(MockingRegistry.createMockitoArgument(v.getType().asString()));
+        }
+
+        for (Expression e : args.reversed()) {
+            mce.addArgument(e);
+        }
+        return mce;
+    }
+
+    Variable repositoryEmptyPath(String collectionTypeName) {
         Variable v = Reflect.variableFactory(collectionTypeName);
         if (v != null && v.getInitializer().getFirst() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
@@ -469,8 +512,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
      * @param sc scope of the method call
      * @param stmt the statement that involves the method call
      * @param collectionTypeName the type of collection that is required
-     * @return a collection of the type that matches collectionTypeName which will contain a
-     *      single entity.
+     * @return A variable instance that is a collection of the `type` that matches
+     *      collectionTypeName which will contain a single entity.
      */
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);

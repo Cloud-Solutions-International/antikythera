@@ -22,6 +22,7 @@ class TestInheritance extends TestHelper {
 
     @BeforeAll
     static void setup() throws IOException {
+        AntikytheraRunTime.reset();
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
@@ -44,6 +45,7 @@ class TestInheritance extends TestHelper {
 
     @Test
     void testGetterSetterAnnotation() throws ReflectiveOperationException {
+        evaluator.setCompilationUnit(evaluator.getCompilationUnit().clone());
         evaluator.getCompilationUnit().getType(0).addAnnotation("Getter");
         evaluator.getCompilationUnit().getType(0).addAnnotation("Setter");
 

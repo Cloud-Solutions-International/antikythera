@@ -3,13 +3,15 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
 public class Scope {
     Expression expression;
     MethodCallExpr scopedMethodCall;
     Variable variable;
-    private MCEWrapper wrapper;
+    private MCEWrapper mceWrapper;
+    private TypeWrapper typeWrapper;
     private final ScopeChain chain;
 
     Scope(ScopeChain chain, Expression expression)
@@ -39,14 +41,21 @@ public class Scope {
     }
 
     public void setMCEWrapper(MCEWrapper wrapper) {
-        this.wrapper = wrapper;
+        this.mceWrapper = wrapper;
     }
 
     public MCEWrapper getMCEWrapper() {
-        return wrapper;
+        return mceWrapper;
     }
 
     public ScopeChain getScopeChain() {
         return chain;
+    }
+
+    public void setTypeWrapper(TypeWrapper typeWrapper) {
+        this.typeWrapper = typeWrapper;
+    }
+    public TypeWrapper getTypeWrapper() {
+        return typeWrapper;
     }
 }

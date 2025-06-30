@@ -34,6 +34,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -48,6 +49,8 @@ import static org.mockito.Mockito.withSettings;
  */
 public class MockingRegistry {
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
+    private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
+
     public static final String MOCKITO = "Mockito";
 
     private MockingRegistry() {
@@ -86,7 +89,7 @@ public class MockingRegistry {
     }
 
     /**
-     * Creates p 'Mockito.when().then()' style setup.
+     * Creates a 'Mockito.when().then()' style setup.
      * This may or may not translate to a real Mockito call. That depends on the mocking framework
      * being used.
      *
@@ -109,29 +112,33 @@ public class MockingRegistry {
     public static Variable mockIt(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
 
-        String fqn = resolvedTypes.getFirst().getFullyQualifiedName();
-        Variable v;
-        if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
-            if (resolvedTypes.size() == 1) {
-                Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
-                eval.setVariableName(variable.getNameAsString());
-                v = new Variable(eval);
+        for(TypeWrapper wrapper : resolvedTypes) {
+            if (wrapper.getClazz() != null && Modifier.isFinal(wrapper.getClazz().getModifiers())) {
+                continue;
             }
-            else {
-                return mockCollection(resolvedTypes, fqn);
+            String fqn = wrapper.getFullyQualifiedName();
+            TestGenerator.addImport(new ImportDeclaration(fqn, false, false));
+            Variable v;
+            if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
+                if (resolvedTypes.size() == 1) {
+                    Evaluator eval = EvaluatorFactory.createLazily(fqn, MockingEvaluator.class);
+                    eval.setVariableName(variable.getNameAsString());
+                    v = new Variable(eval);
+                } else {
+                    return mockCollection(resolvedTypes, fqn);
+                }
+            } else {
+                String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse(MOCKITO);
+                if (mocker.equals(MOCKITO)) {
+                    v = MockingRegistry.createMockitoMockInstance(fqn);
+                } else {
+                    v = MockingRegistry.createByteBuddyMockInstance(fqn);
+                }
             }
+            v.setType(variable.getType());
+            return v;
         }
-        else {
-            String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse("ByteBuddy");
-            if (mocker.equals(MOCKITO)) {
-                v = MockingRegistry.createMockitoMockInstance(fqn);
-            }
-            else {
-                v = MockingRegistry.createByteBuddyMockInstance(fqn);
-            }
-        }
-        v.setType(variable.getType());
-        return v;
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -151,6 +158,10 @@ public class MockingRegistry {
 
     public static Variable createMockitoMockInstance(String className) throws ClassNotFoundException {
         Class<?> cls = AbstractCompiler.loadClass(className);
+        return createMockitoMockInstance(cls);
+    }
+
+    public static Variable createMockitoMockInstance(Class<?> cls) {
         Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
         v.setClazz(cls);
         return v;
@@ -334,5 +345,18 @@ public class MockingRegistry {
         );
         mce.setScope(new NameExpr(MOCKITO));
         return mce;
+    }
+
+    public static void addCustomMockExpression(String className, Expression expr) {
+        customMockExpressions.computeIfAbsent(className, k -> new ArrayList<>()).add(expr);
+    }
+    public static List<Expression> getCustomMockExpressions(String className) {
+        return customMockExpressions.getOrDefault(className, new ArrayList<>());
+    }
+    public static void clearCustomMockExpressions() {
+        customMockExpressions.clear();
+    }
+    public static void setCustomMockExpressions(Map<String, List<Expression>> customMockExpressions) {
+        MockingRegistry.customMockExpressions = customMockExpressions;
     }
 }

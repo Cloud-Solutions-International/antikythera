@@ -24,6 +24,7 @@ import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -76,7 +77,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -86,6 +86,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 
 
 /**
@@ -310,7 +311,7 @@ public class Evaluator {
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {
-            return evaluateClassExpression(expr);
+            return evaluateClassExpression(expr.asClassExpr());
         } else if (expr.isLambdaExpr()) {
             return FPEvaluator.create(expr.asLambdaExpr(), this);
         } else if (expr.isArrayAccessExpr()) {
@@ -319,8 +320,36 @@ public class Evaluator {
             return evaluateExpression(
                     FunctionalConverter.convertToLambda(expr.asMethodReferenceExpr(), new Variable(this)
                     ));
+        } else if (expr.isInstanceOfExpr()) {
+            return evaluateInstanceOf(expr.asInstanceOfExpr());
+        } else {
+            logger.warn("Unsupported expression: {}", expr.getClass().getSimpleName());
         }
         return null;
+    }
+
+    private Variable evaluateInstanceOf(InstanceOfExpr expr) throws ReflectiveOperationException {
+        Expression left = expr.getExpression();
+        Variable l = evaluateExpression(left);
+        Type t = expr.getType();
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, t);
+        if (wrapper != null) {
+            boolean assignable;
+            if (wrapper.getClazz() != null) {
+                assignable = wrapper.getClazz().isAssignableFrom(l.getClazz());
+            }
+            else {
+                Set<String> subs = AntikytheraRunTime.findSubClasses(wrapper.getFullyQualifiedName());
+                assignable = subs.contains(l.getClazz().getName());
+            }
+            expr.getPattern().ifPresent(pattern -> {
+                if (pattern.isTypePatternExpr()) {
+                    setLocal(expr, pattern.asTypePatternExpr().getNameAsString(), l);
+                }
+            });
+            return new Variable(assignable);
+        }
+        return new Variable(false);
     }
 
     private Variable evaluateArrayAccess(Expression expr) throws ReflectiveOperationException {
@@ -335,22 +364,26 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateClassExpression(Expression expr) throws ClassNotFoundException {
-        ClassExpr classExpr = expr.asClassExpr();
+    Variable evaluateClassExpression(ClassExpr classExpr) throws ClassNotFoundException {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, classExpr.getType().asString());
 
         if (wrapper != null) {
-            if (wrapper.getClazz() != null) {
-                return new Variable(wrapper.getClazz());
-            }
-            if (wrapper.getType() != null) {
-                Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), Evaluator.class);
-                Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+            return evaluateClassExpression(wrapper);
+        }
+        return null;
+    }
 
-                Variable v = new Variable(dynamicClass);
-                v.setClazz(Class.class);
-                return v;
-            }
+    protected Variable evaluateClassExpression(TypeWrapper wrapper) throws ClassNotFoundException {
+        if (wrapper.getClazz() != null) {
+            return new Variable(wrapper.getClazz());
+        }
+        if (wrapper.getType() != null) {
+            Evaluator evaluator = EvaluatorFactory.createLazily(wrapper.getFullyQualifiedName(), Evaluator.class);
+            Class<?> dynamicClass = AKBuddy.createDynamicClass(new MethodInterceptor(evaluator));
+
+            Variable v = new Variable(dynamicClass);
+            v.setClazz(Class.class);
+            return v;
         }
         return null;
     }
@@ -627,6 +660,10 @@ public class Evaluator {
             return null;
         }
 
+        return createObject(oce, wrapper);
+    }
+
+    protected Variable createObject(ObjectCreationExpr oce, TypeWrapper wrapper) throws ReflectiveOperationException {
         if (wrapper.getType() != null) {
             return createUsingEvaluator(wrapper.getType(), oce);
         }
@@ -671,7 +708,7 @@ public class Evaluator {
     protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
         MCEWrapper mce = new MCEWrapper(oce);
         NodeList<Type> argTypes = new NodeList<>();
-        Deque<Type> args = new ArrayDeque<>();
+        Deque<Type> args = new LinkedList<>();
         mce.setArgumentTypes(argTypes);
 
         for (int i = oce.getArguments().size() - 1; i >= 0; i--) {
@@ -891,12 +928,24 @@ public class Evaluator {
             Expression expr2 = scope.getExpression();
             if (expr2.isNameExpr()) {
                 variable = resolveExpression(expr2.asNameExpr());
-            } else if (expr2.isFieldAccessExpr() && variable != null) {
-                /*
-                 * getValue should have returned to us a valid field. That means
-                 * we will have an evaluator instance as the 'value' in the variable v
-                 */
-                variable = evaluateScopedFieldAccess(variable, expr2);
+            } else if (expr2.isFieldAccessExpr()) {
+                if (variable != null) {
+                    /*
+                     * getValue should have returned to us a valid field. That means
+                     * we will have an evaluator instance as the 'value' in the variable v
+                     */
+                    variable = evaluateScopedFieldAccess(variable, expr2);
+                }
+                else if (scope.getTypeWrapper() != null){
+                    if (scope.getTypeWrapper().getClazz() != null) {
+                        variable = new Variable(scope.getTypeWrapper().getClazz());
+                        variable.setClazz(scope.getTypeWrapper().getClazz());
+                    }
+                    else {
+                        variable = new Variable(EvaluatorFactory.create(scope.getTypeWrapper().getFullyQualifiedName(), this));
+                    }
+                    break;
+                }
             } else if (expr2.isMethodCallExpr()) {
                 scope.setVariable(variable);
                 scope.setScopedMethodCall(expr2.asMethodCallExpr());

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.zip.Adler32;
 
@@ -27,7 +28,7 @@ class FactoryTest {
 
     @BeforeAll
     static void beforeClass() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
     }
 
     @BeforeEach

@@ -16,7 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InterfaceSolverTest {
     @BeforeAll
     static void setup() throws IOException {
+        DepSolver.reset();
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
     }
 
     @Test

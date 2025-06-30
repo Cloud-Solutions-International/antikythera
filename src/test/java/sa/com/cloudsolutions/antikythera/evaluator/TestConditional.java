@@ -83,8 +83,9 @@ class TestConditional extends TestHelper {
     @CsvSource({"conditional4, ZERO!Positive!Negative!", "conditional5, ZERO!Three!Two!One!",
             "conditional6, ZERO!Three!Two!One!","conditional7, ZERO!Three!Two!One!",
             "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
-            "booleanWorks, False!True!", "printMap, Map is empty!Key: 1 -> Value: null",
-            "animalFarm, Some animals are more equal!All animals are equal!"
+            "booleanWorks, False!True!", "printMap, Map is empty!Key: 0 -> Value: null",
+            "animalFarm, Some animals are more equal!All animals are equal!",
+            "whatInstance, Integer: 0!Unknown!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -98,7 +99,7 @@ class TestConditional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"conditional5, One!","conditional6, One!","conditional7, One!",
-            "conditional8, ZERO!", "smallDiff, ''"
+            "conditional8, ZERO!", "smallDiff, '',",
     })
     void testConditionals(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -252,7 +253,7 @@ class TestConditionalWithOptional extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({
-        "ifEmpty, ID: 1\\nID not found",
+        "ifEmpty, ID not found\\nID: 1",
         "ifPresent, ID: 1", "binOptionals, x is not 10\\nx is 10",
         "optionalString, ANTIKYTHERA\\nDEFAULT"
     })

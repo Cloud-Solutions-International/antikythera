@@ -33,9 +33,16 @@ public class MethodInterceptor {
 
             // Execute the method using source code evaluation
             Variable result = evaluator.executeMethod(methodDecl);
-
-            // Return the actual value from the Variable wrapper
-            return result != null ? result.getValue() : null;
+            if (result != null) {
+                Object value = result.getValue();
+                if (value instanceof Evaluator eval) {
+                    MethodInterceptor interceptor = new MethodInterceptor(eval);
+                    Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+                    return AKBuddy.createInstance(clazz, interceptor);
+                }
+                return value;
+            }
+            return null;
         }
         return intercept(method, args);
     }
@@ -88,6 +95,7 @@ public class MethodInterceptor {
             this.sourceMethod = sourceMethod;
         }
 
+        @SuppressWarnings("java:S3011")
         @RuntimeType
         public Object intercept(@This Object instance, @Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);

@@ -23,6 +23,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -38,21 +39,31 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-class TestSpringEvaluator {
+class TestSpringEvaluator extends TestHelper {
 
     public static final String PERSON_REPO = "sa.com.cloudsolutions.repository.PersonRepository";
     public static final String SERVICE_CLASS = "sa.com.cloudsolutions.service.PersonService";
 
     @BeforeAll
     static void setup() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         AbstractCompiler.preProcess();
     }
 
     @BeforeEach
     void each() {
-        AntikytheraRunTime.reset();
-        MockingRegistry.reset();
+        System.setOut(new PrintStream(outContent));
+    }
+
+    @Test
+    void testStringUtils() throws ReflectiveOperationException {
+        Evaluator eval = EvaluatorFactory.create(SERVICE_CLASS, Evaluator.class);
+        MethodDeclaration methodDeclaration = eval.getCompilationUnit().findFirst(
+                MethodDeclaration.class, m -> m.getNameAsString().equals("utils")
+        ).orElseThrow();
+        AntikytheraRunTime.push(new Variable("Hello World"));
+        eval.executeMethod(methodDeclaration);
+        assertEquals("Non empty!",outContent.toString().trim());
     }
 
     @Test

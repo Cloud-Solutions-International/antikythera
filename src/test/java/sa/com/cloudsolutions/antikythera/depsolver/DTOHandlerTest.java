@@ -24,6 +24,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeS
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -49,7 +50,7 @@ class DTOHandlerTest {
 
     @BeforeEach
     void loadConfigMapBeforeEach() throws IOException {
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
         basePath = Settings.getProperty(Settings.BASE_PATH).toString();
         controllers = Settings.getProperty(Settings.CONTROLLERS).toString();
         outputPath = Settings.getProperty(Settings.OUTPUT_PATH).toString();

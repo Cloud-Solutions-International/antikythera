@@ -3,11 +3,13 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.File;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,9 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GraphTest {
     @BeforeAll
     static void setup() throws IOException {
-        DepSolver.reset();
-        Settings.loadConfigMap();
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
+    }
+
+    @BeforeEach
+    void each() {
+        DepSolver.reset();
     }
 
     @Test

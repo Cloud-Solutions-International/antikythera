@@ -20,8 +20,19 @@ public class MockReturnValueHandler implements Answer<Object> {
     public Object answer(InvocationOnMock invocation) throws Throwable {
         Class<?> returnType = invocation.getMethod().getReturnType();
         String clsName = returnType.getName();
+        if (clsName.equals("void")) {
+            return null;
+        }
 
-        Object result;
+        Object result = null;
+
+        // Check if this is a generic method with a Class parameter that specifies the return type
+        Class<?> better = findBetterReturnType(invocation);
+        if (better != null) {
+            returnType = better;
+            clsName = returnType.getName();
+        }
+
         if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
             result = EvaluatorFactory.create(clsName, Evaluator.class);
         } else {
@@ -39,17 +50,48 @@ public class MockReturnValueHandler implements Answer<Object> {
         return result;
     }
 
+    private static Class<?> findBetterReturnType(InvocationOnMock invocation) {
+        Object[] arguments = invocation.getArguments();
+        for (Object arg : arguments) {
+            if (arg instanceof Class<?> clazz) {
+                return clazz;
+            } else if (arg instanceof java.lang.reflect.Type typeArg) {
+                // Handle TypeReference or other Type instances
+                try {
+                    if (typeArg instanceof java.lang.reflect.ParameterizedType pType) {
+                        java.lang.reflect.Type rawType = pType.getRawType();
+                        if (rawType instanceof Class<?> clazz) {
+                            return clazz;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Failed to extract type from TypeReference", e);
+                }
+            }
+        }
+        return null;
+    }
+
     void whenThen(InvocationOnMock invocation, Object result, String clsName) {
         if (result != null) {
             try {
-                String mockName = invocation.getMock().getClass().getInterfaces()[0]
-                        .getSimpleName();
-                mockName = Character.toLowerCase(mockName.charAt(0)) +
-                        mockName.substring(1);
+                String mockName = Mockito.mockingDetails(invocation.getMock()).getMockCreationSettings().getMockName().toString();
+
+                // Check if this is a default Mockito mock name
+                if (mockName.contains("mock for")) {
+                    // Fallback to interface-based naming
+                    Class<?>[] interfaces = invocation.getMock().getClass().getInterfaces();
+                    if (interfaces.length > 0) {
+                        mockName = interfaces[0].getSimpleName();
+                        mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
+                    }
+                } else {
+                    // Strip any wrapper text if present
+                    mockName = mockName.replaceAll("[\"']", "");
+                }
 
                 if (!mockName.equals("traceable")) {
-
-                    MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(invocation.getMethod().getName(),clsName,mockName);
+                    MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(invocation.getMethod().getName(), clsName, mockName);
                     methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(invocation.getMethod()));
                 }
             } catch (Exception ex) {

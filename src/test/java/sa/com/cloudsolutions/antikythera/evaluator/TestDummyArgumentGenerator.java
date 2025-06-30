@@ -26,7 +26,7 @@ class TestDummyArgumentGenerator {
     }
 
     @ParameterizedTest
-    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 0"})
+    @CsvSource({"String, Antikythera", "int, 0", "Boolean, true", "Double, 0.0", "Float, 0.0", "Long, 0"})
     void testGenerateArgument(String type, Object value) throws ReflectiveOperationException {
         MethodDeclaration md = new MethodDeclaration();
         Parameter parameter = new Parameter();
@@ -34,12 +34,13 @@ class TestDummyArgumentGenerator {
     }
 
     @ParameterizedTest
-    @CsvSource({"String, Antikythera", "int, 1", "Boolean, true", "Double, 1.0", "Float, 1.0", "Long, 0," +
+    @CsvSource({"String, Antikythera", "int, 0", "Boolean, true", "Double, 0.0", "Float, 0.0", "Long, 0," +
             "List, java.util.ArrayList", "Map, {}", "Set, []"})
     void testGenerateArgumentBody(String type, Object value) throws ReflectiveOperationException{
 
 
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                "sa.com.cloudsolutions.antikythera.evaluator.Hello").clone();
         cu.addImport("java.util.Map");
         cu.addImport("java.util.Set");
         MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).orElseThrow();
@@ -65,15 +66,16 @@ class TestDummyArgumentGenerator {
 
     @ParameterizedTest
     @CsvSource({
-        "Integer, 1",
-        "Double, 1.0",
+        "Integer, 0", "Long, 0",
+        "Float, 0.0", "Double, 0.0",
         "Boolean, true",
         "ArrayList, []",
         "HashMap, {}",
         "LinkedList, []"
     })
     void testMockNonPrimitiveParameter(String type, String expectedValue) throws ReflectiveOperationException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Hello");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                "sa.com.cloudsolutions.antikythera.evaluator.Hello").clone();
         cu.addImport("java.util." + type);
 
         MethodDeclaration md = cu.getClassByName("Hello").get().findFirst(MethodDeclaration.class).orElseThrow();

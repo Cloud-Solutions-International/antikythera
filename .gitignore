@@ -21,6 +21,7 @@ src/main/resources/generator.yml
 src/main/resources/depsolver.yml
 src/main/resources/generator
 src/main/resources/depsolver.yml
+src/main/resources/mocks.yml
 
 src/test/resources/testdata/qa
 

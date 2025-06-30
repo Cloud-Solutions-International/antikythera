@@ -3,10 +3,12 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -39,28 +41,44 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         Variable v = null;
         Type t = param.getType();
 
-        if (t.isClassOrInterfaceType() && param.findCompilationUnit().isPresent()) {
-            TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
-            String fullClassName = wrapper.getFullyQualifiedName();
-            if (t.asClassOrInterfaceType().isBoxedType()) {
-                return mockParameter(param);
-            }
-            if (wrapper.getClazz() != null) {
+        if (!t.isClassOrInterfaceType() || param.findCompilationUnit().isEmpty()) {
+            return v;
+        }
+
+        TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
+        String fullClassName = wrapper.getFullyQualifiedName();
+        if (t.asClassOrInterfaceType().isBoxedType()) {
+            return mockParameter(param);
+        }
+        if (wrapper.getClazz() != null) {
+            List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
+            if (customized.isEmpty()) {
                 return mockNonPrimitiveParameter(param, wrapper);
             }
-            Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
-            v = new Variable(o);
-            v.setType(t);
-            Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-            if (opt.isPresent()) {
-                String init = ArgumentGenerator.instantiateClass(
-                        opt.get().asClassOrInterfaceDeclaration(),
-                        param.getNameAsString()
-                ).replace(";","");
-                String[] parts = init.split("=");
-                v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
+            for (Expression expr : customized) {
+                if (expr instanceof ObjectCreationExpr oce) {
+                    ReflectionArguments args = Reflect.buildArguments(oce,
+                            EvaluatorFactory.createLazily("", Evaluator.class), null);
+                    Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
+                    v = new Variable(constructor.newInstance(args.getArguments()));
+                    v.setInitializer(customized);
+                    return v;
+                }
             }
         }
+        Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
+        v = new Variable(o);
+        v.setType(t);
+        Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
+        if (opt.isPresent() && opt.get().isClassOrInterfaceDeclaration()) {
+            String init = ArgumentGenerator.instantiateClass(
+                    opt.get().asClassOrInterfaceDeclaration(),
+                    param.getNameAsString()
+            ).replace(";", "");
+            String[] parts = init.split("=");
+            v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
+        }
+
         return v;
     }
 
@@ -68,12 +86,16 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         String fullClassName = wrapper.getFullyQualifiedName();
         Type t = param.getType();
 
-
         if (fullClassName.startsWith("java.util")) {
             return Reflect.variableFactory(fullClassName);
         }
 
         Class<?> clazz = wrapper.getClazz();
+        if (clazz.isInterface()) {
+            /* this is an interface so no point in looking for a constructor  */
+            return MockingRegistry.createMockitoMockInstance(clazz);
+        }
+
         // Try to find a no-arg constructor first
         try {
             return new Variable(clazz.getDeclaredConstructor().newInstance());
