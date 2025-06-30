@@ -22,7 +22,7 @@ The code is divided into several modules:
             return values encountered in the expression evaluation engine. When the return is not void, assertions will be generated
             based on the return value. For void methods, assertions will be based on logging statements and side effects.
 
-            The test generator will also ensure that the proper preconditions are setup before the test is actually run.
+The test generator will also ensure that the proper preconditions are setup before the test is actually run.
 
 
 Running the tests
