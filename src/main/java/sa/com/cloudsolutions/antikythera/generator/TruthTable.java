@@ -885,15 +885,25 @@ public class TruthTable {
         public void visit(MethodCallExpr m, HashMap<Expression, Domain> collector) {
             ScopeChain chain = ScopeChain.findScopeChain(m);
             if (m.getNameAsString().equals(IS_EMPTY)) {
-                // For isEmpty(), we want to consider both empty and non-empty collections
-                List<?> emptyList = new ArrayList<>();
-                List<Integer> nonEmptyList = new ArrayList<>();
-                nonEmptyList.add(1);
-                Domain domain = new Domain(emptyList, nonEmptyList);
-                if (chain.isEmpty()) {
-                    collector.put(m, domain);
+                Expression scope = null;
+                if (!chain.isEmpty()) {
+                    scope = chain.getChain().getFirst().getExpression();
+                }
+
+                if (scope != null && scope.toString().equals("StringUtils")) {
+                    Expression arg = m.getArgument(0);
+                    collector.put(arg, new Domain(null, "T"));
                 } else {
-                    collector.put(chain.getChain().getFirst().getExpression(), domain);
+                    // For isEmpty(), we want to consider both empty and non-empty collections
+                    List<?> emptyList = new ArrayList<>();
+                    List<Integer> nonEmptyList = new ArrayList<>();
+                    nonEmptyList.add(1);
+                    Domain domain = new Domain(emptyList, nonEmptyList);
+                    if (chain.isEmpty()) {
+                        collector.put(m, domain);
+                    } else {
+                        collector.put(chain.getChain().getFirst().getExpression(), domain);
+                    }
                 }
             } else if (m.getNameAsString().equals(EQUALS_CALL)) {
                 equalsMethodCall(m, collector, chain);
