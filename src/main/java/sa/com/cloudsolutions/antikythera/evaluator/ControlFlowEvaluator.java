@@ -337,23 +337,37 @@ public class ControlFlowEvaluator extends Evaluator {
     private void setupConditionalVariablesWithSetter(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
+        String fieldName = null;
         if (name.startsWith("is")) {
-            setter.setName("set" + name.substring(2));
+            fieldName = name.substring(2);
+            setter.setName("set" + fieldName);
         } else {
-            setter.setName("set" + name.substring(3));
+            fieldName = name.substring(3);
+            setter.setName("set" + fieldName);
         }
+        fieldName = AbstractCompiler.classToInstanceName(fieldName);
         setter.setScope(scope);
 
-        if (entry.getValue() == null) {
+        Object value = entry.getValue();
+        if (value == null) {
             setter.addArgument(new NullLiteralExpr());
         } else {
-            if (entry.getValue().equals("T")) {
-                setupConditionalNotNullValue(stmt, entry, name, setter);
-            } else {
+            boolean solved = false;
+            if ((value.equals("T") || value instanceof Boolean b && b) && scope instanceof NameExpr nameExpr) {
+                Variable v = getValue(stmt, nameExpr.getNameAsString());
+                if (v != null && v.getValue() instanceof Evaluator eval) {
+                    Variable field = eval.getField(fieldName);
+                    if (field != null && field.getType().isClassOrInterfaceType()) {
+                        setupConditionalNotNullValue(stmt, entry, name, setter);
+                        solved = true;
+                    }
+                }
+            }
+            if (!solved) {
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {
-                setter.addArgument(entry.getValue().toString());
+                setter.addArgument(value.toString());
             }
         }
         addPreCondition(stmt, setter);
