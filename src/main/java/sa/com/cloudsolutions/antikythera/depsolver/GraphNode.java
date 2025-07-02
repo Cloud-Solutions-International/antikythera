@@ -367,38 +367,44 @@ public class GraphNode {
     }
 
     public void addEnumConstant(EnumConstantDeclaration enumConstant) {
-        if (typeDeclaration.isEnumDeclaration()) {
-            EnumDeclaration ed = typeDeclaration.asEnumDeclaration();
-            for (EnumConstantDeclaration ecd : ed.getEntries()) {
-                if (ecd.getNameAsString().equals(enumConstant.getNameAsString())) {
-                    return;
-                }
-            }
-            if (enumConstant.getArguments().isNonEmpty()) {
-                Class<?>[] paramTypes = new Class<?>[enumConstant.getArguments().size()];
-
-                for (int i = 0 ; i < paramTypes.length ; i++) {
-                    Expression arg = enumConstant.getArguments().get(i);
-                    if (arg.isLiteralExpr()) {
-                        paramTypes[i] = Reflect.literalExpressionToClass(arg.asLiteralExpr());
-                    }
-                    else if (arg.isFieldAccessExpr()) {
-                        FieldAccessExpr fae = arg.asFieldAccessExpr();
-                        TypeWrapper wrapper = AbstractCompiler.findType(compilationUnit, fae.getScope().asNameExpr().getNameAsString());
-                        if (wrapper != null) {
-                            if (wrapper.getClazz() != null) {
-                                paramTypes[i] = wrapper.getClazz();
-                            } else {
-                                logger.error("Class not found for {}", fae.getNameAsString());
-                            }
-                        }
-                    }
-                }
-
-                enclosingType.getConstructorByParameterTypes(paramTypes).ifPresent(Graph::createGraphNode);
-            }
-            ed.addEntry(enumConstant.clone());
+        if (!typeDeclaration.isEnumDeclaration()) {
+            return;
         }
+
+        EnumDeclaration ed = typeDeclaration.asEnumDeclaration();
+        for (EnumConstantDeclaration ecd : ed.getEntries()) {
+            if (ecd.getNameAsString().equals(enumConstant.getNameAsString())) {
+                return;
+            }
+        }
+        if (enumConstant.getArguments().isNonEmpty()) {
+            addEnumConstantHelper(enumConstant);
+        }
+        ed.addEntry(enumConstant.clone());
+    }
+
+    private void addEnumConstantHelper(EnumConstantDeclaration enumConstant) {
+        Class<?>[] paramTypes = new Class<?>[enumConstant.getArguments().size()];
+
+        for (int i = 0 ; i < paramTypes.length ; i++) {
+            Expression arg = enumConstant.getArguments().get(i);
+            if (arg.isLiteralExpr()) {
+                paramTypes[i] = Reflect.literalExpressionToClass(arg.asLiteralExpr());
+            }
+            else if (arg.isFieldAccessExpr()) {
+                FieldAccessExpr fae = arg.asFieldAccessExpr();
+                TypeWrapper wrapper = AbstractCompiler.findType(compilationUnit, fae.getScope().asNameExpr().getNameAsString());
+                if (wrapper != null) {
+                    if (wrapper.getClazz() != null) {
+                        paramTypes[i] = wrapper.getClazz();
+                    } else {
+                        logger.error("Class not found for {}", fae.getNameAsString());
+                    }
+                }
+            }
+        }
+
+        enclosingType.getConstructorByParameterTypes(paramTypes).ifPresent(Graph::createGraphNode);
     }
 
     public void addField(FieldDeclaration fieldDeclaration)  {
