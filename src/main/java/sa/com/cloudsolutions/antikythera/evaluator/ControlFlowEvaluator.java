@@ -61,7 +61,9 @@ public class ControlFlowEvaluator extends Evaluator {
      *      the conditions cannot be met.
      */
     List<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
+        Expression key = entry.getKey();
+        NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
+
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
             List<Expression> expr = setupConditionThroughAssignmentForLocal(stmt, entry, v, nameExpr);
@@ -103,7 +105,9 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
+        Expression key = entry.getKey();
+        NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
+
         List<Expression> valueExpressions;
         if (v.getType() instanceof PrimitiveType) {
             valueExpressions = List.of(Reflect.createLiteralExpression(entry.getValue()));
@@ -295,12 +299,27 @@ public class ControlFlowEvaluator extends Evaluator {
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
         ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
         if (!chain.isEmpty()) {
-            setupConditionThroughMethodCalls(stmt, entry, chain);
+            Expression expr = chain.getChain().getFirst().getExpression();
+            if (expr.isNameExpr() && expr.toString().equals("StringUtils")) {
+                MethodCallExpr mce = chain.getExpression().asMethodCallExpr();
+                if (mce.getArguments().isNonEmpty()) {
+                    Expression argument = mce.getArgument(0);
+                    if (argument.isMethodCallExpr()) {
+                        Map.Entry <Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
+                        setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
+                    }
+                    else {
+                        setupConditionThroughAssignment(stmt, entry);
+                    }
+                    return;
+                }
+            }
+            setupConditionThroughMethodCalls(stmt, entry, expr);
         }
     }
 
-    private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, ScopeChain chain) {
-        Expression expr = chain.getChain().getFirst().getExpression();
+    private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, Expression expr) {
+
         Variable v = getValue(stmt, expr.toString());
         if (v == null ) {
             if (expr.isNameExpr()) {
@@ -322,8 +341,9 @@ public class ControlFlowEvaluator extends Evaluator {
                         logger.info("Could not create class for {}", fullname);
                     }
                 }
-            }
-            if (expr.isObjectCreationExpr()) {
+            } else if (expr instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                v = getValue(stmt, mce.getScope().orElseThrow().toString());
+            } else if (expr.isObjectCreationExpr()) {
                 ObjectCreationExpr oce = expr.asObjectCreationExpr();
                 addPreCondition(stmt, oce);
             }
