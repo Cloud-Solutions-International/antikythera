@@ -891,9 +891,7 @@ public class TruthTable {
                 }
 
                 if (scope != null && scope.toString().equals("StringUtils")) {
-                    Expression arg = m.getArgument(0);
                     collector.put(m, new Domain(null, "T"));
-                    return; // we don't want the super method to be called here
                 } else {
                     // For isEmpty(), we want to consider both empty and non-empty collections
                     List<?> emptyList = new ArrayList<>();
