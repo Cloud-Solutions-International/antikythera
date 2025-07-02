@@ -413,6 +413,7 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
+    @SuppressWarnings("java:S5411")
     private void createSetterFromGetterForMCE(Map.Entry<Expression, Object> entry, MethodCallExpr setter, MethodCallExpr mce) {
         Expression argument = mce.getArgument(0);
         if (argument.isObjectCreationExpr()) {
