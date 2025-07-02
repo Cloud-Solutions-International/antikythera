@@ -150,9 +150,11 @@ public class Settings {
                 } else if (value instanceof List) {
                     List<String> result = new ArrayList<>();
                     for(String s : (List<String>) value) {
-                        s = s.replace("${USERDIR}", userDir);
-                        s = replaceYamlVariables(s);
-                        result.add(s);
+                        if (s != null) {
+                            s = s.replace("${USERDIR}", userDir);
+                            s = replaceYamlVariables(s);
+                            result.add(s);
+                        }
                     }
                     target.put(key, result);
                 }

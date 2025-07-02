@@ -12,6 +12,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
@@ -380,6 +381,17 @@ public class GraphNode {
                     Expression arg = enumConstant.getArguments().get(i);
                     if (arg.isLiteralExpr()) {
                         paramTypes[i] = Reflect.literalExpressionToClass(arg.asLiteralExpr());
+                    }
+                    else if (arg.isFieldAccessExpr()) {
+                        FieldAccessExpr fae = arg.asFieldAccessExpr();
+                        TypeWrapper wrapper = AbstractCompiler.findType(compilationUnit, fae.getScope().asNameExpr().getNameAsString());
+                        if (wrapper != null) {
+                            if (wrapper.getClazz() != null) {
+                                paramTypes[i] = wrapper.getClazz();
+                            } else {
+                                logger.error("Class not found for {}", fae.getNameAsString());
+                            }
+                        }
                     }
                 }
 
