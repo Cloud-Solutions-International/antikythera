@@ -1131,19 +1131,18 @@ public class Evaluator {
      */
     public Variable executeMethod(Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
-        Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, getClassName()).orElseThrow();
         MCEWrapper mceWrapper = sc.getMCEWrapper();
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl.orElseThrow());
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl);
 
         if (n.isPresent()) {
             mceWrapper.setMatchingCallable(n.get());
             return executeCallable(sc, n.get());
         }
-        ClassOrInterfaceDeclaration classOrInterfaceDeclaration = cdecl.orElseThrow().asClassOrInterfaceDeclaration();
-        return executeGettersOrSetters(mceWrapper, classOrInterfaceDeclaration);
+        return executeGettersOrSetters(mceWrapper, cdecl);
     }
 
-    private Variable executeGettersOrSetters(MCEWrapper mceWrapper, ClassOrInterfaceDeclaration classOrInterfaceDeclaration) {
+    private Variable executeGettersOrSetters(MCEWrapper mceWrapper, TypeDeclaration<?> classOrInterfaceDeclaration) {
         return handleLombokAccessors(classOrInterfaceDeclaration, mceWrapper.getMethodName());
     }
 
@@ -1234,7 +1233,7 @@ public class Evaluator {
         return null;
     }
 
-    private Variable handleLombokAccessors(ClassOrInterfaceDeclaration classDecl, String methodName) {
+    private Variable handleLombokAccessors(TypeDeclaration<?> classDecl, String methodName) {
         boolean hasData = classDecl.getAnnotationByName("Data").isPresent();
         boolean hasGetter = hasData || classDecl.getAnnotationByName("Getter").isPresent();
         boolean hasSetter = hasData || classDecl.getAnnotationByName("Setter").isPresent();
