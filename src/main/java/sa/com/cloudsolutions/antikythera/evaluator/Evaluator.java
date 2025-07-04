@@ -7,6 +7,8 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -524,7 +526,6 @@ public class Evaluator {
         Optional<TypeDeclaration<?>> td = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
         if (td.isPresent()) {
             Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
-
             if (fieldDeclaration.isPresent()) {
                 FieldDeclaration field = fieldDeclaration.get();
                 for (var variable : field.getVariables()) {
@@ -538,6 +539,10 @@ public class Evaluator {
                         return v;
                     }
                 }
+            }
+            else if (td.get().isEnumDeclaration()) {
+                EnumDeclaration enumDeclaration = td.get().asEnumDeclaration();
+                return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
             }
         }
         return null;
@@ -683,26 +688,29 @@ public class Evaluator {
             /* needs eager creation */
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
             anonymousOverrides(match, oce);
-            List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
-            if (constructors.isEmpty()) {
-                return new Variable(eval);
-            }
-            MCEWrapper mce = wrapCallExpression(oce);
-
-            Optional<Callable> matchingConstructor = AbstractCompiler.findConstructorDeclaration(mce, match);
-
-            if (matchingConstructor.isPresent()) {
-                eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
-                return new Variable(eval);
-            }
-            /*
-             * No matching constructor found but in evals the default does not show up. So let's roll
-             */
-            return new Variable(eval);
+            return createUsingEvaluator(match, oce, eval);
         }
 
-
         return null;
+    }
+
+    private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce, Evaluator eval) throws ReflectiveOperationException {
+        List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
+        if (constructors.isEmpty()) {
+            return new Variable(eval);
+        }
+        MCEWrapper mce = wrapCallExpression(oce);
+
+        Optional<Callable> matchingConstructor = AbstractCompiler.findConstructorDeclaration(mce, match);
+
+        if (matchingConstructor.isPresent()) {
+            eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
+            return new Variable(eval);
+        }
+        /*
+         * No matching constructor found but in evals the default does not show up. So let's roll
+         */
+        return new Variable(eval);
     }
 
     protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
@@ -2065,6 +2073,33 @@ public class Evaluator {
                     }
                 });
             }
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void visit(EnumConstantDeclaration ecd, Void arg) {
+            ecd.findAncestor(EnumDeclaration.class).ifPresent(enumDecl -> {
+                if (enumDecl.getFullyQualifiedName().isPresent() && enumDecl.getFullyQualifiedName().get().equals(matchingClass)) {
+                    Variable v = AntikytheraRunTime.getStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString());
+                    if (v == null) {
+                        ObjectCreationExpr oce = new ObjectCreationExpr()
+                                .setType(enumDecl.getFullyQualifiedName().get());
+                        for (Expression argExpr : ecd.getArguments()) {
+                            oce.addArgument(argExpr);
+                        }
+
+                        Evaluator eval = EvaluatorFactory.createLazily(enumDecl.getFullyQualifiedName().get(), Evaluator.class);
+
+                        try {
+                            v = createUsingEvaluator(enumDecl, oce, eval);
+                            AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), v);
+                            fields.put(ecd.getNameAsString(), v);
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    }
+                }
+            });
         }
     }
 
