@@ -1132,13 +1132,13 @@ public class Evaluator {
         returnFrom = null;
         Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
         MCEWrapper mceWrapper = sc.getMCEWrapper();
-        ClassOrInterfaceDeclaration classOrInterfaceDeclaration = cdecl.orElseThrow().asClassOrInterfaceDeclaration();
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, classOrInterfaceDeclaration);
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl.orElseThrow());
 
         if (n.isPresent()) {
             mceWrapper.setMatchingCallable(n.get());
             return executeCallable(sc, n.get());
         }
+        ClassOrInterfaceDeclaration classOrInterfaceDeclaration = cdecl.orElseThrow().asClassOrInterfaceDeclaration();
         return executeGettersOrSetters(mceWrapper, classOrInterfaceDeclaration);
     }
 
@@ -1209,11 +1209,12 @@ public class Evaluator {
         returnFrom = null;
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
         if (call instanceof MethodCallExpr methodCall) {
-            Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+            Optional<TypeDeclaration<?>> cdecl = (Optional<TypeDeclaration<?>>)
+                (Optional<?>) methodCall.findAncestor(TypeDeclaration.class);
             if (cdecl.isEmpty()) {
                 Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(cu, getClassName());
                 if (t.isPresent() && t.get().isClassOrInterfaceDeclaration()) {
-                    cdecl = Optional.of(t.get().asClassOrInterfaceDeclaration());
+                    cdecl = Optional.of(t.get());
                 }
             }
             if (cdecl.isPresent()) {
@@ -1226,8 +1227,8 @@ public class Evaluator {
 
                 if (mdecl.isPresent()) {
                     return executeMethod(mdecl.get().getCallableDeclaration());
-                } else {
-                    return executeViaDataAnnotation(cdecl.get(), methodCall);
+                } else if (cdecl.get().isClassOrInterfaceDeclaration()) {
+                    return executeViaDataAnnotation(cdecl.get().asClassOrInterfaceDeclaration(), methodCall);
                 }
             }
         }

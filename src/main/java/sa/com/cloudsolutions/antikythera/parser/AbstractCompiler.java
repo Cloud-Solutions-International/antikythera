@@ -877,22 +877,23 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl) {
-        Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> typeDeclaration) {
+        Optional<CompilationUnit> compilationUnit = typeDeclaration.findCompilationUnit();
         if (compilationUnit.isEmpty()) {
             return Optional.empty();
         }
+        if (typeDeclaration instanceof  ClassOrInterfaceDeclaration cdecl) {
+            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+                TypeWrapper wrapper = findType(compilationUnit.get(), extended);
+                if (wrapper != null) {
+                    TypeDeclaration<?> p = wrapper.getType();
+                    Optional<Callable> method = (p != null)
+                            ? findCallableDeclaration(methodCall, p)
+                            : findCallableInBinaryCode(wrapper.getClazz(), methodCall);
 
-        for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-            TypeWrapper wrapper = findType(compilationUnit.get(), extended);
-            if (wrapper != null) {
-                TypeDeclaration<?> p = wrapper.getType();
-                Optional<Callable> method = (p != null)
-                        ? findCallableDeclaration(methodCall, p)
-                        : findCallableInBinaryCode(wrapper.getClazz(), methodCall);
-
-                if (method.isPresent()) {
-                    return method;
+                    if (method.isPresent()) {
+                        return method;
+                    }
                 }
             }
         }

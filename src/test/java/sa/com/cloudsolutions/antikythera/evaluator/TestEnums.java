@@ -14,7 +14,7 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestEnums extends TestHelper {
+class TestEnums extends TestHelper {
     static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Status";
     @BeforeAll
     static void setup() throws IOException {
@@ -34,6 +34,15 @@ public class TestEnums extends TestHelper {
                 MethodDeclaration.class, m -> m.getNameAsString().equals("main")).orElseThrow();
         Variable v = new Variable(new String[]{});
         AntikytheraRunTime.push(v);
+        evaluator.executeMethod(md);
+        assertEquals("OPEN!", outContent.toString().trim());
+    }
+
+    @Test
+    void printStatus() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        MethodDeclaration md = evaluator.getCompilationUnit().findFirst(
+                MethodDeclaration.class, m -> m.getNameAsString().equals("printStatus")).orElseThrow();
         evaluator.executeMethod(md);
         assertEquals("OPEN", outContent.toString().trim());
     }
