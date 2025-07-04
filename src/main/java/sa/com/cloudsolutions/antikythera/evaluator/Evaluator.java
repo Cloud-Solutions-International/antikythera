@@ -524,26 +524,27 @@ public class Evaluator {
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep) {
         Optional<TypeDeclaration<?>> td = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (td.isPresent()) {
-            Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
-            if (fieldDeclaration.isPresent()) {
-                FieldDeclaration field = fieldDeclaration.get();
-                for (var variable : field.getVariables()) {
-                    if (variable.getNameAsString().equals(fae.getNameAsString())) {
-                        if (field.isStatic()) {
-                            return AntikytheraRunTime.getStaticVariable(
-                                    getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
-                        }
-                        Variable v = new Variable(field.getVariable(0).getType().asString());
-                        variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
-                        return v;
+        if (td.isEmpty()) {
+            return null;
+        }
+        Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
+        if (fieldDeclaration.isPresent()) {
+            FieldDeclaration field = fieldDeclaration.get();
+            for (var variable : field.getVariables()) {
+                if (variable.getNameAsString().equals(fae.getNameAsString())) {
+                    if (field.isStatic()) {
+                        return AntikytheraRunTime.getStaticVariable(
+                                getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
                     }
+                    Variable v = new Variable(field.getVariable(0).getType().asString());
+                    variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
+                    return v;
                 }
             }
-            else if (td.get().isEnumDeclaration()) {
-                EnumDeclaration enumDeclaration = td.get().asEnumDeclaration();
-                return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
-            }
+        }
+        else if (td.get().isEnumDeclaration()) {
+            EnumDeclaration enumDeclaration = td.get().asEnumDeclaration();
+            return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
         }
         return null;
     }
@@ -1209,13 +1210,11 @@ public class Evaluator {
         returnFrom = null;
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
         if (call instanceof MethodCallExpr methodCall) {
+
             Optional<TypeDeclaration<?>> cdecl = (Optional<TypeDeclaration<?>>)
                 (Optional<?>) methodCall.findAncestor(TypeDeclaration.class);
             if (cdecl.isEmpty()) {
-                Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(cu, getClassName());
-                if (t.isPresent() && t.get().isClassOrInterfaceDeclaration()) {
-                    cdecl = Optional.of(t.get());
-                }
+                cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
             }
             if (cdecl.isPresent()) {
                 /*
