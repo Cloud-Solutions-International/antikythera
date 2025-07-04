@@ -821,11 +821,9 @@ public class AbstractCompiler {
             }
         }
 
-        if (decl.isClassOrInterfaceDeclaration()) {
-            Optional<Callable> c = findCallableInParent(methodCall, decl.asClassOrInterfaceDeclaration());
-            if (c.isPresent()) {
-                return c;
-            }
+        Optional<Callable> c = findCallableInParent(methodCall, decl);
+        if (c.isPresent()) {
+            return c;
         }
 
         if (found != -1 && occurs == 1) {
@@ -883,24 +881,30 @@ public class AbstractCompiler {
             return Optional.empty();
         }
         if (typeDeclaration instanceof  ClassOrInterfaceDeclaration cdecl) {
-            for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-                TypeWrapper wrapper = findType(compilationUnit.get(), extended);
-                if (wrapper != null) {
-                    TypeDeclaration<?> p = wrapper.getType();
-                    Optional<Callable> method = (p != null)
-                            ? findCallableDeclaration(methodCall, p)
-                            : findCallableInBinaryCode(wrapper.getClazz(), methodCall);
-
-                    if (method.isPresent()) {
-                        return method;
-                    }
-                }
-            }
+            Optional<Callable> method = findCallableInParent(methodCall, cdecl, compilationUnit.get());
+            if (method != null) return method;
         }
         if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
             return Optional.empty();
         }
         return findCallableInBinaryCode(Object.class, methodCall);
+    }
+
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl, CompilationUnit compilationUnit) {
+        for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
+            TypeWrapper wrapper = findType(compilationUnit, extended);
+            if (wrapper != null) {
+                TypeDeclaration<?> p = wrapper.getType();
+                Optional<Callable> method = (p != null)
+                        ? findCallableDeclaration(methodCall, p)
+                        : findCallableInBinaryCode(wrapper.getClazz(), methodCall);
+
+                if (method.isPresent()) {
+                    return method;
+                }
+            }
+        }
+        return null;
     }
 
     private static Optional<Callable> findCallableInBinaryCode(Class<?> clazz, MCEWrapper methodCall) {
