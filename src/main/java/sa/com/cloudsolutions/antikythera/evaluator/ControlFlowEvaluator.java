@@ -300,18 +300,28 @@ public class ControlFlowEvaluator extends Evaluator {
         ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
         if (!chain.isEmpty()) {
             Expression expr = chain.getChain().getFirst().getExpression();
-            if (expr.isNameExpr() && expr.toString().equals("StringUtils")) {
+            if (expr.isNameExpr()) {
                 MethodCallExpr mce = chain.getExpression().asMethodCallExpr();
                 if (mce.getArguments().isNonEmpty()) {
                     Expression argument = mce.getArgument(0);
-                    if (argument.isMethodCallExpr()) {
-                        Map.Entry <Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
-                        setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
+                    if (expr.toString().equals("StringUtils")) {
+                        if (argument.isMethodCallExpr()) {
+                            Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
+                            setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
+                        } else {
+                            setupConditionThroughAssignment(stmt, entry);
+                        }
+                        return;
                     }
-                    else {
-                        setupConditionThroughAssignment(stmt, entry);
+                    if (expr.toString().equals("CollectionUtils")) {
+                        if (argument.isMethodCallExpr()) {
+                            Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
+                            setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
+                        } else {
+                            setupConditionThroughAssignment(stmt, entry);
+                        }
+                        return;
                     }
-                    return;
                 }
             }
             setupConditionThroughMethodCalls(stmt, entry, expr);

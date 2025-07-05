@@ -911,17 +911,20 @@ public class TruthTable {
 
             if (scope != null && scope.toString().equals("StringUtils")) {
                 collector.put(m, new Domain(null, "T"));
+                return;
+            }
+            // For isEmpty(), we want to consider both empty and non-empty collections
+            List<?> emptyList = new ArrayList<>();
+            List<Integer> nonEmptyList = new ArrayList<>();
+            nonEmptyList.add(1);
+            Domain domain = new Domain(emptyList, nonEmptyList);
+            if (chain.isEmpty()) {
+                collector.put(m, domain);
             } else {
-                // For isEmpty(), we want to consider both empty and non-empty collections
-                List<?> emptyList = new ArrayList<>();
-                List<Integer> nonEmptyList = new ArrayList<>();
-                nonEmptyList.add(1);
-                Domain domain = new Domain(emptyList, nonEmptyList);
-                if (chain.isEmpty()) {
+                if (scope != null && scope.toString().equals("CollectionUtils")) {
                     collector.put(m, domain);
-                } else {
-                    collector.put(chain.getChain().getFirst().getExpression(), domain);
                 }
+                collector.put(chain.getChain().getFirst().getExpression(), domain);
             }
         }
 
