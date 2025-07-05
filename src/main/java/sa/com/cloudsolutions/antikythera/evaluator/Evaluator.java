@@ -1464,7 +1464,11 @@ public class Evaluator {
     }
 
     public Variable getField(String name) {
-        return fields.get(name);
+        Variable v = fields.get(name);
+        if (v == null && typeDeclaration != null && typeDeclaration.isEnumDeclaration()) {
+            return AntikytheraRunTime.getStaticVariable(typeDeclaration.getFullyQualifiedName().orElseThrow(), name);
+        }
+        return v;
     }
 
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {
@@ -2092,7 +2096,6 @@ public class Evaluator {
                         try {
                             v = createUsingEvaluator(enumDecl, oce, eval);
                             AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), v);
-                            fields.put(ecd.getNameAsString(), v);
                         } catch (ReflectiveOperationException e) {
                             throw new AntikytheraException(e);
                         }

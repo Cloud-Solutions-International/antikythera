@@ -860,8 +860,8 @@ public class AbstractCompiler {
                 }
             }
 
-            if (overRides && decl.isClassOrInterfaceDeclaration()) {
-                Optional<Callable> method = findCallableInParent(methodCall, decl.asClassOrInterfaceDeclaration());
+            if (overRides) {
+                Optional<Callable> method = findCallableInParent(methodCall, decl);
                 if (method.isPresent()) {
                     return method;
                 }
