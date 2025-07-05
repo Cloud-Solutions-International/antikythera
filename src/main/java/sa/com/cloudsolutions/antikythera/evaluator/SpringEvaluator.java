@@ -614,26 +614,30 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
 
         if (!values.isEmpty()) {
-            Map<Expression, Object> value = values.getFirst();
-            for (var entry : value.entrySet()) {
-                Expression key = entry.getKey();
-                if (key instanceof MethodCallExpr mce) {
-                    if (mce.getScope().isPresent() && mce.getScope().orElseThrow() instanceof NameExpr name
-                            && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
-                        var collection = value.get(new NameExpr(TruthTable.COLLECTION_UTILS));
-                        if (collection != null) {
-                            Map.Entry<Expression, Object> copy = new AbstractMap.SimpleEntry<>(key, collection);
-                            setupConditionThroughMethodCalls(currentConditional.getStatement(), copy);
-                            break;
-                        }
+            setupIfCondition(values);
+        }
+    }
+
+    private void setupIfCondition(List<Map<Expression, Object>> values) {
+        Map<Expression, Object> value = values.getFirst();
+        for (var entry : value.entrySet()) {
+            Expression key = entry.getKey();
+            if (key instanceof MethodCallExpr mce) {
+                if (mce.getScope().isPresent() && mce.getScope().orElseThrow() instanceof NameExpr name
+                        && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
+                    var collection = value.get(new NameExpr(TruthTable.COLLECTION_UTILS));
+                    if (collection != null) {
+                        setupConditionThroughMethodCalls(currentConditional.getStatement(),
+                                new AbstractMap.SimpleEntry<>(key, collection));
+                        break;
                     }
-                    setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
-                } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
-                    setupConditionThroughAssignment(currentConditional.getStatement(), entry);
-                } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
-                    setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
-                    break;
                 }
+                setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+            } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
+                setupConditionThroughAssignment(currentConditional.getStatement(), entry);
+            } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
+                setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+                break;
             }
         }
     }
