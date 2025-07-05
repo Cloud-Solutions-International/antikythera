@@ -637,7 +637,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 setupConditionThroughAssignment(currentConditional.getStatement(), entry);
             } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
                 setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
-                break;
+                return;
             }
         }
     }
