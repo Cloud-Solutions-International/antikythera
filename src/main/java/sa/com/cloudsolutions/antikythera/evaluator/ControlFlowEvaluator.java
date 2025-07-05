@@ -61,7 +61,9 @@ public class ControlFlowEvaluator extends Evaluator {
      *      the conditions cannot be met.
      */
     List<Expression> setupConditionThroughAssignment(Statement stmt, Map.Entry<Expression, Object> entry) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
+        Expression key = entry.getKey();
+        NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
+
         Variable v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
             List<Expression> expr = setupConditionThroughAssignmentForLocal(stmt, entry, v, nameExpr);
@@ -103,7 +105,9 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
-        NameExpr nameExpr = entry.getKey().asNameExpr();
+        Expression key = entry.getKey();
+        NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
+
         List<Expression> valueExpressions;
         if (v.getType() instanceof PrimitiveType) {
             valueExpressions = List.of(Reflect.createLiteralExpression(entry.getValue()));
@@ -130,21 +134,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
         if (entry.getValue() instanceof List<?> list) {
-            if (list.isEmpty()) {
-                if (v.getValue() instanceof List<?>) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                    return List.of(StaticJavaParser.parseExpression("List.of()"));
-                } else if (v.getValue() instanceof Set<?>) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                    return List.of(StaticJavaParser.parseExpression("Set.of()"));
-                } else if (v.getValue() instanceof Map<?,?>) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
-                    return List.of(StaticJavaParser.parseExpression("Map.of()"));
-                }
-            }
-            else if(entry.getKey() instanceof NameExpr name) {
-                return setupNonEmptyCollections(v, name);
-            }
+            return setupConditionForNonPrimitive(entry, list, v);
         }
         if (entry.getValue() == null) {
             return List.of(new NullLiteralExpr());
@@ -158,6 +148,31 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of(new StringLiteralExpr(entry.getValue().toString()));
     }
 
+    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Variable v) {
+        if (list.isEmpty()) {
+            if (v.getValue() instanceof List<?>) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+                return List.of(StaticJavaParser.parseExpression("List.of()"));
+            } else if (v.getValue() instanceof Set<?>) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
+                return List.of(StaticJavaParser.parseExpression("Set.of()"));
+            } else if (v.getValue() instanceof Map<?,?>) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_MAP, false, false));
+                return List.of(StaticJavaParser.parseExpression("Map.of()"));
+            }
+        }
+        else if(entry.getKey() instanceof NameExpr name) {
+            return setupNonEmptyCollections(v, name);
+        } else if (entry.getKey() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            Expression scope = mce.getScope().orElseThrow();
+            if (scope.toString().equals(TruthTable.COLLECTION_UTILS)) {
+                Expression arg = mce.getArgument(0);
+                Variable vx = getValue(mce, arg.asNameExpr().getNameAsString());
+                return setupNonEmptyCollections(vx, arg.asNameExpr());
+            }
+        }
+        return List.of();
+    }
     /**
      * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
      * @param v represents the type of collection or map that we need
@@ -185,11 +200,10 @@ public class ControlFlowEvaluator extends Evaluator {
         VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
-            if (member.getValue() == null && Reflect.isPrimitiveOrBoxed(member.getType().asString())) {
+            if (member.getValue() == null
+                    && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
                 member = Reflect.variableFactory(member.getType().asString());
-            }
-
-            if (member.getValue() instanceof Evaluator eval) {
+            } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(typeArgs, member, wrappedCollection, name, eval);
             }
 
@@ -295,12 +309,34 @@ public class ControlFlowEvaluator extends Evaluator {
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
         ScopeChain chain = ScopeChain.findScopeChain(entry.getKey());
         if (!chain.isEmpty()) {
-            setupConditionThroughMethodCalls(stmt, entry, chain);
+            Expression expr = chain.getChain().getFirst().getExpression();
+            if (expr.isNameExpr()) {
+                MethodCallExpr mce = chain.getExpression().asMethodCallExpr();
+                if (mce.getArguments().isNonEmpty()) {
+                    Expression argument = mce.getArgument(0);
+                    String exprName = expr.toString();
+
+                    if (exprName.equals("StringUtils") || exprName.equals("CollectionUtils")) {
+                        handleUtilsMethodCall(stmt, entry, argument);
+                        return;
+                    }
+                }
+            }
+            setupConditionThroughMethodCalls(stmt, entry, expr);
         }
     }
 
-    private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, ScopeChain chain) {
-        Expression expr = chain.getChain().getFirst().getExpression();
+    private void handleUtilsMethodCall(Statement stmt, Map.Entry<Expression, Object> entry, Expression argument) {
+        if (argument.isMethodCallExpr()) {
+            Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
+            setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
+        } else {
+            setupConditionThroughAssignment(stmt, entry);
+        }
+    }
+
+    private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, Expression expr) {
+
         Variable v = getValue(stmt, expr.toString());
         if (v == null ) {
             if (expr.isNameExpr()) {
@@ -322,8 +358,9 @@ public class ControlFlowEvaluator extends Evaluator {
                         logger.info("Could not create class for {}", fullname);
                     }
                 }
-            }
-            if (expr.isObjectCreationExpr()) {
+            } else if (expr instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                v = getValue(stmt, mce.getScope().orElseThrow().toString());
+            } else if (expr.isObjectCreationExpr()) {
                 ObjectCreationExpr oce = expr.asObjectCreationExpr();
                 addPreCondition(stmt, oce);
             }
@@ -393,6 +430,7 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
+    @SuppressWarnings("java:S5411")
     private void createSetterFromGetterForMCE(Map.Entry<Expression, Object> entry, MethodCallExpr setter, MethodCallExpr mce) {
         Expression argument = mce.getArgument(0);
         if (argument.isObjectCreationExpr()) {

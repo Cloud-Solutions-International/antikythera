@@ -140,30 +140,36 @@ public class Settings {
         String userDir = System.getProperty("user.home");
 
         for (Map.Entry<String, Object> entry : source.entrySet()) {
-            String key = entry.getKey();
-            Object value = entry.getValue();
-            if (value != null && !key.equals(VARIABLES)) {
-                if (value instanceof Map) {
-                    Map<String, Object> nestedMap = new HashMap<>();
-                    replaceVariables((Map<String, Object>) value, nestedMap);
-                    target.put(key, nestedMap);
-                } else if (value instanceof List) {
-                    List<String> result = new ArrayList<>();
-                    for(String s : (List<String>) value) {
+            replaceVariable(target, entry, userDir);
+        }
+    }
+
+    private static void replaceVariable(Map<String, Object> target, Map.Entry<String, Object> entry, String userDir) {
+        String key = entry.getKey();
+        Object value = entry.getValue();
+        if (value != null && !key.equals(VARIABLES)) {
+            if (value instanceof Map) {
+                Map<String, Object> nestedMap = new HashMap<>();
+                replaceVariables((Map<String, Object>) value, nestedMap);
+                target.put(key, nestedMap);
+            } else if (value instanceof List) {
+                List<String> result = new ArrayList<>();
+                for(String s : (List<String>) value) {
+                    if (s != null) {
                         s = s.replace("${USERDIR}", userDir);
                         s = replaceYamlVariables(s);
                         result.add(s);
                     }
-                    target.put(key, result);
                 }
-                else if (value instanceof String v) {
-                    v = v.replace("${USERDIR}", userDir);
-                    v = replaceYamlVariables(v);
-                    target.put(key, replaceEnvVariables(v));
-                }
-                else {
-                    target.put(key, value);
-                }
+                target.put(key, result);
+            }
+            else if (value instanceof String v) {
+                v = v.replace("${USERDIR}", userDir);
+                v = replaceYamlVariables(v);
+                target.put(key, replaceEnvVariables(v));
+            }
+            else {
+                target.put(key, value);
             }
         }
     }
@@ -318,7 +324,7 @@ public class Settings {
     }
 
     public static String[] getJarFiles() {
-        return getDependencies("jar_files");
+        return getDependencies(JAR_FILES);
     }
 
     public static class LinkedHashMapDeserializer extends JsonDeserializer<Map<String, Object>> {

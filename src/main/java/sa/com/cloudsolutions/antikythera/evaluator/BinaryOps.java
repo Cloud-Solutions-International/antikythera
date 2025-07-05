@@ -99,6 +99,9 @@ public class BinaryOps {
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
                     yield new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
                 }
+                if (left.getValue() == null || right.getValue() == null) {
+                    throw new NullPointerException();
+                }
                 throw new EvaluatorException(leftExpression, rightExpression);
             }
 
