@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -890,6 +891,12 @@ public class AbstractCompiler {
             return findCallableInBinaryCode(Object.class, methodCall);
         }
         if (typeDeclaration.isEnumDeclaration()) {
+            if (methodCall.getMethodName().equals("equals")) {
+                MethodDeclaration md =  StaticJavaParser.parseMethodDeclaration("""
+                        public boolean equals(Object other) { return this == other; }
+                        """);
+                return Optional.of(new Callable(md, methodCall));
+            }
             return findCallableInBinaryCode(Enum.class, methodCall);
         }
         return Optional.empty();

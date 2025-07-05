@@ -324,6 +324,8 @@ public class Evaluator {
                     ));
         } else if (expr.isInstanceOfExpr()) {
             return evaluateInstanceOf(expr.asInstanceOfExpr());
+        } else if (expr.isThisExpr()) {
+            return new Variable(this);
         } else {
             logger.warn("Unsupported expression: {}", expr.getClass().getSimpleName());
         }
@@ -2094,12 +2096,8 @@ public class Evaluator {
                         Evaluator eval = EvaluatorFactory.createLazily(enumDecl.getFullyQualifiedName().get(), Evaluator.class);
 
                         try {
-                            createUsingEvaluator(enumDecl, oce, eval);
-                            MethodInterceptor interceptor = new MethodInterceptor(eval);
-                            interceptor.setWrappedClass(Enum.class);
-                            Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
-                            Variable en = new Variable(AKBuddy.createInstance(clazz, interceptor));
-                            AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), en);
+                            v = createUsingEvaluator(enumDecl, oce, eval);
+                            AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), v);
                         } catch (ReflectiveOperationException e) {
                             throw new AntikytheraException(e);
                         }
