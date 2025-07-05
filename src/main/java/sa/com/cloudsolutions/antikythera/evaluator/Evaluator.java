@@ -2094,8 +2094,12 @@ public class Evaluator {
                         Evaluator eval = EvaluatorFactory.createLazily(enumDecl.getFullyQualifiedName().get(), Evaluator.class);
 
                         try {
-                            v = createUsingEvaluator(enumDecl, oce, eval);
-                            AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), v);
+                            createUsingEvaluator(enumDecl, oce, eval);
+                            MethodInterceptor interceptor = new MethodInterceptor(eval);
+                            interceptor.setWrappedClass(Enum.class);
+                            Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+                            Variable en = new Variable(AKBuddy.createInstance(clazz, interceptor));
+                            AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), en);
                         } catch (ReflectiveOperationException e) {
                             throw new AntikytheraException(e);
                         }

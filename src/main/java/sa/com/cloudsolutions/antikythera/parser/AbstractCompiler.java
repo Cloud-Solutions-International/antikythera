@@ -882,12 +882,17 @@ public class AbstractCompiler {
         }
         if (typeDeclaration instanceof  ClassOrInterfaceDeclaration cdecl) {
             Optional<Callable> method = findCallableInParent(methodCall, cdecl, compilationUnit.get());
-            if (method != null) return method;
+            if (method.isPresent()) return method;
+
+            if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
+                return Optional.empty();
+            }
+            return findCallableInBinaryCode(Object.class, methodCall);
         }
-        if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
-            return Optional.empty();
+        if (typeDeclaration.isEnumDeclaration()) {
+            return findCallableInBinaryCode(Enum.class, methodCall);
         }
-        return findCallableInBinaryCode(Object.class, methodCall);
+        return Optional.empty();
     }
 
     private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl, CompilationUnit compilationUnit) {
@@ -904,7 +909,7 @@ public class AbstractCompiler {
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static Optional<Callable> findCallableInBinaryCode(Class<?> clazz, MCEWrapper methodCall) {
