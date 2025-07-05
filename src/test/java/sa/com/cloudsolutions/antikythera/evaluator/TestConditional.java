@@ -72,7 +72,7 @@ class TestConditional extends TestHelper {
             "stringUtilsString, Not empty!Empty!",
             "notStringUtilsPerson, Not empty!Empty!",
             "stringUtilsPerson, Empty!Not empty!",
-            "collectionCheck, Empty!Not empty!",
+            "collectionCheck, Not empty!Empty!",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

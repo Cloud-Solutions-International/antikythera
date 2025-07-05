@@ -41,6 +41,7 @@ public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
     public static final String EQUALS_CALL = "equals";
     public static final String IS_EMPTY = "isEmpty";
+    public static final String COLLECTION_UTILS = "CollectionUtils";
     /**
      * The condition that this truth table is for
      */
@@ -921,7 +922,7 @@ public class TruthTable {
             if (chain.isEmpty()) {
                 collector.put(m, domain);
             } else {
-                if (scope != null && scope.toString().equals("CollectionUtils")) {
+                if (scope != null && scope.toString().equals(COLLECTION_UTILS)) {
                     collector.put(m, domain);
                 }
                 collector.put(chain.getChain().getFirst().getExpression(), domain);

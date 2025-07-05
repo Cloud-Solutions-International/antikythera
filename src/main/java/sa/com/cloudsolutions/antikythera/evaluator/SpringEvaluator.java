@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -615,11 +616,21 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         if (!values.isEmpty()) {
             Map<Expression, Object> value = values.getFirst();
             for (var entry : value.entrySet()) {
-                if (entry.getKey().isMethodCallExpr()) {
+                Expression key = entry.getKey();
+                if (key instanceof MethodCallExpr mce) {
+                    if (mce.getScope().isPresent() && mce.getScope().orElseThrow() instanceof NameExpr name
+                            && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
+                        var collection = value.get(new NameExpr(TruthTable.COLLECTION_UTILS));
+                        if (collection != null) {
+                            Map.Entry<Expression, Object> copy = new AbstractMap.SimpleEntry<>(key, collection);
+                            setupConditionThroughMethodCalls(currentConditional.getStatement(), copy);
+                            break;
+                        }
+                    }
                     setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
-                } else if (entry.getKey().isNameExpr()) {
+                } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
                     setupConditionThroughAssignment(currentConditional.getStatement(), entry);
-                } else if (entry.getKey().isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
+                } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
                     setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                     break;
                 }

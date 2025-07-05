@@ -148,6 +148,15 @@ public class ControlFlowEvaluator extends Evaluator {
             }
             else if(entry.getKey() instanceof NameExpr name) {
                 return setupNonEmptyCollections(v, name);
+            } else if (entry.getKey() instanceof MethodCallExpr mce) {
+                if (mce.getScope().isPresent()) {
+                    Expression scope = mce.getScope().orElseThrow();
+                    if (scope.toString().equals(TruthTable.COLLECTION_UTILS)) {
+                        Expression arg = mce.getArgument(0);
+                        Variable vx = getValue(mce, arg.asNameExpr().getNameAsString());
+                        return setupNonEmptyCollections(vx, arg.asNameExpr());
+                    }
+                }
             }
         }
         if (entry.getValue() == null) {
@@ -189,11 +198,10 @@ public class ControlFlowEvaluator extends Evaluator {
         VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
-            if (member.getValue() == null && Reflect.isPrimitiveOrBoxed(member.getType().asString())) {
+            if (member.getValue() == null
+                    && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
                 member = Reflect.variableFactory(member.getType().asString());
-            }
-
-            if (member.getValue() instanceof Evaluator eval) {
+            } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(typeArgs, member, wrappedCollection, name, eval);
             }
 
