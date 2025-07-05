@@ -76,6 +76,8 @@ public class Reflect {
     public static final String PRIMITIVE_LONG = "long";
     public static final String PRIMITIVE_SHORT = "short";
     public static final String JAVA_UTIL_LIST = "java.util.List";
+    public static final String JAVA_UTIL_SET = "java.util.Set";
+    public static final String JAVA_UTIL_MAP = "java.util.Map";
 
 
     /**

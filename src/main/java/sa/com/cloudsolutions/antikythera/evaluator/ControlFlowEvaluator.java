@@ -134,30 +134,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
         if (entry.getValue() instanceof List<?> list) {
-            if (list.isEmpty()) {
-                if (v.getValue() instanceof List<?>) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
-                    return List.of(StaticJavaParser.parseExpression("List.of()"));
-                } else if (v.getValue() instanceof Set<?>) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
-                    return List.of(StaticJavaParser.parseExpression("Set.of()"));
-                } else if (v.getValue() instanceof Map<?,?>) {
-                    TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
-                    return List.of(StaticJavaParser.parseExpression("Map.of()"));
-                }
-            }
-            else if(entry.getKey() instanceof NameExpr name) {
-                return setupNonEmptyCollections(v, name);
-            } else if (entry.getKey() instanceof MethodCallExpr mce) {
-                if (mce.getScope().isPresent()) {
-                    Expression scope = mce.getScope().orElseThrow();
-                    if (scope.toString().equals(TruthTable.COLLECTION_UTILS)) {
-                        Expression arg = mce.getArgument(0);
-                        Variable vx = getValue(mce, arg.asNameExpr().getNameAsString());
-                        return setupNonEmptyCollections(vx, arg.asNameExpr());
-                    }
-                }
-            }
+            return setupConditionForNonPrimitive(entry, list, v);
         }
         if (entry.getValue() == null) {
             return List.of(new NullLiteralExpr());
@@ -171,6 +148,31 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of(new StringLiteralExpr(entry.getValue().toString()));
     }
 
+    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Variable v) {
+        if (list.isEmpty()) {
+            if (v.getValue() instanceof List<?>) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+                return List.of(StaticJavaParser.parseExpression("List.of()"));
+            } else if (v.getValue() instanceof Set<?>) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
+                return List.of(StaticJavaParser.parseExpression("Set.of()"));
+            } else if (v.getValue() instanceof Map<?,?>) {
+                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_MAP, false, false));
+                return List.of(StaticJavaParser.parseExpression("Map.of()"));
+            }
+        }
+        else if(entry.getKey() instanceof NameExpr name) {
+            return setupNonEmptyCollections(v, name);
+        } else if (entry.getKey() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            Expression scope = mce.getScope().orElseThrow();
+            if (scope.toString().equals(TruthTable.COLLECTION_UTILS)) {
+                Expression arg = mce.getArgument(0);
+                Variable vx = getValue(mce, arg.asNameExpr().getNameAsString());
+                return setupNonEmptyCollections(vx, arg.asNameExpr());
+            }
+        }
+        return List.of();
+    }
     /**
      * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
      * @param v represents the type of collection or map that we need
@@ -312,27 +314,24 @@ public class ControlFlowEvaluator extends Evaluator {
                 MethodCallExpr mce = chain.getExpression().asMethodCallExpr();
                 if (mce.getArguments().isNonEmpty()) {
                     Expression argument = mce.getArgument(0);
-                    if (expr.toString().equals("StringUtils")) {
-                        if (argument.isMethodCallExpr()) {
-                            Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
-                            setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
-                        } else {
-                            setupConditionThroughAssignment(stmt, entry);
-                        }
-                        return;
-                    }
-                    if (expr.toString().equals("CollectionUtils")) {
-                        if (argument.isMethodCallExpr()) {
-                            Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
-                            setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
-                        } else {
-                            setupConditionThroughAssignment(stmt, entry);
-                        }
+                    String exprName = expr.toString();
+
+                    if (exprName.equals("StringUtils") || exprName.equals("CollectionUtils")) {
+                        handleUtilsMethodCall(stmt, entry, argument);
                         return;
                     }
                 }
             }
             setupConditionThroughMethodCalls(stmt, entry, expr);
+        }
+    }
+
+    private void handleUtilsMethodCall(Statement stmt, Map.Entry<Expression, Object> entry, Expression argument) {
+        if (argument.isMethodCallExpr()) {
+            Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
+            setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
+        } else {
+            setupConditionThroughAssignment(stmt, entry);
         }
     }
 
