@@ -259,7 +259,7 @@ public class TruthTable {
         return false;
     }
 
-    private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
+    boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
             Map<Expression, Object> truthValues) {
         Object value = truthValues.get(variable);
         if (value instanceof Integer intValue) {
@@ -460,7 +460,7 @@ public class TruthTable {
         variables.put(variable, newInterval);
     }
 
-    private Domain calculateNewInterval(Domain current, int literalValue,
+    Domain calculateNewInterval(Domain current, int literalValue,
             BinaryExpr.Operator operator, boolean varOnLeft) {
         return switch (operator) {
             case GREATER -> varOnLeft ?
@@ -1148,7 +1148,7 @@ public class TruthTable {
         }
     }
 
-    private static class Domain {
+     static class Domain {
         private final Object lowerBound;
         private final Object upperBound;
         final int min;
