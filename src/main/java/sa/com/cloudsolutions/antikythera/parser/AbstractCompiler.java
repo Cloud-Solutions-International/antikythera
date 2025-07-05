@@ -895,6 +895,7 @@ public class AbstractCompiler {
                 MethodDeclaration md =  StaticJavaParser.parseMethodDeclaration("""
                         public boolean equals(Object other) { return this == other; }
                         """);
+                typeDeclaration.addMember(md);
                 return Optional.of(new Callable(md, methodCall));
             }
             return findCallableInBinaryCode(Enum.class, methodCall);

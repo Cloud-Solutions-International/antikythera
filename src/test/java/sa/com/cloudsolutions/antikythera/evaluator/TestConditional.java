@@ -72,6 +72,7 @@ class TestConditional extends TestHelper {
             "stringUtilsString, Not empty!Empty!",
             "notStringUtilsPerson, Not empty!Empty!",
             "stringUtilsPerson, Empty!Not empty!",
+            "collectionCheck, Empty!Not empty!",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -79,7 +80,7 @@ class TestConditional extends TestHelper {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
         evaluator.visit(method);
-        assertEquals(value, outContent.toString());
+        assertEquals(value, outContent.toString(), "For parameter: " + name);
     }
 
     @ParameterizedTest
