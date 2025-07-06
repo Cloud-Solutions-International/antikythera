@@ -128,9 +128,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return handleOptionals(sc);
         }
         else if (Object.class.equals(clazz)) {
-            List<Variable> variables = new ArrayList<>();
             for (int i = 0 ; i < method.getParameters().length ; i++) {
-                variables.add(AntikytheraRunTime.pop());
+                AntikytheraRunTime.pop();
             }
 
             Class<?> foundIn = callable.getFoundInClass();
