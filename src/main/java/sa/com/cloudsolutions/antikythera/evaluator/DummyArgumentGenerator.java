@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -8,26 +9,39 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockedFieldDetector;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
 
-    public DummyArgumentGenerator() {
-        super();
+    public DummyArgumentGenerator(Evaluator evaluator) {
+        super(evaluator);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
         Variable v = mockParameter(param);
         if (v.getValue() == null) {
             v = mockNonPrimitiveParameter(param);
+
+            param.findAncestor(MethodDeclaration.class).ifPresent(md -> {
+                Set<Expression> expressions = new HashSet<>();
+                MockedFieldDetector detector = new MockedFieldDetector(param.getNameAsString());
+                md.accept(detector, expressions);
+                if (!expressions.isEmpty()) {
+
+                }
+            });
         }
 
         /*

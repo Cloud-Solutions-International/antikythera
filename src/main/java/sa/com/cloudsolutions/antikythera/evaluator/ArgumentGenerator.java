@@ -9,6 +9,11 @@ import java.util.Map;
 
 public abstract class ArgumentGenerator {
     protected Map<String, Variable> arguments = new HashMap<>();
+    protected Evaluator evaluator;
+
+    public ArgumentGenerator(Evaluator evaluator) {
+        this.evaluator = evaluator;
+    }
 
     public abstract void generateArgument(Parameter param) throws ReflectiveOperationException;
 

@@ -83,7 +83,7 @@ public class ServicesParser {
     private void eval() {
         for (MethodDeclaration md : methods) {
             stats.methods++;
-            evaluateMethod(md, new DummyArgumentGenerator());
+            evaluateMethod(md);
         }
     }
 
@@ -91,14 +91,14 @@ public class ServicesParser {
         generator.save();
     }
 
-    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+    public void evaluateMethod(MethodDeclaration md) {
         generator = (UnitTestGenerator) Factory.create("unit", cu);
         generator.addBeforeClass();
 
         evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
-        evaluator.setArgumentGenerator(gen);
+        evaluator.setArgumentGenerator(new DummyArgumentGenerator(evaluator));
         evaluator.reset();
         Branching.clear();
         AntikytheraRunTime.reset();

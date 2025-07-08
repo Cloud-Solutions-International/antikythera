@@ -14,13 +14,17 @@ import java.util.Optional;
 
 public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DatabaseArgumentGenerator.class);
-
     /**
      * The last executed database query.
      */
     static RepositoryQuery query;
 
     private static boolean prepared;
+
+    public DatabaseArgumentGenerator(Evaluator evaluator) {
+        super(evaluator);
+    }
+
 
     /**
      *

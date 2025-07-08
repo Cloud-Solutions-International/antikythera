@@ -38,7 +38,7 @@ class TestQueries extends TestHelper{
 
     @Test
     void testScope() throws AntikytheraException, ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
 
         MethodDeclaration doStuff = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("getById")).orElseThrow();

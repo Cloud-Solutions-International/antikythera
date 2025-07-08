@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class TestDummyArgumentGenerator {
-    DummyArgumentGenerator dummy = new DummyArgumentGenerator();
+    DummyArgumentGenerator dummy = new DummyArgumentGenerator(null);
     @BeforeAll
     static void setUP() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));

@@ -47,7 +47,7 @@ public abstract class DepsolvingParser {
                  * I would gladly do this without a visitor, but discovered a bug in findAll()
                  */
                 if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md, new NullArgumentGenerator());
+                    evaluateMethod(md);
                 }
                 super.visit(md, arg);
             }
@@ -56,6 +56,6 @@ public abstract class DepsolvingParser {
     }
 
 
-    public abstract void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen);
+    public abstract void evaluateMethod(MethodDeclaration md);
 
 }

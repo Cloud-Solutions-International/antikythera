@@ -133,7 +133,7 @@ class TestSpringGenerator {
         SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.createTests(md, response);
 
-        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator(null);
         argumentGenerator.generateArgument(param);
         generator.setArgumentGenerator(argumentGenerator);
         generator.handleURIVariables(request);
@@ -164,7 +164,7 @@ class TestSpringGenerator {
         SpringTestGenerator generator = new SpringTestGenerator(cu);
         generator.createTests(md, response);
 
-        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator(null);
         generator.setArgumentGenerator(argumentGenerator);
         argumentGenerator.generateArgument(param);
 
