@@ -97,12 +97,11 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
             return super.executeCallable(sc, callable);
         }
-        else {
-            if (isRepository()) {
-                return mockRepositoryMethodCall(sc, callable);
-            }
-            return mockBinaryMethodExecution(sc, callable);
+
+        if (isRepository()) {
+            return mockRepositoryMethodCall(sc, callable);
         }
+        return mockBinaryMethodExecution(sc, callable);
     }
 
     private boolean isRepository() {
@@ -120,7 +119,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
+    Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = getMethod(callable);
 
         Class<?> clazz = method.getReturnType();
@@ -148,9 +147,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (method != null) {
             return mockRepositoryMethod(sc, callable);
         }
-        else {
-            return mockRepositoryMethodDeclaration(sc, callable);
-        }
+        return mockRepositoryMethodDeclaration(sc, callable);
     }
 
     @SuppressWarnings("unchecked")
