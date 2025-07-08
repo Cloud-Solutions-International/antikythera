@@ -96,6 +96,43 @@ class TestMockReturnValueHandler {
         assertNotNull(result);
     }
 
+    @Test
+    void testFindBetterReturnTypeWithClassArgument() throws Throwable {
+        // This test will test the findBetterReturnType method with a Class argument
+        Method method = TestService.class.getMethod("convertValue", Object.class, Class.class);
+        when(invocation.getMethod()).thenReturn(method);
+
+        // Setup with a Class argument
+        when(invocation.getArguments()).thenReturn(new Object[]{"input", ArrayList.class});
+
+        // Reset the spy to allow the real method to execute
+        reset(handler);
+
+        Object result = handler.answer(invocation);
+
+        // The result should be an ArrayList since findBetterReturnType should find ArrayList.class
+        assertInstanceOf(ArrayList.class, result);
+    }
+
+    @Test
+    void testFindBetterReturnTypeWithParameterizedType() throws Throwable {
+        // Create a mock ParameterizedType
+        java.lang.reflect.ParameterizedType pType = mock(java.lang.reflect.ParameterizedType.class);
+        when(pType.getRawType()).thenReturn(ArrayList.class);
+
+        Method method = TestService.class.getMethod("convertValue", Object.class, Class.class);
+        when(invocation.getMethod()).thenReturn(method);
+        when(invocation.getArguments()).thenReturn(new Object[]{"input", pType});
+
+        // Reset the spy to allow the real method to execute
+        reset(handler);
+
+        Object result = handler.answer(invocation);
+
+        // The result should be an ArrayList since findBetterReturnType should find ArrayList.class from the ParameterizedType
+        assertInstanceOf(ArrayList.class, result);
+    }
+
     // Test interfaces/classes used in the tests
     interface TestService {
         void doVoid();
