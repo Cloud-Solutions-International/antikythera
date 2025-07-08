@@ -9,7 +9,6 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
@@ -556,18 +555,5 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return v;
         }
         return null;
-    }
-
-    @Override
-    void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
-        TypeWrapper wrapper = AbstractCompiler.findType(cu, variableDeclarator.getType().toString());
-        if (wrapper != null && !wrapper.getFullyQualifiedName().equals(Reflect.JAVA_LANG_STRING)) {
-            Variable v = Reflect.variableFactory(wrapper.getFullyQualifiedName());
-            v.setType(variableDeclarator.getType());
-            fields.put(variableDeclarator.getNameAsString(), v);
-        }
-        else {
-            super.setupFieldWithoutInitializer(variableDeclarator);
-        }
     }
 }
