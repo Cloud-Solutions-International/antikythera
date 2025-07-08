@@ -548,34 +548,34 @@ class TestTruthTable {
     }
 
     static List<Arguments> constraintCases() {
-        NameExpr var = new NameExpr("a");
+        NameExpr variable = new NameExpr("a");
         return List.of(
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 5, true),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 2, false),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 3, true),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 2, false),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 1, true),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 4, false),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 3, true),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 4, false),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 7, true),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 8, false),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 9, true),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 7, false),
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("1"), BinaryExpr.Operator.BINARY_AND), 42, true), // default case
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), true, true), // boolean value
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), false, false), // boolean value
-            Arguments.of(var, new BinaryExpr(var, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), "string", true) // non-integer, non-boolean
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 5, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 2, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 3, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 2, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 1, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 4, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 3, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 4, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 7, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 8, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 9, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 7, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("1"), BinaryExpr.Operator.BINARY_AND), 42, true), // default case
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), true, true), // boolean value
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), false, false), // boolean value
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), "string", true) // non-integer, non-boolean
         );
     }
 
     @ParameterizedTest
     @MethodSource("constraintCases")
-    void testSatisfiesConstraintForVariableSwitchCases(NameExpr var, BinaryExpr expr, Object value, boolean expected) {
+    void testSatisfiesConstraintForVariableSwitchCases(NameExpr variable, BinaryExpr expr, Object value, boolean expected) {
         TruthTable tt = new TruthTable();
         Map<Expression, Object> truthValues = new HashMap<>();
-        truthValues.put(var, value);
-        assertEquals(expected, tt.satisfiesConstraintForVariable(var, expr, truthValues));
+        truthValues.put(variable, value);
+        assertEquals(expected, tt.satisfiesConstraintForVariable(variable, expr, truthValues));
     }
 
     static List<Arguments> calculateNewIntervalCases() {
