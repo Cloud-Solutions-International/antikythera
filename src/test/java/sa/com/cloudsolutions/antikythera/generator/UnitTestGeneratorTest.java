@@ -243,7 +243,7 @@ class UnitTestGeneratorTest {
         // Verify that the whenThen list contains an expression for Optional.empty()
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing empty Optional");
         String whenThenString = TestGenerator.whenThen.getFirst().toString();
-        assertTrue(whenThenString.contains("Optional.empty()"), 
+        assertTrue(whenThenString.contains("Optional.empty()"),
                 "The whenThen expression should contain 'Optional.empty()' but was: " + whenThenString);
 
         // Clear the whenThen list for the next test
@@ -272,7 +272,7 @@ class UnitTestGeneratorTest {
         // Verify that the whenThen list contains an expression for Optional.of(new TestClass())
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing Optional with Evaluator");
         whenThenString = TestGenerator.whenThen.getFirst().toString();
-        assertTrue(whenThenString.contains("Optional.of(new TestClass())"), 
+        assertTrue(whenThenString.contains("Optional.of(new TestClass())"),
                 "The whenThen expression should contain 'Optional.of(new TestClass())' but was: " + whenThenString);
     }
 }
@@ -310,7 +310,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     private MethodDeclaration setupMethod(String className, String name) {
         cu = AntikytheraRunTime.getCompilationUnit(className);
         unitTestGenerator = new UnitTestGenerator(cu);
-
+        unitTestGenerator.addBeforeClass();
         SpringEvaluator evaluator = EvaluatorFactory.create(className, SpringEvaluator.class);
         unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator(evaluator));
 
@@ -353,26 +353,18 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
 
-        cu = AntikytheraRunTime.getCompilationUnit(FAKE_SERVICE);
-        unitTestGenerator = new UnitTestGenerator(cu);
+        MethodDeclaration md = setupMethod(FAKE_SERVICE,"findAll");
 
         SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
-
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("findAll")).orElseThrow();
-        unitTestGenerator.methodUnderTest = md;
-        unitTestGenerator.setAsserter(new JunitAsserter());
-
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator(evaluator);
 
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
-        unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
         unitTestGenerator.setupAsserterImports();
-        unitTestGenerator.addBeforeClass();
+
 
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
-
+        evaluator.setArgumentGenerator(argumentGenerator);
         evaluator.visit(md);
         assertTrue(outContent.toString().contains("1!0!"));
         String s = unitTestGenerator.gen.toString();
