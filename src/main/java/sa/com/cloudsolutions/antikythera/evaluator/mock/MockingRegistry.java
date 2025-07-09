@@ -264,7 +264,7 @@ public class MockingRegistry {
             case "List", "java.util.List", "java.util.ArrayList" -> {
                 TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
                 yield new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("ArrayList"))
+                        .setType(new ClassOrInterfaceType().setName("ArrayList<>"))
                         .setArguments(new NodeList<>());
             }
 

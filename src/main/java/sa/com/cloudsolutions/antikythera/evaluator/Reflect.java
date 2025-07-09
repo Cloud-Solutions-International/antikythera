@@ -363,7 +363,7 @@ public class Reflect {
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
                 ObjectCreationExpr init = new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("ArrayList"));
+                    .setType(new ClassOrInterfaceType().setName("ArrayList<>"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_SET, JAVA_UTIL_HASH_SET -> {

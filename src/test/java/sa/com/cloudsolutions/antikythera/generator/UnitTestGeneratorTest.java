@@ -363,7 +363,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         assertTrue(outContent.toString().contains("1!0!"));
         String s = unitTestGenerator.gen.toString();
         assertTrue(s.contains("List.of(fakeEntity"));
-        assertTrue(s.contains("List.of()"));
+        assertTrue(s.contains("new ArrayList<>()"));
 
     }
 
