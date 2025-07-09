@@ -353,18 +353,26 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
 
-        MethodDeclaration md = setupMethod(FAKE_SERVICE,"findAll");
+        cu = AntikytheraRunTime.getCompilationUnit(FAKE_SERVICE);
+        unitTestGenerator = new UnitTestGenerator(cu);
 
         SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("findAll")).orElseThrow();
+        unitTestGenerator.methodUnderTest = md;
+        unitTestGenerator.setAsserter(new JunitAsserter());
+
         DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator(evaluator);
 
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
+        unitTestGenerator.testMethod = unitTestGenerator.buildTestMethod(md);
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
-        evaluator.setArgumentGenerator(argumentGenerator);
+
         evaluator.visit(md);
         assertTrue(outContent.toString().contains("1!0!"));
         String s = unitTestGenerator.gen.toString();
