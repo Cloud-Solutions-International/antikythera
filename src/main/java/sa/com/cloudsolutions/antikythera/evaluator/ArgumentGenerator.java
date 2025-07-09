@@ -11,7 +11,7 @@ public abstract class ArgumentGenerator {
     protected Map<String, Variable> arguments = new HashMap<>();
     protected Evaluator evaluator;
 
-    public ArgumentGenerator(Evaluator evaluator) {
+    protected ArgumentGenerator(Evaluator evaluator) {
         this.evaluator = evaluator;
     }
 

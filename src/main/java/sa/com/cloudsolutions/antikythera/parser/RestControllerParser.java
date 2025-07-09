@@ -67,7 +67,7 @@ public class RestControllerParser extends DepsolvingParser {
 
     @Override
     public void evaluateMethod(MethodDeclaration md) {
-
+        throw new UnsupportedOperationException("To be completed");
     }
 
     private void processRestController(PackageDeclaration pd) throws IOException {
