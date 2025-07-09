@@ -51,24 +51,28 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 MockedFieldDetector detector = new MockedFieldDetector(param.getNameAsString());
                 md.accept(detector, expressions);
                 for (Expression expr : expressions) {
-                    if (expr instanceof NameExpr name) {
-                        Variable field = eval.getField(name.getNameAsString());
-                        if (field != null) {
-                            Type t = field.getType();
-                            String fullClassName = AbstractCompiler.findFullyQualifiedName(eval.getCompilationUnit(), t);
-                            if (fullClassName != null && !fullClassName.endsWith("String")) {
-                                Variable value = Reflect.variableFactory(fullClassName);
-                                if (value != null) {
-                                    field.getInitializer().addAll(value.getInitializer());
-                                    field.setValue(value.getValue());
-                                }
-                            }
-                        }
-                    }
+                    mockField(eval, expr);
                 }
             });
         }
         return vx;
+    }
+
+    private static void mockField(Evaluator eval, Expression expr) {
+        if (expr instanceof NameExpr name) {
+            Variable field = eval.getField(name.getNameAsString());
+            if (field != null) {
+                Type t = field.getType();
+                String fullClassName = AbstractCompiler.findFullyQualifiedName(eval.getCompilationUnit(), t);
+                if (fullClassName != null && !fullClassName.endsWith("String")) {
+                    Variable value = Reflect.variableFactory(fullClassName);
+                    if (value != null) {
+                        field.getInitializer().addAll(value.getInitializer());
+                        field.setValue(value.getValue());
+                    }
+                }
+            }
+        }
     }
 
     private Variable mockNonPrimitiveParameterHelper(Parameter param) throws ReflectiveOperationException {
