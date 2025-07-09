@@ -28,23 +28,11 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         super();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void generateArgument(Parameter param) throws ReflectiveOperationException {
         Variable v = mockParameter(param);
         if (v.getValue() == null) {
             v = mockNonPrimitiveParameter(param);
-
-            param.findAncestor(MethodDeclaration.class).ifPresent(md -> {
-                Set<Expression> expressions = new HashSet<>();
-                MockedFieldDetector detector = new MockedFieldDetector(param.getNameAsString());
-                md.accept(detector, expressions);
-                for (Expression expr : expressions) {
-                    if (expr instanceof NameExpr name) {
-
-                    }
-                }
-            });
         }
 
         /*
@@ -54,7 +42,36 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         AntikytheraRunTime.push(v);
     }
 
+    @SuppressWarnings("unchecked")
     private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
+        final Variable vx = mockNonPrimitiveParameterHelper(param);
+        if (vx.getValue() instanceof Evaluator eval) {
+            param.findAncestor(MethodDeclaration.class).ifPresent(md -> {
+                Set<Expression> expressions = new HashSet<>();
+                MockedFieldDetector detector = new MockedFieldDetector(param.getNameAsString());
+                md.accept(detector, expressions);
+                for (Expression expr : expressions) {
+                    if (expr instanceof NameExpr name) {
+                        Variable field = eval.getField(name.getNameAsString());
+                        if (field != null) {
+                            Type t = field.getType();
+                            String fullClassName = AbstractCompiler.findFullyQualifiedName(eval.getCompilationUnit(), t);
+                            if (fullClassName != null && !fullClassName.endsWith("String")) {
+                                Variable value = Reflect.variableFactory(fullClassName);
+                                if (value != null) {
+                                    field.getInitializer().addAll(value.getInitializer());
+                                    field.setValue(value.getValue());
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        return vx;
+    }
+
+    private Variable mockNonPrimitiveParameterHelper(Parameter param) throws ReflectiveOperationException {
         Variable v = null;
         Type t = param.getType();
 
@@ -70,7 +87,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (wrapper.getClazz() != null) {
             List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
             if (customized.isEmpty()) {
-                return mockNonPrimitiveParameter(param, wrapper);
+                return mockNonPrimitiveParameterHelper(param, wrapper);
             }
             for (Expression expr : customized) {
                 if (expr instanceof ObjectCreationExpr oce) {
@@ -99,7 +116,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         return v;
     }
 
-    private Variable mockNonPrimitiveParameter(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
+    private Variable mockNonPrimitiveParameterHelper(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
         String fullClassName = wrapper.getFullyQualifiedName();
         Type t = param.getType();
 
