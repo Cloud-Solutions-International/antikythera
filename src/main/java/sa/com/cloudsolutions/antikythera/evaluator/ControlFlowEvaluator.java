@@ -409,7 +409,7 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
+    void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
         if (binaryExpr.getLeft().equals(key)) {
             processBinaryExpressionSide(setter, binaryExpr.getRight());
         } else if (binaryExpr.getRight().equals(key)) {
