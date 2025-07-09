@@ -75,7 +75,7 @@ class TestConditional extends TestHelper {
             "collectionCheck, Not empty!Empty!",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
@@ -92,7 +92,7 @@ class TestConditional extends TestHelper {
             "whatInstance, Integer: 0!Unknown!"
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
@@ -106,7 +106,7 @@ class TestConditional extends TestHelper {
             "conditional8, ZERO!", "smallDiff, '',",
     })
     void testConditionals(String name, String value) throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
@@ -120,7 +120,7 @@ class TestConditional extends TestHelper {
     @Test
     void testConditional4() throws ReflectiveOperationException {
         Evaluator p = EvaluatorFactory.create(PERSON_CLASS, SpringEvaluator.class);
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("conditional4")).orElseThrow();
@@ -133,7 +133,7 @@ class TestConditional extends TestHelper {
 
     @Test
     void testBooleanWorks() throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("booleanWorks")).orElseThrow();
@@ -184,7 +184,7 @@ class TestConditional extends TestHelper {
 
     @Test
     void testMultivariate() throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("multiVariate")).orElseThrow();
@@ -203,7 +203,7 @@ class TestConditional extends TestHelper {
             "ternary2, null,  It is null!"
     })
     void testTernary(String name, String arg , String value) throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
@@ -225,7 +225,7 @@ class TestConditional extends TestHelper {
             "clarendon, Not drinkable!good!", "ternary5, False!True!",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();
@@ -262,7 +262,7 @@ class TestConditionalWithOptional extends TestHelper {
         "optionalString, ANTIKYTHERA\\nDEFAULT"
     })
     void testOptionals(String methodName, String expectedOutput) throws ReflectiveOperationException, AntikytheraException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(methodName)).orElseThrow();

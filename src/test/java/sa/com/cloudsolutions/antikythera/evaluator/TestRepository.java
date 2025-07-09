@@ -39,7 +39,7 @@ public class TestRepository extends TestHelper {
     @CsvSource({"searchByName, Found 1 matches!No Matches!", "findById, Found!Not Found!",
             "countItems, No items!Found 1 item!"})
     void testSearchByName(String name, String value) throws ReflectiveOperationException {
-        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator(evaluator));
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(name)).orElseThrow();

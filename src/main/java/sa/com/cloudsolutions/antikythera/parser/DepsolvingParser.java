@@ -6,6 +6,8 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
 
 import java.io.IOException;
@@ -45,7 +47,7 @@ public abstract class DepsolvingParser {
                  * I would gladly do this without a visitor, but discovered a bug in findAll()
                  */
                 if (md.getNameAsString().equals(method)) {
-                    evaluateMethod(md);
+                    evaluateMethod(md, new NullArgumentGenerator());
                 }
                 super.visit(md, arg);
             }
@@ -54,6 +56,6 @@ public abstract class DepsolvingParser {
     }
 
 
-    public abstract void evaluateMethod(MethodDeclaration md);
+    public abstract void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen);
 
 }

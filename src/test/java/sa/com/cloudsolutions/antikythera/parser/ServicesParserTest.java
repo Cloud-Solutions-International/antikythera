@@ -47,7 +47,7 @@ class ServicesParserTest {
 
         // Should not throw any exception
         assertDoesNotThrow(() ->
-            parser.evaluateMethod(method)
+            parser.evaluateMethod(method, new DummyArgumentGenerator())
         );
     }
 

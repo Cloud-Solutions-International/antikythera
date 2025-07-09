@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -23,8 +24,8 @@ import java.util.Set;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
 
-    public DummyArgumentGenerator(Evaluator evaluator) {
-        super(evaluator);
+    public DummyArgumentGenerator() {
+        super();
     }
 
     @SuppressWarnings("unchecked")
@@ -38,8 +39,10 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 Set<Expression> expressions = new HashSet<>();
                 MockedFieldDetector detector = new MockedFieldDetector(param.getNameAsString());
                 md.accept(detector, expressions);
-                if (!expressions.isEmpty()) {
+                for (Expression expr : expressions) {
+                    if (expr instanceof NameExpr name) {
 
+                    }
                 }
             });
         }

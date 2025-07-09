@@ -66,7 +66,7 @@ public class RestControllerParser extends DepsolvingParser {
     }
 
     @Override
-    public void evaluateMethod(MethodDeclaration md) {
+    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
         throw new UnsupportedOperationException("To be completed");
     }
 
@@ -126,32 +126,28 @@ public class RestControllerParser extends DepsolvingParser {
             super.visit(md, arg);
 
             if (checkEligible(md)) {
-                 evaluateMethod(md);
+                 evaluateMethod(md, new NullArgumentGenerator());
+                 evaluateMethod(md, new DummyArgumentGenerator());
+                 evaluateMethod(md, new DatabaseArgumentGenerator());
             }
         }
 
-        protected void evaluateMethod(MethodDeclaration md) {
-            Class<?>[] generators = new Class<?>[] { NullArgumentGenerator.class, DummyArgumentGenerator.class, DatabaseArgumentGenerator.class };
-            for (Class<?> genClass : generators) {
-                try {
-                    ArgumentGenerator gen = (ArgumentGenerator) genClass.getDeclaredConstructor().newInstance();
+        protected void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+            evaluator.setArgumentGenerator(gen);
+            evaluator.reset();
+            Branching.clear();
+            AntikytheraRunTime.reset();
+            try {
+                evaluator.visit(md);
 
-                    evaluator.setArgumentGenerator(gen);
-                    evaluator.reset();
-                    Branching.clear();
-                    AntikytheraRunTime.reset();
-
-                    evaluator.visit(md);
-
-                } catch (AntikytheraException | ReflectiveOperationException e) {
-                    if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                        logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-                    } else {
-                        throw new GeneratorException(e);
-                    }
-                } finally {
-                    logger.info(md.getNameAsString());
+            } catch (AntikytheraException | ReflectiveOperationException e) {
+                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
+                } else {
+                    throw new GeneratorException(e);
                 }
+            } finally {
+                logger.info(md.getNameAsString());
             }
         }
 

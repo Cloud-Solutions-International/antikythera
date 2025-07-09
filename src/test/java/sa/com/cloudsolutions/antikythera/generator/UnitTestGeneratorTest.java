@@ -189,13 +189,12 @@ class UnitTestGeneratorTest {
     void testLogger() throws ReflectiveOperationException {
         Settings.setProperty(Settings.LOG_APPENDER,"sa.com.cloudsolutions.antikythera.generator.LogHandler");
         MethodDeclaration md = classUnderTest.getMethodsByName("queries5").getFirst();
-        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.PersonService", SpringEvaluator.class);
-
-        argumentGenerator = new DummyArgumentGenerator(evaluator);
+        argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
+        SpringEvaluator evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.service.PersonService", SpringEvaluator.class);
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
@@ -310,10 +309,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     private MethodDeclaration setupMethod(String className, String name) {
         cu = AntikytheraRunTime.getCompilationUnit(className);
         unitTestGenerator = new UnitTestGenerator(cu);
-        unitTestGenerator.addBeforeClass();
-        SpringEvaluator evaluator = EvaluatorFactory.create(className, SpringEvaluator.class);
-        unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator(evaluator));
-
+        unitTestGenerator.setArgumentGenerator(new DummyArgumentGenerator());
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals(name)).orElseThrow();
         unitTestGenerator.methodUnderTest = md;
@@ -329,13 +325,12 @@ class UnitTestGeneratorMoreTests extends TestHelper {
 
 
         MethodDeclaration md = setupMethod(FAKE_SERVICE,"castingHelper");
-
-        SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
-        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator(evaluator);
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setupAsserterImports();
         unitTestGenerator.addBeforeClass();
 
+        SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
@@ -353,15 +348,14 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(Level.OFF);
 
+
         MethodDeclaration md = setupMethod(FAKE_SERVICE,"findAll");
-
-        SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
-        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator(evaluator);
-
+        DummyArgumentGenerator argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
         unitTestGenerator.setupAsserterImports();
+        unitTestGenerator.addBeforeClass();
 
-
+        SpringEvaluator evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
         evaluator.setOnTest(true);
         evaluator.addGenerator(unitTestGenerator);
         evaluator.setArgumentGenerator(argumentGenerator);
