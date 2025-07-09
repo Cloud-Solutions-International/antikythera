@@ -8,11 +8,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -542,5 +545,76 @@ class TestTruthTable {
             assertTrue((int) row.get(new NameExpr("a")) >= bValue, "a should be greater than or equal to b");
             assertTrue(bValue >= (int) row.get(new NameExpr("c")), "b should be greater than or equal to c");
         }
+    }
+
+    static List<Arguments> constraintCases() {
+        NameExpr variable = new NameExpr("a");
+        return List.of(
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 5, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 2, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 3, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 2, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 1, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 4, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 3, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 4, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 7, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 8, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 9, true),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 7, false),
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("1"), BinaryExpr.Operator.BINARY_AND), 42, true), // default case
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), true, true), // boolean value
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), false, false), // boolean value
+            Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), "string", true) // non-integer, non-boolean
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("constraintCases")
+    void testSatisfiesConstraintForVariableSwitchCases(NameExpr variable, BinaryExpr expr, Object value, boolean expected) {
+        TruthTable tt = new TruthTable();
+        Map<Expression, Object> truthValues = new HashMap<>();
+        truthValues.put(variable, value);
+        assertEquals(expected, tt.satisfiesConstraintForVariable(variable, expr, truthValues));
+    }
+
+    static List<Arguments> calculateNewIntervalCases() {
+        return List.of(
+            // GREATER, varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER, true, new TruthTable.Domain(6, 10)),
+            // GREATER, !varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER, false, new TruthTable.Domain(0, 4)),
+            // GREATER_EQUALS, varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER_EQUALS, true, new TruthTable.Domain(5, 10)),
+            // GREATER_EQUALS, !varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER_EQUALS, false, new TruthTable.Domain(0, 5)),
+            // LESS, varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS, true, new TruthTable.Domain(0, 4)),
+            // LESS, !varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS, false, new TruthTable.Domain(6, 10)),
+            // LESS_EQUALS, varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS_EQUALS, true, new TruthTable.Domain(0, 5)),
+            // LESS_EQUALS, !varOnLeft
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS_EQUALS, false, new TruthTable.Domain(5, 10)),
+            // EQUALS
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.EQUALS, true, new TruthTable.Domain(5, 5)),
+            // default (NOT_EQUALS and others)
+            Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.NOT_EQUALS, true, new TruthTable.Domain(0, 10))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("calculateNewIntervalCases")
+    void testCalculateNewInterval(
+            TruthTable.Domain current,
+            int literalValue,
+            BinaryExpr.Operator operator,
+            boolean varOnLeft,
+            TruthTable.Domain expected
+    ) {
+        TruthTable tt = new TruthTable();
+        TruthTable.Domain result = tt.calculateNewInterval(current, literalValue, operator, varOnLeft);
+        assertEquals(expected.min, result.min);
+        assertEquals(expected.max, result.max);
     }
 }

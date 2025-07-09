@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
@@ -821,11 +822,9 @@ public class AbstractCompiler {
             }
         }
 
-        if (decl.isClassOrInterfaceDeclaration()) {
-            Optional<Callable> c = findCallableInParent(methodCall, decl.asClassOrInterfaceDeclaration());
-            if (c.isPresent()) {
-                return c;
-            }
+        Optional<Callable> c = findCallableInParent(methodCall, decl);
+        if (c.isPresent()) {
+            return c;
         }
 
         if (found != -1 && occurs == 1) {
@@ -862,8 +861,8 @@ public class AbstractCompiler {
                 }
             }
 
-            if (overRides && decl.isClassOrInterfaceDeclaration()) {
-                Optional<Callable> method = findCallableInParent(methodCall, decl.asClassOrInterfaceDeclaration());
+            if (overRides) {
+                Optional<Callable> method = findCallableInParent(methodCall, decl);
                 if (method.isPresent()) {
                     return method;
                 }
@@ -877,14 +876,36 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
-    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl) {
-        Optional<CompilationUnit> compilationUnit = cdecl.findCompilationUnit();
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, TypeDeclaration<?> typeDeclaration) {
+        Optional<CompilationUnit> compilationUnit = typeDeclaration.findCompilationUnit();
         if (compilationUnit.isEmpty()) {
             return Optional.empty();
         }
+        if (typeDeclaration instanceof  ClassOrInterfaceDeclaration cdecl) {
+            Optional<Callable> method = findCallableInParent(methodCall, cdecl, compilationUnit.get());
+            if (method.isPresent()) return method;
 
+            if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
+                return Optional.empty();
+            }
+            return findCallableInBinaryCode(Object.class, methodCall);
+        }
+        if (typeDeclaration.isEnumDeclaration()) {
+            if (methodCall.getMethodName().equals("equals")) {
+                MethodDeclaration md =  StaticJavaParser.parseMethodDeclaration("""
+                        public boolean equals(Object other) { return this == other; }
+                        """);
+                typeDeclaration.addMember(md);
+                return Optional.of(new Callable(md, methodCall));
+            }
+            return findCallableInBinaryCode(Enum.class, methodCall);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Callable> findCallableInParent(MCEWrapper methodCall, ClassOrInterfaceDeclaration cdecl, CompilationUnit compilationUnit) {
         for (ClassOrInterfaceType extended : cdecl.getExtendedTypes()) {
-            TypeWrapper wrapper = findType(compilationUnit.get(), extended);
+            TypeWrapper wrapper = findType(compilationUnit, extended);
             if (wrapper != null) {
                 TypeDeclaration<?> p = wrapper.getType();
                 Optional<Callable> method = (p != null)
@@ -896,10 +917,7 @@ public class AbstractCompiler {
                 }
             }
         }
-        if (Reflect.getMethodsByName(Object.class, methodCall.getMethodName()).isEmpty()) {
-            return Optional.empty();
-        }
-        return findCallableInBinaryCode(Object.class, methodCall);
+        return Optional.empty();
     }
 
     private static Optional<Callable> findCallableInBinaryCode(Class<?> clazz, MCEWrapper methodCall) {

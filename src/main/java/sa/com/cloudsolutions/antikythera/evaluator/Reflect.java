@@ -76,6 +76,8 @@ public class Reflect {
     public static final String PRIMITIVE_LONG = "long";
     public static final String PRIMITIVE_SHORT = "short";
     public static final String JAVA_UTIL_LIST = "java.util.List";
+    public static final String JAVA_UTIL_SET = "java.util.Set";
+    public static final String JAVA_UTIL_MAP = "java.util.Map";
 
 
     /**
@@ -361,10 +363,10 @@ public class Reflect {
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
                 ObjectCreationExpr init = new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("ArrayList"));
+                    .setType(new ClassOrInterfaceType().setName("ArrayList<>"));
                 v.setInitializer(List.of(init));
             }
-            case "java.util.Set", JAVA_UTIL_HASH_SET -> {
+            case JAVA_UTIL_SET, JAVA_UTIL_HASH_SET -> {
                 ObjectCreationExpr init = new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashSet"));
                 v.setInitializer(List.of(init));
@@ -471,10 +473,10 @@ public class Reflect {
             case "List", JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
                     createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
-            case "Map", "java.util.Map", "java.util.HashMap" ->
+            case "Map", JAVA_UTIL_MAP, "java.util.HashMap" ->
                     createVariable(new HashMap<>(), "java.util.HashMap", null);
             case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
-            case "Set", "java.util.Set", JAVA_UTIL_HASH_SET ->
+            case "Set", JAVA_UTIL_SET, JAVA_UTIL_HASH_SET ->
                     createVariable(new HashSet<>(), JAVA_UTIL_HASH_SET, null);
             case "java.util.TreeSet" -> createVariable(new TreeSet<>(), "java.util.TreeSet", null);
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> createVariable(Optional.empty(), JAVA_UTIL_OPTIONAL, null);

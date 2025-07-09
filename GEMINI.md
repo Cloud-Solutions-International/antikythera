@@ -11,6 +11,9 @@ class for the expression evaluation engine is `Evaluator.java` located in `src/m
 The main class for the test generation is `TestGenerator.java` located in `src/main/java/sa/com/cloudsolutions/antikythera/generator/`.
 All tehse classes have subclasses that extend their functionality.
 
+When generating unit tests its required that you take both paths of a conditional statement where possible. This is
+managed with the help of `sa.com.cloudsolutions.antikythera.evaluator.Branching.java` and `sa.com.cloudsolutions.antikythera.generator.TruthTable.java`
+
 ## 2. Core Commands
 
 *   **Build:** `mvn clean install`

@@ -1,21 +1,26 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockedFieldDetector;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
 
@@ -37,7 +42,40 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         AntikytheraRunTime.push(v);
     }
 
+    @SuppressWarnings("unchecked")
     private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
+        final Variable vx = mockNonPrimitiveParameterHelper(param);
+        if (vx.getValue() instanceof Evaluator eval) {
+            param.findAncestor(MethodDeclaration.class).ifPresent(md -> {
+                Set<Expression> expressions = new HashSet<>();
+                MockedFieldDetector detector = new MockedFieldDetector(param.getNameAsString());
+                md.accept(detector, expressions);
+                for (Expression expr : expressions) {
+                    mockField(eval, expr);
+                }
+            });
+        }
+        return vx;
+    }
+
+    private static void mockField(Evaluator eval, Expression expr) {
+        if (expr instanceof NameExpr name) {
+            Variable field = eval.getField(name.getNameAsString());
+            if (field != null) {
+                Type t = field.getType();
+                String fullClassName = AbstractCompiler.findFullyQualifiedName(eval.getCompilationUnit(), t);
+                if (fullClassName != null && !fullClassName.endsWith("String")) {
+                    Variable value = Reflect.variableFactory(fullClassName);
+                    if (value != null) {
+                        field.getInitializer().addAll(value.getInitializer());
+                        field.setValue(value.getValue());
+                    }
+                }
+            }
+        }
+    }
+
+    private Variable mockNonPrimitiveParameterHelper(Parameter param) throws ReflectiveOperationException {
         Variable v = null;
         Type t = param.getType();
 
@@ -53,7 +91,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (wrapper.getClazz() != null) {
             List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
             if (customized.isEmpty()) {
-                return mockNonPrimitiveParameter(param, wrapper);
+                return mockNonPrimitiveParameterHelper(param, wrapper);
             }
             for (Expression expr : customized) {
                 if (expr instanceof ObjectCreationExpr oce) {
@@ -82,7 +120,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         return v;
     }
 
-    private Variable mockNonPrimitiveParameter(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
+    private Variable mockNonPrimitiveParameterHelper(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
         String fullClassName = wrapper.getFullyQualifiedName();
         Type t = param.getType();
 

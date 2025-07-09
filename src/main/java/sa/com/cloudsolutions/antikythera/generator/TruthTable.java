@@ -41,6 +41,7 @@ public class TruthTable {
     public static final NameExpr RESULT = new NameExpr("Result");
     public static final String EQUALS_CALL = "equals";
     public static final String IS_EMPTY = "isEmpty";
+    public static final String COLLECTION_UTILS = "CollectionUtils";
     /**
      * The condition that this truth table is for
      */
@@ -258,7 +259,7 @@ public class TruthTable {
         return false;
     }
 
-    private boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
+    boolean satisfiesConstraintForVariable(Expression variable, BinaryExpr binaryExpr,
             Map<Expression, Object> truthValues) {
         Object value = truthValues.get(variable);
         if (value instanceof Integer intValue) {
@@ -459,7 +460,7 @@ public class TruthTable {
         variables.put(variable, newInterval);
     }
 
-    private Domain calculateNewInterval(Domain current, int literalValue,
+    Domain calculateNewInterval(Domain current, int literalValue,
             BinaryExpr.Operator operator, boolean varOnLeft) {
         return switch (operator) {
             case GREATER -> varOnLeft ?
@@ -885,16 +886,7 @@ public class TruthTable {
         public void visit(MethodCallExpr m, HashMap<Expression, Domain> collector) {
             ScopeChain chain = ScopeChain.findScopeChain(m);
             if (m.getNameAsString().equals(IS_EMPTY)) {
-                // For isEmpty(), we want to consider both empty and non-empty collections
-                List<?> emptyList = new ArrayList<>();
-                List<Integer> nonEmptyList = new ArrayList<>();
-                nonEmptyList.add(1);
-                Domain domain = new Domain(emptyList, nonEmptyList);
-                if (chain.isEmpty()) {
-                    collector.put(m, domain);
-                } else {
-                    collector.put(chain.getChain().getFirst().getExpression(), domain);
-                }
+                isEmptyMethodCall(m, collector, chain);
             } else if (m.getNameAsString().equals(EQUALS_CALL)) {
                 equalsMethodCall(m, collector, chain);
             } else {
@@ -910,6 +902,31 @@ public class TruthTable {
                 }
             }
             super.visit(m, collector);
+        }
+
+        private void isEmptyMethodCall(MethodCallExpr m, HashMap<Expression, Domain> collector, ScopeChain chain) {
+            Expression scope = null;
+            if (!chain.isEmpty()) {
+                scope = chain.getChain().getFirst().getExpression();
+            }
+
+            if (scope != null && scope.toString().equals("StringUtils")) {
+                collector.put(m, new Domain(null, "T"));
+                return;
+            }
+            // For isEmpty(), we want to consider both empty and non-empty collections
+            List<?> emptyList = new ArrayList<>();
+            List<Integer> nonEmptyList = new ArrayList<>();
+            nonEmptyList.add(1);
+            Domain domain = new Domain(emptyList, nonEmptyList);
+            if (chain.isEmpty()) {
+                collector.put(m, domain);
+            } else {
+                if (scope != null && scope.toString().equals(COLLECTION_UTILS)) {
+                    collector.put(m, domain);
+                }
+                collector.put(chain.getChain().getFirst().getExpression(), domain);
+            }
         }
 
 
@@ -1131,7 +1148,7 @@ public class TruthTable {
         }
     }
 
-    private static class Domain {
+     static class Domain {
         private final Object lowerBound;
         private final Object upperBound;
         final int min;

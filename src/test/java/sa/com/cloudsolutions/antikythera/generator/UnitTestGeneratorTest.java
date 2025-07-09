@@ -242,7 +242,7 @@ class UnitTestGeneratorTest {
         // Verify that the whenThen list contains an expression for Optional.empty()
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing empty Optional");
         String whenThenString = TestGenerator.whenThen.getFirst().toString();
-        assertTrue(whenThenString.contains("Optional.empty()"), 
+        assertTrue(whenThenString.contains("Optional.empty()"),
                 "The whenThen expression should contain 'Optional.empty()' but was: " + whenThenString);
 
         // Clear the whenThen list for the next test
@@ -271,7 +271,7 @@ class UnitTestGeneratorTest {
         // Verify that the whenThen list contains an expression for Optional.of(new TestClass())
         assertFalse(TestGenerator.whenThen.isEmpty(), "whenThen list should not be empty after processing Optional with Evaluator");
         whenThenString = TestGenerator.whenThen.getFirst().toString();
-        assertTrue(whenThenString.contains("Optional.of(new TestClass())"), 
+        assertTrue(whenThenString.contains("Optional.of(new TestClass())"),
                 "The whenThen expression should contain 'Optional.of(new TestClass())' but was: " + whenThenString);
     }
 }
@@ -363,7 +363,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         assertTrue(outContent.toString().contains("1!0!"));
         String s = unitTestGenerator.gen.toString();
         assertTrue(s.contains("List.of(fakeEntity"));
-        assertTrue(s.contains("List.of()"));
+        assertTrue(s.contains("new ArrayList<>()"));
 
     }
 

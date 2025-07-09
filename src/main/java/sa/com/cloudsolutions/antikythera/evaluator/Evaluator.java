@@ -7,6 +7,8 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -322,6 +324,8 @@ public class Evaluator {
                     ));
         } else if (expr.isInstanceOfExpr()) {
             return evaluateInstanceOf(expr.asInstanceOfExpr());
+        } else if (expr.isThisExpr()) {
+            return new Variable(this);
         } else {
             logger.warn("Unsupported expression: {}", expr.getClass().getSimpleName());
         }
@@ -522,23 +526,27 @@ public class Evaluator {
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep) {
         Optional<TypeDeclaration<?>> td = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (td.isPresent()) {
-            Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
-
-            if (fieldDeclaration.isPresent()) {
-                FieldDeclaration field = fieldDeclaration.get();
-                for (var variable : field.getVariables()) {
-                    if (variable.getNameAsString().equals(fae.getNameAsString())) {
-                        if (field.isStatic()) {
-                            return AntikytheraRunTime.getStaticVariable(
-                                    getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
-                        }
-                        Variable v = new Variable(field.getVariable(0).getType().asString());
-                        variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
-                        return v;
+        if (td.isEmpty()) {
+            return null;
+        }
+        Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
+        if (fieldDeclaration.isPresent()) {
+            FieldDeclaration field = fieldDeclaration.get();
+            for (var variable : field.getVariables()) {
+                if (variable.getNameAsString().equals(fae.getNameAsString())) {
+                    if (field.isStatic()) {
+                        return AntikytheraRunTime.getStaticVariable(
+                                getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
                     }
+                    Variable v = new Variable(field.getVariable(0).getType().asString());
+                    variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
+                    return v;
                 }
             }
+        }
+        else if (td.get().isEnumDeclaration()) {
+            EnumDeclaration enumDeclaration = td.get().asEnumDeclaration();
+            return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
         }
         return null;
     }
@@ -683,26 +691,29 @@ public class Evaluator {
             /* needs eager creation */
             Evaluator eval = EvaluatorFactory.create(match.getFullyQualifiedName().orElseThrow(), this);
             anonymousOverrides(match, oce);
-            List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
-            if (constructors.isEmpty()) {
-                return new Variable(eval);
-            }
-            MCEWrapper mce = wrapCallExpression(oce);
-
-            Optional<Callable> matchingConstructor = AbstractCompiler.findConstructorDeclaration(mce, match);
-
-            if (matchingConstructor.isPresent()) {
-                eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
-                return new Variable(eval);
-            }
-            /*
-             * No matching constructor found but in evals the default does not show up. So let's roll
-             */
-            return new Variable(eval);
+            return createUsingEvaluator(match, oce, eval);
         }
 
-
         return null;
+    }
+
+    private Variable createUsingEvaluator(TypeDeclaration<?> match, ObjectCreationExpr oce, Evaluator eval) throws ReflectiveOperationException {
+        List<ConstructorDeclaration> constructors = match.findAll(ConstructorDeclaration.class);
+        if (constructors.isEmpty()) {
+            return new Variable(eval);
+        }
+        MCEWrapper mce = wrapCallExpression(oce);
+
+        Optional<Callable> matchingConstructor = AbstractCompiler.findConstructorDeclaration(mce, match);
+
+        if (matchingConstructor.isPresent()) {
+            eval.executeConstructor(matchingConstructor.get().getCallableDeclaration());
+            return new Variable(eval);
+        }
+        /*
+         * No matching constructor found but in evals the default does not show up. So let's roll
+         */
+        return new Variable(eval);
     }
 
     protected MCEWrapper wrapCallExpression(NodeWithArguments<?> oce) throws ReflectiveOperationException {
@@ -1122,19 +1133,18 @@ public class Evaluator {
      */
     public Variable executeMethod(Scope sc) throws ReflectiveOperationException {
         returnFrom = null;
-        Optional<TypeDeclaration<?>> cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(cu, getClassName()).orElseThrow();
         MCEWrapper mceWrapper = sc.getMCEWrapper();
-        ClassOrInterfaceDeclaration classOrInterfaceDeclaration = cdecl.orElseThrow().asClassOrInterfaceDeclaration();
-        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, classOrInterfaceDeclaration);
+        Optional<Callable> n = AbstractCompiler.findCallableDeclaration(mceWrapper, cdecl);
 
         if (n.isPresent()) {
             mceWrapper.setMatchingCallable(n.get());
             return executeCallable(sc, n.get());
         }
-        return executeGettersOrSetters(mceWrapper, classOrInterfaceDeclaration);
+        return executeGettersOrSetters(mceWrapper, cdecl);
     }
 
-    private Variable executeGettersOrSetters(MCEWrapper mceWrapper, ClassOrInterfaceDeclaration classOrInterfaceDeclaration) {
+    private Variable executeGettersOrSetters(MCEWrapper mceWrapper, TypeDeclaration<?> classOrInterfaceDeclaration) {
         return handleLombokAccessors(classOrInterfaceDeclaration, mceWrapper.getMethodName());
     }
 
@@ -1201,12 +1211,11 @@ public class Evaluator {
         returnFrom = null;
         NodeWithArguments<?> call = methodCallWrapper.getMethodCallExpr();
         if (call instanceof MethodCallExpr methodCall) {
-            Optional<ClassOrInterfaceDeclaration> cdecl = methodCall.findAncestor(ClassOrInterfaceDeclaration.class);
+
+            Optional<TypeDeclaration<?>> cdecl = (Optional<TypeDeclaration<?>>)
+                (Optional<?>) methodCall.findAncestor(TypeDeclaration.class);
             if (cdecl.isEmpty()) {
-                Optional<TypeDeclaration<?>> t = AbstractCompiler.getMatchingType(cu, getClassName());
-                if (t.isPresent() && t.get().isClassOrInterfaceDeclaration()) {
-                    cdecl = Optional.of(t.get().asClassOrInterfaceDeclaration());
-                }
+                cdecl = AbstractCompiler.getMatchingType(cu, getClassName());
             }
             if (cdecl.isPresent()) {
                 /*
@@ -1218,15 +1227,15 @@ public class Evaluator {
 
                 if (mdecl.isPresent()) {
                     return executeMethod(mdecl.get().getCallableDeclaration());
-                } else {
-                    return executeViaDataAnnotation(cdecl.get(), methodCall);
+                } else if (cdecl.get().isClassOrInterfaceDeclaration()) {
+                    return executeViaDataAnnotation(cdecl.get().asClassOrInterfaceDeclaration(), methodCall);
                 }
             }
         }
         return null;
     }
 
-    private Variable handleLombokAccessors(ClassOrInterfaceDeclaration classDecl, String methodName) {
+    private Variable handleLombokAccessors(TypeDeclaration<?> classDecl, String methodName) {
         boolean hasData = classDecl.getAnnotationByName("Data").isPresent();
         boolean hasGetter = hasData || classDecl.getAnnotationByName("Getter").isPresent();
         boolean hasSetter = hasData || classDecl.getAnnotationByName("Setter").isPresent();
@@ -1457,7 +1466,11 @@ public class Evaluator {
     }
 
     public Variable getField(String name) {
-        return fields.get(name);
+        Variable v = fields.get(name);
+        if (v == null && typeDeclaration != null && typeDeclaration.isEnumDeclaration()) {
+            return AntikytheraRunTime.getStaticVariable(typeDeclaration.getFullyQualifiedName().orElseThrow(), name);
+        }
+        return v;
     }
 
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {
@@ -2065,6 +2078,32 @@ public class Evaluator {
                     }
                 });
             }
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void visit(EnumConstantDeclaration ecd, Void arg) {
+            ecd.findAncestor(EnumDeclaration.class).ifPresent(enumDecl -> {
+                if (enumDecl.getFullyQualifiedName().isPresent() && enumDecl.getFullyQualifiedName().get().equals(matchingClass)) {
+                    Variable v = AntikytheraRunTime.getStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString());
+                    if (v == null) {
+                        ObjectCreationExpr oce = new ObjectCreationExpr()
+                                .setType(enumDecl.getFullyQualifiedName().get());
+                        for (Expression argExpr : ecd.getArguments()) {
+                            oce.addArgument(argExpr);
+                        }
+
+                        Evaluator eval = EvaluatorFactory.createLazily(enumDecl.getFullyQualifiedName().get(), Evaluator.class);
+
+                        try {
+                            v = createUsingEvaluator(enumDecl, oce, eval);
+                            AntikytheraRunTime.setStaticVariable(enumDecl.getFullyQualifiedName().get(), ecd.getNameAsString(), v);
+                        } catch (ReflectiveOperationException e) {
+                            throw new AntikytheraException(e);
+                        }
+                    }
+                }
+            });
         }
     }
 

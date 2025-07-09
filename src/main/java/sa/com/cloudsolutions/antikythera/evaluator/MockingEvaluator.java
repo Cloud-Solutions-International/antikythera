@@ -9,7 +9,6 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
@@ -97,12 +96,11 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
             return super.executeCallable(sc, callable);
         }
-        else {
-            if (isRepository()) {
-                return mockRepositoryMethodCall(sc, callable);
-            }
-            return mockBinaryMethodExecution(sc, callable);
+
+        if (isRepository()) {
+            return mockRepositoryMethodCall(sc, callable);
         }
+        return mockBinaryMethodExecution(sc, callable);
     }
 
     private boolean isRepository() {
@@ -120,7 +118,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
-    private Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
+    Variable mockBinaryMethodExecution(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = getMethod(callable);
 
         Class<?> clazz = method.getReturnType();
@@ -128,9 +126,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return handleOptionals(sc);
         }
         else if (Object.class.equals(clazz)) {
-            List<Variable> variables = new ArrayList<>();
             for (int i = 0 ; i < method.getParameters().length ; i++) {
-                variables.add(AntikytheraRunTime.pop());
+                AntikytheraRunTime.pop();
             }
 
             Class<?> foundIn = callable.getFoundInClass();
@@ -149,9 +146,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (method != null) {
             return mockRepositoryMethod(sc, callable);
         }
-        else {
-            return mockRepositoryMethodDeclaration(sc, callable);
-        }
+        return mockRepositoryMethodDeclaration(sc, callable);
     }
 
     @SuppressWarnings("unchecked")
@@ -560,18 +555,5 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return v;
         }
         return null;
-    }
-
-    @Override
-    void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
-        TypeWrapper wrapper = AbstractCompiler.findType(cu, variableDeclarator.getType().toString());
-        if (wrapper != null && !wrapper.getFullyQualifiedName().equals(Reflect.JAVA_LANG_STRING)) {
-            Variable v = Reflect.variableFactory(wrapper.getFullyQualifiedName());
-            v.setType(variableDeclarator.getType());
-            fields.put(variableDeclarator.getNameAsString(), v);
-        }
-        else {
-            super.setupFieldWithoutInitializer(variableDeclarator);
-        }
     }
 }
