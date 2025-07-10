@@ -167,25 +167,22 @@ public class Resolver {
 
     static void resolveBinaryExpr(GraphNode node, Expression value) {
         Expression left = value.asBinaryExpr().getLeft();
-        if (left.isFieldAccessExpr()) {
-            Resolver.resolveField(node, left.asFieldAccessExpr());
-        }
-        else if (left.isNameExpr()) {
-            resolveNameExpression(node, left);
-        }
-        else if (left.isBinaryExpr()) {
-            resolveBinaryExpr(node, left);
-        }
-
         Expression right = value.asBinaryExpr().getRight();
-        if (right.isFieldAccessExpr()) {
-            Resolver.resolveField(node, right.asFieldAccessExpr());
+
+        resolveBinaryExpressionSide(node, left);
+        resolveBinaryExpressionSide(node, right);
+    }
+
+    private static void resolveBinaryExpressionSide(GraphNode node, Expression expr) {
+        processExpression(node, expr, new NodeList<>());
+        if (expr.isFieldAccessExpr()) {
+            Resolver.resolveField(node, expr.asFieldAccessExpr());
         }
-        else if(right.isNameExpr()) {
-            resolveNameExpression(node, right);
+        else if (expr.isNameExpr()) {
+            resolveNameExpression(node, expr);
         }
-        else if (right.isBinaryExpr()) {
-            resolveBinaryExpr(node, right);
+        else if (expr.isBinaryExpr()) {
+            resolveBinaryExpr(node, expr);
         }
     }
 
