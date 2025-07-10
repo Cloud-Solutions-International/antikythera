@@ -47,7 +47,6 @@ class DepSolverTest extends TestHelper {
     void each() {
         depSolver = DepSolver.createSolver();
         DepSolver.reset();
-
     }
 
     @AfterAll

@@ -47,7 +47,6 @@ public class TruthTable {
      */
     private Expression condition;
     /**
-     * Collection of variables involved in the condition.
      * the key will be the expression representing the variable and the value will be a Domain
      * representing the lower and upper bounds for the expression
      */
@@ -318,7 +317,7 @@ public class TruthTable {
      *   Returns empty map
      *
      * @param variableList Array of Expression objects representing variables
-     * @return Map of numeric variables to their bounds
+     * @return Map map with {a->2, b->2, c->2} etc
      */
     private Map<Expression, Domain> collectNumericRanges(Expression[] variableList) {
         Map<Expression, Domain> numericRanges = new HashMap<>();

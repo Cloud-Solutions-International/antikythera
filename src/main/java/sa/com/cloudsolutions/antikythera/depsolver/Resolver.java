@@ -553,9 +553,8 @@ public class Resolver {
     }
 
     static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) {
-        if (argMethodCall.getNameAsString().startsWith("get") &&
-                cid.getAnnotationByName("Data").isPresent() ||
-                cid.getAnnotationByName("Getter").isPresent()
+        if ( (argMethodCall.getNameAsString().startsWith("get") || argMethodCall.getNameAsString().startsWith("set") &&
+                (cid.getAnnotationByName("Data").isPresent() || cid.getAnnotationByName("Getter").isPresent()))
         ) {
             String field = argMethodCall.getNameAsString().substring(3);
             if (!field.isEmpty()) {
@@ -601,13 +600,12 @@ public class Resolver {
             Type t = lombokSolver(mce, decl, node);
             if (t != null && t.isClassOrInterfaceType()) {
                 return ImportUtils.addImport(node, t);
-            } else {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                    if (imp.getMethodDeclaration() != null) {
-                        Graph.createGraphNode(imp.getMethodDeclaration());
-                    }
+            }
+            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
+            if (imp != null) {
+                node.getDestination().addImport(imp.getImport());
+                if (imp.getMethodDeclaration() != null) {
+                    Graph.createGraphNode(imp.getMethodDeclaration());
                 }
             }
         }
