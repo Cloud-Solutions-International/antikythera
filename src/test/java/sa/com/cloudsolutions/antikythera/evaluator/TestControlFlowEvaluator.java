@@ -5,12 +5,14 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.AbstractMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,9 +27,13 @@ class TestControlFlowEvaluator {
         BinaryExpr binaryExpr = new BinaryExpr(left, right, BinaryExpr.Operator.EQUALS);
 
         evaluator.createSetterFromGetterForBinaryExpr(setter, binaryExpr, key);
-
-        assertEquals(1, setter.getArguments().size());
-        assertEquals(expectedArgument, setter.getArgument(0).toString());
+        if (testName.equals("WithNameExpression")) {
+            assertEquals(0, setter.getArguments().size());
+        }
+        else {
+            assertEquals(1, setter.getArguments().size());
+            assertEquals(expectedArgument, setter.getArgument(0).toString());
+        }
     }
 
     private static Stream<Arguments> provideBinaryExpressionTestCases() {
@@ -41,7 +47,49 @@ class TestControlFlowEvaluator {
             Arguments.of("WithLiteralExpression", nameKey, new IntegerLiteralExpr("42"),
                         nameKey, "42"),
             Arguments.of("WithMethodCallExpression", nameKey, new MethodCallExpr("someMethod"),
-                        nameKey, "someMethod()")
+                        nameKey, "someMethod()"),
+            Arguments.of("WithNameExpression", nameKey, new NameExpr("someVariable"),
+                        nameKey, "someVariable")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideMCETestCases")
+    void testCreateSetterFromGetterForMCE(String testName, Expression argument, Object entryValue,
+                                         String expectedArgument, int expectedArgumentCount) {
+        // Given
+        ControlFlowEvaluator evaluator = EvaluatorFactory.create("", ControlFlowEvaluator.class);
+        MethodCallExpr setter = new MethodCallExpr("setValue");
+        MethodCallExpr mce = new MethodCallExpr("equals");
+        mce.addArgument(argument);
+
+        NameExpr key = new NameExpr("getValue");
+        Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(key, entryValue);
+
+        // When
+        evaluator.createSetterFromGetterForMCE(entry, setter, mce);
+
+        // Then
+        assertEquals(expectedArgumentCount, setter.getArguments().size());
+        if (expectedArgumentCount > 0) {
+            assertEquals(expectedArgument, setter.getArgument(0).toString());
+        }
+    }
+
+    private static Stream<Arguments> provideMCETestCases() {
+        return Stream.of(
+            Arguments.of("WithObjectCreationExpr",
+                        new ObjectCreationExpr().setType("String"),
+                        true, "new String()", 1),
+            Arguments.of("WithLiteralExprAndTrueValue",
+                        new StringLiteralExpr("testValue"),
+                        true, "\"testValue\"", 1),
+            Arguments.of("WithLiteralExprAndFalseValue",
+                        new IntegerLiteralExpr("42"),
+                        false, "Integer.valueOf(\"0\")", 1),
+            Arguments.of("WithNonLiteralNonObjectCreation",
+                        new NameExpr("someVariable"),
+                        true, "", 0)
         );
     }
 }

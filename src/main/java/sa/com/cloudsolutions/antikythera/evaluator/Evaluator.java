@@ -765,6 +765,7 @@ public class Evaluator {
             if (cons != null) {
                 Object instance = cons.newInstance(reflectionArguments.getArguments());
                 Variable v = new Variable(instance);
+                v.setInitializer(List.of(oce));
                 v.setClazz(clazz);
                 return v;
             } else {
