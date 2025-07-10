@@ -1,10 +1,14 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -90,6 +94,44 @@ class TestControlFlowEvaluator {
             Arguments.of("WithNonLiteralNonObjectCreation",
                         new NameExpr("someVariable"),
                         true, "", 0)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideParameterAssignmentTestCases")
+    void testParameterAssignment(String testName, String variableType, Expression valueExpr,
+                               Object expectedValue, String expectedExpressionString) {
+        // Given
+        ControlFlowEvaluator evaluator = EvaluatorFactory.create("", ControlFlowEvaluator.class);
+        AssignExpr assignExpr = new AssignExpr(new NameExpr("testVar"), valueExpr, AssignExpr.Operator.ASSIGN);
+
+        Variable variable = new Variable(expectedValue);
+        try {
+            variable.setClazz(Class.forName("java.lang." + variableType));
+        } catch (ClassNotFoundException e) {
+            variable.setClazz(String.class); // fallback
+        }
+
+        // When
+        evaluator.parameterAssignment(assignExpr, variable);
+
+        // Then
+        assertEquals(expectedValue, variable.getValue());
+        if (expectedExpressionString != null) {
+            assertEquals(expectedExpressionString, assignExpr.getValue().toString());
+        }
+    }
+
+    private static Stream<Arguments> provideParameterAssignmentTestCases() {
+        return Stream.of(
+            Arguments.of("IntegerWithT", "Integer", new StringLiteralExpr("T"), 1, "1"),
+            Arguments.of("IntegerWithNull", "Integer", new NullLiteralExpr(), null, null),
+            Arguments.of("IntegerWithValue", "Integer", new IntegerLiteralExpr("42"), 42, null),
+            Arguments.of("LongWithT", "Long", new StringLiteralExpr("T"), 1L, "1L"),
+            Arguments.of("LongWithNull", "Long", new NullLiteralExpr(), null, null),
+            Arguments.of("BooleanWithTrue", "Boolean", new BooleanLiteralExpr(true), true, null),
+            Arguments.of("StringWithValue", "String", new StringLiteralExpr("test"), "test", null),
+            Arguments.of("StringWithNull", "String", new NullLiteralExpr(), null, null)gi
         );
     }
 }

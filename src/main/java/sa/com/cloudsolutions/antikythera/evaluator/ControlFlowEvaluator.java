@@ -682,7 +682,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return null;
     }
 
-    protected void parameterAssignment(AssignExpr assignExpr, Variable va) {
+    void parameterAssignment(AssignExpr assignExpr, Variable va) {
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> {
