@@ -293,18 +293,22 @@ public class Resolver {
 
     private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) {
         GraphNode scopeNode = resolveFieldAccess(node, scope, types);
-        if (scopeNode != null) {
-            FieldDeclaration scopeField = ((FieldDeclaration) scopeNode.getNode()).asFieldDeclaration();
-            ClassOrInterfaceType resolvedType = scopeField.getElementType().asClassOrInterfaceType();
-            if (resolvedType != null) {
+        if (scopeNode != null && scopeNode.getNode() instanceof FieldDeclaration scopeField) {
+            Type fieldType = scopeField.getElementType();
+            if (fieldType.isClassOrInterfaceType()) {
+                ClassOrInterfaceType resolvedType = fieldType.asClassOrInterfaceType();
                 String fqn = AbstractCompiler.findFullyQualifiedName(scopeNode.getCompilationUnit(), resolvedType.getName().asString());
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
-                if (cu != null) {
-                    Optional<TypeDeclaration<?>> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
-                    if (resolvedClass.isPresent()) {
-                        Optional<FieldDeclaration> field = resolvedClass.get().getFieldByName(fae.getNameAsString());
-                        if (field.isPresent()) {
-                            return Graph.createGraphNode(field.get());
+                if (fqn != null) {
+                    CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
+                    if (cu != null) {
+                        Optional<TypeDeclaration<?>> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
+                        if (resolvedClass.isPresent()) {
+                            Optional<FieldDeclaration> field = resolvedClass.get().getFieldByName(fae.getNameAsString());
+                            if (field.isPresent()) {
+                                FieldDeclaration targetField = field.get();
+                                types.add(targetField.getElementType());
+                                return Graph.createGraphNode(targetField);
+                            }
                         }
                     }
                 }

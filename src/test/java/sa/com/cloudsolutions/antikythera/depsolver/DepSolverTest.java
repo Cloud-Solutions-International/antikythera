@@ -286,4 +286,27 @@ class DepSolverTest extends TestHelper {
 
         assertEquals(expectedTypeCount, types.size());
     }
+
+    @Test
+    void testResolveFieldAccess() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+
+        // Find field access expressions in the chained method
+        MethodDeclaration chainedMethod = sourceClass.getMethodsByName("chained").getFirst();
+        var fieldAccessExprs = chainedMethod.findAll(FieldAccessExpr.class);
+        assertFalse(fieldAccessExprs.isEmpty());
+
+        DepSolver.getNames().put("p", new com.github.javaparser.ast.type.ClassOrInterfaceType(null, "Person"));
+
+        NodeList<Type> types = new NodeList<>();
+        FieldAccessExpr pNameExpr = fieldAccessExprs.stream()
+                .filter(fae -> fae.getNameAsString().equals("name"))
+                .findFirst()
+                .orElseThrow();
+
+        Resolver.resolveFieldAccess(node, pNameExpr, types);
+
+        assertFalse(types.isEmpty());
+        assertTrue(types.get(0).isClassOrInterfaceType());
+    }
 }
