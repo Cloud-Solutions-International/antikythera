@@ -618,10 +618,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void setupIfCondition(List<Map<Expression, Object>> values) {
         Map<Expression, Object> value = values.getFirst();
         for (var entry : value.entrySet()) {
             Expression key = entry.getKey();
+            Optional<MethodCallExpr> parentCall = key.findAncestor(MethodCallExpr.class);
+            if (parentCall.isPresent() ) {
+                MethodCallExpr p = parentCall.get();
+                if (p.getScope().isPresent() && p.getScope().get() instanceof NameExpr nameExpr && nameExpr.getNameAsString().equals("StringUtils")) {
+                    continue;
+                }
+            }
             if (key instanceof MethodCallExpr mce) {
                 if (mce.getScope().isPresent() && mce.getScope().orElseThrow() instanceof NameExpr name
                         && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
