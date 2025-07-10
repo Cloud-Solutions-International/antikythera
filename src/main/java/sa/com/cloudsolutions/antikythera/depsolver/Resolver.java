@@ -116,17 +116,9 @@ public class Resolver {
                     }
                 }
             }
-            else {
-                return Resolver.resolveThisFieldAccess(node, value);
-            }
         }
-        else {
-            return Resolver.resolveThisFieldAccess(node, value);
-        }
-
-        return null;
+        return Resolver.resolveThisFieldAccess(node, value);
     }
-
 
     static void resolveArrayExpr(GraphNode node, Expression value) {
         ArrayInitializerExpr aie = value.asArrayInitializerExpr();
