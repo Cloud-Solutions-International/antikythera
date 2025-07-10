@@ -19,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+/**
+ * ATM, resolver is too tightly coupled with Depsolver to write many direct unit tests.
+ */
 class ResolverTest {
     DepSolver depSolver;
 

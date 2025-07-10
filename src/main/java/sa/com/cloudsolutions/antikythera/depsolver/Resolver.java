@@ -387,6 +387,7 @@ public class Resolver {
             if (fd.isPresent()) {
                 return findFieldNode(gn, fd.get());
             }
+
             gn = ImportUtils.addImport(gn, nameExpr);
         }
         else {
@@ -469,7 +470,7 @@ public class Resolver {
         }
     }
 
-    private static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
+    static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
         ArrayAccessExpr aae = expr.asArrayAccessExpr();
         if (aae.getName().isNameExpr()) {
             resolveNameExpr(node, aae.getName().asNameExpr(), types);
@@ -534,22 +535,20 @@ public class Resolver {
                         Type t = cd.asMethodDeclaration().getType();
                         types.add(t);
                         ImportUtils.addImport(node, t);
-
                     }
                     cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
                         ImportUtils.addImport(node, c.getNameAsString())
                     );
                 }
-            } else {
-                if (callExpression instanceof MethodCallExpr methodCallExpr) {
-                        Type t = lombokSolver(methodCallExpr, cid, gn);
-                        if (t != null) {
-                            types.add(t);
-                        }
+                return;
+            }
+            if (callExpression instanceof MethodCallExpr methodCallExpr) {
+                Type t = lombokSolver(methodCallExpr, cid, gn);
+                if (t != null) {
+                    types.add(t);
                 }
             }
         }
-
     }
 
     static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) {
