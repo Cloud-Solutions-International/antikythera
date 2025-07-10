@@ -131,7 +131,7 @@ class TestControlFlowEvaluator {
             Arguments.of("LongWithNull", "Long", new NullLiteralExpr(), null, null),
             Arguments.of("BooleanWithTrue", "Boolean", new BooleanLiteralExpr(true), true, null),
             Arguments.of("StringWithValue", "String", new StringLiteralExpr("test"), "test", null),
-            Arguments.of("StringWithNull", "String", new NullLiteralExpr(), null, null)gi
+            Arguments.of("StringWithNull", "String", new NullLiteralExpr(), null, null)
         );
     }
 }
