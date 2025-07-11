@@ -42,6 +42,7 @@ public class TruthTable {
     public static final String EQUALS_CALL = "equals";
     public static final String IS_EMPTY = "isEmpty";
     public static final String COLLECTION_UTILS = "CollectionUtils";
+    public static final String STRING_UTILS = "StringUtils";
     /**
      * The condition that this truth table is for
      */
@@ -733,6 +734,12 @@ public class TruthTable {
         Expression scope = condition.getScope().orElse(null);
 
         if (IS_EMPTY.equals(methodName)) {
+            if (scope instanceof NameExpr nameExpr) {
+                String name = nameExpr.getNameAsString();
+                if (name.equals(STRING_UTILS) || name.equals(COLLECTION_UTILS)) {
+                    return evaluateIsEmpty(truthValues, condition);
+                }
+            }
             return evaluateIsEmpty(truthValues, scope);
         } else if (EQUALS_CALL.equals(methodName)) {
             return evaluateIsEquals(condition, truthValues, scope);
@@ -885,7 +892,9 @@ public class TruthTable {
         public void visit(MethodCallExpr m, HashMap<Expression, Domain> collector) {
             ScopeChain chain = ScopeChain.findScopeChain(m);
             if (m.getNameAsString().equals(IS_EMPTY)) {
-                isEmptyMethodCall(m, collector, chain);
+                if(isEmptyMethodCall(m, collector, chain)) {
+                    return;
+                }
             } else if (m.getNameAsString().equals(EQUALS_CALL)) {
                 equalsMethodCall(m, collector, chain);
             } else {
@@ -903,15 +912,16 @@ public class TruthTable {
             super.visit(m, collector);
         }
 
-        private void isEmptyMethodCall(MethodCallExpr m, HashMap<Expression, Domain> collector, ScopeChain chain) {
+        private boolean isEmptyMethodCall(MethodCallExpr m, HashMap<Expression, Domain> collector, ScopeChain chain) {
             Expression scope = null;
             if (!chain.isEmpty()) {
                 scope = chain.getChain().getFirst().getExpression();
             }
 
-            if (scope != null && scope.toString().equals("StringUtils")) {
+            if (scope != null && scope.toString().equals(STRING_UTILS)) {
                 collector.put(m, new Domain(null, "T"));
-                return;
+                // no further handling needed for StringUtils.isEmpty()
+                return true;
             }
             // For isEmpty(), we want to consider both empty and non-empty collections
             List<?> emptyList = new ArrayList<>();
@@ -921,11 +931,13 @@ public class TruthTable {
             if (chain.isEmpty()) {
                 collector.put(m, domain);
             } else {
+                collector.put(chain.getChain().getFirst().getExpression(), domain);
                 if (scope != null && scope.toString().equals(COLLECTION_UTILS)) {
                     collector.put(m, domain);
+                    return true;
                 }
-                collector.put(chain.getChain().getFirst().getExpression(), domain);
             }
+            return false;
         }
 
 

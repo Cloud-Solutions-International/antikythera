@@ -379,7 +379,12 @@ public class ControlFlowEvaluator extends Evaluator {
         } else {
             setter.setName("set" + name.substring(3));
         }
-        setter.setScope(scope);
+        if ( scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            setter.setScope(mce.getScope().get());
+        }
+        else {
+            setter.setScope(scope);
+        }
 
         if (entry.getValue() == null) {
             setter.addArgument(new NullLiteralExpr());
