@@ -931,11 +931,11 @@ public class TruthTable {
             if (chain.isEmpty()) {
                 collector.put(m, domain);
             } else {
-                collector.put(chain.getChain().getFirst().getExpression(), domain);
                 if (scope != null && scope.toString().equals(COLLECTION_UTILS)) {
                     collector.put(m, domain);
                     return true;
                 }
+                collector.put(chain.getChain().getFirst().getExpression(), domain);
             }
             return false;
         }
