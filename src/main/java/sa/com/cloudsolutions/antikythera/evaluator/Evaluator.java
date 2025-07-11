@@ -1432,6 +1432,11 @@ public class Evaluator {
             v = new Variable(t, null);
             v.setType(t);
         }
+        if (v!= null && v.getType() != null && v.getType().isPrimitiveType()
+                && v.getClazz() != null  && !v.getClazz().isPrimitive()) {
+            v.setValue(v.getClazz().cast(v.getValue()));
+            v.setType(new ClassOrInterfaceType().setName(v.getClazz().getName()));
+        }
         return v;
     }
 
