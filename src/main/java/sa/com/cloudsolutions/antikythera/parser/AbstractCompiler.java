@@ -675,7 +675,7 @@ public class AbstractCompiler {
          */
         for (Object e : Settings.getProperty("extra_exports", List.class).orElseGet(List::of)) {
             if (e.toString().endsWith(className)) {
-                return new ImportWrapper(new ImportDeclaration(e.toString(), false, false), true);
+                return new ImportWrapper(new ImportDeclaration(e.toString(), false, false));
             }
         }
         return null;
@@ -698,12 +698,10 @@ public class AbstractCompiler {
                 final ImportWrapper wrapper = new ImportWrapper(imp);
                 if (!imp.isStatic()) {
                     AntikytheraRunTime.getTypeDeclaration(imp.getNameAsString()).ifPresent(p -> {
-                        wrapper.setExternal(false);
                         setTypeAndField(className, p, wrapper);
                     });
                 } else if (importName.getQualifier().isPresent()) {
                     AntikytheraRunTime.getTypeDeclaration(importName.getQualifier().orElseThrow().toString()).ifPresent(p -> {
-                        wrapper.setExternal(false);
                         setTypeAndField(className, p, wrapper);
                     });
                 }
@@ -730,24 +728,24 @@ public class AbstractCompiler {
 
                 String fullClassName = impName + "." + className;
                 try {
-                    Class.forName(fullClassName);
+                    Class<?> clazz = Class.forName(fullClassName);
                     /*
                      * Wild card import. Append the class name to the end and load the class,
                      * we are on this line because it has worked, so this is the correct import.
                      */
-                    ImportWrapper wrapper = new ImportWrapper(imp, true);
+                    ImportWrapper wrapper = new ImportWrapper(imp, clazz);
                     ImportDeclaration decl = new ImportDeclaration(fullClassName, imp.isStatic(), false);
                     wrapper.setSimplified(decl);
                     return wrapper;
                 } catch (ClassNotFoundException e) {
                     try {
-                        AbstractCompiler.loadClass(fullClassName);
+                        Class<?> clazz = AbstractCompiler.loadClass(fullClassName);
                         /*
                          * We are here because the previous attempt at `class forname` was
                          * unsuccessful simply because the class had not been loaded.
                          * Here we have loaded it, which obviously means it's there
                          */
-                        return new ImportWrapper(imp, true);
+                        return new ImportWrapper(imp, clazz);
                     } catch (ClassNotFoundException ex) {
                         /*
                          * There's one more thing that we can try, append the class name to the
@@ -767,7 +765,7 @@ public class AbstractCompiler {
     private static ImportWrapper fakeImport(String className, ImportDeclaration imp, String fullClassName, String impName) {
         CompilationUnit target = AntikytheraRunTime.getCompilationUnit(fullClassName);
         if (target != null) {
-            ImportWrapper wrapper = new ImportWrapper(imp, false);
+            ImportWrapper wrapper = new ImportWrapper(imp);
             for (TypeDeclaration<?> type : target.getTypes()) {
                 if (type.getNameAsString().equals(className)) {
                     wrapper.setType(type);

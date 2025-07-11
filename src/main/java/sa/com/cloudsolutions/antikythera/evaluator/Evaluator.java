@@ -568,23 +568,31 @@ public class Evaluator {
         if (target.isFieldAccessExpr()) {
             FieldAccessExpr fae = target.asFieldAccessExpr();
             String fieldName = fae.getNameAsString();
+
+
             Variable variable = fae.getScope().toString().equals("this")
                     ? getValue(expr, fieldName)
                     : getValue(expr, fae.getScope().toString());
 
-            Object obj = variable.getValue();
-            if (obj instanceof Evaluator eval) {
-                eval.setField(fae.getNameAsString(), v);
-            } else {
-                try {
-                    Field field = obj.getClass().getDeclaredField(fieldName);
-                    field.setAccessible(true);
-                    field.set(obj, v.getValue());
-                } catch (ReflectiveOperationException | NullPointerException e) {
-                    /*
-                     * This is not something that was created with class.forName or byte buddy.
-                     */
-                    this.fields.put(fieldName, v);
+            if (variable == null) {
+                setField(fae.getNameAsString(), v);
+            }
+            else {
+                Object obj = variable.getValue();
+
+                if (obj instanceof Evaluator eval) {
+                    eval.setField(fae.getNameAsString(), v);
+                } else {
+                    try {
+                        Field field = obj.getClass().getDeclaredField(fieldName);
+                        field.setAccessible(true);
+                        field.set(obj, v.getValue());
+                    } catch (ReflectiveOperationException | NullPointerException e) {
+                        /*
+                         * This is not something that was created with class.forName or byte buddy.
+                         */
+                        this.fields.put(fieldName, v);
+                    }
                 }
             }
         } else if (target.isNameExpr()) {

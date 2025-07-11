@@ -616,10 +616,13 @@ public class Reflect {
             return false;
         }
         Class<?> parameterType = parameterTypes[i];
-        if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
-            return true;
+        try {
+            if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
+                return true;
+            }
+        } catch (Exception e) {
+            System.out.println("a");
         }
-
         if (wrapperToPrimitive.get(parameterType) != null && wrapperToPrimitive.get(parameterType).equals(argumentTypes[i])) {
             argumentTypes[i] = wrapperToPrimitive.get(parameterType);
             return true;
