@@ -4,12 +4,15 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -618,14 +621,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private void setupIfCondition(List<Map<Expression, Object>> values) {
-        Map<Expression, Object> value = values.getFirst();
-        for (var entry : value.entrySet()) {
+    private void setupIfCondition(List<Map<Expression, Object>> combinations) {
+        Map<Expression, Object> combination = adjustForEnums(combinations.getFirst());
+        for (var entry : combination.entrySet()) {
             Expression key = entry.getKey();
             if (key instanceof MethodCallExpr mce) {
                 if (mce.getScope().isPresent() && mce.getScope().orElseThrow() instanceof NameExpr name
                         && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
-                    var collection = value.get(new NameExpr(TruthTable.COLLECTION_UTILS));
+                    var collection = combination.get(new NameExpr(TruthTable.COLLECTION_UTILS));
                     if (collection != null) {
                         setupConditionThroughMethodCalls(currentConditional.getStatement(),
                                 new AbstractMap.SimpleEntry<>(key, collection));
@@ -634,12 +637,56 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
                 setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
             } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
+
                 setupConditionThroughAssignment(currentConditional.getStatement(), entry);
             } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
                 setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
                 return;
             }
         }
+    }
+
+    private Map<Expression, Object> adjustForEnums(Map<Expression, Object> combination) {
+        final Map<Expression, Object> result = new HashMap<>();
+        for (var entry : combination.entrySet()) {
+            Expression key = entry.getKey();
+            if (key.isNameExpr()) {
+                TypeWrapper t = AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
+                if (t != null && t.getEnumConstant() != null) {
+                    key.getParentNode().ifPresent(node -> {
+                        if (node instanceof BinaryExpr binaryExpr) {
+
+                        }
+                        if (node instanceof MethodCallExpr methodCall) {
+                            methodCall.getScope().ifPresent(scope -> {
+                                if (scope instanceof NameExpr nameExpr) {
+                                    if (entry.getKey() == combination.get(nameExpr)) {
+                                        result.put(key, t.getEnumConstant());
+                                    } else {
+                                        t.getEnumConstant().getParentNode().ifPresent(parent -> {
+                                            if (parent instanceof EnumDeclaration enumDeclaration) {
+                                                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
+                                                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                                                        result.put(nameExpr, t.getEnumConstant());
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+                else {
+                    result.put(key, entry.getValue());
+                }
+            }
+            else {
+                result.put(key, entry.getValue());
+            }
+        }
+        return result;
     }
 
     /**

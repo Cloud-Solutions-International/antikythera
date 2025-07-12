@@ -1,10 +1,13 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 
 public class TypeWrapper {
     TypeDeclaration<?> type;
     Class<?> clazz;
+    EnumConstantDeclaration enumConstant;
+
     private boolean isController;
     private boolean isService;
     private boolean component;
@@ -16,6 +19,10 @@ public class TypeWrapper {
 
     public TypeWrapper(Class<?> cls) {
         this.clazz = cls;
+    }
+
+    public TypeWrapper(EnumConstantDeclaration enumConstant) {
+        this.enumConstant = enumConstant;
     }
 
     public TypeWrapper() {
@@ -73,5 +80,9 @@ public class TypeWrapper {
 
     public void setInterface(boolean isInterface) {
         this.isInterface = isInterface;
+    }
+
+    public EnumConstantDeclaration getEnumConstant() {
+        return enumConstant;
     }
 }

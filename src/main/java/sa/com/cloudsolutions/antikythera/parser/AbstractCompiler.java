@@ -572,6 +572,13 @@ public class AbstractCompiler {
                 // ignorable
             }
         }
+        for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
+            for (EnumConstantDeclaration constant : ed.getEntries()) {
+                if (constant.getNameAsString().equals(className)) {
+                    return new TypeWrapper(constant);
+                }
+            }
+        }
 
         return detectTypeWithClassLoaders(cu, className);
     }

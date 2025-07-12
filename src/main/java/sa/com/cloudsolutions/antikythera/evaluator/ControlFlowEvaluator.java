@@ -5,6 +5,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -114,6 +115,10 @@ public class ControlFlowEvaluator extends Evaluator {
         } else if (entry.getValue() instanceof ClassOrInterfaceType cType) {
             Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
             valueExpressions = vx.getInitializer();
+        } else if (entry.getValue() instanceof EnumConstantDeclaration ec) {
+            valueExpressions = List.of(
+                    new NameExpr(ec.getNameAsString())
+            );
         } else {
             valueExpressions = setupConditionForNonPrimitive(entry, v);
         }
