@@ -664,30 +664,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                         result.put(right, leftType.getEnumConstant());
                                     }
                                     else {
-                                        t.getEnumConstant().getParentNode().ifPresent(parent -> {
-                                            if (parent instanceof EnumDeclaration enumDeclaration) {
-                                                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                                                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                                                        result.put(left, ecd);
-                                                    }
-                                                }
-                                            }
-                                        });
+                                        setupEnumMismatch(t, key, result, right);
                                     }
                                 } else if (rightType != null && rightType.getEnumConstant() != null) {
                                     if (combination.get(left) == combination.get(right)) {
                                         result.put(left, rightType.getEnumConstant());
                                     }
                                     else {
-                                        t.getEnumConstant().getParentNode().ifPresent(parent -> {
-                                            if (parent instanceof EnumDeclaration enumDeclaration) {
-                                                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                                                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                                                        result.put(left, ecd);
-                                                    }
-                                                }
-                                            }
-                                        });
+                                        setupEnumMismatch(t, key, result, left);
                                     }
                                 }
                             } else if (binaryExpr.getOperator().equals(BinaryExpr.Operator.NOT_EQUALS)) {
@@ -695,15 +679,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                     result.put(left, rightType.getEnumConstant());
                                 }
                                 else {
-                                    t.getEnumConstant().getParentNode().ifPresent(parent -> {
-                                        if (parent instanceof EnumDeclaration enumDeclaration) {
-                                            for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                                                if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                                                    result.put(left, ecd);
-                                                }
-                                            }
-                                        }
-                                    });
+                                    setupEnumMismatch(t, key, result, left);
                                 }
                             }
                         }
@@ -713,15 +689,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                     if (entry.getValue() == combination.get(nameExpr)) {
                                         result.put(nameExpr, t.getEnumConstant());
                                     } else {
-                                        t.getEnumConstant().getParentNode().ifPresent(parent -> {
-                                            if (parent instanceof EnumDeclaration enumDeclaration) {
-                                                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                                                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                                                        result.put(nameExpr, ecd);
-                                                    }
-                                                }
-                                            }
-                                        });
+                                        setupEnumMismatch(t, key, result, nameExpr);
                                     }
                                 }
                             });
@@ -737,6 +705,18 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         }
         return result;
+    }
+
+    private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, NameExpr left) {
+        t.getEnumConstant().getParentNode().ifPresent(parent -> {
+            if (parent instanceof EnumDeclaration enumDeclaration) {
+                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
+                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                        result.put(left, ecd);
+                    }
+                }
+            }
+        });
     }
 
     /**
