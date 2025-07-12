@@ -730,11 +730,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     return false;
                 }).orElseThrow();
 
-                rightType.setEnumConstant(enumConstantDeclaration);
                 if (conditionMatches) {
-                    result.put(left, rightType.getEnumConstant());
+                    result.put(left, enumConstantDeclaration);
                 } else {
-                    setupEnumMismatch(rightType, entry.getKey(), result, left);
+                    result.put(left, right);
                 }
             }
         }
@@ -785,15 +784,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, Expression expr) {
         t.getEnumConstant().getParentNode().ifPresent(parent -> {
             if (parent instanceof EnumDeclaration enumDeclaration) {
-                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                        result.put(expr, ecd);
-                    }
-                }
+                result.put(key, getNonMatchingEnum(enumDeclaration, key.asNameExpr().getNameAsString()));
             }
         });
     }
 
+    private static EnumConstantDeclaration getNonMatchingEnum(EnumDeclaration enumDeclaration, String name) {
+        for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
+            if (!ecd.getNameAsString().equals(name)) {
+                return ecd;
+            }
+        }
+        return null;
+    }
     /**
      * Execute a method that's only available to us in source code format.
      *

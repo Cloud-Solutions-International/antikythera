@@ -85,8 +85,4 @@ public class TypeWrapper {
     public EnumConstantDeclaration getEnumConstant() {
         return enumConstant;
     }
-
-    public void setEnumConstant(EnumConstantDeclaration enumConstant) {
-        this.enumConstant = enumConstant;
-    }
 }
