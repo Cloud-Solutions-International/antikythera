@@ -49,7 +49,7 @@ class TestEnums extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"cmp1, OPEN!CLOSED!", "cmp2, OPEN!CLOSED!"})
+    @CsvSource({"cmp1, CLOSED!OPEN!", "cmp2, OPEN!CLOSED!"})
     void cmp(String name, String value) throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

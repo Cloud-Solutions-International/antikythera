@@ -637,7 +637,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
                 setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
             } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
-
                 setupConditionThroughAssignment(currentConditional.getStatement(), entry);
             } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
                 setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
@@ -660,14 +659,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         if (node instanceof MethodCallExpr methodCall) {
                             methodCall.getScope().ifPresent(scope -> {
                                 if (scope instanceof NameExpr nameExpr) {
-                                    if (entry.getKey() == combination.get(nameExpr)) {
-                                        result.put(key, t.getEnumConstant());
+                                    if (entry.getValue() == combination.get(nameExpr)) {
+                                        result.put(nameExpr, t.getEnumConstant());
                                     } else {
                                         t.getEnumConstant().getParentNode().ifPresent(parent -> {
                                             if (parent instanceof EnumDeclaration enumDeclaration) {
                                                 for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
                                                     if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                                                        result.put(nameExpr, t.getEnumConstant());
+                                                        result.put(nameExpr, ecd);
                                                     }
                                                 }
                                             }
