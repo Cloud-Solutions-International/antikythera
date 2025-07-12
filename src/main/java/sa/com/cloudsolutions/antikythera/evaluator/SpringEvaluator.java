@@ -660,7 +660,20 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                             TypeWrapper rightType = AbstractCompiler.findType(cu, right.getNameAsString());
                             if (binaryExpr.getOperator().equals(BinaryExpr.Operator.EQUALS)) {
                                 if (leftType != null && leftType.getEnumConstant() != null) {
-                                    result.put(right, t.getEnumConstant());
+                                    if (combination.get(left) == combination.get(right)) {
+                                        result.put(right, leftType.getEnumConstant());
+                                    }
+                                    else {
+                                        t.getEnumConstant().getParentNode().ifPresent(parent -> {
+                                            if (parent instanceof EnumDeclaration enumDeclaration) {
+                                                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
+                                                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                                                        result.put(left, ecd);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
                                 } else if (rightType != null && rightType.getEnumConstant() != null) {
                                     if (combination.get(left) == combination.get(right)) {
                                         result.put(left, rightType.getEnumConstant());
@@ -678,10 +691,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                     }
                                 }
                             } else if (binaryExpr.getOperator().equals(BinaryExpr.Operator.NOT_EQUALS)) {
-                                if (leftType != null && leftType.getEnumConstant() != null) {
-                                    result.put(right, t.getEnumConstant());
-                                } else if (rightType != null && rightType.getEnumConstant() != null) {
-                                    result.put(left, t.getEnumConstant());
+                                if (combination.get(left) != combination.get(right)) {
+                                    result.put(left, rightType.getEnumConstant());
+                                }
+                                else {
+                                    t.getEnumConstant().getParentNode().ifPresent(parent -> {
+                                        if (parent instanceof EnumDeclaration enumDeclaration) {
+                                            for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
+                                                if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                                                    result.put(left, ecd);
+                                                }
+                                            }
+                                        }
+                                    });
                                 }
                             }
                         }
