@@ -6,6 +6,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -32,6 +33,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -116,9 +118,20 @@ public class ControlFlowEvaluator extends Evaluator {
             Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
             valueExpressions = vx.getInitializer();
         } else if (entry.getValue() instanceof EnumConstantDeclaration ec) {
-            valueExpressions = List.of(
-                    new NameExpr(ec.getNameAsString())
-            );
+            TypeWrapper wrapper = AbstractCompiler.findType(cu, ec.getNameAsString());
+            if (wrapper != null) {
+                valueExpressions = List.of(
+                        new NameExpr(ec.getNameAsString())
+                );
+            }
+            else if (ec.getParentNode().isPresent() && ec.getParentNode().get() instanceof EnumDeclaration ed) {
+                valueExpressions = List.of(
+                        new NameExpr(ed.getNameAsString() + "." + ec.getNameAsString())
+                );
+            }
+            else {
+                valueExpressions = List.of();
+            }
         } else {
             valueExpressions = setupConditionForNonPrimitive(entry, v);
         }

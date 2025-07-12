@@ -786,7 +786,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         t.getEnumConstant().getParentNode().ifPresent(parent -> {
             if (parent instanceof EnumDeclaration enumDeclaration) {
                 for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                    if (!ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                    if (key.isNameExpr() && !ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                        result.put(expr, ecd);
+                    }
+                    else if (key.isFieldAccessExpr() && !ecd.getNameAsString().equals(key.asFieldAccessExpr().getNameAsString())) {
                         result.put(expr, ecd);
                     }
                 }
