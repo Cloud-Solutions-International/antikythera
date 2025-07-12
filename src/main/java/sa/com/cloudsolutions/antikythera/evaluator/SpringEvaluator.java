@@ -661,12 +661,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void adjustForEnums(Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
         Expression key = entry.getKey();
-        TypeWrapper t = AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
-        Optional<Node> parentNode = key.getParentNode();
 
-        if (t != null && t.getEnumConstant() != null) {
-            if (parentNode.isPresent()) {
-                Node node = parentNode.get();
+        Optional<Node> parentNode = key.getParentNode();
+        if (parentNode.isPresent()) {
+            Node node = parentNode.get();
+            TypeWrapper t = AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
+            if (t != null && t.getEnumConstant() != null) {
                 if (node instanceof BinaryExpr binaryExpr) {
                     NameExpr left = binaryExpr.getLeft().asNameExpr();
                     NameExpr right = binaryExpr.getRight().asNameExpr();
@@ -730,10 +730,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     });
                 }
             }
-        }
-        else {
-            if (parentNode.isPresent()) {
-                Node node = parentNode.get();
+            else {
                 if (node instanceof MethodCallExpr methodCall) {
                     if (methodCall.getArguments().isNonEmpty() && methodCall.getArgument(0) instanceof NameExpr nameExpr) {
                         TypeWrapper wrapper = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
@@ -751,9 +748,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 result.put(key, entry.getValue());
 
             }
-            else {
-                result.put(key, entry.getValue());
-            }
+        }  else {
+            result.put(key, entry.getValue());
         }
     }
 
