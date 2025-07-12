@@ -694,8 +694,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         TypeWrapper leftType = AbstractCompiler.findType(cu, left.getNameAsString());
         TypeWrapper rightType = AbstractCompiler.findType(cu, right.getNameAsString());
 
-        boolean isEquals = binaryExpr.getOperator().equals(BinaryExpr.Operator.EQUALS);
-        boolean conditionMatches = isEquals ?
+        boolean conditionMatches = binaryExpr.getOperator().equals(BinaryExpr.Operator.EQUALS) ?
             combination.get(left) == combination.get(right) :
             combination.get(left) != combination.get(right);
 
@@ -721,10 +720,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 TypeWrapper keyType = AbstractCompiler.findType(cu, entry.getKey().asNameExpr().getNameAsString());
 
                 if (scopeType != null && scopeType.getEnumConstant() != null) {
-                    // Pattern: OPEN.equals(s)
                     handleEnumComparison(scopeType, entry, combination, nameExpr, entry.getKey().asNameExpr(), result);
                 } else if (keyType != null && keyType.getEnumConstant() != null) {
-                    // Pattern: s.equals(OPEN)
                     handleEnumComparison(keyType, entry, combination, nameExpr, nameExpr, result);
                 }
             }
@@ -745,7 +742,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             hasEnumConstant(nameExpr.getNameAsString());
 
         boolean hasEnumScope = methodCall.getScope().isPresent() &&
-            methodCall.getScope().get() instanceof NameExpr nameExpr &&
+            methodCall.getScope().orElseThrow() instanceof NameExpr nameExpr &&
             hasEnumConstant(nameExpr.getNameAsString());
 
         if (!hasEnumArgument && !hasEnumScope) {
@@ -757,6 +754,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, name);
         return wrapper != null && wrapper.getEnumConstant() != null;
     }
+
     private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, NameExpr left) {
         t.getEnumConstant().getParentNode().ifPresent(parent -> {
             if (parent instanceof EnumDeclaration enumDeclaration) {
