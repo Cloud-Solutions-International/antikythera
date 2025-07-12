@@ -14,6 +14,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -118,20 +119,11 @@ public class ControlFlowEvaluator extends Evaluator {
             Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
             valueExpressions = vx.getInitializer();
         } else if (entry.getValue() instanceof EnumConstantDeclaration ec) {
-            TypeWrapper wrapper = AbstractCompiler.findType(cu, ec.getNameAsString());
-            if (wrapper != null) {
-                valueExpressions = List.of(
-                        new NameExpr(ec.getNameAsString())
-                );
-            }
-            else if (ec.getParentNode().isPresent() && ec.getParentNode().get() instanceof EnumDeclaration ed) {
-                valueExpressions = List.of(
-                        new NameExpr(ed.getNameAsString() + "." + ec.getNameAsString())
-                );
-            }
-            else {
-                valueExpressions = List.of();
-            }
+            valueExpressions = List.of(
+                    new NameExpr(ec.getNameAsString())
+            );
+        } else if (entry.getValue() instanceof FieldAccessExpr fae) {
+            valueExpressions = List.of(fae);
         } else {
             valueExpressions = setupConditionForNonPrimitive(entry, v);
         }
