@@ -661,98 +661,102 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void adjustForEnums(Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
         Expression key = entry.getKey();
-
         Optional<Node> parentNode = key.getParentNode();
-        if (parentNode.isPresent()) {
-            Node node = parentNode.get();
-            TypeWrapper t = AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
-            if (t != null && t.getEnumConstant() != null) {
-                if (node instanceof BinaryExpr binaryExpr) {
-                    NameExpr left = binaryExpr.getLeft().asNameExpr();
-                    NameExpr right = binaryExpr.getRight().asNameExpr();
-                    TypeWrapper leftType = AbstractCompiler.findType(cu, left.getNameAsString());
-                    TypeWrapper rightType = AbstractCompiler.findType(cu, right.getNameAsString());
-                    if (binaryExpr.getOperator().equals(BinaryExpr.Operator.EQUALS)) {
-                        if (leftType != null && leftType.getEnumConstant() != null) {
-                            if (combination.get(left) == combination.get(right)) {
-                                result.put(right, leftType.getEnumConstant());
-                            }
-                            else {
-                                setupEnumMismatch(t, key, result, right);
-                            }
-                        } else if (rightType != null && rightType.getEnumConstant() != null) {
-                            if (combination.get(left) == combination.get(right)) {
-                                result.put(left, rightType.getEnumConstant());
-                            }
-                            else {
-                                setupEnumMismatch(t, key, result, left);
-                            }
-                        }
-                    } else if (binaryExpr.getOperator().equals(BinaryExpr.Operator.NOT_EQUALS)) {
-                        if (leftType != null && leftType.getEnumConstant() != null) {
-                            if (combination.get(left) != combination.get(right)) {
-                                result.put(right, leftType.getEnumConstant());
-                            }
-                            else {
-                                setupEnumMismatch(t, key, result, right);
-                            }
-                        } else if (rightType != null && rightType.getEnumConstant() != null) {
-                            if (combination.get(left) != combination.get(right)) {
-                                result.put(left, rightType.getEnumConstant());
-                            }
-                            else {
-                                setupEnumMismatch(t, key, result, left);
-                            }
-                        }
-                    }
-                }
-                if (node instanceof MethodCallExpr methodCall) {
-                    methodCall.getScope().ifPresent(scope -> {
-                        // Handle both s.equals(OPEN) and OPEN.equals(s)
-                        if (scope instanceof NameExpr nameExpr) {
-                            TypeWrapper scopeType = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
-                            if (scopeType != null && scopeType.getEnumConstant() != null) {
-                                // Pattern: OPEN.equals(s)
-                                if (entry.getValue() == combination.get(nameExpr)) {
-                                    result.put(key, scopeType.getEnumConstant());
-                                } else {
-                                    setupEnumMismatch(scopeType, key, result, key.asNameExpr());
-                                }
-                            } else if (t != null && t.getEnumConstant() != null) {
-                                // Pattern: s.equals(OPEN)
-                                if (entry.getValue() == combination.get(nameExpr)) {
-                                    result.put(nameExpr, t.getEnumConstant());
-                                } else {
-                                    setupEnumMismatch(t, key, result, nameExpr);
-                                }
-                            }
-                        }
-                    });
-                }
-            }
-            else {
-                if (node instanceof MethodCallExpr methodCall) {
-                    if (methodCall.getArguments().isNonEmpty() && methodCall.getArgument(0) instanceof NameExpr nameExpr) {
-                        TypeWrapper wrapper = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
-                        if (wrapper != null && wrapper.getEnumConstant() != null) {
-                            return;
-                        }
-                    }
-                    if (methodCall.getScope().isPresent() && methodCall.getScope().get() instanceof NameExpr nameExpr) {
-                        TypeWrapper wrapper = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
-                        if (wrapper != null && wrapper.getEnumConstant() != null) {
-                            return;
-                        }
-                    }
-                }
-                result.put(key, entry.getValue());
 
-            }
-        }  else {
+        if (parentNode.isEmpty()) {
+            result.put(key, entry.getValue());
+            return;
+        }
+
+        Node node = parentNode.get();
+        TypeWrapper keyType = AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
+
+        if (keyType != null && keyType.getEnumConstant() != null) {
+            adjustForEnumConstantComparison(node, combination, entry, result);
+        } else if (node instanceof MethodCallExpr methodCall) {
+            adjustForEnumMethodCall(methodCall, entry, result);
+        } else {
             result.put(key, entry.getValue());
         }
     }
 
+    private void adjustForEnumConstantComparison(Node node, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
+        if (node instanceof BinaryExpr binaryExpr) {
+            handleBinaryExprWithEnum(binaryExpr, combination, entry, result);
+        } else if (node instanceof MethodCallExpr methodCall) {
+            handleMethodCallWithEnum(methodCall, combination, entry, result);
+        }
+    }
+
+    private void handleBinaryExprWithEnum(BinaryExpr binaryExpr, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
+        NameExpr left = binaryExpr.getLeft().asNameExpr();
+        NameExpr right = binaryExpr.getRight().asNameExpr();
+        TypeWrapper leftType = AbstractCompiler.findType(cu, left.getNameAsString());
+        TypeWrapper rightType = AbstractCompiler.findType(cu, right.getNameAsString());
+
+        boolean isEquals = binaryExpr.getOperator().equals(BinaryExpr.Operator.EQUALS);
+        boolean conditionMatches = isEquals ?
+            combination.get(left) == combination.get(right) :
+            combination.get(left) != combination.get(right);
+
+        if (leftType != null && leftType.getEnumConstant() != null) {
+            if (conditionMatches) {
+                result.put(right, leftType.getEnumConstant());
+            } else {
+                setupEnumMismatch(leftType, entry.getKey(), result, right);
+            }
+        } else if (rightType != null && rightType.getEnumConstant() != null) {
+            if (conditionMatches) {
+                result.put(left, rightType.getEnumConstant());
+            } else {
+                setupEnumMismatch(rightType, entry.getKey(), result, left);
+            }
+        }
+    }
+
+    private void handleMethodCallWithEnum(MethodCallExpr methodCall, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
+        methodCall.getScope().ifPresent(scope -> {
+            if (scope instanceof NameExpr nameExpr) {
+                TypeWrapper scopeType = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
+                TypeWrapper keyType = AbstractCompiler.findType(cu, entry.getKey().asNameExpr().getNameAsString());
+
+                if (scopeType != null && scopeType.getEnumConstant() != null) {
+                    // Pattern: OPEN.equals(s)
+                    handleEnumComparison(scopeType, entry, combination, nameExpr, entry.getKey().asNameExpr(), result);
+                } else if (keyType != null && keyType.getEnumConstant() != null) {
+                    // Pattern: s.equals(OPEN)
+                    handleEnumComparison(keyType, entry, combination, nameExpr, nameExpr, result);
+                }
+            }
+        });
+    }
+
+    private void handleEnumComparison(TypeWrapper enumType, Map.Entry<Expression, Object> entry, Map<Expression, Object> combination, NameExpr compareExpr, NameExpr targetExpr, Map<Expression, Object> result) {
+        if (entry.getValue() == combination.get(compareExpr)) {
+            result.put(targetExpr, enumType.getEnumConstant());
+        } else {
+            setupEnumMismatch(enumType, entry.getKey(), result, targetExpr);
+        }
+    }
+
+    private void adjustForEnumMethodCall(MethodCallExpr methodCall, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
+        boolean hasEnumArgument = methodCall.getArguments().isNonEmpty() &&
+            methodCall.getArgument(0) instanceof NameExpr nameExpr &&
+            hasEnumConstant(nameExpr.getNameAsString());
+
+        boolean hasEnumScope = methodCall.getScope().isPresent() &&
+            methodCall.getScope().get() instanceof NameExpr nameExpr &&
+            hasEnumConstant(nameExpr.getNameAsString());
+
+        if (!hasEnumArgument && !hasEnumScope) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private boolean hasEnumConstant(String name) {
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, name);
+        return wrapper != null && wrapper.getEnumConstant() != null;
+    }
     private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, NameExpr left) {
         t.getEnumConstant().getParentNode().ifPresent(parent -> {
             if (parent instanceof EnumDeclaration enumDeclaration) {
