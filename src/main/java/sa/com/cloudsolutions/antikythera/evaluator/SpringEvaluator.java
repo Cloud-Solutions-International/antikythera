@@ -662,8 +662,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private void adjustForEnums(Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
         Expression key = entry.getKey();
         TypeWrapper t = AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
+        Optional<Node> parentNode = key.getParentNode();
+
         if (t != null && t.getEnumConstant() != null) {
-            key.getParentNode().ifPresent(node -> {
+            if (parentNode.isPresent()) {
+                Node node = parentNode.get();
                 if (node instanceof BinaryExpr binaryExpr) {
                     NameExpr left = binaryExpr.getLeft().asNameExpr();
                     NameExpr right = binaryExpr.getRight().asNameExpr();
@@ -726,10 +729,31 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         }
                     });
                 }
-            });
+            }
         }
         else {
-            result.put(key, entry.getValue());
+            if (parentNode.isPresent()) {
+                Node node = parentNode.get();
+                if (node instanceof MethodCallExpr methodCall) {
+                    if (methodCall.getArguments().isNonEmpty() && methodCall.getArgument(0) instanceof NameExpr nameExpr) {
+                        TypeWrapper wrapper = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
+                        if (wrapper != null && wrapper.getEnumConstant() != null) {
+                            return;
+                        }
+                    }
+                    if (methodCall.getScope().isPresent() && methodCall.getScope().get() instanceof NameExpr nameExpr) {
+                        TypeWrapper wrapper = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
+                        if (wrapper != null && wrapper.getEnumConstant() != null) {
+                            return;
+                        }
+                    }
+                }
+                result.put(key, entry.getValue());
+
+            }
+            else {
+                result.put(key, entry.getValue());
+            }
         }
     }
 
