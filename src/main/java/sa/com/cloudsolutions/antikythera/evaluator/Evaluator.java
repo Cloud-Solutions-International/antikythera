@@ -422,9 +422,12 @@ public class Evaluator {
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
         if (parent.isPresent() && parent.get() instanceof VariableDeclarator) {
-
             List<Expression> values = arrayInitializerExpr.getValues();
-            Object array = Array.newInstance(Object.class, values.size());
+
+            // Determine the component type from the variable declarator or array contents
+            Class<?> componentType = determineComponentType(parent.get());
+
+            Object array = Array.newInstance(componentType, values.size());
 
             for (int i = 0; i < values.size(); i++) {
                 Object value = evaluateExpression(values.get(i)).getValue();
@@ -432,16 +435,46 @@ public class Evaluator {
                     MethodInterceptor interceptor = new MethodInterceptor(evaluator);
                     Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
                     Array.set(array, i, AKBuddy.createInstance(dynamicClass, interceptor));
-                }
-                else {
+                } else {
                     Array.set(array, i, value);
                 }
             }
 
             return new Variable(array);
         }
-
         return null;
+    }
+
+    private Class<?> determineComponentType(Node parent) {
+        // First try to get type from the variable declarator
+        if (parent instanceof VariableDeclarator vd) {
+            if (vd.getType().isArrayType()) {
+                String elementTypeName = vd.getType().asArrayType().getComponentType().asString();
+
+                // Handle primitive types specifically
+                Class<?> primitiveType = getPrimitiveClass(elementTypeName);
+                if (primitiveType != null) {
+                    return primitiveType;
+                }
+            }
+        }
+
+        // Default to Object if we can't determine a primitive type
+        return Object.class;
+    }
+
+    private Class<?> getPrimitiveClass(String typeName) {
+        return switch (typeName) {
+            case "int" -> int.class;
+            case "double" -> double.class;
+            case "boolean" -> boolean.class;
+            case "long" -> long.class;
+            case "float" -> float.class;
+            case "short" -> short.class;
+            case "byte" -> byte.class;
+            case "char" -> char.class;
+            default -> null;
+        };
     }
 
     private Variable evaluateUnaryExpression(Expression expr) throws ReflectiveOperationException {
