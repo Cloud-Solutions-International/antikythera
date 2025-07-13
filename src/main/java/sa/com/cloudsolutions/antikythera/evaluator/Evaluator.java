@@ -421,11 +421,11 @@ public class Evaluator {
      */
     Variable createArray(ArrayInitializerExpr arrayInitializerExpr) throws ReflectiveOperationException, AntikytheraException {
         Optional<Node> parent = arrayInitializerExpr.getParentNode();
-        if (parent.isPresent() && parent.get() instanceof VariableDeclarator) {
+        if (parent.isPresent() && parent.get() instanceof VariableDeclarator vd) {
             List<Expression> values = arrayInitializerExpr.getValues();
 
             // Determine the component type from the variable declarator or array contents
-            Class<?> componentType = determineComponentType(parent.get());
+            Class<?> componentType = determineComponentType(vd);
 
             Object array = Array.newInstance(componentType, values.size());
 
@@ -445,18 +445,15 @@ public class Evaluator {
         return null;
     }
 
-    private Class<?> determineComponentType(Node parent) {
-        if (parent instanceof VariableDeclarator vd && vd.getType().isArrayType()) {
-            String elementTypeName = vd.getType().asArrayType().getComponentType().asString();
+    private Class<?> determineComponentType(VariableDeclarator vd) {
+        String elementTypeName = vd.getType().asArrayType().getComponentType().asString();
 
-            try {
-                return Reflect.getComponentClass(elementTypeName);
-            } catch (ClassNotFoundException e) {
-                // Fall back to Object if class not found
-                return Object.class;
-            }
+        try {
+            return Reflect.getComponentClass(elementTypeName);
+        } catch (ClassNotFoundException e) {
+            // Fall back to Object if class not found
+            return Object.class;
         }
-        return Object.class;
     }
 
     private Variable evaluateUnaryExpression(Expression expr) throws ReflectiveOperationException {
