@@ -114,7 +114,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         ClassOrInterfaceType t = variable.getType().asClassOrInterfaceType();
         String shortName = t.getNameAsString();
-        List<TypeWrapper> wrappers =  AbstractCompiler.findTypesInVariable(variable);
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(variable);
         if (wrappers.isEmpty()) {
             return;
         }
@@ -181,6 +181,54 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return false;
     }
 
+    private static Variable wireFromByteCode(String resolvedClass) {
+        try {
+            Class<?> cls = AbstractCompiler.loadClass(resolvedClass);
+            if (!cls.isInterface()) {
+                Constructor<?> c = cls.getConstructor();
+                return new Variable(c.newInstance());
+            }
+            return null;
+        } catch (ReflectiveOperationException e) {
+            throw new AntikytheraException(e);
+        }
+    }
+
+    private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
+        Variable v;
+        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
+        Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
+                ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
+                : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
+
+        v = new Variable(eval);
+        v.setType(type);
+        AntikytheraRunTime.autoWire(resolvedClass, v);
+        if (!(eval instanceof MockingEvaluator)) {
+            eval.setupFields();
+            eval.initializeFields();
+            eval.invokeDefaultConstructor();
+        }
+        return v;
+    }
+
+    private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, Expression expr) {
+        t.getEnumConstant().getParentNode().ifPresent(parent -> {
+            if (parent instanceof EnumDeclaration enumDeclaration) {
+                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
+                    if (key.isNameExpr() && !ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
+                        result.put(expr, ecd);
+                    } else if (key.isFieldAccessExpr() && !ecd.getNameAsString().equals(key.asFieldAccessExpr().getNameAsString())) {
+                        FieldAccessExpr fae = new FieldAccessExpr()
+                                .setScope(enumDeclaration.getNameAsExpression())
+                                .setName(ecd.getName());
+                        result.put(expr, fae);
+                    }
+                }
+            }
+        });
+    }
+
     /**
      * <p>This is where the code evaluation really starts</p>
      * <p>
@@ -228,8 +276,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
                 if (Branching.size(md) == 0) {
                     break;
-                }
-                else {
+                } else {
                     oldSize = Branching.size(md);
                 }
             }
@@ -237,7 +284,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             logger.warn("This has probably been handled {}", aex.getMessage());
         }
     }
-
 
     private void beforeVisit(MethodDeclaration md) {
         md.getParentNode().ifPresent(p -> {
@@ -256,7 +302,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
         super.setupParameters(md);
         NodeList<Parameter> parameters = md.getParameters();
-        for(int i = parameters.size() - 1 ; i >= 0 ; i--) {
+        for (int i = parameters.size() - 1; i >= 0; i--) {
             setupParameter(md, parameters.get(i));
         }
     }
@@ -267,13 +313,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * will be updated to reflect those preconditions.
      *
      * @param md the method declaration into whose variable space this parameter will be copied
-     * @param p the parameter in question.
+     * @param p  the parameter in question.
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
         Variable va = getValue(md.getBody().orElseThrow(), p.getNameAsString());
 
-        if (currentConditional != null ) {
+        if (currentConditional != null) {
             if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
                 setupIfCondition();
             }
@@ -299,10 +345,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     eval.executeLocalMethod(wrapper);
                 }
             } else if (cond.getExpression() instanceof AssignExpr assignExpr &&
-                assignExpr.getTarget().toString().equals(p.getNameAsString())) {
+                    assignExpr.getTarget().toString().equals(p.getNameAsString())) {
 
-                    parameterAssignment(assignExpr, va);
-                    va.setInitializer(List.of(assignExpr));
+                parameterAssignment(assignExpr, va);
+                va.setInitializer(List.of(assignExpr));
             } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
                 va.setValue(createObject(oce).getValue());
                 va.setInitializer(List.of(oce));
@@ -503,37 +549,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    private static Variable wireFromByteCode(String resolvedClass) {
-        try {
-            Class<?> cls = AbstractCompiler.loadClass(resolvedClass);
-            if (!cls.isInterface()) {
-                Constructor<?> c = cls.getConstructor();
-                return new Variable(c.newInstance());
-            }
-            return null;
-        } catch (ReflectiveOperationException e) {
-            throw new AntikytheraException(e);
-        }
-    }
-
-    private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
-        Variable v;
-        List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-        Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
-            ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
-            : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
-
-        v = new Variable(eval);
-        v.setType(type);
-        AntikytheraRunTime.autoWire(resolvedClass, v);
-        if (! (eval instanceof MockingEvaluator)) {
-            eval.setupFields();
-            eval.initializeFields();
-            eval.invokeDefaultConstructor();
-        }
-        return v;
-    }
-
     @Override
     void setupField(FieldDeclaration field, VariableDeclarator variableDeclarator) {
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(field);
@@ -652,8 +667,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Expression key = entry.getKey();
             if (key.isNameExpr() || key.isFieldAccessExpr()) {
                 adjustForEnums(combination, entry, result);
-            }
-            else {
+            } else {
                 result.put(key, entry.getValue());
             }
         }
@@ -671,11 +685,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         Node node = parentNode.get();
         TypeWrapper keyType = (key instanceof FieldAccessExpr fieldAccessExpr)
-            ?   AbstractCompiler.findType(cu, fieldAccessExpr.getScope().asNameExpr().getNameAsString())
-            :   AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
+                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().asNameExpr().getNameAsString())
+                : AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
 
-        if (keyType != null &&  (keyType.getEnumConstant() != null || keyType.getType().isEnumDeclaration())) {
-                adjustForEnumConstantComparison(node, combination, entry, result);
+        if (keyType != null && (keyType.getEnumConstant() != null || keyType.getType().isEnumDeclaration())) {
+            adjustForEnumConstantComparison(node, combination, entry, result);
         } else if (node instanceof MethodCallExpr methodCall) {
             adjustForEnumMethodCall(methodCall, entry, result);
         } else {
@@ -691,19 +705,17 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private void handleBinaryExprWithEnum(BinaryExpr binaryExpr, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
+    private void handleBinaryExprWithEnum(BinaryExpr binaryExpr, Map<Expression, Object> combination,
+            Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
+
         Expression left = binaryExpr.getLeft();
         Expression right = binaryExpr.getRight();
-        TypeWrapper leftType = (left instanceof FieldAccessExpr fieldAccessExpr)
-                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().asNameExpr().getNameAsString())
-                : AbstractCompiler.findType(cu, left.asNameExpr().getNameAsString());
-        TypeWrapper rightType = (right instanceof FieldAccessExpr fieldAccessExpr)
-                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().asNameExpr().getNameAsString())
-                : AbstractCompiler.findType(cu, right.asNameExpr().getNameAsString());
 
-        boolean conditionMatches = binaryExpr.getOperator().equals(BinaryExpr.Operator.EQUALS) ?
-            combination.get(left) == combination.get(right) :
-            combination.get(left) != combination.get(right);
+        TypeWrapper leftType = resolveType(left);
+        TypeWrapper rightType = resolveType(right);
+
+        boolean isEquals = binaryExpr.getOperator() == BinaryExpr.Operator.EQUALS;
+        boolean conditionMatches = isEquals == (combination.get(left) == combination.get(right));
 
         if (leftType != null && leftType.getEnumConstant() != null) {
             if (conditionMatches) {
@@ -711,37 +723,47 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             } else {
                 setupEnumMismatch(leftType, entry.getKey(), result, right);
             }
-        } else if (rightType != null ) {
-            if (rightType.getEnumConstant() != null) {
-                if (conditionMatches) {
-                    result.put(left, rightType.getEnumConstant());
-                } else {
-                    setupEnumMismatch(rightType, entry.getKey(), result, left);
-                }
-            } else if (rightType.getType() instanceof EnumDeclaration enumDeclaration) {
-                EnumConstantDeclaration enumConstantDeclaration = enumDeclaration.findFirst(
-                        EnumConstantDeclaration.class, ecd -> {
-                    if (right instanceof FieldAccessExpr fieldAccessExpr) {
-                        return ecd.getNameAsString().equals(fieldAccessExpr.getNameAsString());
-                    }
-                    else if (left instanceof FieldAccessExpr fieldAccessExpr) {
-                        return ecd.getNameAsString().equals(fieldAccessExpr.getNameAsString());
-                    }
-                    return false;
-                }).orElseThrow();
+            return;
+        }
 
-                rightType.setEnumConstant(enumConstantDeclaration);
-                if (conditionMatches) {
-                    if (right instanceof FieldAccessExpr) {
-                        result.put(left, right);
-                    } else {
-                        result.put(left, rightType.getEnumConstant());
-                    }
-                } else {
-                    setupEnumMismatch(rightType, entry.getKey(), result, left);
-                }
+        if (rightType != null && rightType.getEnumConstant() != null) {
+            if (conditionMatches) {
+                result.put(left, rightType.getEnumConstant());
+            } else {
+                setupEnumMismatch(rightType, entry.getKey(), result, left);
+            }
+            return;
+        }
+
+        if (rightType != null && rightType.getType() instanceof EnumDeclaration enumDecl) {
+            EnumConstantDeclaration enumConst = findEnumConstant(enumDecl, left, right);
+            rightType.setEnumConstant(enumConst);
+            if (conditionMatches) {
+                result.put(left, right instanceof FieldAccessExpr ? right : rightType.getEnumConstant());
+            } else {
+                setupEnumMismatch(rightType, entry.getKey(), result, left);
             }
         }
+    }
+
+    private TypeWrapper resolveType(Expression expr) {
+        if (expr instanceof FieldAccessExpr fae) {
+            return AbstractCompiler.findType(cu, fae.getScope().asNameExpr().getNameAsString());
+        } else if (expr.isNameExpr()) {
+            return AbstractCompiler.findType(cu, expr.asNameExpr().getNameAsString());
+        }
+        return null;
+    }
+
+    private EnumConstantDeclaration findEnumConstant(EnumDeclaration enumDecl, Expression left, Expression right) {
+        return enumDecl.findFirst(EnumConstantDeclaration.class, ecd -> {
+            if (right instanceof FieldAccessExpr fae) {
+                return ecd.getNameAsString().equals(fae.getNameAsString());
+            } else if (left instanceof FieldAccessExpr fae) {
+                return ecd.getNameAsString().equals(fae.getNameAsString());
+            }
+            return false;
+        }).orElseThrow();
     }
 
     private void handleMethodCallWithEnum(MethodCallExpr methodCall, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
@@ -769,12 +791,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void adjustForEnumMethodCall(MethodCallExpr methodCall, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
         boolean hasEnumArgument = methodCall.getArguments().isNonEmpty() &&
-            methodCall.getArgument(0) instanceof NameExpr nameExpr &&
-            hasEnumConstant(nameExpr.getNameAsString());
+                methodCall.getArgument(0) instanceof NameExpr nameExpr &&
+                hasEnumConstant(nameExpr.getNameAsString());
 
         boolean hasEnumScope = methodCall.getScope().isPresent() &&
-            methodCall.getScope().orElseThrow() instanceof NameExpr nameExpr &&
-            hasEnumConstant(nameExpr.getNameAsString());
+                methodCall.getScope().orElseThrow() instanceof NameExpr nameExpr &&
+                hasEnumConstant(nameExpr.getNameAsString());
 
         if (!hasEnumArgument && !hasEnumScope) {
             result.put(entry.getKey(), entry.getValue());
@@ -784,24 +806,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private boolean hasEnumConstant(String name) {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, name);
         return wrapper != null && wrapper.getEnumConstant() != null;
-    }
-
-    private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, Expression expr) {
-        t.getEnumConstant().getParentNode().ifPresent(parent -> {
-            if (parent instanceof EnumDeclaration enumDeclaration) {
-                for (EnumConstantDeclaration ecd : enumDeclaration.getEntries()) {
-                    if (key.isNameExpr() && !ecd.getNameAsString().equals(key.asNameExpr().getNameAsString())) {
-                        result.put(expr, ecd);
-                    }
-                    else if (key.isFieldAccessExpr() && !ecd.getNameAsString().equals(key.asFieldAccessExpr().getNameAsString())) {
-                        FieldAccessExpr fae = new FieldAccessExpr()
-                                .setScope(enumDeclaration.getNameAsExpression())
-                                .setName(ecd.getName());
-                        result.put(expr, fae);
-                    }
-                }
-            }
-        });
     }
 
     /**
