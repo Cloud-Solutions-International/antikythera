@@ -525,7 +525,6 @@ public class Evaluator {
         }
         logger.warn("Could not resolve {} for field access", fae.getScope());
 
-
         return null;
     }
 
