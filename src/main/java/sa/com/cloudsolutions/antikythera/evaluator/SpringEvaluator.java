@@ -790,7 +790,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         result.put(expr, ecd);
                     }
                     else if (key.isFieldAccessExpr() && !ecd.getNameAsString().equals(key.asFieldAccessExpr().getNameAsString())) {
-                        result.put(expr, key);
+                        result.put(expr, ecd);
                     }
                 }
             }

@@ -58,6 +58,7 @@ import sa.com.cloudsolutions.antikythera.depsolver.InterfaceSolver;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.ReflectionArguments;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 /**
@@ -283,7 +284,19 @@ public class AbstractCompiler {
             if(type.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
                 typeWrapper.setInterface(cdecl.isInterface());
+            } else if(type.isEnumDeclaration()) {
+                // Initialize enum constants as static variables
+                EnumDeclaration enumDecl = type.asEnumDeclaration();
+                for (EnumConstantDeclaration enumConstant : enumDecl.getEntries()) {
+                    String enumFqn = enumDecl.getFullyQualifiedName().orElse(enumDecl.getNameAsString());
+                    String constantName = enumConstant.getNameAsString();
+                    
+                    // Create a variable representing this enum constant
+                    Variable enumVar = new Variable(enumFqn + "." + constantName);
+                    AntikytheraRunTime.setStaticVariable(enumFqn, constantName, enumVar);
+                }
             }
+            
             type.getFullyQualifiedName().ifPresent(name -> {
                 AntikytheraRunTime.addType(name, typeWrapper);
                 AntikytheraRunTime.addCompilationUnit(name, cu);

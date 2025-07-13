@@ -119,9 +119,22 @@ public class ControlFlowEvaluator extends Evaluator {
             Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
             valueExpressions = vx.getInitializer();
         } else if (entry.getValue() instanceof EnumConstantDeclaration ec) {
-            valueExpressions = List.of(
-                    new NameExpr(ec.getNameAsString())
-            );
+            // Create a proper FieldAccessExpr for enum constants like State.OPEN
+            List<Expression> expressions = new ArrayList<>();
+            ec.getParentNode().ifPresent(parent -> {
+                if (parent instanceof EnumDeclaration enumDecl) {
+                    FieldAccessExpr fieldAccess = new FieldAccessExpr(
+                        new NameExpr(enumDecl.getNameAsString()), 
+                        ec.getNameAsString()
+                    );
+                    expressions.add(fieldAccess);
+                }
+            });
+            if (expressions.isEmpty()) {
+                // Fallback to simple name
+                expressions.add(new NameExpr(ec.getNameAsString()));
+            }
+            valueExpressions = expressions;
         } else if (entry.getValue() instanceof FieldAccessExpr fae) {
             valueExpressions = List.of(fae);
         } else {
