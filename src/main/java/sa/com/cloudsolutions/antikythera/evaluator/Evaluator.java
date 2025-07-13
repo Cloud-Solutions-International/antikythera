@@ -446,35 +446,17 @@ public class Evaluator {
     }
 
     private Class<?> determineComponentType(Node parent) {
-        // First try to get type from the variable declarator
-        if (parent instanceof VariableDeclarator vd) {
-            if (vd.getType().isArrayType()) {
-                String elementTypeName = vd.getType().asArrayType().getComponentType().asString();
+        if (parent instanceof VariableDeclarator vd && vd.getType().isArrayType()) {
+            String elementTypeName = vd.getType().asArrayType().getComponentType().asString();
 
-                // Handle primitive types specifically
-                Class<?> primitiveType = getPrimitiveClass(elementTypeName);
-                if (primitiveType != null) {
-                    return primitiveType;
-                }
+            try {
+                return Reflect.getComponentClass(elementTypeName);
+            } catch (ClassNotFoundException e) {
+                // Fall back to Object if class not found
+                return Object.class;
             }
         }
-
-        // Default to Object if we can't determine a primitive type
         return Object.class;
-    }
-
-    private Class<?> getPrimitiveClass(String typeName) {
-        return switch (typeName) {
-            case "int" -> int.class;
-            case "double" -> double.class;
-            case "boolean" -> boolean.class;
-            case "long" -> long.class;
-            case "float" -> float.class;
-            case "short" -> short.class;
-            case "byte" -> byte.class;
-            case "char" -> char.class;
-            default -> null;
-        };
     }
 
     private Variable evaluateUnaryExpression(Expression expr) throws ReflectiveOperationException {
