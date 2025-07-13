@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 
 public class ReflectionArguments {
@@ -77,9 +78,14 @@ public class ReflectionArguments {
     }
 
     public void finalizeArguments() {
-        finalArgs = method.getParameterTypes().length == 1 &&
-                method.getParameterTypes()[0].equals(Object[].class) ?
-                new Object[]{ getArguments() } : getArguments();
+        if (Arrays.class.equals(method.getDeclaringClass()) && method.getParameters().length == 1) {
+            finalArgs = getArguments();
+        }
+        else {
+            finalArgs = method.getParameterTypes().length == 1 &&
+                    method.getParameterTypes()[0].equals(Object[].class) ?
+                    new Object[]{getArguments()} : getArguments();
+        }
     }
 
     public Object[] getFinalArgs() {
