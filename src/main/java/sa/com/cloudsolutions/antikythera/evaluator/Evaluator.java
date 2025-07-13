@@ -244,10 +244,7 @@ public class Evaluator {
     public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
         if (value == null && getField(name) != null) {
-            value = getField(name);
-            if (value == null) {
-                String vName = this.typeDeclaration.getNameAsString();
-            }
+            return getField(name);
         }
         return value;
     }

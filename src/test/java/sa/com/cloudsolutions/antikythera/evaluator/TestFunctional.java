@@ -43,7 +43,8 @@ class TestFunctional extends TestHelper{
             "sorting1; 0123456789", "sorting2; 9876543210", "people4; [A]", "people5; A", "people6; A",
             "people7; Tom Bombadil", "nestedStream; 1AB2AB", "valueOf; 1",
             "staticMethodReference1; 234", "staticMethodReference2; 234", "collectAgain; 1 2",
-            "peopleArray1; [A, B]", "array0; [1, 2, 3, 4, 5]", "arraySort1; 345679"}, delimiter = ';'
+            "peopleArray1; [A, B]", "array0; [1, 2, 3, 4, 5]", "arraySort1; 345679",
+            "arraySort2; 345679", "peopleArray2; AB"}, delimiter = ';'
     )
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
