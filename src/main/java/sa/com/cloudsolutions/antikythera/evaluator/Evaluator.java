@@ -295,7 +295,7 @@ public class Evaluator {
         } else if (expr.isObjectCreationExpr()) {
             return createObject(expr.asObjectCreationExpr());
         } else if (expr.isFieldAccessExpr()) {
-            return evaluateFieldAccessExpression(expr);
+            return evaluateFieldAccessExpression(expr.asFieldAccessExpr());
         } else if (expr.isArrayInitializerExpr()) {
             /*
              * Array Initialization is tricky
@@ -498,22 +498,15 @@ public class Evaluator {
     }
 
     @SuppressWarnings("java:S3011")
-    Variable evaluateFieldAccessExpression(Expression expr) throws ReflectiveOperationException {
-        FieldAccessExpr fae = expr.asFieldAccessExpr();
-
-        String fullName = AbstractCompiler.findFullyQualifiedName(cu, fae.getScope().toString());
-        if (fullName != null) {
-            CompilationUnit dep = AntikytheraRunTime.getCompilationUnit(fullName);
-            if (dep == null) {
-                /*
-                 * Use class loader
-                 */
-                Class<?> clazz = AbstractCompiler.loadClass(fullName);
-                Field field = clazz.getDeclaredField(fae.getNameAsString());
+    Variable evaluateFieldAccessExpression(FieldAccessExpr fae) throws ReflectiveOperationException {
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, fae.getScope().toString());
+        if (wrapper != null) {
+            if (wrapper.getClazz() != null) {
+                Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
                 field.setAccessible(true);
                 return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(null));
             } else {
-                Variable v = evaluateFieldAccessExpression(fae, dep);
+                Variable v = evaluateFieldAccessExpression(fae, wrapper.getType());
                 if (v != null) {
                     return v;
                 }
@@ -536,12 +529,8 @@ public class Evaluator {
         return null;
     }
 
-    private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, CompilationUnit dep) {
-        Optional<TypeDeclaration<?>> td = AbstractCompiler.getMatchingType(dep, fae.getScope().toString());
-        if (td.isEmpty()) {
-            return null;
-        }
-        Optional<FieldDeclaration> fieldDeclaration = td.get().getFieldByName(fae.getNameAsString());
+    private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, TypeDeclaration<?> td) {
+        Optional<FieldDeclaration> fieldDeclaration = td.getFieldByName(fae.getNameAsString());
         if (fieldDeclaration.isPresent()) {
             FieldDeclaration field = fieldDeclaration.get();
             for (var variable : field.getVariables()) {
@@ -556,8 +545,8 @@ public class Evaluator {
                 }
             }
         }
-        else if (td.get().isEnumDeclaration()) {
-            EnumDeclaration enumDeclaration = td.get().asEnumDeclaration();
+        else if (td.isEnumDeclaration()) {
+            EnumDeclaration enumDeclaration = td.asEnumDeclaration();
             return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
         }
         return null;
