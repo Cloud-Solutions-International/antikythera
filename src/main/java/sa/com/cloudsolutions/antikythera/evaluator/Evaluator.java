@@ -1554,11 +1554,6 @@ public class Evaluator {
             }
 
             executeBlock(statements);
-
-            if (!AntikytheraRunTime.isEmptyStack()) {
-                AntikytheraRunTime.pop();
-
-            }
         }
     }
 

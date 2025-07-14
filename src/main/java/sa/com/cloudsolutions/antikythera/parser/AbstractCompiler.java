@@ -896,7 +896,7 @@ public class AbstractCompiler {
             return findCallableInBinaryCode(Object.class, methodCall);
         }
         if (typeDeclaration.isEnumDeclaration()) {
-            if (methodCall.getMethodName().equals("equals")) {
+            if ("equals".equals(methodCall.getMethodName())) {
                 MethodDeclaration md =  StaticJavaParser.parseMethodDeclaration("""
                         public boolean equals(Object other) { return this == other; }
                         """);
