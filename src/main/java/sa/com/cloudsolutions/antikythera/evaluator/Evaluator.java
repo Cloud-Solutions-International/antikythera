@@ -1040,20 +1040,26 @@ public class Evaluator {
                  * presence of an import, a class from same package or this is part of java.lang package
                  * or a Static import
                  */
-                TypeWrapper wrapper = AbstractCompiler.findType(cu, expr.getNameAsString());
-                if (wrapper != null) {
-                    Class<?> clazz = wrapper.getClazz();
-                    if (clazz != null) {
-                        v = new Variable(clazz);
-                        v.setClazz(clazz);
-                    } else {
-                        v = resolveExpressionHelper(wrapper);
-                    }
-                }
+                v = resolveExpressionAsUtilityClass(expr);
             }
 
             return v;
         }
+    }
+
+    Variable resolveExpressionAsUtilityClass(NameExpr expr) {
+        Variable v = null;
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, expr.getNameAsString());
+        if (wrapper != null) {
+            Class<?> clazz = wrapper.getClazz();
+            if (clazz != null) {
+                v = new Variable(clazz);
+                v.setClazz(clazz);
+            } else {
+                v = resolveExpressionHelper(wrapper);
+            }
+        }
+        return v;
     }
 
     protected Variable resolveExpressionHelper(TypeWrapper wrapper) {
@@ -1552,7 +1558,6 @@ public class Evaluator {
                 Parameter p = parameters.get(i);
                 setLocal(cd.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
             }
-
             executeBlock(statements);
         }
     }

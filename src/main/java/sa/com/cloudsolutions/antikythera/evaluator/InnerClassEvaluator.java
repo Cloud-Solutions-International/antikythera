@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -40,6 +41,17 @@ public class InnerClassEvaluator extends Evaluator {
 
     public void setEnclosure(Evaluator eval) {
         this.enclosure = eval;
+    }
+
+    @Override
+    Variable resolveExpressionAsUtilityClass(NameExpr expr) {
+        Variable v = super.resolveExpressionAsUtilityClass(expr);
+        if (v == null && enclosure != null && enclosure.getCompilationUnit() != null) {
+            cu = enclosure.getCompilationUnit();
+            v = super.resolveExpressionAsUtilityClass(expr);
+            cu = null;
+        }
+        return v;
     }
 
     @SuppressWarnings("unchecked")

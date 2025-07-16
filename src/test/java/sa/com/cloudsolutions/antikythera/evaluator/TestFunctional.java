@@ -41,7 +41,7 @@ class TestFunctional extends TestHelper{
     @ParameterizedTest
     @CsvSource(value = {"greet1; Hello Ashfaloth", "greet2; Hello Ashfaloth", "greet3; Hello Thorin Oakenshield",
             "sorting1; 0123456789", "sorting2; 9876543210", "people4; [A]", "people5; A", "people6; A",
-            "people7; Tom Bombadil", "nestedStream; 1AB2AB", "valueOf; 1",
+            "people7; Tom Bombadil", "nestedStream; 1AB2AB", "valueOf; 1","people8; AB",
             "staticMethodReference1; 234", "staticMethodReference2; 234", "collectAgain; 1 2",
             "peopleArray1; [A, B]", "array0; [1, 2, 3, 4, 5]", "arraySort1; 345679",
             "arraySort2; 345679", "peopleArray2; AB"}, delimiter = ';'
