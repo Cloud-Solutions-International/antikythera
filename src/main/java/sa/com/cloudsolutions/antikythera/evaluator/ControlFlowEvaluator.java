@@ -199,6 +199,25 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     protected List<Expression> setupNonEmptyCollection(Type type, Variable wrappedCollection, NameExpr name) {
+        NodeList<Type> typeArgs = getTypeArgs(type);
+        Type pimaryType = typeArgs.getFirst().orElseThrow();
+        VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
+        try {
+            Variable member = resolveVariableDeclaration(vdecl);
+            if (member.getValue() == null
+                    && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
+                member = Reflect.variableFactory(member.getType().asString());
+            } else if (member.getValue() instanceof Evaluator eval) {
+                return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
+            }
+            return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
+
+        } catch (ReflectiveOperationException e) {
+            throw new AntikytheraException(e);
+        }
+    }
+
+    private static NodeList<Type> getTypeArgs(Type type) {
         NodeList<Type> typeArgs;
         if (type.isClassOrInterfaceType()) {
             typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
@@ -208,29 +227,16 @@ public class ControlFlowEvaluator extends Evaluator {
         if (typeArgs.isEmpty()) {
             typeArgs.add(new ClassOrInterfaceType().setName("Object"));
         }
-        Type pimaryType = typeArgs.getFirst().orElseThrow();
-        VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
-        try {
-            Variable member = resolveVariableDeclaration(vdecl);
-            if (member.getValue() == null
-                    && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
-                member = Reflect.variableFactory(member.getType().asString());
-            } else if (member.getValue() instanceof Evaluator eval) {
-                return createSingleItemCollectionWithInitializer(typeArgs, member, wrappedCollection, name, eval);
-            }
-            return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
-
-        } catch (ReflectiveOperationException e) {
-            throw new AntikytheraException(e);
-        }
+        return typeArgs;
     }
 
-    private List<Expression> createSingleItemCollectionWithInitializer(NodeList<Type> typeArgs, Variable member,
+    private List<Expression> createSingleItemCollectionWithInitializer(Type type, Variable member,
                                                                        Variable wrappedCollection, NameExpr name, Evaluator eval) throws ReflectiveOperationException {
+        NodeList<Type> typeArgs = getTypeArgs(type);
         Type pimaryType = typeArgs.getFirst().orElseThrow();
         List<Expression> fieldIntializers = eval.getFieldInitializers();
         if (fieldIntializers.isEmpty()) {
-            return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
+            return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
         }
         else {
             List<Expression> mocks = new ArrayList<>();
@@ -263,8 +269,9 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private Expression createSingleItemCollection(NodeList<Type> typeArgs, Variable member,
+    private Expression createSingleItemCollection(Type type, Variable member,
                                                   Variable wrappedCollection, NameExpr name) throws ReflectiveOperationException {
+        NodeList<Type> typeArgs = getTypeArgs(type);
         List<Expression> initializer = member.getInitializer();
         if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
             TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
