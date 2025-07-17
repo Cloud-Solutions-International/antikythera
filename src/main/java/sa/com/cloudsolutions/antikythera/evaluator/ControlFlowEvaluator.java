@@ -193,17 +193,21 @@ public class ControlFlowEvaluator extends Evaluator {
         if (paramByName.isPresent()) {
             Parameter param = paramByName.orElseThrow();
             Type type = param.getType();
-            NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
-            if (typeArgs.isEmpty()) {
-                typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-            }
-
-            return setupNonEmptyCollection(typeArgs, v, name);
+            return setupNonEmptyCollection(type, v, name);
         }
         return List.of();
     }
 
-    protected List<Expression> setupNonEmptyCollection(NodeList<Type> typeArgs, Variable wrappedCollection, NameExpr name) {
+    protected List<Expression> setupNonEmptyCollection(Type type, Variable wrappedCollection, NameExpr name) {
+        NodeList<Type> typeArgs;
+        if (type.isClassOrInterfaceType()) {
+            typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        } else {
+            typeArgs = new NodeList<>();
+        }
+        if (typeArgs.isEmpty()) {
+            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        }
         Type pimaryType = typeArgs.getFirst().orElseThrow();
         VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
         try {
@@ -214,7 +218,6 @@ public class ControlFlowEvaluator extends Evaluator {
             } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(typeArgs, member, wrappedCollection, name, eval);
             }
-
             return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
 
         } catch (ReflectiveOperationException e) {
