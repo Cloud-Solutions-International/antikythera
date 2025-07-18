@@ -5,7 +5,6 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -186,25 +185,25 @@ public class ControlFlowEvaluator extends Evaluator {
     }
     /**
      * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
-     * @param v represents the type of collection or map that we need
+     * @param collection represents the type of collection or map that we need
      * @param name the name of the variable
      * @return a list of expressions that can be used to set up the condition
      */
-    private List<Expression> setupNonEmptyCollections(Variable v, NameExpr name) {
+    private List<Expression> setupNonEmptyCollections(Variable collection, NameExpr name) {
 
         Optional<Parameter> paramByName = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString());
         if (paramByName.isPresent()) {
             Parameter param = paramByName.orElseThrow();
             Type type = param.getType();
-            return setupNonEmptyCollection(type, v, name);
+            return setupNonEmptyCollection(type, collection, name);
         }
         return List.of();
     }
 
     protected List<Expression> setupNonEmptyCollection(Type type, Variable wrappedCollection, NameExpr name) {
         NodeList<Type> typeArgs = getTypeArgs(type);
-        Type pimaryType = typeArgs.getFirst().orElseThrow();
-        VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
+        Type primaryType = typeArgs.getFirst().orElseThrow();
+        VariableDeclarator vdecl = new VariableDeclarator(primaryType, name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
             if (member.getValue() == null
@@ -213,7 +212,7 @@ public class ControlFlowEvaluator extends Evaluator {
             } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
             } else if (member.getValue() == null) {
-                member = recreateVariable(type);
+                member = recreateVariable(primaryType);
             }
             return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
 
