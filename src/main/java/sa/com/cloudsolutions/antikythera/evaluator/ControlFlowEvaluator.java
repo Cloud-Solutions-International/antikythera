@@ -5,6 +5,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -33,6 +34,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -209,6 +211,22 @@ public class ControlFlowEvaluator extends Evaluator {
                 member = Reflect.variableFactory(member.getType().asString());
             } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
+            } else if (member.getValue() == null) {
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, member.getType());
+                if (wrapper != null) {
+                    ConstructorDeclaration cdecl = AbstractCompiler.findSimplestConstructor(wrapper.getType());
+                    if (cdecl != null) {
+
+                        NodeList<Expression> args = new NodeList<>();
+                        for (var param : cdecl.getParameters()) {
+                            args.add(new NameExpr(param.getNameAsString()));
+                        }
+                        ObjectCreationExpr oce = new ObjectCreationExpr(null, member.getType().asClassOrInterfaceType(), args);
+                        member.setInitializer(List.of(oce));
+                    } else {
+                        throw new AntikytheraException("Could not find constructor for " + wrapper.getType());
+                    }
+                }
             }
             return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
 

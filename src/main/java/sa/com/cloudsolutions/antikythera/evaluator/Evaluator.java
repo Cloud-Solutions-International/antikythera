@@ -1321,6 +1321,9 @@ public class Evaluator {
     @SuppressWarnings({"java:S3776", "java:S1130"})
     Variable resolveVariableDeclaration(VariableDeclarator variable) throws ReflectiveOperationException {
         List<TypeWrapper> resolvedTypes = AbstractCompiler.findTypesInVariable(variable);
+        if (resolvedTypes.isEmpty()) {
+            resolvedTypes = AbstractCompiler.findWrappedTypes(cu, variable.getType());
+        }
         String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
 
         if (!registryKey.isEmpty() && MockingRegistry.isMockTarget(registryKey)) {
