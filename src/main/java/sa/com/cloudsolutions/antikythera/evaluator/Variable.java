@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.ArrayList;
@@ -125,6 +126,13 @@ public class Variable {
 
     public void setInitializer(List<Expression> initializer) {
         this.initializer = initializer;
+    }
+
+    public static String generateVariableName(TypeWrapper type) {
+        if (type.getClazz() == null) {
+            return generateVariableName(type.getType().getNameAsString());
+        }
+        return generateVariableName(type.getClazz());
     }
 
     public static String generateVariableName(Type type) {

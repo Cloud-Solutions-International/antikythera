@@ -33,6 +33,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
@@ -198,19 +199,19 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of();
     }
 
-    protected List<Expression> setupNonEmptyCollection(Type type, Variable wrappedCollection, NameExpr name) {
-        NodeList<Type> typeArgs = getTypeArgs(type);
-        Type pimaryType = typeArgs.getFirst().orElseThrow();
-        VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
+    protected List<Expression> setupNonEmptyCollection(Node node, Variable wrappedCollection, NameExpr name) {
+        List<TypeWrapper> typeArgs = AbstractCompiler.findTypesInVariable(node);
+        TypeWrapper pimaryType = typeArgs.getFirst();
+        VariableDeclarator vdecl = new VariableDeclarator(pimaryType.asClassOrInterfaceType(), name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
             if (member.getValue() == null
                     && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
                 member = Reflect.variableFactory(member.getType().asString());
             } else if (member.getValue() instanceof Evaluator eval) {
-                return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
+                return createSingleItemCollectionWithInitializer(node, member, wrappedCollection, name, eval);
             }
-            return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
+            return List.of(createSingleItemCollection(node, member, wrappedCollection, name));
 
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
@@ -230,13 +231,13 @@ public class ControlFlowEvaluator extends Evaluator {
         return typeArgs;
     }
 
-    private List<Expression> createSingleItemCollectionWithInitializer(Type type, Variable member,
+    private List<Expression> createSingleItemCollectionWithInitializer(Node node, Variable member,
                                                                        Variable wrappedCollection, NameExpr name, Evaluator eval) throws ReflectiveOperationException {
-        NodeList<Type> typeArgs = getTypeArgs(type);
-        Type pimaryType = typeArgs.getFirst().orElseThrow();
+        List<TypeWrapper> typeArgs = AbstractCompiler.findTypesInVariable(node);
+        TypeWrapper pimaryType = typeArgs.getFirst();
         List<Expression> fieldIntializers = eval.getFieldInitializers();
         if (fieldIntializers.isEmpty()) {
-            return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
+            return List.of(createSingleItemCollection(node, member, wrappedCollection, name));
         }
         else {
             List<Expression> mocks = new ArrayList<>();
@@ -269,9 +270,9 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private Expression createSingleItemCollection(Type type, Variable member,
+    private Expression createSingleItemCollection(Node node, Variable member,
                                                   Variable wrappedCollection, NameExpr name) throws ReflectiveOperationException {
-        NodeList<Type> typeArgs = getTypeArgs(type);
+        List<TypeWrapper> typeArgs = AbstractCompiler.findTypesInVariable(node);
         List<Expression> initializer = member.getInitializer();
         if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
             TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
@@ -294,11 +295,11 @@ public class ControlFlowEvaluator extends Evaluator {
         return null;
     }
 
-    private Variable findValueForKey(NodeList<Type> typeArgs, NameExpr name) throws ReflectiveOperationException {
-        if (typeArgs.size() == 1) {
-            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-        }
-        VariableDeclarator vdecl2 = new VariableDeclarator(typeArgs.get(1), name.getNameAsString());
+    private Variable findValueForKey(List<TypeWrapper> typeArgs, NameExpr name) throws ReflectiveOperationException {
+        VariableDeclarator vdecl2 = (typeArgs.isEmpty())
+                ? new VariableDeclarator(new ClassOrInterfaceType().setName("Object"), "obj")
+                : new VariableDeclarator(typeArgs.get(1).asClassOrInterfaceType(), name.getNameAsString());
+
         Variable resolved2 = resolveVariableDeclaration(vdecl2);
         if (resolved2.getValue() == null && Reflect.isPrimitiveOrBoxed(resolved2.getType().asString())) {
             resolved2 = Reflect.variableFactory(resolved2.getType().asString());

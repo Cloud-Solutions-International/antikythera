@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
 public class TypeWrapper {
     TypeDeclaration<?> type;
@@ -88,5 +89,12 @@ public class TypeWrapper {
 
     public void setEnumConstant(EnumConstantDeclaration enumConstant) {
         this.enumConstant = enumConstant;
+    }
+
+    public ClassOrInterfaceType asClassOrInterfaceType() {
+        if (type != null) {
+            return new ClassOrInterfaceType(null, type.getNameAsString());
+        }
+        return new ClassOrInterfaceType(null, clazz.getSimpleName());
     }
 }
