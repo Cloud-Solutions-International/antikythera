@@ -213,7 +213,7 @@ public class ControlFlowEvaluator extends Evaluator {
             } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
             } else if (member.getValue() == null) {
-                addInitializer(member);
+                member = recreateVariable(type);
             }
             return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
 
@@ -222,32 +222,25 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private void addInitializer(Variable member) {
-        TypeWrapper wrapper = AbstractCompiler.findType(cu, member.getType());
+    private Variable recreateVariable(Type type) {
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
         if (wrapper != null) {
             if (wrapper.getType() != null) {
-                ConstructorDeclaration cdecl = DummyArgumentGenerator.findSimplestConstructor(wrapper.getType());
-                if (cdecl != null) {
-                    ObjectCreationExpr oce = DummyArgumentGenerator.createObjectWithSimplestConstructor(member, cdecl);
-                    member.setInitializer(List.of(oce));
-                } else {
-                    throw new AntikytheraException("Could not find constructor for " + wrapper.getType());
-                }
+               return DummyArgumentGenerator.createObjectWithSimplestConstructor(
+                       wrapper.getType().asClassOrInterfaceDeclaration(),  "nomatter");
             }
             else {
                 Constructor<?> constructor = DummyArgumentGenerator.findSimplestConstructor(wrapper.getClazz());
                 if (constructor != null) {
                     try {
-                        ObjectCreationExpr oce = DummyArgumentGenerator.createObjectWithSimplestConstructor(constructor);
-                        member.setInitializer(List.of(oce));
+                        return DummyArgumentGenerator.createObjectWithSimplestConstructor(constructor, type);
                     } catch (ReflectiveOperationException e) {
                         throw new AntikytheraException(e);
                     }
-                } else {
-                    throw new AntikytheraException("Could not find constructor for " + wrapper.getClazz());
                 }
             }
         }
+        throw new AntikytheraException("Could not find constructor for " + type);
     }
 
     private static NodeList<Type> getTypeArgs(Type type) {

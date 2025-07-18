@@ -1,15 +1,14 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockedFieldDetector;
@@ -106,19 +105,23 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 }
             }
         }
-        Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
-        v = new Variable(o);
-        v.setType(t);
+
         Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-        if (opt.isPresent() && opt.get().isClassOrInterfaceDeclaration()) {
-            String init = ArgumentGenerator.instantiateClass(
-                    opt.get().asClassOrInterfaceDeclaration(),
-                    param.getNameAsString()
-            ).replace(";", "");
-            String[] parts = init.split("=");
-            v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
+        if (opt.isPresent() ) {
+            v = createObjectWithSimplestConstructor(opt.get(), param.getNameAsString());
         }
 
+        return v;
+    }
+
+    public static Variable createObjectWithSimplestConstructor(TypeDeclaration<?> cdecl, String name) {
+        Evaluator o = EvaluatorFactory.create(cdecl.getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+        Variable v = new Variable(o);
+        String init = ArgumentGenerator.instantiateClass(
+                cdecl, name
+        ).replace(";", "");
+        String[] parts = init.split("=");
+        v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
         return v;
     }
 
@@ -150,16 +153,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         return new Variable((Object) null);
     }
 
-    public static Variable createObjectWithSimplestConstructor(ConstructorDeclaration cdecl) {
-        NodeList<Expression> args = new NodeList<>();
-        for (var param : cdecl.getParameters()) {
-            args.add(new NameExpr(param.getNameAsString()));
-        }
-        ObjectCreationExpr oce = new ObjectCreationExpr(null, new ClassOrInterfaceType().setName(cdecl.getName()), args);
-        return oce;
-    }
-
-
     public static Variable createObjectWithSimplestConstructor(Constructor<?> simplest, Type t) throws InstantiationException, IllegalAccessException, InvocationTargetException {
         Object[] args = new Object[simplest.getParameterCount()];
         Class<?>[] paramTypes = simplest.getParameterTypes();
@@ -181,22 +174,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 .setArguments(argExprs);
         v.setInitializer(List.of(oce));
         return v;
-    }
-
-    public static ConstructorDeclaration findSimplestConstructor(TypeDeclaration<?> classOrInterface) {
-        List<ConstructorDeclaration> constructors = classOrInterface.getConstructors();
-        if (constructors.isEmpty()) {
-            return null;
-        }
-        ConstructorDeclaration simplest = null;
-        int minParams = Integer.MAX_VALUE;
-        for (ConstructorDeclaration ctor : constructors) {
-            if (ctor.getParameters().size() < minParams) {
-                minParams = ctor.getParameters().size();
-                simplest = ctor;
-            }
-        }
-        return simplest;
     }
 
     public static Constructor<?> findSimplestConstructor(Class<?> clazz) {
