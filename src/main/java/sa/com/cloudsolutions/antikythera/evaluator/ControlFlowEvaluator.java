@@ -39,6 +39,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
@@ -212,26 +213,40 @@ public class ControlFlowEvaluator extends Evaluator {
             } else if (member.getValue() instanceof Evaluator eval) {
                 return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
             } else if (member.getValue() == null) {
-                TypeWrapper wrapper = AbstractCompiler.findType(cu, member.getType());
-                if (wrapper != null) {
-                    ConstructorDeclaration cdecl = AbstractCompiler.findSimplestConstructor(wrapper.getType());
-                    if (cdecl != null) {
-
-                        NodeList<Expression> args = new NodeList<>();
-                        for (var param : cdecl.getParameters()) {
-                            args.add(new NameExpr(param.getNameAsString()));
-                        }
-                        ObjectCreationExpr oce = new ObjectCreationExpr(null, member.getType().asClassOrInterfaceType(), args);
-                        member.setInitializer(List.of(oce));
-                    } else {
-                        throw new AntikytheraException("Could not find constructor for " + wrapper.getType());
-                    }
-                }
+                addInitializer(member);
             }
             return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
 
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
+        }
+    }
+
+    private void addInitializer(Variable member) {
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, member.getType());
+        if (wrapper != null) {
+            if (wrapper.getType() != null) {
+                ConstructorDeclaration cdecl = DummyArgumentGenerator.findSimplestConstructor(wrapper.getType());
+                if (cdecl != null) {
+                    ObjectCreationExpr oce = DummyArgumentGenerator.createObjectWithSimplestConstructor(member, cdecl);
+                    member.setInitializer(List.of(oce));
+                } else {
+                    throw new AntikytheraException("Could not find constructor for " + wrapper.getType());
+                }
+            }
+            else {
+                Constructor<?> constructor = DummyArgumentGenerator.findSimplestConstructor(wrapper.getClazz());
+                if (constructor != null) {
+                    try {
+                        ObjectCreationExpr oce = DummyArgumentGenerator.createObjectWithSimplestConstructor(constructor);
+                        member.setInitializer(List.of(oce));
+                    } catch (ReflectiveOperationException e) {
+                        throw new AntikytheraException(e);
+                    }
+                } else {
+                    throw new AntikytheraException("Could not find constructor for " + wrapper.getClazz());
+                }
+            }
         }
     }
 

@@ -1112,20 +1112,4 @@ public class AbstractCompiler {
     public static ClassLoader getClassLoader() {
         return loader;
     }
-
-    public static ConstructorDeclaration findSimplestConstructor(TypeDeclaration<?> classOrInterface) {
-        List<ConstructorDeclaration> constructors = classOrInterface.getConstructors();
-        if (constructors.isEmpty()) {
-            return null;
-        }
-        ConstructorDeclaration simplest = null;
-        int minParams = Integer.MAX_VALUE;
-        for (ConstructorDeclaration ctor : constructors) {
-            if (ctor.getParameters().size() < minParams) {
-                minParams = ctor.getParameters().size();
-                simplest = ctor;
-            }
-        }
-        return simplest;
-    }
 }

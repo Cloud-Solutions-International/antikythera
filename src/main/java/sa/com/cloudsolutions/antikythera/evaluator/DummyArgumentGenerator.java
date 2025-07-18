@@ -1,11 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -139,35 +141,65 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             return new Variable(clazz.getDeclaredConstructor().newInstance());
         } catch (NoSuchMethodException e) {
             // No no-arg constructor, find the simplest one
-            Constructor<?> simplest = findConstructor(clazz);
+            Constructor<?> simplest = findSimplestConstructor(clazz);
             if (simplest != null) {
-                Object[] args = new Object[simplest.getParameterCount()];
-                Class<?>[] paramTypes = simplest.getParameterTypes();
-                NodeList<com.github.javaparser.ast.expr.Expression> argExprs = new NodeList<>();
-                for (int i = 0; i < paramTypes.length; i++) {
-                    if (paramTypes[i].equals(String.class)) {
-                        args[i] = "Antikythera";
-                        argExprs.add(new StringLiteralExpr("Antikythera"));
-                    } else {
-                        args[i] = Reflect.getDefault(paramTypes[i]);
-                        argExprs.add(Reflect.createLiteralExpression(args[i]));
-                    }
-                }
-                Variable v = new Variable(simplest.newInstance(args));
-                // Set initializer
-                ObjectCreationExpr oce =
-                    new ObjectCreationExpr()
-                        .setType(t.asString())
-                        .setArguments(argExprs);
-                v.setInitializer(List.of(oce));
-                return v;
+                return createObjectWithSimplestConstructor(simplest, t);
             }
         }
 
         return new Variable((Object) null);
     }
 
-    private static Constructor<?> findConstructor(Class<?> clazz) {
+    public static Variable createObjectWithSimplestConstructor(ConstructorDeclaration cdecl) {
+        NodeList<Expression> args = new NodeList<>();
+        for (var param : cdecl.getParameters()) {
+            args.add(new NameExpr(param.getNameAsString()));
+        }
+        ObjectCreationExpr oce = new ObjectCreationExpr(null, new ClassOrInterfaceType().setName(cdecl.getName()), args);
+        return oce;
+    }
+
+
+    public static Variable createObjectWithSimplestConstructor(Constructor<?> simplest, Type t) throws InstantiationException, IllegalAccessException, InvocationTargetException {
+        Object[] args = new Object[simplest.getParameterCount()];
+        Class<?>[] paramTypes = simplest.getParameterTypes();
+        NodeList<Expression> argExprs = new NodeList<>();
+        for (int i = 0; i < paramTypes.length; i++) {
+            if (paramTypes[i].equals(String.class)) {
+                args[i] = "Antikythera";
+                argExprs.add(new StringLiteralExpr("Antikythera"));
+            } else {
+                args[i] = Reflect.getDefault(paramTypes[i]);
+                argExprs.add(Reflect.createLiteralExpression(args[i]));
+            }
+        }
+        Variable v = new Variable(simplest.newInstance(args));
+        // Set initializer
+        ObjectCreationExpr oce =
+            new ObjectCreationExpr()
+                .setType(t.asString())
+                .setArguments(argExprs);
+        v.setInitializer(List.of(oce));
+        return v;
+    }
+
+    public static ConstructorDeclaration findSimplestConstructor(TypeDeclaration<?> classOrInterface) {
+        List<ConstructorDeclaration> constructors = classOrInterface.getConstructors();
+        if (constructors.isEmpty()) {
+            return null;
+        }
+        ConstructorDeclaration simplest = null;
+        int minParams = Integer.MAX_VALUE;
+        for (ConstructorDeclaration ctor : constructors) {
+            if (ctor.getParameters().size() < minParams) {
+                minParams = ctor.getParameters().size();
+                simplest = ctor;
+            }
+        }
+        return simplest;
+    }
+
+    public static Constructor<?> findSimplestConstructor(Class<?> clazz) {
         Constructor<?>[] constructors = clazz.getDeclaredConstructors();
         Constructor<?> simplest = null;
         int minParams = Integer.MAX_VALUE;
