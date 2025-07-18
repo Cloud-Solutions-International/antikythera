@@ -202,7 +202,6 @@ public class AbstractCompiler {
         }
 
         Type type = switch (variable) {
-            case ClassOrInterfaceType t -> t;
             case VariableDeclarator v -> v.getType();
             case FieldDeclaration f -> f.getElementType();
             case Parameter parameter -> parameter.getType();
