@@ -48,6 +48,16 @@ class TestEnums extends TestHelper {
         assertEquals("OPEN", outContent.toString().trim());
     }
 
+    @Test
+    void testMultiEnum() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Hello", Evaluator.class);
+        MethodDeclaration md = evaluator.getCompilationUnit().findFirst(
+                MethodDeclaration.class, m -> m.getNameAsString().equals("helloEnum3")).orElseThrow();
+
+        evaluator.executeMethod(md);
+        assertEquals("2 KARLA", outContent.toString().trim());
+    }
+
     @ParameterizedTest
     @CsvSource({"cmp1, CLOSED!OPEN!", "cmp2, CLOSED!OPEN!",
             "cmp3, CLOSED!OPEN!", "cmp4, CLOSED!OPEN!", "cmp5, CLOSED!OPEN!"})

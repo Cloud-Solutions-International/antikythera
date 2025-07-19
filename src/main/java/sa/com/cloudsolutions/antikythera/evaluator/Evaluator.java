@@ -957,7 +957,7 @@ public class Evaluator {
                     variable = evaluateScopedFieldAccess(variable, expr2);
                 }
                 else if (scope.getTypeWrapper() != null){
-                    return evaluateScopeChainFieldAccesHelper(scope);
+                    return evaluateScopeChainFieldAccessHelper(scope);
                 }
             } else if (expr2.isMethodCallExpr()) {
                 scope.setVariable(variable);
@@ -983,7 +983,7 @@ public class Evaluator {
         return variable;
     }
 
-    private Variable evaluateScopeChainFieldAccesHelper(Scope scope) {
+    private Variable evaluateScopeChainFieldAccessHelper(Scope scope) {
         Variable variable;
         if (scope.getTypeWrapper().getClazz() != null) {
             variable = new Variable(scope.getTypeWrapper().getClazz());
