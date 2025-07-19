@@ -278,8 +278,8 @@ public class ControlFlowEvaluator extends Evaluator {
                 mocks.add(e);
             }
 
-            if (wrappedCollection.getValue() instanceof List<?> list) {
-                addToList(member, list);
+            if (wrappedCollection.getValue() instanceof List<?>) {
+                addToList(member, wrappedCollection);
                 mocks.add(StaticJavaParser.parseExpression(String.format("List.of(%s)", instanceName)));
             }
             else if (wrappedCollection.getValue() instanceof Set<?> set) {
@@ -301,8 +301,8 @@ public class ControlFlowEvaluator extends Evaluator {
         if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
             TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
         }
-        if (wrappedCollection.getValue() instanceof List<?> list) {
-            addToList(member, list);
+        if (wrappedCollection.getValue() instanceof List<?>) {
+            addToList(member, wrappedCollection);
             return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
         }
         if (wrappedCollection.getValue() instanceof Set<?> set) {
@@ -343,10 +343,19 @@ public class ControlFlowEvaluator extends Evaluator {
         TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
     }
 
-    private static void addToList(Variable member, List<?> list) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        Method m = List.class.getMethod("add", Object.class);
-        m.invoke(list, member.getValue());
-        TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+    private static void addToList(Variable member, Variable collection) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+        try {
+            List<?> list = (List<?>) collection.getValue();
+            Method m = List.class.getMethod("add", Object.class);
+            m.invoke(list, member.getValue());
+            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+        } catch (InvocationTargetException e) {
+            ArrayList<?> list = new ArrayList<>();
+            Method m = List.class.getMethod("add", Object.class);
+            m.invoke(list, member.getValue());
+            TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+            collection.setValue(list);
+        }
     }
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
