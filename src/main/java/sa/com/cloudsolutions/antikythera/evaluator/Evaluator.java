@@ -957,14 +957,7 @@ public class Evaluator {
                     variable = evaluateScopedFieldAccess(variable, expr2);
                 }
                 else if (scope.getTypeWrapper() != null){
-                    if (scope.getTypeWrapper().getClazz() != null) {
-                        variable = new Variable(scope.getTypeWrapper().getClazz());
-                        variable.setClazz(scope.getTypeWrapper().getClazz());
-                    }
-                    else {
-                        variable = new Variable(EvaluatorFactory.create(scope.getTypeWrapper().getFullyQualifiedName(), this));
-                    }
-                    break;
+                    return evaluateScopeChainFieldAccesHelper(scope);
                 }
             } else if (expr2.isMethodCallExpr()) {
                 scope.setVariable(variable);
@@ -986,6 +979,18 @@ public class Evaluator {
             } else if (expr2.isArrayAccessExpr()) {
                 variable = evaluateArrayAccess(expr2);
             }
+        }
+        return variable;
+    }
+
+    private Variable evaluateScopeChainFieldAccesHelper(Scope scope) {
+        Variable variable;
+        if (scope.getTypeWrapper().getClazz() != null) {
+            variable = new Variable(scope.getTypeWrapper().getClazz());
+            variable.setClazz(scope.getTypeWrapper().getClazz());
+        }
+        else {
+            variable = new Variable(EvaluatorFactory.create(scope.getTypeWrapper().getFullyQualifiedName(), this));
         }
         return variable;
     }
