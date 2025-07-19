@@ -64,6 +64,7 @@ public class Reflect {
     public static final String JAVA_LANG_LONG = "java.lang.Long";
     public static final String JAVA_LANG_STRING = "java.lang.String";
     public static final String JAVA_UTIL_ARRAY_LIST = "java.util.ArrayList";
+    public static final String JAVA_UTIL_HASH_MAP = "java.util.HashMap";
     public static final String JAVA_UTIL_HASH_SET = "java.util.HashSet";
     public static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
 
@@ -616,13 +617,11 @@ public class Reflect {
             return false;
         }
         Class<?> parameterType = parameterTypes[i];
-        try {
-            if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
-                return true;
-            }
-        } catch (Exception e) {
-            System.out.println("a");
+
+        if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
+            return true;
         }
+
         if (wrapperToPrimitive.get(parameterType) != null && wrapperToPrimitive.get(parameterType).equals(argumentTypes[i])) {
             argumentTypes[i] = wrapperToPrimitive.get(parameterType);
             return true;
