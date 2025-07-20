@@ -528,24 +528,68 @@ public class Reflect {
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
+        Object[] arguments = reflectionArguments.getArguments();
 
         for (Method m : getMethodsByName(clazz, methodName)) {
             Class<?>[] parameterTypes = m.getParameterTypes();
+            
+            // Handle methods with a single Object[] parameter
             if (parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class)) {
                 return m;
             }
-            if (argumentTypes == null || parameterTypes.length != argumentTypes.length) {
+            
+            // Check if this is a varargs method
+            boolean isVarArgs = m.isVarArgs();
+            
+            // For varargs methods, we need at least (parameterCount - 1) arguments
+            // For non-varargs methods, we need exactly the same number of arguments
+            if (argumentTypes == null || 
+                (!isVarArgs && parameterTypes.length != argumentTypes.length) ||
+                (isVarArgs && argumentTypes.length < parameterTypes.length - 1)) {
                 continue;
             }
+            
             boolean found = true;
-            for (int i = 0; i < argumentTypes.length; i++) {
-                if (matchArgumentVsParameter(argumentTypes, parameterTypes, reflectionArguments.getArguments(), i) ||
+            int regularParamCount = isVarArgs ? parameterTypes.length - 1 : parameterTypes.length;
+            
+            // Check regular parameters (all parameters for non-varargs, all except the last for varargs)
+            for (int i = 0; i < regularParamCount; i++) {
+                if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i) ||
                         parameterTypes[i].getName().equals("java.lang.Object")) {
                     continue;
                 }
                 found = false;
+                break;
             }
+            
+            // If this is a varargs method and we've matched all regular parameters, check varargs
+            if (found && isVarArgs && argumentTypes.length >= regularParamCount) {
+                Class<?> varArgComponentType = parameterTypes[parameterTypes.length - 1].getComponentType();
+                
+                // Check each vararg parameter against the component type
+                for (int i = regularParamCount; i < argumentTypes.length; i++) {
+                    if (arguments[i] == null || 
+                        varArgComponentType.isAssignableFrom(argumentTypes[i]) || 
+                        varArgComponentType.equals(argumentTypes[i]) ||
+                        varArgComponentType.getName().equals("java.lang.Object")) {
+                        continue;
+                    }
+                    
+                    // Try primitive/wrapper conversions for varargs
+                    if ((wrapperToPrimitive.get(varArgComponentType) != null && 
+                         wrapperToPrimitive.get(varArgComponentType).equals(argumentTypes[i])) ||
+                        (primitiveToWrapper.get(varArgComponentType) != null && 
+                         primitiveToWrapper.get(varArgComponentType).equals(argumentTypes[i]))) {
+                        continue;
+                    }
+                    
+                    found = false;
+                    break;
+                }
+            }
+            
             if (found) {
+                reflectionArguments.setMethod(m);
                 return m;
             }
         }

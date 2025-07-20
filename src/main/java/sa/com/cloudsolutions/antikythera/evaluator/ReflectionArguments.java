@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.Expression;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
@@ -80,6 +81,42 @@ public class ReflectionArguments {
     public void finalizeArguments() {
         if (Arrays.class.equals(method.getDeclaringClass()) && method.getParameters().length == 1) {
             finalArgs = getArguments();
+        }
+        else if (method.isVarArgs()) {
+            // For varargs methods, we need to handle the last parameter specially
+            Class<?>[] paramTypes = method.getParameterTypes();
+            int regularParamCount = paramTypes.length - 1;
+            Object[] args = getArguments();
+            
+            // If we have exactly the right number of parameters and the last one is already an array
+            // of the correct type, we can use the arguments as is
+            if (args.length == paramTypes.length && args[regularParamCount] != null && 
+                args[regularParamCount].getClass().isArray() && 
+                args[regularParamCount].getClass().getComponentType().equals(paramTypes[regularParamCount].getComponentType())) {
+                finalArgs = args;
+                return;
+            }
+            
+            // Otherwise, we need to create a new array for the varargs
+            finalArgs = new Object[paramTypes.length];
+            
+            // Copy the regular parameters
+            for (int i = 0; i < regularParamCount; i++) {
+                finalArgs[i] = args[i];
+            }
+            
+            // Create an array for the varargs parameters
+            Class<?> componentType = paramTypes[regularParamCount].getComponentType();
+            int varArgCount = args.length - regularParamCount;
+            Object varArgArray = Array.newInstance(componentType, varArgCount);
+            
+            // Copy the varargs parameters into the array
+            for (int i = 0; i < varArgCount; i++) {
+                Array.set(varArgArray, i, args[regularParamCount + i]);
+            }
+            
+            // Set the varargs array as the last parameter
+            finalArgs[regularParamCount] = varArgArray;
         }
         else {
             finalArgs = method.getParameterTypes().length == 1 &&

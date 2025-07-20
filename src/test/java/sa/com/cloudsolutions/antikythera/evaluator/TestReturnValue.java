@@ -46,7 +46,7 @@ class TestReturnValue extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource(value = {"deepCalls,UPPER2","deepEnums,KARLA3"})
+    @CsvSource(value = {"deepCalls,UPPER2","deepEnums,KARLA3", "format, A 1 2.00000"})
     void testDeepCalls(String name, String value) throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(printName);
