@@ -474,8 +474,8 @@ public class Reflect {
             case "List", JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
                     createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
-            case "Map", JAVA_UTIL_MAP, "java.util.HashMap" ->
-                    createVariable(new HashMap<>(), "java.util.HashMap", null);
+            case "Map", JAVA_UTIL_MAP, JAVA_UTIL_HASH_MAP ->
+                    createVariable(new HashMap<>(), JAVA_UTIL_HASH_MAP, null);
             case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
             case "Set", JAVA_UTIL_SET, JAVA_UTIL_HASH_SET ->
                     createVariable(new HashSet<>(), JAVA_UTIL_HASH_SET, null);
@@ -532,68 +532,67 @@ public class Reflect {
 
         for (Method m : getMethodsByName(clazz, methodName)) {
             Class<?>[] parameterTypes = m.getParameterTypes();
-            
-            // Handle methods with a single Object[] parameter
-            if (parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class)) {
+
+            if (isSingleObjectArrayParam(parameterTypes)) {
                 return m;
             }
-            
-            // Check if this is a varargs method
+
             boolean isVarArgs = m.isVarArgs();
-            
-            // For varargs methods, we need at least (parameterCount - 1) arguments
-            // For non-varargs methods, we need exactly the same number of arguments
-            if (argumentTypes == null || 
-                (!isVarArgs && parameterTypes.length != argumentTypes.length) ||
-                (isVarArgs && argumentTypes.length < parameterTypes.length - 1)) {
+            if (!isArgumentCountValid(argumentTypes, parameterTypes, isVarArgs)) {
                 continue;
             }
-            
-            boolean found = true;
-            int regularParamCount = isVarArgs ? parameterTypes.length - 1 : parameterTypes.length;
-            
-            // Check regular parameters (all parameters for non-varargs, all except the last for varargs)
-            for (int i = 0; i < regularParamCount; i++) {
-                if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i) ||
-                        parameterTypes[i].getName().equals("java.lang.Object")) {
-                    continue;
-                }
-                found = false;
-                break;
-            }
-            
-            // If this is a varargs method and we've matched all regular parameters, check varargs
-            if (found && isVarArgs && argumentTypes.length >= regularParamCount) {
-                Class<?> varArgComponentType = parameterTypes[parameterTypes.length - 1].getComponentType();
-                
-                // Check each vararg parameter against the component type
-                for (int i = regularParamCount; i < argumentTypes.length; i++) {
-                    if (arguments[i] == null || 
-                        varArgComponentType.isAssignableFrom(argumentTypes[i]) || 
-                        varArgComponentType.equals(argumentTypes[i]) ||
-                        varArgComponentType.getName().equals("java.lang.Object")) {
-                        continue;
-                    }
-                    
-                    // Try primitive/wrapper conversions for varargs
-                    if ((wrapperToPrimitive.get(varArgComponentType) != null && 
-                         wrapperToPrimitive.get(varArgComponentType).equals(argumentTypes[i])) ||
-                        (primitiveToWrapper.get(varArgComponentType) != null && 
-                         primitiveToWrapper.get(varArgComponentType).equals(argumentTypes[i]))) {
-                        continue;
-                    }
-                    
-                    found = false;
-                    break;
-                }
-            }
-            
-            if (found) {
+
+            if (matchParameters(argumentTypes, parameterTypes, arguments, isVarArgs)) {
                 reflectionArguments.setMethod(m);
                 return m;
             }
         }
         return null;
+    }
+
+    private static boolean isSingleObjectArrayParam(Class<?>[] parameterTypes) {
+        return parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class);
+    }
+
+    private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes, boolean isVarArgs) {
+        if (argumentTypes == null) return false;
+        if (!isVarArgs && parameterTypes.length != argumentTypes.length) return false;
+        if (isVarArgs && argumentTypes.length < parameterTypes.length - 1) return false;
+        return true;
+    }
+
+    private static boolean matchParameters(Class<?>[] argumentTypes, Class<?>[] parameterTypes, Object[] arguments, boolean isVarArgs) {
+        int regularParamCount = isVarArgs ? parameterTypes.length - 1 : parameterTypes.length;
+        for (int i = 0; i < regularParamCount; i++) {
+            if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i) ||
+                parameterTypes[i].getName().equals("java.lang.Object")) {
+                continue;
+            }
+            return false;
+        }
+        if (isVarArgs && argumentTypes.length >= regularParamCount) {
+            Class<?> varArgComponentType = parameterTypes[parameterTypes.length - 1].getComponentType();
+            for (int i = regularParamCount; i < argumentTypes.length; i++) {
+                if (!matchVarArg(varArgComponentType, argumentTypes[i], arguments[i])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @SuppressWarnings("java:S1872")
+    private static boolean matchVarArg(Class<?> varArgComponentType, Class<?> argType, Object argument) {
+        if (argument == null ||
+            varArgComponentType.isAssignableFrom(argType) ||
+            varArgComponentType.equals(argType) ||
+            varArgComponentType.getName().equals("java.lang.Object")) {
+            return true;
+        }
+        return  (
+                (wrapperToPrimitive.get(varArgComponentType) != null && wrapperToPrimitive.get(varArgComponentType).equals(argType)) ||
+                (primitiveToWrapper.get(varArgComponentType) != null && primitiveToWrapper.get(varArgComponentType).equals(argType))
+        );
     }
 
     /**
