@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.CompilationUnit;
@@ -23,6 +25,7 @@ class TestReturnValue extends TestHelper {
 
     @BeforeAll
     static void setup() throws IOException {
+        AntikytheraRunTime.resetAll();
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
     }
@@ -40,6 +43,15 @@ class TestReturnValue extends TestHelper {
         evaluator.executeMethod(printName);
 
         assertTrue(outContent.toString().contains("John"));
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"deepCalls,UPPER2","deepEnums,KARLA3"})
+    void testDeepCalls(String name, String value) throws AntikytheraException, ReflectiveOperationException {
+        MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+        evaluator.executeMethod(printName);
+
+        assertTrue(outContent.toString().contains(value));
     }
 
     @Test
