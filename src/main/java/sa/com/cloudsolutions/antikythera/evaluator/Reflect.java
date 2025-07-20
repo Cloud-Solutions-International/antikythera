@@ -204,12 +204,7 @@ public class Reflect {
             }
 
             if (argValues[i] != null) {
-                args[i] = argValues[i].getValue();
-                if (argValues[i].getClazz() != null) {
-                    argumentTypes[i] = argValues[i].getClazz();
-                } else if (args[i] != null) {
-                    argumentTypes[i] = argValues[i].getValue().getClass();
-                }
+                detectTypeForNotNullArg(args, i, argValues, argumentTypes);
             } else {
                 try {
                     String className = arguments.getFirst().calculateResolvedType().describe();
@@ -227,6 +222,15 @@ public class Reflect {
         reflectionArguments.setScope(scope);
         reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
+    }
+
+    private static void detectTypeForNotNullArg(Object[] args, int i, Variable[] argValues, Class<?>[] argumentTypes) {
+        args[i] = argValues[i].getValue();
+        if (argValues[i].getClazz() != null) {
+            argumentTypes[i] = argValues[i].getClazz();
+        } else if (args[i] != null) {
+            argumentTypes[i] = argValues[i].getValue().getClass();
+        }
     }
 
     private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
@@ -557,10 +561,10 @@ public class Reflect {
     private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes, boolean isVarArgs) {
         if (argumentTypes == null) return false;
         if (!isVarArgs && parameterTypes.length != argumentTypes.length) return false;
-        if (isVarArgs && argumentTypes.length < parameterTypes.length - 1) return false;
-        return true;
+        return !(isVarArgs && argumentTypes.length < parameterTypes.length - 1);
     }
 
+    @SuppressWarnings("java:S1872")
     private static boolean matchParameters(Class<?>[] argumentTypes, Class<?>[] parameterTypes, Object[] arguments, boolean isVarArgs) {
         int regularParamCount = isVarArgs ? parameterTypes.length - 1 : parameterTypes.length;
         for (int i = 0; i < regularParamCount; i++) {
@@ -624,6 +628,7 @@ public class Reflect {
      * @param argumentTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
+    @SuppressWarnings("java:S1452")
     public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] argumentTypes, Object[] arguments) {
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             Class<?>[] parameterTypes = c.getParameterTypes();
