@@ -55,6 +55,15 @@ class TestReturnValue extends TestHelper {
     }
 
     @Test
+    void testDeepOCE() throws ReflectiveOperationException {
+        MethodDeclaration printName = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("deepOCE")).orElseThrow();
+        AntikytheraRunTime.push(new Variable(2.0));
+        AntikytheraRunTime.push(new Variable(1));
+        evaluator.executeMethod(printName);
+        assertTrue(outContent.toString().contains("KARLA 1 2.00000"));
+    }
+
+    @Test
     void testPrintNumberField() throws  AntikytheraException, ReflectiveOperationException {
         MethodDeclaration printNumber = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("printNumberField")).orElseThrow();
         evaluator.executeMethod(printNumber);
