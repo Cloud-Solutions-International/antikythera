@@ -106,11 +106,7 @@ public class AntikytheraRunTime {
     }
 
     public static Variable pop() {
-        return stack.removeLast();
-    }
-
-    public static boolean isEmptyStack() {
-        return stack.isEmpty();
+        return stack.pop();
     }
 
     public static boolean isInterface(String name) {

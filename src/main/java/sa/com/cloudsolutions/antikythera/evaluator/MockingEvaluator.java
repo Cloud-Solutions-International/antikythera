@@ -476,7 +476,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         methodCall.getScope().ifPresent(mce::setScope);
 
         List<Expression> args = new ArrayList<>();
-        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
+        for (int i = 0 ;  i < methodCall.getArguments().size() ; i++) {
             Variable v = AntikytheraRunTime.pop();
             args.add(MockingRegistry.createMockitoArgument(v.getType().asString()));
         }

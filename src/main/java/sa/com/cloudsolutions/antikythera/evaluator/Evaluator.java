@@ -1538,13 +1538,9 @@ public class Evaluator {
      * @throws ReflectiveOperationException is not really thrown here, but the subclasses might.
      */
     protected void setupParameters(MethodDeclaration md) throws ReflectiveOperationException {
-        NodeList<Parameter> parameters = md.getParameters();
-
-        for (int i = parameters.size() - 1; i >= 0; i--) {
-            Variable va = AntikytheraRunTime.pop();
-            Parameter p = parameters.get(i);
+        for (Parameter parameter :  md.getParameters()) {
             md.getBody().ifPresent(body ->
-                    setLocal(body, p.getNameAsString(), va)
+                    setLocal(body, parameter.getNameAsString(), AntikytheraRunTime.pop())
             );
         }
     }
@@ -1559,12 +1555,10 @@ public class Evaluator {
     public void executeConstructor(CallableDeclaration<?> md) throws ReflectiveOperationException {
         if (md instanceof ConstructorDeclaration cd) {
             List<Statement> statements = cd.getBody().getStatements();
-            NodeList<Parameter> parameters = md.getParameters();
 
             returnValue = null;
-            for (int i = parameters.size() - 1; i >= 0; i--) {
-                Parameter p = parameters.get(i);
-                setLocal(cd.getBody(), p.getNameAsString(), AntikytheraRunTime.pop());
+            for (Parameter parameter : md.getParameters()) {
+                setLocal(cd.getBody(), parameter.getNameAsString(), AntikytheraRunTime.pop());
             }
             executeBlock(statements);
         }

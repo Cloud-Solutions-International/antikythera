@@ -417,7 +417,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         for (int i = 0, j = methodCall.getArguments().size(); i < j; i++) {
                             q.getMethodArguments().add(null);
                         }
-                        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
+                        for (int i = 0 ; i < methodCall.getArguments().size(); i++) {
                             QueryMethodArgument qa = new QueryMethodArgument(methodCall.getArgument(i), i, AntikytheraRunTime.pop());
                             q.getMethodArguments().set(i, qa);
                         }
