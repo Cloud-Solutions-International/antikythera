@@ -14,6 +14,8 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -44,10 +46,22 @@ class TestFunctional extends TestHelper{
             "people7; Tom Bombadil", "nestedStream; 1AB2AB", "valueOf; 1","people8; AB",
             "staticMethodReference1; 234", "staticMethodReference2; 234", "collectAgain; 1 2",
             "peopleArray1; [A, B]", "array0; [1, 2, 3, 4, 5]", "arraySort1; 345679",
+            "streamForEach; 8903145672", "streamForSet; ABC", "streamLongs1; 123","streamLongs2; 123",
             "arraySort2; 345679", "peopleArray2; AB"}, delimiter = ';'
     )
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        Variable v = evaluator.executeMethod(method);
+        assertNull(v.getValue());
+        assertEquals(value + "\n", outContent.toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"streamLongs3, 123", "streamLongs4, 123"})
+    void testStreamLongs(String name, String value) throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+        AntikytheraRunTime.push(new Variable(new HashSet<>(Set.of(1L, 2L, 3L))));
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         Variable v = evaluator.executeMethod(method);
         assertNull(v.getValue());

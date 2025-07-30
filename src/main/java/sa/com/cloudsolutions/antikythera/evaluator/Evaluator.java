@@ -1126,7 +1126,6 @@ public class Evaluator {
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
-
             returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
             if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                 returnValue.setClazz(method.getReturnType());
