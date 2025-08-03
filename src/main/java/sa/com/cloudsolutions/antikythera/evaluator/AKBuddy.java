@@ -15,7 +15,9 @@ import net.bytebuddy.description.annotation.AnnotationDescription;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.MethodCall;
 import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.implementation.SuperMethodCall;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,6 +95,23 @@ public class AKBuddy {
 
     private static DynamicType.Builder<?> addConstructors(TypeDeclaration<?> dtoType, CompilationUnit cu,
                                                           DynamicType.Builder<?> builder) {
+        List<com.github.javaparser.ast.body.ConstructorDeclaration> constructors = dtoType.getConstructors();
+
+        for (com.github.javaparser.ast.body.ConstructorDeclaration constructor : constructors) {
+            Class<?>[] parameterTypes = constructor.getParameters().stream()
+                    .map(p -> getParameterType(cu, p))
+                    .toArray(Class<?>[]::new);
+
+            try {
+                builder = builder.defineConstructor(Visibility.PUBLIC)
+                        .withParameters(parameterTypes)
+                        .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         return builder;
     }
 

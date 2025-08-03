@@ -137,7 +137,7 @@ class TestAKBuddy extends TestHelper {
 
     @ParameterizedTest
     @CsvSource({"createPerson1, Person created: Horatio", "createPerson2, Person created: Horatio"})
-    void createPersion(String name, String value) throws ReflectiveOperationException {
+    void createPerson(String name, String value) throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Reflective", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
