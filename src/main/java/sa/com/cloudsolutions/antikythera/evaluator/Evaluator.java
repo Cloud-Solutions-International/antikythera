@@ -1150,18 +1150,18 @@ public class Evaluator {
         }
     }
 
+    @SuppressWarnings({"unchecked", "java:S3740"})
     private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
-        Object stream = v.getValue();
+        Object obj = v.getValue();
 
         if ("forEach".equals(methodName)) {
             Consumer<?> action = (Consumer<?>) reflectionArguments.getFinalArgs()[0];
-            if (stream instanceof Stream) {
-                ((Stream) stream).forEach(action);
+            if (obj instanceof Stream stream) {
+                stream.forEach(action);
                 returnValue = new Variable(null); // void method
             }
         }
-        // Add other stream methods as needed
     }
 
     /**
