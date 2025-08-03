@@ -61,25 +61,7 @@ public class AKBuddy {
             return createDynamicClassBasedOnByteCode(interceptor);
         }
     }
-    
-    /**
-     * <p>Dynamically create a class with constructor interception</p>
-     * <p>
-     * Similar to createDynamicClass but uses a ConstructorInterceptor to intercept constructor calls.
-     *
-     * @param interceptor the ConstructorInterceptor to be used for the dynamic class.
-     * @return the dynamically created class.
-     * @throws ClassNotFoundException If an error occurs during reflection operations.
-     */
-    public static Class<?> createDynamicClassWithConstructorInterception(ConstructorInterceptor interceptor) throws ClassNotFoundException {
-        Evaluator eval = interceptor.getEvaluator();
-        if (eval != null) {
-            return createDynamicClassWithConstructorInterceptionBasedOnSourceCode(interceptor, eval);
-        } else {
-            return createDynamicClassWithConstructorInterceptionBasedOnByteCode(interceptor);
-        }
-    }
-    
+
     private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnByteCode(ConstructorInterceptor interceptor) {
         Class<?> wrappedClass = interceptor.getWrappedClass();
         Class<?> existing = registry.get(wrappedClass.getName());
@@ -443,46 +425,6 @@ public class AKBuddy {
                         MethodInterceptor interceptor1 = new MethodInterceptor(eval);
                         Class<?> c = AKBuddy.createDynamicClass(interceptor1);
                         f.set(instance, AKBuddy.createInstance(c, interceptor1));
-                    } else {
-                        f.set(instance, value);
-                    }
-                }
-            }
-        }
-
-        return instance;
-    }
-    
-    /**
-     * Creates an instance of a dynamic class with a constructor interceptor.
-     *
-     * @param dynamicClass the dynamic class to instantiate
-     * @param interceptor the constructor interceptor to use
-     * @return an instance of the dynamic class
-     * @throws ReflectiveOperationException if an error occurs during reflection operations
-     */
-    @SuppressWarnings("java:S3011")
-    public static Object createInstanceWithConstructorInterception(Class<?> dynamicClass, ConstructorInterceptor interceptor) throws ReflectiveOperationException {
-        Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-        Field icpt = instance.getClass().getDeclaredField(CONSTRUCTOR_INTERCEPTOR);
-        icpt.setAccessible(true);
-        icpt.set(instance, interceptor);
-
-        Evaluator evaluator = interceptor.getEvaluator();
-        if (evaluator != null) {
-            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
-            for (FieldDeclaration field : dtoType.getFields()) {
-                Field f = instance.getClass().getDeclaredField(field.getVariable(0).getNameAsString());
-                f.setAccessible(true);
-
-                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
-                if (v != null) {
-                    Object value = v.getValue();
-
-                    if (value instanceof Evaluator eval) {
-                        MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
-                        Class<?> c = AKBuddy.createDynamicClass(methodInterceptor);
-                        f.set(instance, AKBuddy.createInstance(c, methodInterceptor));
                     } else {
                         f.set(instance, value);
                     }
