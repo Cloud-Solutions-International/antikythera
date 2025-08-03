@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -121,5 +122,14 @@ class TestAKBuddy extends TestHelper {
         assertEquals("0", instance.enquoteLiteral("aaa"));
         assertNull(instance.executeBatch());
         assertDoesNotThrow(instance::close);
+    }
+
+    @Test
+    void testConvert() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.ConvertValue", SpringEvaluator.class);
+        cu = evaluator.getCompilationUnit();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("convert")).orElseThrow();
+        evaluator.executeMethod(method);
+        assertEquals("Horatio\nHornblower\n", outContent.toString());
     }
 }
