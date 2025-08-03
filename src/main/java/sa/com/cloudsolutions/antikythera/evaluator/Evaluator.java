@@ -1084,20 +1084,19 @@ public class Evaluator {
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (v != null) {
             Object value = v.getValue();
-            if (v.getClass() != null && v.getClass().getName().equals("java.lang.Class")) {
-                if (scope.getScopedMethodCall().getNameAsString().equals("forName")) {
-                    MCEWrapper wrapper = wrapCallExpression(methodCall);
-                    String className = wrapper.getArgumentTypes().get(0).asString();
-                    TypeWrapper t = AbstractCompiler.findType(cu, className);
-                    if (t != null) {
-                        if (t.getClazz() != null) {
-                            return new Variable(t.getClazz());
-                        }
-                        else {
-                            Evaluator eval = EvaluatorFactory.create(className, this);
-                            MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
-                            return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
-                        }
+            if (v.getClazz() != null  && scope.getScopedMethodCall().getNameAsString().equals("forName")) {
+                MCEWrapper wrapper = wrapCallExpression(methodCall);
+                AntikytheraRunTime.pop();
+                String cname = wrapper.getArgumentTypes().get(0).asString();
+                TypeWrapper t = AbstractCompiler.findType(cu, cname);
+                if (t != null) {
+                    if (t.getClazz() != null) {
+                        return new Variable(t.getClazz());
+                    }
+                    else {
+                        Evaluator eval = EvaluatorFactory.create(className, this);
+                        MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
+                        return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
                     }
                 }
             }

@@ -7,6 +7,8 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -133,12 +135,13 @@ class TestAKBuddy extends TestHelper {
         assertEquals("Horatio\nHornblower\n", outContent.toString());
     }
 
-    @Test
-    void createPersion() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"createPerson1, Person created: Horatio"})
+    void createPersion(String name, String value) throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Reflective", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("createPerson")).orElseThrow();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Person created: John Doe", outContent.toString());
+        assertEquals(value, outContent.toString().strip());
     }
 }
