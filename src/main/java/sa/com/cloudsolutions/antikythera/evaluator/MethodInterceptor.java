@@ -1,7 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.Origin;
 import net.bytebuddy.implementation.bind.annotation.RuntimeType;
@@ -25,13 +27,9 @@ public class MethodInterceptor {
         wrappedClass = clazz;
     }
 
-    /**
-     * Intercept constructor calls with a ConstructorDeclaration.
-     * This is used when we have source code available.
-     */
     @RuntimeType
     public Object intercept(Constructor<?> constructor, Object[] args, ConstructorDeclaration constructorDecl) throws ReflectiveOperationException {
-        if (evaluator != null) {
+        if (evaluator != null && constructorDecl != null) {
             // Push arguments onto stack in reverse order
             for (int i = args.length - 1; i >= 0; i--) {
                 AntikytheraRunTime.push(new Variable(args[i]));
@@ -39,39 +37,49 @@ public class MethodInterceptor {
 
             // Execute the constructor using source code evaluation
             evaluator.executeConstructor(constructorDecl);
-
-            // For constructors, we need to return a new instance of the class
-            try {
-                return wrappedClass.getDeclaredConstructor().newInstance();
-            } catch (Exception e) {
-                // If we can't create an instance, return null
-                return null;
-            }
         }
-        return intercept(constructor, args);
+
+        // The actual instance creation is handled by ByteBuddy's SuperMethodCall
+        // We just need to set the interceptor field
+
+            Field icpt = constructor.getDeclaringClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
+            icpt.setAccessible(true);
+            icpt.set(this, this);
+
+            // Initialize fields if needed
+            if (evaluator != null) {
+                TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
+                for (FieldDeclaration field : dtoType.getFields()) {
+                    Field f = constructor.getDeclaringClass().getDeclaredField(field.getVariable(0).getNameAsString());
+                    f.setAccessible(true);
+
+                    Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
+                    if (v != null) {
+                        Object value = v.getValue();
+                        if (value instanceof Evaluator eval) {
+                            MethodInterceptor interceptor1 = new MethodInterceptor(eval);
+                            Class<?> c = AKBuddy.createDynamicClass(interceptor1);
+                            f.set(this, AKBuddy.createInstance(c, interceptor1));
+                        } else {
+                            f.set(this, value);
+                        }
+                    }
+                }
+            }
+
+        return null; // The actual instance is returned by SuperMethodCall
     }
 
-
-    /**
-     * Intercepts constructor calls without a ConstructorDeclaration.
-     * This is used when we only have bytecode available.
-     */
     @RuntimeType
     public Object intercept(@Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
-        if (wrappedClass != null) {
-            try {
-                Constructor<?> targetConstructor = wrappedClass.getDeclaredConstructor(constructor.getParameterTypes());
-                return targetConstructor.newInstance(args);
-            } catch (NoSuchMethodException e) {
-                // Constructor not found in wrapped class, fall through to default behavior
-            }
-        }
-
-        // For constructors, we need to return a new instance of the class
+        // For bytecode-only case, just create the instance and set the interceptor
         try {
-            return wrappedClass.getDeclaredConstructor().newInstance();
+            Object instance = constructor.newInstance(args);
+            Field icpt = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
+            icpt.setAccessible(true);
+            icpt.set(instance, this);
+            return instance;
         } catch (Exception e) {
-            // If we can't create an instance, return null
             return null;
         }
     }
