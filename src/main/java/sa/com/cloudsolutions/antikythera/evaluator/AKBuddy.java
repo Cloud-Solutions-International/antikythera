@@ -62,7 +62,7 @@ public class AKBuddy {
         }
     }
 
-    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnByteCode(ConstructorInterceptor interceptor) {
+    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnByteCode(MethodInterceptor interceptor) {
         Class<?> wrappedClass = interceptor.getWrappedClass();
         Class<?> existing = registry.get(wrappedClass.getName());
         if (existing != null) {
@@ -80,7 +80,7 @@ public class AKBuddy {
                 .intercept(MethodDelegation.to(new MethodInterceptor(wrappedClass)))
                 .constructor(ElementMatchers.any())
                 .intercept(MethodDelegation.to(interceptor))
-                .defineField(CONSTRUCTOR_INTERCEPTOR, ConstructorInterceptor.class, Visibility.PRIVATE)
+                .defineField(CONSTRUCTOR_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
                 .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
@@ -89,7 +89,7 @@ public class AKBuddy {
         return clazz;
     }
 
-    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnSourceCode(ConstructorInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
@@ -106,7 +106,7 @@ public class AKBuddy {
                 .intercept(MethodDelegation.to(new MethodInterceptor(interceptor.getWrappedClass())))
                 .constructor(ElementMatchers.any())
                 .intercept(MethodDelegation.to(interceptor))
-                .defineField(CONSTRUCTOR_INTERCEPTOR, ConstructorInterceptor.class, Visibility.PRIVATE);
+                .defineField(CONSTRUCTOR_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE);
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
@@ -223,7 +223,7 @@ public class AKBuddy {
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
                             .filter(ElementMatchers.named("intercept"))
-                            .to(new MethodInterceptor.Interceptor(method)));
+                            .to(new MethodInterceptor.MethodDeclarationSupport(method)));
         }
         return builder;
     }
@@ -250,14 +250,14 @@ public class AKBuddy {
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
                             .filter(ElementMatchers.named("intercept"))
-                            .to(new ConstructorInterceptor.Interceptor(constructor)));
+                            .to(new MethodInterceptor.ConstructorDeclarationSupport(constructor)));
         }
         
         // Always add a default constructor if none exists
         if (constructors.isEmpty()) {
             builder = builder.defineConstructor(Visibility.PUBLIC)
                     .withParameters(new Class<?>[0])
-                    .intercept(MethodDelegation.to(ConstructorInterceptor.class));
+                    .intercept(MethodDelegation.to(MethodInterceptor.class));
         }
         
         return builder;
