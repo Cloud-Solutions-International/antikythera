@@ -89,6 +89,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 
 /**
@@ -1131,15 +1133,35 @@ public class Evaluator {
                 returnValue.setClazz(method.getReturnType());
             }
         } catch (InaccessibleObjectException ioe) {
-            // If module access fails, try to find a public interface or superclass method
-            Method publicMethod = Reflect.findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getArgumentTypes());
-            if (publicMethod != null) {
-                returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
-                if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                    returnValue.setClazz(publicMethod.getReturnType());
+            // Handle JDK stream methods differently
+            if (v.getClazz().getName().startsWith("java.util.stream.")) {
+                handleStreamMethods(v, reflectionArguments);
+            } else {
+                Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
+                        reflectionArguments.getMethodName(),
+                        reflectionArguments.getArgumentTypes());
+                if (publicMethod != null) {
+                    returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
+                    if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                        returnValue.setClazz(publicMethod.getReturnType());
+                    }
                 }
             }
         }
+    }
+
+    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) {
+        String methodName = reflectionArguments.getMethodName();
+        Object stream = v.getValue();
+
+        if ("forEach".equals(methodName)) {
+            Consumer<?> action = (Consumer<?>) reflectionArguments.getFinalArgs()[0];
+            if (stream instanceof Stream) {
+                ((Stream) stream).forEach(action);
+                returnValue = new Variable(null); // void method
+            }
+        }
+        // Add other stream methods as needed
     }
 
     /**
