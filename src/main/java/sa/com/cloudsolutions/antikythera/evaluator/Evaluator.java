@@ -1084,20 +1084,30 @@ public class Evaluator {
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (v != null) {
             Object value = v.getValue();
-            if (v.getClazz() != null  && scope.getScopedMethodCall().getNameAsString().equals("forName")) {
-                MCEWrapper wrapper = wrapCallExpression(methodCall);
-                AntikytheraRunTime.pop();
-                String cname = wrapper.getArgumentTypes().get(0).asString();
-                TypeWrapper t = AbstractCompiler.findType(cu, cname);
-                if (t != null) {
-                    if (t.getClazz() != null) {
-                        return new Variable(t.getClazz());
+            if (value instanceof Class<?> clazz) {
+                String nameAsString = scope.getScopedMethodCall().getNameAsString();
+                if (nameAsString.equals("forName")) {
+                    Variable arg = evaluateExpression(scope.getScopedMethodCall().getArgument(0));
+                    String cname = arg.getValue().toString();
+                    TypeWrapper t = AbstractCompiler.findType(cu, cname);
+                    if (t != null) {
+                        if (t.getClazz() != null) {
+                            return new Variable(t.getClazz());
+                        } else {
+                            Evaluator eval = EvaluatorFactory.create(cname, this);
+                            MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
+                            return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
+                        }
                     }
-                    else {
-                        Evaluator eval = EvaluatorFactory.create(className, this);
-                        MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
-                        return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
+                } else if (nameAsString.equals("getDeclaredConstructor")) {
+                    // This can probably be deleted.
+                    // this is used to test the creation of a dynamic class with constructors
+                    ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
+                    Class<?>[] types = new Class[reflectionArguments.getArgumentTypes().length];
+                    for (int i = 0; i < reflectionArguments.getArgumentTypes().length; i++) {
+                        types[i] = (Class<?>) reflectionArguments.getArguments()[i];
                     }
+                    clazz.getDeclaredConstructor(types);
                 }
             }
 
