@@ -35,6 +35,7 @@ import java.util.Map;
  */
 public class AKBuddy {
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
+    public static final String CONSTRUCTOR_INTERCEPTOR = "constructorInterceptor";
     private static final Map<String, Class<?>> registry = new HashMap<>();
     private static final Logger logger = LoggerFactory.getLogger(AKBuddy.class);
 
@@ -58,6 +59,98 @@ public class AKBuddy {
             return createDynamicClassBasedOnSourceCode(interceptor, eval);
         } else {
             return createDynamicClassBasedOnByteCode(interceptor);
+        }
+    }
+    
+    /**
+     * <p>Dynamically create a class with constructor interception</p>
+     * <p>
+     * Similar to createDynamicClass but uses a ConstructorInterceptor to intercept constructor calls.
+     *
+     * @param interceptor the ConstructorInterceptor to be used for the dynamic class.
+     * @return the dynamically created class.
+     * @throws ClassNotFoundException If an error occurs during reflection operations.
+     */
+    public static Class<?> createDynamicClassWithConstructorInterception(ConstructorInterceptor interceptor) throws ClassNotFoundException {
+        Evaluator eval = interceptor.getEvaluator();
+        if (eval != null) {
+            return createDynamicClassWithConstructorInterceptionBasedOnSourceCode(interceptor, eval);
+        } else {
+            return createDynamicClassWithConstructorInterceptionBasedOnByteCode(interceptor);
+        }
+    }
+    
+    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnByteCode(ConstructorInterceptor interceptor) {
+        Class<?> wrappedClass = interceptor.getWrappedClass();
+        Class<?> existing = registry.get(wrappedClass.getName());
+        if (existing != null) {
+            return existing;
+        }
+
+        ByteBuddy byteBuddy = new ByteBuddy();
+
+        Class<?> clazz = byteBuddy.subclass(wrappedClass)
+                .method(ElementMatchers.not(
+                        ElementMatchers.isDeclaredBy(Object.class)
+                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
+                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
+                ))
+                .intercept(MethodDelegation.to(new MethodInterceptor(wrappedClass)))
+                .constructor(ElementMatchers.any())
+                .intercept(MethodDelegation.to(interceptor))
+                .defineField(CONSTRUCTOR_INTERCEPTOR, ConstructorInterceptor.class, Visibility.PRIVATE)
+                .make()
+                .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                .getLoaded();
+
+        registry.put(wrappedClass.getName(), clazz);
+        return clazz;
+    }
+
+    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnSourceCode(ConstructorInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+        Class<?> existing = registry.get(eval.getClassName());
+        if (existing != null) {
+            return existing;
+        }
+        CompilationUnit cu = eval.getCompilationUnit();
+        TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
+        String className = eval.getClassName();
+
+        List<FieldDeclaration> fields = dtoType.getFields();
+
+        ByteBuddy byteBuddy = new ByteBuddy();
+        DynamicType.Builder<?> builder = byteBuddy.subclass(interceptor.getWrappedClass()).name(className)
+                .method(ElementMatchers.any())
+                .intercept(MethodDelegation.to(new MethodInterceptor(interceptor.getWrappedClass())))
+                .constructor(ElementMatchers.any())
+                .intercept(MethodDelegation.to(interceptor))
+                .defineField(CONSTRUCTOR_INTERCEPTOR, ConstructorInterceptor.class, Visibility.PRIVATE);
+
+        if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
+            for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
+                TypeWrapper wrapper = AbstractCompiler.findType(eval.getCompilationUnit(), iface.getNameAsString());
+                if (wrapper != null && wrapper.getClazz() != null) {
+                    builder = builder.implement(wrapper.getClazz());
+                }
+            }
+        }
+
+        builder = addFields(fields, cu, builder);
+        builder = addMethods(dtoType.getMethods(), cu, builder);
+        builder = addConstructors(dtoType.getConstructors(), cu, builder);
+        builder = addLombokAccessors(dtoType, cu, builder);
+
+        DynamicType.Unloaded<?> unloaded = builder.make();
+
+        try {
+            Class<?> clazz = unloaded.load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                    .getLoaded();
+            registry.put(eval.getClassName(), clazz);
+            return clazz;
+        } catch (IllegalStateException e) {
+            Class<?> clazz = AbstractCompiler.loadClass(eval.getClassName());
+            registry.put(eval.getClassName(), clazz);
+            return clazz;
         }
     }
 
@@ -150,6 +243,41 @@ public class AKBuddy {
                             .filter(ElementMatchers.named("intercept"))
                             .to(new MethodInterceptor.Interceptor(method)));
         }
+        return builder;
+    }
+    
+    /**
+     * Add constructors to the dynamic class based on the constructors in the source code.
+     *
+     * @param constructors the constructors from the source code
+     * @param cu the compilation unit
+     * @param builder the dynamic type builder
+     * @return the updated builder
+     */
+    private static DynamicType.Builder<?> addConstructors(List<com.github.javaparser.ast.body.ConstructorDeclaration> constructors, 
+                                                         CompilationUnit cu,
+                                                         DynamicType.Builder<?> builder) {
+
+        for (com.github.javaparser.ast.body.ConstructorDeclaration constructor : constructors) {
+            // Get parameter types
+            Class<?>[] parameterTypes = constructor.getParameters().stream()
+                    .map(p -> getParameterType(cu, p))
+                    .toArray(Class<?>[]::new);
+
+            builder = builder.defineConstructor(Visibility.PUBLIC)
+                    .withParameters(parameterTypes)
+                    .intercept(MethodDelegation.withDefaultConfiguration()
+                            .filter(ElementMatchers.named("intercept"))
+                            .to(new ConstructorInterceptor.Interceptor(constructor)));
+        }
+        
+        // Always add a default constructor if none exists
+        if (constructors.isEmpty()) {
+            builder = builder.defineConstructor(Visibility.PUBLIC)
+                    .withParameters(new Class<?>[0])
+                    .intercept(MethodDelegation.to(ConstructorInterceptor.class));
+        }
+        
         return builder;
     }
 
@@ -315,6 +443,46 @@ public class AKBuddy {
                         MethodInterceptor interceptor1 = new MethodInterceptor(eval);
                         Class<?> c = AKBuddy.createDynamicClass(interceptor1);
                         f.set(instance, AKBuddy.createInstance(c, interceptor1));
+                    } else {
+                        f.set(instance, value);
+                    }
+                }
+            }
+        }
+
+        return instance;
+    }
+    
+    /**
+     * Creates an instance of a dynamic class with a constructor interceptor.
+     *
+     * @param dynamicClass the dynamic class to instantiate
+     * @param interceptor the constructor interceptor to use
+     * @return an instance of the dynamic class
+     * @throws ReflectiveOperationException if an error occurs during reflection operations
+     */
+    @SuppressWarnings("java:S3011")
+    public static Object createInstanceWithConstructorInterception(Class<?> dynamicClass, ConstructorInterceptor interceptor) throws ReflectiveOperationException {
+        Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+        Field icpt = instance.getClass().getDeclaredField(CONSTRUCTOR_INTERCEPTOR);
+        icpt.setAccessible(true);
+        icpt.set(instance, interceptor);
+
+        Evaluator evaluator = interceptor.getEvaluator();
+        if (evaluator != null) {
+            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
+            for (FieldDeclaration field : dtoType.getFields()) {
+                Field f = instance.getClass().getDeclaredField(field.getVariable(0).getNameAsString());
+                f.setAccessible(true);
+
+                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
+                if (v != null) {
+                    Object value = v.getValue();
+
+                    if (value instanceof Evaluator eval) {
+                        MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
+                        Class<?> c = AKBuddy.createDynamicClass(methodInterceptor);
+                        f.set(instance, AKBuddy.createInstance(c, methodInterceptor));
                     } else {
                         f.set(instance, value);
                     }
