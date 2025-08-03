@@ -576,6 +576,12 @@ public class Reflect {
         }
         if (isVarArgs && argumentTypes.length >= regularParamCount) {
             Class<?> varArgComponentType = parameterTypes[parameterTypes.length - 1].getComponentType();
+            
+            // Special case for Arrays.asList and similar methods with generic varargs
+            if (varArgComponentType.equals(Object.class)) {
+                return true;
+            }
+            
             for (int i = regularParamCount; i < argumentTypes.length; i++) {
                 if (!matchVarArg(varArgComponentType, argumentTypes[i], arguments[i])) {
                     return false;

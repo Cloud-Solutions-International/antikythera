@@ -89,8 +89,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 
 /**
@@ -1133,33 +1131,13 @@ public class Evaluator {
                 returnValue.setClazz(method.getReturnType());
             }
         } catch (InaccessibleObjectException ioe) {
-            // Handle JDK stream methods differently
-            if (v.getClazz().getName().startsWith("java.util.stream.")) {
-                handleStreamMethods(v, reflectionArguments);
-            } else {
-                Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
-                        reflectionArguments.getMethodName(),
-                        reflectionArguments.getArgumentTypes());
-                if (publicMethod != null) {
-                    returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
-                    if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                        returnValue.setClazz(publicMethod.getReturnType());
-                    }
+            // If module access fails, try to find a public interface or superclass method
+            Method publicMethod = Reflect.findPublicMethod(v.getClazz(), reflectionArguments.getMethodName(), reflectionArguments.getArgumentTypes());
+            if (publicMethod != null) {
+                returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
+                if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                    returnValue.setClazz(publicMethod.getReturnType());
                 }
-            }
-        }
-    }
-
-    @SuppressWarnings({"unchecked", "java:S3740"})
-    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) {
-        String methodName = reflectionArguments.getMethodName();
-        Object obj = v.getValue();
-
-        if ("forEach".equals(methodName)) {
-            Consumer<?> action = (Consumer<?>) reflectionArguments.getFinalArgs()[0];
-            if (obj instanceof Stream stream) {
-                stream.forEach(action);
-                returnValue = new Variable(null); // void method
             }
         }
     }

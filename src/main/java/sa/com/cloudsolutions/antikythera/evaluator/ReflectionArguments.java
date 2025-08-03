@@ -79,10 +79,30 @@ public class ReflectionArguments {
     }
 
     public void finalizeArguments() {
-        if (Arrays.class.equals(method.getDeclaringClass()) && method.getParameters().length == 1) {
-            finalArgs = getArguments();
+        // Special handling for Arrays class methods
+        if (Arrays.class.equals(method.getDeclaringClass())) {
+            String methodName = method.getName();
+            Class<?>[] paramTypes = method.getParameterTypes();
+            Object[] args = getArguments();
+            
+            // Handle Arrays.asList which is a varargs method
+            if ("asList".equals(methodName) && method.isVarArgs()) {
+                // Create an array of Objects for the varargs parameter
+                Object[] varArgArray = new Object[args.length];
+                System.arraycopy(args, 0, varArgArray, 0, args.length);
+                finalArgs = new Object[]{varArgArray};
+                return;
+            }
+            
+            // Handle Arrays.stream and Arrays.sort which take array parameters
+            if (("stream".equals(methodName) || "sort".equals(methodName)) && 
+                paramTypes.length == 1 && paramTypes[0].isArray()) {
+                finalArgs = args;
+                return;
+            }
         }
-        else if (method.isVarArgs()) {
+        
+        if (method.isVarArgs()) {
             // For varargs methods, we need to handle the last parameter specially
             Class<?>[] paramTypes = method.getParameterTypes();
             int regularParamCount = paramTypes.length - 1;
