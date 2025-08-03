@@ -132,4 +132,13 @@ class TestAKBuddy extends TestHelper {
         evaluator.executeMethod(method);
         assertEquals("Horatio\nHornblower\n", outContent.toString());
     }
+
+    @Test
+    void createPersion() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Reflective", SpringEvaluator.class);
+        cu = evaluator.getCompilationUnit();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("createPerson")).orElseThrow();
+        evaluator.executeMethod(method);
+        assertEquals("Person created: John Doe", outContent.toString());
+    }
 }
