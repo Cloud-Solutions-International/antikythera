@@ -168,7 +168,7 @@ public class MethodInterceptor {
         @SuppressWarnings("java:S3011")
         @RuntimeType
         public Object intercept(@This Object instance, @Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
-            Field f = instance.getClass().getDeclaredField(AKBuddy.CONSTRUCTOR_INTERCEPTOR);
+            Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
             f.setAccessible(true);
             MethodInterceptor parent = (MethodInterceptor) f.get(instance);
             return parent.intercept(constructor, args, sourceConstructor);
