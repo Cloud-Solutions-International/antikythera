@@ -62,33 +62,6 @@ public class AKBuddy {
         }
     }
 
-    private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnByteCode(MethodInterceptor interceptor) {
-        Class<?> wrappedClass = interceptor.getWrappedClass();
-        Class<?> existing = registry.get(wrappedClass.getName());
-        if (existing != null) {
-            return existing;
-        }
-
-        ByteBuddy byteBuddy = new ByteBuddy();
-
-        Class<?> clazz = byteBuddy.subclass(wrappedClass)
-                .method(ElementMatchers.not(
-                        ElementMatchers.isDeclaredBy(Object.class)
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
-                ))
-                .intercept(MethodDelegation.to(new MethodInterceptor(wrappedClass)))
-                .constructor(ElementMatchers.any())
-                .intercept(MethodDelegation.to(interceptor))
-                .defineField(CONSTRUCTOR_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
-                .make()
-                .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
-                .getLoaded();
-
-        registry.put(wrappedClass.getName(), clazz);
-        return clazz;
-    }
-
     private static Class<?> createDynamicClassWithConstructorInterceptionBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
@@ -152,6 +125,9 @@ public class AKBuddy {
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
                 .intercept(MethodDelegation.to(interceptor))
+                .constructor(ElementMatchers.any())
+                .intercept(net.bytebuddy.implementation.SuperMethodCall.INSTANCE
+                        .andThen(MethodDelegation.to(interceptor)))  // Call super() first, then delegate
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
                 .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
