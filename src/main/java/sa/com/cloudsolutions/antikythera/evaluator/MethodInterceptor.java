@@ -16,6 +16,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
+@SuppressWarnings("java:S3011")
 public class MethodInterceptor {
     private Evaluator evaluator;
     private Class<?> wrappedClass = Object.class;
@@ -29,7 +30,8 @@ public class MethodInterceptor {
     }
 
     @RuntimeType
-    public Object intercept(Constructor<?> constructor, Object[] args, ConstructorDeclaration constructorDecl) throws ReflectiveOperationException {
+    public Object intercept(@This Object instance,
+                            Constructor<?> constructor, Object[] args, ConstructorDeclaration constructorDecl) throws ReflectiveOperationException {
         if (evaluator != null ) {
             if (constructorDecl != null) {
                 for (int i = args.length - 1; i >= 0; i--) {
@@ -49,29 +51,15 @@ public class MethodInterceptor {
                     if (value instanceof Evaluator eval) {
                         MethodInterceptor interceptor1 = new MethodInterceptor(eval);
                         Class<?> c = AKBuddy.createDynamicClass(interceptor1);
-                        f.set(this, AKBuddy.createInstance(c, interceptor1));
+                        f.set(instance, AKBuddy.createInstance(c, interceptor1));
                     } else {
-                        f.set(this, value);
+                        f.set(instance, value);
                     }
                 }
             }
         }
 
         return null; // The actual instance is returned by SuperMethodCall
-    }
-
-    @RuntimeType
-    public Object intercept(@Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
-        // For bytecode-only case, just create the instance and set the interceptor
-        try {
-            Object instance = constructor.newInstance(args);
-            Field icpt = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
-            icpt.setAccessible(true);
-            icpt.set(instance, this);
-            return instance;
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     @RuntimeType
@@ -171,7 +159,7 @@ public class MethodInterceptor {
             Evaluator eval = EvaluatorFactory.create(constructor.getDeclaringClass().getName(), SpringEvaluator.class);
             MethodInterceptor parent = new MethodInterceptor(eval);
             f.set(instance, parent);
-            return parent.intercept(constructor, args, sourceConstructor);
+            return parent.intercept(instance, constructor, args, sourceConstructor);
         }
     }
 }
