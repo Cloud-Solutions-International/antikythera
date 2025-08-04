@@ -118,10 +118,19 @@ public class AKBuddy {
                         .toArray(Class<?>[]::new);
 
                 try {
-                    builder = builder.defineConstructor(Visibility.PUBLIC)
-                            .withParameters(parameterTypes)
-                            .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
-                                    MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                    // Check if this is a no-args constructor
+                    if (parameterTypes.length == 0) {
+                        // Intercept the existing default constructor instead of defining a new one
+                        builder = builder.constructor(ElementMatchers.takesArguments(0))
+                                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                        MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                    } else {
+                        // Define new constructor for non-default constructors
+                        builder = builder.defineConstructor(Visibility.PUBLIC)
+                                .withParameters(parameterTypes)
+                                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                        MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                    }
                 } catch (NoSuchMethodException e) {
                     throw new RuntimeException(e);
                 }
@@ -130,6 +139,7 @@ public class AKBuddy {
 
         return builder;
     }
+
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
