@@ -540,6 +540,7 @@ public class AbstractCompiler {
                     return new TypeWrapper(Optional.class);
                 }
             }
+            return null;
         }
 
         /*
@@ -549,7 +550,6 @@ public class AbstractCompiler {
          * Lastly, we will try to invoke Class.forName to see if the class can be located in any jar file
          *    that we have loaded.
          */
-        if (cu == null) return null;
         TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
         if (p != null) {
             return new TypeWrapper(p);
@@ -704,13 +704,13 @@ public class AbstractCompiler {
                  */
                 final ImportWrapper wrapper = new ImportWrapper(imp);
                 if (!imp.isStatic()) {
-                    AntikytheraRunTime.getTypeDeclaration(imp.getNameAsString()).ifPresent(p -> {
-                        setTypeAndField(className, p, wrapper);
-                    });
+                    AntikytheraRunTime.getTypeDeclaration(imp.getNameAsString()).ifPresent(
+                        p -> setTypeAndField(className, p, wrapper)
+                    );
                 } else if (importName.getQualifier().isPresent()) {
-                    AntikytheraRunTime.getTypeDeclaration(importName.getQualifier().orElseThrow().toString()).ifPresent(p -> {
-                        setTypeAndField(className, p, wrapper);
-                    });
+                    AntikytheraRunTime.getTypeDeclaration(importName.getQualifier().orElseThrow().toString()).ifPresent(
+                            p -> setTypeAndField(className, p, wrapper)
+                    );
                 }
                 return wrapper;
             }

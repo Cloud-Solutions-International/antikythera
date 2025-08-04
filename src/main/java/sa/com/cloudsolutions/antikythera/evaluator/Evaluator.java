@@ -1091,37 +1091,44 @@ public class Evaluator {
         MethodCallExpr methodCall = scope.getScopedMethodCall();
         if (v != null) {
             Object value = v.getValue();
-            if (value instanceof Class<?> clazz) {
-                String nameAsString = scope.getScopedMethodCall().getNameAsString();
-                if (nameAsString.equals("forName")) {
-                    Variable arg = evaluateExpression(scope.getScopedMethodCall().getArgument(0));
-                    String cname = arg.getValue().toString();
-                    TypeWrapper t = AbstractCompiler.findType(cu, cname);
-                    if (t != null) {
-                        if (t.getClazz() != null) {
-                            return new Variable(t.getClazz());
-                        } else {
-                            Evaluator eval = EvaluatorFactory.create(cname, this);
-                            MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
-                            return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
-                        }
-                    }
+            if (value instanceof Class<?>) {
+                // Class.forName() requires special handling because that's reflectively creating a
+                // class instance, not a method call on an object.
+                Variable forNameResult = handleClassForNameCall(methodCall);
+                if (forNameResult != null) {
+                    return forNameResult;
                 }
             }
-
             if (value instanceof Evaluator eval && eval.getCompilationUnit() != null) {
                 MCEWrapper wrapper = wrapCallExpression(methodCall);
                 scope.setMCEWrapper(wrapper);
                 return eval.executeMethod(scope);
             }
-
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
-        } else {
-            MCEWrapper wrapper = wrapCallExpression(methodCall);
-            scope.setMCEWrapper(wrapper);
-            return executeMethod(scope);
         }
+        MCEWrapper wrapper = wrapCallExpression(methodCall);
+        scope.setMCEWrapper(wrapper);
+        return executeMethod(scope);
+    }
+
+    private Variable handleClassForNameCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
+        String nameAsString = methodCall.getNameAsString();
+        if (nameAsString.equals("forName")) {
+            Variable arg = evaluateExpression(methodCall.getArgument(0));
+            String cname = arg.getValue().toString();
+            TypeWrapper t = AbstractCompiler.findType(cu, cname);
+            if (t != null) {
+                if (t.getClazz() != null) {
+                    return new Variable(t.getClazz());
+                } else {
+                    Evaluator eval = EvaluatorFactory.create(cname, this);
+                    MethodInterceptor methodInterceptor = new MethodInterceptor(eval);
+                    return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
+                }
+            }
+        }
+        return null;
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {

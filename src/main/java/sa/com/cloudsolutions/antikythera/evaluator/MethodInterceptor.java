@@ -126,7 +126,6 @@ public class MethodInterceptor {
                     }
                 } catch (NoSuchFieldException e) {
                     // Field doesn't exist in the dynamic class, skip it
-                    continue;
                 }
             }
         }

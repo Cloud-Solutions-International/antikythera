@@ -19,6 +19,7 @@ import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -111,7 +112,7 @@ public class AKBuddy {
                         .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
                                 MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(defaultConstructor))));
             } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
+                throw new AntikytheraException(e);
             }
         } else {
             // Handle explicitly declared constructors
@@ -135,7 +136,7 @@ public class AKBuddy {
                                         MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
                     }
                 } catch (NoSuchMethodException e) {
-                    throw new RuntimeException(e);
+                    throw new AntikytheraException(e);
                 }
             }
         }
