@@ -23,11 +23,7 @@ public class ReflectionArguments {
      * In order to find the right method to invoke, we need to know the type of each argument
      */
     private final Class<?>[] argumentTypes;
-    /**
-     * This reflective operation is likely happening because of a class that we have in source form.
-     * The evaluator here represents the expression evalaution engine for that class.
-     */
-    private Evaluator enclosure;
+
     /**
      * Some methods have a scope, we may need it for additional type resolutions.
      */
@@ -66,10 +62,6 @@ public class ReflectionArguments {
         this.scope = scope;
     }
 
-    public void setEnclosure(Evaluator enclosure) {
-        this.enclosure = enclosure;
-    }
-
     public void setMethod(Method method) {
         this.method = method;
     }
@@ -79,70 +71,77 @@ public class ReflectionArguments {
     }
 
     public void finalizeArguments() {
-        // Special handling for Arrays class methods
-        if (Arrays.class.equals(method.getDeclaringClass())) {
-            String methodName = method.getName();
-            Class<?>[] paramTypes = method.getParameterTypes();
-            Object[] args = getArguments();
-            
-            // Handle Arrays.asList which is a varargs method
-            if ("asList".equals(methodName) && method.isVarArgs()) {
-                // Create an array of Objects for the varargs parameter
-                Object[] varArgArray = new Object[args.length];
-                System.arraycopy(args, 0, varArgArray, 0, args.length);
-                finalArgs = new Object[]{varArgArray};
-                return;
-            }
-            
-            // Handle Arrays.stream and Arrays.sort which take array parameters
-            if (("stream".equals(methodName) || "sort".equals(methodName)) && 
-                paramTypes.length == 1 && paramTypes[0].isArray()) {
-                finalArgs = args;
-                return;
-            }
+        if (handleArraysClassSpecialCases()) {
+            return;
         }
-        
+
         if (method.isVarArgs()) {
-            // For varargs methods, we need to handle the last parameter specially
-            Class<?>[] paramTypes = method.getParameterTypes();
-            int regularParamCount = paramTypes.length - 1;
-            Object[] args = getArguments();
-            
-            // If we have exactly the right number of parameters and the last one is already an array
-            // of the correct type, we can use the arguments as is
-            if (args.length == paramTypes.length && args[regularParamCount] != null && 
-                args[regularParamCount].getClass().isArray() && 
+            processVarArgsMethod();
+        } else {
+            processRegularMethod();
+        }
+    }
+
+    private boolean handleArraysClassSpecialCases() {
+        if (!Arrays.class.equals(method.getDeclaringClass())) {
+            return false;
+        }
+
+        String name = method.getName();
+        Class<?>[] paramTypes = method.getParameterTypes();
+        Object[] args = getArguments();
+
+        // Handle Arrays.asList which is a varargs method
+        if ("asList".equals(name) && method.isVarArgs()) {
+            Object[] varArgArray = new Object[args.length];
+            System.arraycopy(args, 0, varArgArray, 0, args.length);
+            finalArgs = new Object[]{varArgArray};
+            return true;
+        }
+
+        // Handle Arrays.stream and Arrays.sort which take array parameters
+        if (("stream".equals(name) || "sort".equals(name)) &&
+                paramTypes.length == 1 && paramTypes[0].isArray()) {
+            finalArgs = args;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void processVarArgsMethod() {
+        Class<?>[] paramTypes = method.getParameterTypes();
+        int regularParamCount = paramTypes.length - 1;
+        Object[] args = getArguments();
+
+        // Check if arguments are already in the correct varargs format
+        if (args.length == paramTypes.length && args[regularParamCount] != null &&
+                args[regularParamCount].getClass().isArray() &&
                 args[regularParamCount].getClass().getComponentType().equals(paramTypes[regularParamCount].getComponentType())) {
-                finalArgs = args;
-                return;
-            }
-            
-            // Otherwise, we need to create a new array for the varargs
-            finalArgs = new Object[paramTypes.length];
-            
-            // Copy the regular parameters
-            for (int i = 0; i < regularParamCount; i++) {
-                finalArgs[i] = args[i];
-            }
-            
-            // Create an array for the varargs parameters
-            Class<?> componentType = paramTypes[regularParamCount].getComponentType();
-            int varArgCount = args.length - regularParamCount;
-            Object varArgArray = Array.newInstance(componentType, varArgCount);
-            
-            // Copy the varargs parameters into the array
-            for (int i = 0; i < varArgCount; i++) {
-                Array.set(varArgArray, i, args[regularParamCount + i]);
-            }
-            
-            // Set the varargs array as the last parameter
-            finalArgs[regularParamCount] = varArgArray;
+            finalArgs = args;
+            return;
         }
-        else {
-            finalArgs = method.getParameterTypes().length == 1 &&
-                    method.getParameterTypes()[0].equals(Object[].class) ?
-                    new Object[]{getArguments()} : getArguments();
+
+        // Create new array structure for varargs
+        finalArgs = new Object[paramTypes.length];
+        System.arraycopy(args, 0, finalArgs, 0, regularParamCount);
+
+        // Create and populate the varargs array
+        Class<?> componentType = paramTypes[regularParamCount].getComponentType();
+        int varArgCount = args.length - regularParamCount;
+        Object varArgArray = Array.newInstance(componentType, varArgCount);
+
+        for (int i = 0; i < varArgCount; i++) {
+            Array.set(varArgArray, i, args[regularParamCount + i]);
         }
+
+        finalArgs[regularParamCount] = varArgArray;
+    }
+
+    private void processRegularMethod() {
+        finalArgs = method.getParameterTypes().length == 1 &&
+                method.getParameterTypes()[0].equals(Object[].class) ?
+                new Object[]{getArguments()} : getArguments();
     }
 
     public Object[] getFinalArgs() {

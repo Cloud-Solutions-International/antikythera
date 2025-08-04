@@ -220,7 +220,6 @@ public class Reflect {
 
         ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, argumentTypes);
         reflectionArguments.setScope(scope);
-        reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
     }
 
