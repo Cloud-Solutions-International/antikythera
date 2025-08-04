@@ -281,7 +281,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
         } catch (AUTException aex) {
-            aex.printStackTrace();
             logger.warn("This has probably been handled {}", aex.getMessage());
         }
     }
