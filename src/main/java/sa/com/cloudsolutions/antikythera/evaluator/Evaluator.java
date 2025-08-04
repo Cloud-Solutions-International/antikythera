@@ -1099,15 +1099,6 @@ public class Evaluator {
                             return new Variable(AKBuddy.createDynamicClass(methodInterceptor));
                         }
                     }
-                } else if (nameAsString.equals("getDeclaredConstructor")) {
-                    // This can probably be deleted.
-                    // this is used to test the creation of a dynamic class with constructors
-                    ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
-                    Class<?>[] types = new Class[reflectionArguments.getArgumentTypes().length];
-                    for (int i = 0; i < reflectionArguments.getArgumentTypes().length; i++) {
-                        types[i] = (Class<?>) reflectionArguments.getArguments()[i];
-                    }
-                    clazz.getDeclaredConstructor(types);
                 }
             }
 

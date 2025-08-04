@@ -23,49 +23,39 @@ public class MethodInterceptor {
     public MethodInterceptor(Evaluator evaluator) {
         this.evaluator = evaluator;
     }
+
     public MethodInterceptor(Class<?> clazz) {
         wrappedClass = clazz;
     }
 
     @RuntimeType
     public Object intercept(Constructor<?> constructor, Object[] args, ConstructorDeclaration constructorDecl) throws ReflectiveOperationException {
-        if (evaluator != null && constructorDecl != null) {
-            // Push arguments onto stack in reverse order
-            for (int i = args.length - 1; i >= 0; i--) {
-                AntikytheraRunTime.push(new Variable(args[i]));
+        if (evaluator != null ) {
+            if (constructorDecl != null) {
+                for (int i = args.length - 1; i >= 0; i--) {
+                    AntikytheraRunTime.push(new Variable(args[i]));
+                }
+                evaluator.executeConstructor(constructorDecl);
             }
 
-            // Execute the constructor using source code evaluation
-            evaluator.executeConstructor(constructorDecl);
-        }
+            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
+            for (FieldDeclaration field : dtoType.getFields()) {
+                Field f = constructor.getDeclaringClass().getDeclaredField(field.getVariable(0).getNameAsString());
+                f.setAccessible(true);
 
-        // The actual instance creation is handled by ByteBuddy's SuperMethodCall
-        // We just need to set the interceptor field
-
-            Field icpt = constructor.getDeclaringClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
-            icpt.setAccessible(true);
-            icpt.set(this, this);
-
-            // Initialize fields if needed
-            if (evaluator != null) {
-                TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
-                for (FieldDeclaration field : dtoType.getFields()) {
-                    Field f = constructor.getDeclaringClass().getDeclaredField(field.getVariable(0).getNameAsString());
-                    f.setAccessible(true);
-
-                    Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
-                    if (v != null) {
-                        Object value = v.getValue();
-                        if (value instanceof Evaluator eval) {
-                            MethodInterceptor interceptor1 = new MethodInterceptor(eval);
-                            Class<?> c = AKBuddy.createDynamicClass(interceptor1);
-                            f.set(this, AKBuddy.createInstance(c, interceptor1));
-                        } else {
-                            f.set(this, value);
-                        }
+                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
+                if (v != null) {
+                    Object value = v.getValue();
+                    if (value instanceof Evaluator eval) {
+                        MethodInterceptor interceptor1 = new MethodInterceptor(eval);
+                        Class<?> c = AKBuddy.createDynamicClass(interceptor1);
+                        f.set(this, AKBuddy.createInstance(c, interceptor1));
+                    } else {
+                        f.set(this, value);
                     }
                 }
             }
+        }
 
         return null; // The actual instance is returned by SuperMethodCall
     }
@@ -116,7 +106,7 @@ public class MethodInterceptor {
             return mc.getVariable().getValue();
         }
 
-        if (wrappedClass != null && ! MockingRegistry.isMockTarget(wrappedClass.getName())) {
+        if (wrappedClass != null && !MockingRegistry.isMockTarget(wrappedClass.getName())) {
             try {
                 Method targetMethod = wrappedClass.getMethod(method.getName(), method.getParameterTypes());
                 // Create instance if the method is not static
@@ -141,12 +131,12 @@ public class MethodInterceptor {
         return wrappedClass;
     }
 
-    public Evaluator getEvaluator() {
-        return evaluator;
-    }
-
     public void setWrappedClass(Class<?> componentClass) {
         this.wrappedClass = componentClass;
+    }
+
+    public Evaluator getEvaluator() {
+        return evaluator;
     }
 
     public static class MethodDeclarationSupport {
@@ -178,7 +168,9 @@ public class MethodInterceptor {
         public Object intercept(@This Object instance, @Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
             f.setAccessible(true);
-            MethodInterceptor parent = (MethodInterceptor) f.get(instance);
+            Evaluator eval = EvaluatorFactory.create(constructor.getDeclaringClass().getName(), SpringEvaluator.class);
+            MethodInterceptor parent = new MethodInterceptor(eval);
+            f.set(instance, parent);
             return parent.intercept(constructor, args, sourceConstructor);
         }
     }
