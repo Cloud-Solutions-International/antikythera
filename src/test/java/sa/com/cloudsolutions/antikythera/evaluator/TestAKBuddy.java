@@ -132,7 +132,7 @@ class TestAKBuddy extends TestHelper {
         cu = evaluator.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("convert")).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Horatio\nHornblower\n", outContent.toString());
+        assertEquals("Name: Alice\nYears Old: 0\n", outContent.toString());
     }
 
     @ParameterizedTest

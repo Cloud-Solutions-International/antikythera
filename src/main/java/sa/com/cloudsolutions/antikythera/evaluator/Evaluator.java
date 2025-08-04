@@ -526,6 +526,10 @@ public class Evaluator {
                     return new Variable(Array.getLength(v.getValue()));
                 }
                 logger.warn("Array field access {} not supported", fae.getNameAsString());
+            } else {
+                Field field = v.getValue().getClass().getDeclaredField(fae.getNameAsString());
+                field.setAccessible(true);
+                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(v.getValue()));
             }
         }
         logger.warn("Could not resolve {} for field access", fae.getScope());

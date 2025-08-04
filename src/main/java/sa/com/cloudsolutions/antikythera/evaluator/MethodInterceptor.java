@@ -63,7 +63,7 @@ public class MethodInterceptor {
     }
 
     @RuntimeType
-    public Object intercept(Method method, Object[] args, MethodDeclaration methodDecl) throws ReflectiveOperationException {
+    public Object intercept(@This Object instance, Method method, Object[] args, MethodDeclaration methodDecl) throws ReflectiveOperationException {
         if (evaluator != null) {
             // Push arguments onto stack in reverse order
             for (int i = args.length - 1; i >= 0; i--) {
@@ -72,6 +72,10 @@ public class MethodInterceptor {
 
             // Execute the method using source code evaluation
             Variable result = evaluator.executeMethod(methodDecl);
+
+            // Synchronize field changes from evaluator back to the instance
+            synchronizeFieldsToInstance(instance);
+
             if (result != null) {
                 Object value = result.getValue();
                 if (value instanceof Evaluator eval) {
@@ -84,6 +88,48 @@ public class MethodInterceptor {
             return null;
         }
         return intercept(method, args);
+    }
+
+    /**
+     * Synchronizes field changes from the evaluator back to the specific instance
+     */
+    @SuppressWarnings("java:S3011")
+    private void synchronizeFieldsToInstance(Object instance) throws ReflectiveOperationException {
+        if (evaluator == null) {
+            return;
+        }
+
+        TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElse(null);
+        if (dtoType == null) {
+            return;
+        }
+
+        // Iterate through all fields in the type declaration
+        for (FieldDeclaration field : dtoType.getFields()) {
+            String fieldName = field.getVariable(0).getNameAsString();
+            Variable evaluatorFieldValue = evaluator.getField(fieldName);
+
+            if (evaluatorFieldValue != null) {
+                try {
+                    Field instanceField = instance.getClass().getDeclaredField(fieldName);
+                    instanceField.setAccessible(true);
+
+                    Object value = evaluatorFieldValue.getValue();
+                    if (value instanceof Evaluator eval) {
+                        // Handle nested evaluator objects
+                        MethodInterceptor nestedInterceptor = new MethodInterceptor(eval);
+                        Class<?> nestedClass = AKBuddy.createDynamicClass(nestedInterceptor);
+                        Object nestedInstance = AKBuddy.createInstance(nestedClass, nestedInterceptor);
+                        instanceField.set(instance, nestedInstance);
+                    } else {
+                        instanceField.set(instance, value);
+                    }
+                } catch (NoSuchFieldException e) {
+                    // Field doesn't exist in the dynamic class, skip it
+                    continue;
+                }
+            }
+        }
     }
 
     @RuntimeType
@@ -140,7 +186,7 @@ public class MethodInterceptor {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
             f.setAccessible(true);
             MethodInterceptor parent = (MethodInterceptor) f.get(instance);
-            return parent.intercept(method, args, sourceMethod);
+            return parent.intercept(instance, method, args, sourceMethod);
         }
     }
 
