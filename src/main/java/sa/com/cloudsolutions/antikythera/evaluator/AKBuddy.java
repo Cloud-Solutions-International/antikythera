@@ -26,6 +26,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,10 +79,12 @@ public class AKBuddy {
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
-                .intercept(MethodDelegation.to(interceptor))
+                .intercept(MethodDelegation.withDefaultConfiguration()
+                        .filter(ElementMatchers.named("intercept")
+                                .and(ElementMatchers.takesArguments(Method.class, Object[].class)))
+                        .to(interceptor))
                 .constructor(ElementMatchers.any())
-                .intercept(net.bytebuddy.implementation.SuperMethodCall.INSTANCE
-                        .andThen(MethodDelegation.to(interceptor)))  // Call super() first, then delegate
+                .intercept(net.bytebuddy.implementation.SuperMethodCall.INSTANCE)
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
                 .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
