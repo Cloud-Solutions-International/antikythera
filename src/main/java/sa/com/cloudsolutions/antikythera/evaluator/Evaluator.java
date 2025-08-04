@@ -376,6 +376,9 @@ public class Evaluator {
         if (wrapper != null) {
             return evaluateClassExpression(wrapper);
         }
+        if (classExpr.getType().isPrimitiveType()) {
+            return new Variable(Reflect.getComponentClass(classExpr.getType().asString()));
+        }
         return null;
     }
 
