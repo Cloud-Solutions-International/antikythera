@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -17,7 +16,6 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodCall;
 import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.implementation.SuperMethodCall;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,24 +95,41 @@ public class AKBuddy {
                                                           DynamicType.Builder<?> builder) {
         List<com.github.javaparser.ast.body.ConstructorDeclaration> constructors = dtoType.getConstructors();
 
-        for (com.github.javaparser.ast.body.ConstructorDeclaration constructor : constructors) {
-            Class<?>[] parameterTypes = constructor.getParameters().stream()
-                    .map(p -> getParameterType(cu, p))
-                    .toArray(Class<?>[]::new);
+        // If no constructors are explicitly declared, we need to intercept the implicit default constructor
+        if (constructors.isEmpty()) {
+            // Create a synthetic default constructor declaration for the interceptor
+            com.github.javaparser.ast.body.ConstructorDeclaration defaultConstructor =
+                    new com.github.javaparser.ast.body.ConstructorDeclaration();
+            defaultConstructor.setName(dtoType.getNameAsString());
 
+            // Don't define a new constructor, just intercept the existing default one
             try {
-                builder = builder.defineConstructor(Visibility.PUBLIC)
-                        .withParameters(parameterTypes)
+                builder = builder.constructor(ElementMatchers.takesArguments(0))
                         .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
-                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(defaultConstructor))));
             } catch (NoSuchMethodException e) {
                 throw new RuntimeException(e);
+            }
+        } else {
+            // Handle explicitly declared constructors
+            for (com.github.javaparser.ast.body.ConstructorDeclaration constructor : constructors) {
+                Class<?>[] parameterTypes = constructor.getParameters().stream()
+                        .map(p -> getParameterType(cu, p))
+                        .toArray(Class<?>[]::new);
+
+                try {
+                    builder = builder.defineConstructor(Visibility.PUBLIC)
+                            .withParameters(parameterTypes)
+                            .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                    MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
 
         return builder;
     }
-
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
