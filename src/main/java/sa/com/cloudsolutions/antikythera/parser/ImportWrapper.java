@@ -4,7 +4,6 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 public class ImportWrapper {
     ImportDeclaration imp;
