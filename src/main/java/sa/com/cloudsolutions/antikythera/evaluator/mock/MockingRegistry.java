@@ -36,6 +36,7 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +53,11 @@ public class MockingRegistry {
     private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
 
     public static final String MOCKITO = "Mockito";
+    private static final List<String> PROBLEMATIC_SPRING_INTERFACES = Arrays.asList(
+            "org.springframework.beans.factory.Aware",
+            "org.springframework.context.ApplicationContextAware",
+            "org.springframework.beans.factory.BeanNameAware"
+    );
 
     private MockingRegistry() {
 
@@ -130,9 +136,9 @@ public class MockingRegistry {
             } else {
                 String mocker = Settings.getProperty(Settings.MOCK_WITH_INTERNAL, String.class).orElse(MOCKITO);
                 if (mocker.equals(MOCKITO)) {
-                    v = MockingRegistry.createMockitoMockInstance(fqn);
+                    v = createMockitoMockInstance(wrapper);
                 } else {
-                    v = MockingRegistry.createByteBuddyMockInstance(fqn);
+                    v = createByteBuddyMockInstance(fqn);
                 }
             }
             v.setType(variable.getType());
@@ -156,15 +162,39 @@ public class MockingRegistry {
         return cv;
     }
 
-    public static Variable createMockitoMockInstance(String className) throws ClassNotFoundException {
-        Class<?> cls = AbstractCompiler.loadClass(className);
-        return createMockitoMockInstance(cls);
+    public static Variable createMockitoMockInstance(TypeWrapper wrapper) throws ClassNotFoundException {
+        return createMockitoMockInstance(wrapper.getClazz() != null ?
+                wrapper.getClazz() : AbstractCompiler.loadClass(wrapper.getFullyQualifiedName()));
     }
 
     public static Variable createMockitoMockInstance(Class<?> cls) {
-        Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
-        v.setClazz(cls);
-        return v;
+        // Special handling for Spring components
+        if (isSpringComponent(cls)) {
+            return createLenientSpringMock(cls);
+        }
+
+        // Default Mockito mock creation
+        return new Variable(
+                Mockito.mock(cls, withSettings()
+                        .defaultAnswer(new MockReturnValueHandler())
+                        .strictness(Strictness.LENIENT)
+                ));
+    }
+
+    private static boolean isSpringComponent(Class<?> cls) {
+        return cls.getName().startsWith("org.springframework") ||
+                Arrays.stream(cls.getInterfaces())
+                        .anyMatch(i -> PROBLEMATIC_SPRING_INTERFACES.contains(i.getName()));
+    }
+
+    private static Variable createLenientSpringMock(Class<?> cls) {
+        return new Variable(
+                Mockito.mock(cls, withSettings()
+                        .defaultAnswer(new MockReturnValueHandler())
+                        .strictness(Strictness.LENIENT)
+                        .verboseLogging()
+                ));
+
     }
 
     public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {
