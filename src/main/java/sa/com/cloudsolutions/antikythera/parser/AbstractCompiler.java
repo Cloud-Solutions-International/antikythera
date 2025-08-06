@@ -866,15 +866,15 @@ public class AbstractCompiler {
                 }
             }
 
+            if (found != -1 && occurs == 1) {
+                return Optional.of(new Callable(methodsByName.get(found), methodCall));
+            }
+
             if (overRides) {
                 Optional<Callable> method = findCallableInParent(methodCall, decl);
                 if (method.isPresent()) {
                     return method;
                 }
-            }
-
-            if (found != -1 && occurs == 1) {
-                return Optional.of(new Callable(methodsByName.get(found), methodCall));
             }
         }
 
