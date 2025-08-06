@@ -94,7 +94,7 @@ public class MethodInterceptor {
      * Synchronizes field changes from the evaluator back to the specific instance
      */
     @SuppressWarnings("java:S3011")
-    private void synchronizeFieldsToInstance(Object instance) throws ReflectiveOperationException {
+    public void synchronizeFieldsToInstance(Object instance) throws ReflectiveOperationException {
         if (evaluator == null) {
             return;
         }

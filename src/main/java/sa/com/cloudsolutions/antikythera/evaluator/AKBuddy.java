@@ -358,29 +358,7 @@ public class AKBuddy {
         Field icpt = instance.getClass().getDeclaredField(INSTANCE_INTERCEPTOR);
         icpt.setAccessible(true);
         icpt.set(instance, interceptor);
-
-        Evaluator evaluator = interceptor.getEvaluator();
-        if (evaluator != null) {
-            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
-            for (FieldDeclaration field : dtoType.getFields()) {
-                Field f = instance.getClass().getDeclaredField(field.getVariable(0).getNameAsString());
-                f.setAccessible(true);
-
-                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
-                if (v != null) {
-                    Object value = v.getValue();
-
-                    if (value instanceof Evaluator eval) {
-                        MethodInterceptor interceptor1 = new MethodInterceptor(eval);
-                        Class<?> c = AKBuddy.createDynamicClass(interceptor1);
-                        f.set(instance, AKBuddy.createInstance(c, interceptor1));
-                    } else {
-                        f.set(instance, value);
-                    }
-                }
-            }
-        }
-
+        interceptor.synchronizeFieldsToInstance(instance);
         return instance;
     }
 }
