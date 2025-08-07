@@ -14,16 +14,20 @@ import net.bytebuddy.description.annotation.AnnotationDescription;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.MethodCall;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,7 +80,12 @@ public class AKBuddy {
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
                                 .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
                 ))
-                .intercept(MethodDelegation.to(interceptor))
+                .intercept(MethodDelegation.withDefaultConfiguration()
+                        .filter(ElementMatchers.named("intercept")
+                                .and(ElementMatchers.takesArguments(Method.class, Object[].class)))
+                        .to(interceptor))
+                .constructor(ElementMatchers.any())
+                .intercept(net.bytebuddy.implementation.SuperMethodCall.INSTANCE)
                 .defineField(INSTANCE_INTERCEPTOR, MethodInterceptor.class, Visibility.PRIVATE)
                 .make()
                 .load(AbstractCompiler.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
@@ -84,6 +93,55 @@ public class AKBuddy {
 
         registry.put(wrappedClass.getName(), clazz);
         return clazz;
+    }
+
+    private static DynamicType.Builder<?> addConstructors(TypeDeclaration<?> dtoType, CompilationUnit cu,
+                                                          DynamicType.Builder<?> builder) {
+        List<com.github.javaparser.ast.body.ConstructorDeclaration> constructors = dtoType.getConstructors();
+
+        // If no constructors are explicitly declared, we need to intercept the implicit default constructor
+        if (constructors.isEmpty()) {
+            // Create a synthetic default constructor declaration for the interceptor
+            com.github.javaparser.ast.body.ConstructorDeclaration defaultConstructor =
+                    new com.github.javaparser.ast.body.ConstructorDeclaration();
+            defaultConstructor.setName(dtoType.getNameAsString());
+
+            // Don't define a new constructor, just intercept the existing default one
+            try {
+                builder = builder.constructor(ElementMatchers.takesArguments(0))
+                        .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(defaultConstructor))));
+            } catch (NoSuchMethodException e) {
+                throw new AntikytheraException(e);
+            }
+        } else {
+            // Handle explicitly declared constructors
+            for (com.github.javaparser.ast.body.ConstructorDeclaration constructor : constructors) {
+                Class<?>[] parameterTypes = constructor.getParameters().stream()
+                        .map(p -> getParameterType(cu, p))
+                        .toArray(Class<?>[]::new);
+
+                try {
+                    // Check if this is a no-args constructor
+                    if (parameterTypes.length == 0) {
+                        // Intercept the existing default constructor instead of defining a new one
+                        builder = builder.constructor(ElementMatchers.takesArguments(0))
+                                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                        MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                    } else {
+                        // Define new constructor for non-default constructors
+                        builder = builder.defineConstructor(Visibility.PUBLIC)
+                                .withParameters(parameterTypes)
+                                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                        MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+                    }
+                } catch (NoSuchMethodException e) {
+                    throw new AntikytheraException(e);
+                }
+            }
+        }
+
+        return builder;
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
@@ -112,6 +170,7 @@ public class AKBuddy {
             }
         }
 
+        builder = addConstructors(dtoType, cu, builder); // Add this line
         builder = addFields(fields, cu, builder);
         builder = addMethods(dtoType.getMethods(), cu, builder);
         builder = addLombokAccessors(dtoType, cu, builder);
@@ -148,7 +207,7 @@ public class AKBuddy {
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
                             .filter(ElementMatchers.named("intercept"))
-                            .to(new MethodInterceptor.Interceptor(method)));
+                            .to(new MethodInterceptor.MethodDeclarationSupport(method)));
         }
         return builder;
     }
@@ -299,29 +358,7 @@ public class AKBuddy {
         Field icpt = instance.getClass().getDeclaredField(INSTANCE_INTERCEPTOR);
         icpt.setAccessible(true);
         icpt.set(instance, interceptor);
-
-        Evaluator evaluator = interceptor.getEvaluator();
-        if (evaluator != null) {
-            TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(evaluator.getClassName()).orElseThrow();
-            for (FieldDeclaration field : dtoType.getFields()) {
-                Field f = instance.getClass().getDeclaredField(field.getVariable(0).getNameAsString());
-                f.setAccessible(true);
-
-                Variable v = evaluator.getField(field.getVariable(0).getNameAsString());
-                if (v != null) {
-                    Object value = v.getValue();
-
-                    if (value instanceof Evaluator eval) {
-                        MethodInterceptor interceptor1 = new MethodInterceptor(eval);
-                        Class<?> c = AKBuddy.createDynamicClass(interceptor1);
-                        f.set(instance, AKBuddy.createInstance(c, interceptor1));
-                    } else {
-                        f.set(instance, value);
-                    }
-                }
-            }
-        }
-
+        interceptor.synchronizeFieldsToInstance(instance);
         return instance;
     }
 }

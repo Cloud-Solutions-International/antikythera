@@ -99,6 +99,7 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
         }
     }
 
+
     private static boolean isReturning(LambdaExpr lambdaExpr) {
         /*
          * There are two kinds of lambdas; those that contain a block and those that don't

@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -62,7 +63,7 @@ public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
                     return getValueFromColumn(t, col);
                 }
                 else {
-                    throw new RuntimeException("Unhandled");
+                    throw new AntikytheraException("Unhandled");
                 }
             }
         }

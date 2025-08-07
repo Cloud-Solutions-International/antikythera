@@ -70,8 +70,8 @@ class TestConditional extends TestHelper {
             "emptiness4, Set is empty!Set is not empty!",
             "emptiness5, Map is empty!Map is not empty!",
             "stringUtilsString, Not empty!Empty!",
-            "notStringUtilsPerson, Not empty!Empty!",
-            "stringUtilsPerson, Empty!Not empty!",
+            "notStringUtilsPerson, Empty!Not empty!",
+            "stringUtilsPerson, Not empty!Empty!",
             "collectionCheck, Not empty!Empty!",
     })
     void testVisit(String name, String value) throws ReflectiveOperationException {
@@ -89,7 +89,7 @@ class TestConditional extends TestHelper {
             "conditional8, ZERO!Three!Two!One!", "smallDiff, One!Nearly 2!",
             "booleanWorks, False!True!", "printMap, Map is empty!Key: 0 -> Value: null",
             "animalFarm, Some animals are more equal!All animals are equal!",
-            "whatInstance, Integer: 0!Unknown!"
+            "whatInstance, Integer: 0!Unknown!", "enum1, CLOSED!OPEN!",
     })
     void testConditionalsAllPaths(String name, String value) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -222,7 +222,7 @@ class TestConditional extends TestHelper {
     @CsvSource({"ternary3, It is not null!It is null!", "ternary4, Big!Small!",
             "stringCompare, Donno!Hello!AK!", "fileCompare, Other!tmp!Null!",
             "numberCompare, Other!Two!One!", "drinkable, good!Very good!Not drinkable!",
-            "clarendon, Not drinkable!good!", "ternary5, False!True!",
+            "clarendon, Not drinkable!good!", "ternary5, False!True!", "ternary6, BA",
     })
     void testTernaryVisit(String name, String result) throws ReflectiveOperationException {
         ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());

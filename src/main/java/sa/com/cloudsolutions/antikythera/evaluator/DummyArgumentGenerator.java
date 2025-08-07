@@ -6,8 +6,8 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockedFieldDetector;
@@ -104,19 +104,23 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                 }
             }
         }
-        Evaluator o = EvaluatorFactory.create(fullClassName, MockingEvaluator.class);
-        v = new Variable(o);
-        v.setType(t);
+
         Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-        if (opt.isPresent() && opt.get().isClassOrInterfaceDeclaration()) {
-            String init = ArgumentGenerator.instantiateClass(
-                    opt.get().asClassOrInterfaceDeclaration(),
-                    param.getNameAsString()
-            ).replace(";", "");
-            String[] parts = init.split("=");
-            v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
+        if (opt.isPresent() ) {
+            v = createObjectWithSimplestConstructor(opt.get(), param.getNameAsString());
         }
 
+        return v;
+    }
+
+    public static Variable createObjectWithSimplestConstructor(TypeDeclaration<?> cdecl, String name) {
+        Evaluator o = EvaluatorFactory.create(cdecl.getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+        Variable v = new Variable(o);
+        String init = ArgumentGenerator.instantiateClass(
+                cdecl, name
+        ).replace(";", "");
+        String[] parts = init.split("=");
+        v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
         return v;
     }
 
@@ -139,35 +143,39 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             return new Variable(clazz.getDeclaredConstructor().newInstance());
         } catch (NoSuchMethodException e) {
             // No no-arg constructor, find the simplest one
-            Constructor<?> simplest = findConstructor(clazz);
+            Constructor<?> simplest = findSimplestConstructor(clazz);
             if (simplest != null) {
-                Object[] args = new Object[simplest.getParameterCount()];
-                Class<?>[] paramTypes = simplest.getParameterTypes();
-                NodeList<com.github.javaparser.ast.expr.Expression> argExprs = new NodeList<>();
-                for (int i = 0; i < paramTypes.length; i++) {
-                    if (paramTypes[i].equals(String.class)) {
-                        args[i] = "Antikythera";
-                        argExprs.add(new StringLiteralExpr("Antikythera"));
-                    } else {
-                        args[i] = Reflect.getDefault(paramTypes[i]);
-                        argExprs.add(Reflect.createLiteralExpression(args[i]));
-                    }
-                }
-                Variable v = new Variable(simplest.newInstance(args));
-                // Set initializer
-                ObjectCreationExpr oce =
-                    new ObjectCreationExpr()
-                        .setType(t.asString())
-                        .setArguments(argExprs);
-                v.setInitializer(List.of(oce));
-                return v;
+                return createObjectWithSimplestConstructor(simplest, t);
             }
         }
 
         return new Variable((Object) null);
     }
 
-    private static Constructor<?> findConstructor(Class<?> clazz) {
+    public static Variable createObjectWithSimplestConstructor(Constructor<?> simplest, Type t) throws InstantiationException, IllegalAccessException, InvocationTargetException {
+        Object[] args = new Object[simplest.getParameterCount()];
+        Class<?>[] paramTypes = simplest.getParameterTypes();
+        NodeList<Expression> argExprs = new NodeList<>();
+        for (int i = 0; i < paramTypes.length; i++) {
+            if (paramTypes[i].equals(String.class)) {
+                args[i] = "Antikythera";
+                argExprs.add(new StringLiteralExpr("Antikythera"));
+            } else {
+                args[i] = Reflect.getDefault(paramTypes[i]);
+                argExprs.add(Reflect.createLiteralExpression(args[i]));
+            }
+        }
+        Variable v = new Variable(simplest.newInstance(args));
+        // Set initializer
+        ObjectCreationExpr oce =
+            new ObjectCreationExpr()
+                .setType(t.asString())
+                .setArguments(argExprs);
+        v.setInitializer(List.of(oce));
+        return v;
+    }
+
+    public static Constructor<?> findSimplestConstructor(Class<?> clazz) {
         Constructor<?>[] constructors = clazz.getDeclaredConstructors();
         Constructor<?> simplest = null;
         int minParams = Integer.MAX_VALUE;

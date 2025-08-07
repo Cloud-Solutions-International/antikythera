@@ -1,10 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -47,4 +48,27 @@ class TestEnums extends TestHelper {
         assertEquals("OPEN", outContent.toString().trim());
     }
 
+    @Test
+    void testMultiEnum() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Hello", Evaluator.class);
+        MethodDeclaration md = evaluator.getCompilationUnit().findFirst(
+                MethodDeclaration.class, m -> m.getNameAsString().equals("helloEnum3")).orElseThrow();
+
+        evaluator.executeMethod(md);
+        assertEquals("2 KARLA", outContent.toString().trim());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"cmp1, CLOSED!OPEN!", "cmp2, CLOSED!OPEN!",
+            "cmp3, CLOSED!OPEN!", "cmp4, CLOSED!OPEN!", "cmp5, CLOSED!OPEN!"})
+    void cmp(String name, String value) throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
+        ((SpringEvaluator)evaluator).setArgumentGenerator(new DummyArgumentGenerator());
+
+        MethodDeclaration method = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals(name)).orElseThrow();
+        evaluator.visit(method);
+        String s = outContent.toString();
+        assertEquals(value,s);
+    }
 }

@@ -2,10 +2,13 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -121,5 +124,24 @@ class TestAKBuddy extends TestHelper {
         assertEquals("0", instance.enquoteLiteral("aaa"));
         assertNull(instance.executeBatch());
         assertDoesNotThrow(instance::close);
+    }
+
+    @Test
+    void testConvert() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.ConvertValue", SpringEvaluator.class);
+        cu = evaluator.getCompilationUnit();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("convert")).orElseThrow();
+        evaluator.executeMethod(method);
+        assertEquals("Name: Alice\nYears Old: 0\n", outContent.toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"createPerson1, Person created: Horatio", "createPerson2, Person created: Horatio Colombo"})
+    void createPerson(String name, String value) throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Reflective", SpringEvaluator.class);
+        cu = evaluator.getCompilationUnit();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
+        evaluator.executeMethod(method);
+        assertEquals(value, outContent.toString().strip());
     }
 }

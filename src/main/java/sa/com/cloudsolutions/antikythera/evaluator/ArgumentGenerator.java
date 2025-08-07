@@ -1,8 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,7 +16,7 @@ public abstract class ArgumentGenerator {
         return arguments;
     }
 
-    public static String instantiateClass(ClassOrInterfaceDeclaration classUnderTest, String instanceName) {
+    public static String instantiateClass(TypeDeclaration<?> classUnderTest, String instanceName) {
 
         ConstructorDeclaration matched = null;
         String className = classUnderTest.getNameAsString();

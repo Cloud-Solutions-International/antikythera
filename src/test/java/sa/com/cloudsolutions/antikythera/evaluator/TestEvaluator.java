@@ -222,6 +222,7 @@ class TestEvaluator extends TestHelper {
         });
         assertEquals("Error evaluating method call: missingMethod", ex.getMessage());
     }
+
 }
 
 class TestEvaluatorWithFinches extends TestHelper {

@@ -2,6 +2,8 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -52,14 +54,16 @@ class TestStrings extends TestHelper{
         assertTrue(outContent.toString().contains("Hello, Antikythera"));
     }
 
-    @Test
-    void testLongChain() throws AntikytheraException, ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"longChain, his is a field", "helloEnum1, OPEN", "helloEnum2, CLOSED"})
+    void testLongChain(String name, String value) throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloWorld = cu
-                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("longChain")).orElseThrow();
+                .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(helloWorld);
 
-        assertTrue(outContent.toString().contains("his is a field"));
+        assertTrue(outContent.toString().contains(value));
     }
+
     @Test
     void testHelloArgs() throws AntikytheraException, ReflectiveOperationException {
         MethodDeclaration helloName = cu

@@ -475,14 +475,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         MethodCallExpr mce = new MethodCallExpr(methodCall.getNameAsString());
         methodCall.getScope().ifPresent(mce::setScope);
 
-        List<Expression> args = new ArrayList<>();
-        for (int i = methodCall.getArguments().size() - 1; i >= 0; i--) {
+        for (int i = 0 ;  i < methodCall.getArguments().size() ; i++) {
             Variable v = AntikytheraRunTime.pop();
-            args.add(MockingRegistry.createMockitoArgument(v.getType().asString()));
-        }
-
-        for (Expression e : args.reversed()) {
-            mce.addArgument(e);
+            mce.addArgument(MockingRegistry.createMockitoArgument(v.getType().asString()));
         }
         return mce;
     }
@@ -538,7 +533,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             if (typeArgs.isEmpty()) {
                 typeArgs.add(new ClassOrInterfaceType().setName("Object"));
             }
-            List<Expression> expressions = setupNonEmptyCollection(typeArgs, v, new NameExpr("bada"));
+            // Create a ClassOrInterfaceType to hold the type arguments
+            ClassOrInterfaceType type = new ClassOrInterfaceType().setName("Collection");
+            type.setTypeArguments(typeArgs);
+            List<Expression> expressions = setupNonEmptyCollection(type, v, new NameExpr("bada"));
             if (expressions != null) {
                 v.setInitializer(expressions);
             }

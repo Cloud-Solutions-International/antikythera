@@ -64,6 +64,7 @@ public class Reflect {
     public static final String JAVA_LANG_LONG = "java.lang.Long";
     public static final String JAVA_LANG_STRING = "java.lang.String";
     public static final String JAVA_UTIL_ARRAY_LIST = "java.util.ArrayList";
+    public static final String JAVA_UTIL_HASH_MAP = "java.util.HashMap";
     public static final String JAVA_UTIL_HASH_SET = "java.util.HashSet";
     public static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
 
@@ -203,12 +204,7 @@ public class Reflect {
             }
 
             if (argValues[i] != null) {
-                args[i] = argValues[i].getValue();
-                if (argValues[i].getClazz() != null) {
-                    argumentTypes[i] = argValues[i].getClazz();
-                } else if (args[i] != null) {
-                    argumentTypes[i] = argValues[i].getValue().getClass();
-                }
+                detectTypeForNotNullArg(args, i, argValues, argumentTypes);
             } else {
                 try {
                     String className = arguments.getFirst().calculateResolvedType().describe();
@@ -224,8 +220,16 @@ public class Reflect {
 
         ReflectionArguments reflectionArguments = new ReflectionArguments(methodName, args, argumentTypes);
         reflectionArguments.setScope(scope);
-        reflectionArguments.setEnclosure(evaluator);
         return reflectionArguments;
+    }
+
+    private static void detectTypeForNotNullArg(Object[] args, int i, Variable[] argValues, Class<?>[] argumentTypes) {
+        args[i] = argValues[i].getValue();
+        if (argValues[i].getClazz() != null) {
+            argumentTypes[i] = argValues[i].getClazz();
+        } else if (args[i] != null) {
+            argumentTypes[i] = argValues[i].getValue().getClass();
+        }
     }
 
     private static void dynamicProxy(Class<?>[] argumentTypes, int i, Object[] args) {
@@ -473,8 +477,8 @@ public class Reflect {
             case "List", JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
                     createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
-            case "Map", JAVA_UTIL_MAP, "java.util.HashMap" ->
-                    createVariable(new HashMap<>(), "java.util.HashMap", null);
+            case "Map", JAVA_UTIL_MAP, JAVA_UTIL_HASH_MAP ->
+                    createVariable(new HashMap<>(), JAVA_UTIL_HASH_MAP, null);
             case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
             case "Set", JAVA_UTIL_SET, JAVA_UTIL_HASH_SET ->
                     createVariable(new HashSet<>(), JAVA_UTIL_HASH_SET, null);
@@ -527,28 +531,77 @@ public class Reflect {
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
+        Object[] arguments = reflectionArguments.getArguments();
 
         for (Method m : getMethodsByName(clazz, methodName)) {
             Class<?>[] parameterTypes = m.getParameterTypes();
-            if (parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class)) {
+
+            if (isSingleObjectArrayParam(parameterTypes)) {
                 return m;
             }
-            if (argumentTypes == null || parameterTypes.length != argumentTypes.length) {
+
+            boolean isVarArgs = m.isVarArgs();
+            if (!isArgumentCountValid(argumentTypes, parameterTypes, isVarArgs)) {
                 continue;
             }
-            boolean found = true;
-            for (int i = 0; i < argumentTypes.length; i++) {
-                if (matchArgumentVsParameter(argumentTypes, parameterTypes, reflectionArguments.getArguments(), i) ||
-                        parameterTypes[i].getName().equals("java.lang.Object")) {
-                    continue;
-                }
-                found = false;
-            }
-            if (found) {
+
+            if (matchParameters(argumentTypes, parameterTypes, arguments, isVarArgs)) {
+                reflectionArguments.setMethod(m);
                 return m;
             }
         }
         return null;
+    }
+
+    private static boolean isSingleObjectArrayParam(Class<?>[] parameterTypes) {
+        return parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class);
+    }
+
+    private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes, boolean isVarArgs) {
+        if (argumentTypes == null) return false;
+        if (!isVarArgs && parameterTypes.length != argumentTypes.length) return false;
+        return !(isVarArgs && argumentTypes.length < parameterTypes.length - 1);
+    }
+
+    @SuppressWarnings("java:S1872")
+    private static boolean matchParameters(Class<?>[] argumentTypes, Class<?>[] parameterTypes, Object[] arguments, boolean isVarArgs) {
+        int regularParamCount = isVarArgs ? parameterTypes.length - 1 : parameterTypes.length;
+        for (int i = 0; i < regularParamCount; i++) {
+            if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i) ||
+                parameterTypes[i].getName().equals("java.lang.Object")) {
+                continue;
+            }
+            return false;
+        }
+        if (isVarArgs && argumentTypes.length >= regularParamCount) {
+            Class<?> varArgComponentType = parameterTypes[parameterTypes.length - 1].getComponentType();
+            
+            // Special case for Arrays.asList and similar methods with generic varargs
+            if (varArgComponentType.equals(Object.class)) {
+                return true;
+            }
+            
+            for (int i = regularParamCount; i < argumentTypes.length; i++) {
+                if (!matchVarArg(varArgComponentType, argumentTypes[i], arguments[i])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @SuppressWarnings("java:S1872")
+    private static boolean matchVarArg(Class<?> varArgComponentType, Class<?> argType, Object argument) {
+        if (argument == null ||
+            varArgComponentType.isAssignableFrom(argType) ||
+            varArgComponentType.equals(argType) ||
+            varArgComponentType.getName().equals("java.lang.Object")) {
+            return true;
+        }
+        return  (
+                (wrapperToPrimitive.get(varArgComponentType) != null && wrapperToPrimitive.get(varArgComponentType).equals(argType)) ||
+                (primitiveToWrapper.get(varArgComponentType) != null && primitiveToWrapper.get(varArgComponentType).equals(argType))
+        );
     }
 
     /**
@@ -580,6 +633,7 @@ public class Reflect {
      * @param argumentTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
+    @SuppressWarnings("java:S1452")
     public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] argumentTypes, Object[] arguments) {
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             Class<?>[] parameterTypes = c.getParameterTypes();
@@ -616,6 +670,7 @@ public class Reflect {
             return false;
         }
         Class<?> parameterType = parameterTypes[i];
+
         if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
             return true;
         }

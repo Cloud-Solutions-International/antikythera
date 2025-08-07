@@ -7,11 +7,15 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.ArrayAccessExpr;
+import com.github.javaparser.ast.type.Type;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -47,7 +51,6 @@ class DepSolverTest extends TestHelper {
     void each() {
         depSolver = DepSolver.createSolver();
         DepSolver.reset();
-
     }
 
     @AfterAll
@@ -242,5 +245,68 @@ class DepSolverTest extends TestHelper {
         GraphNode top = depSolver.peek();
         assertNotNull(top);
         assertInstanceOf(MethodDeclaration.class, top.getNode());
+    }
+
+    @Test
+    void testResolveArrayAccessExpr() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Locals");
+
+        // Find array access expressions in the people method
+        MethodDeclaration peopleMethod = sourceClass.getMethodsByName("people").getFirst();
+        var arrayAccessExprs = peopleMethod.findAll(ArrayAccessExpr.class);
+        assertFalse(arrayAccessExprs.isEmpty());
+
+        // Setup array type in names map
+        DepSolver.getNames().put("a", new com.github.javaparser.ast.type.ArrayType(
+                new com.github.javaparser.ast.type.ClassOrInterfaceType(null, "IPerson")));
+
+        // Test the method
+        NodeList<Type> types = new NodeList<>();
+        Resolver.processExpression(node, arrayAccessExprs.get(0), types);
+
+        // Verify component type extracted
+        assertFalse(types.isEmpty());
+        assertEquals("IPerson", types.get(0).asString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "drinkable, 0",
+        "ternary6, 2"
+    })
+    void testResolveConditionalExpr(String methodName, int expectedTypeCount) {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+
+        MethodDeclaration method = sourceClass.getMethodsByName(methodName).getFirst();
+        var conditionalExprs = method.findAll(com.github.javaparser.ast.expr.ConditionalExpr.class);
+        assertFalse(conditionalExprs.isEmpty());
+
+        NodeList<Type> types = new NodeList<>();
+        Resolver.processExpression(node, conditionalExprs.get(0), types);
+
+        assertEquals(expectedTypeCount, types.size());
+    }
+
+    @Test
+    void testResolveFieldAccess() {
+        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+
+        // Find field access expressions in the chained method
+        MethodDeclaration chainedMethod = sourceClass.getMethodsByName("chained").getFirst();
+        var fieldAccessExprs = chainedMethod.findAll(FieldAccessExpr.class);
+        assertFalse(fieldAccessExprs.isEmpty());
+
+        DepSolver.getNames().put("p", new com.github.javaparser.ast.type.ClassOrInterfaceType(null, "Person"));
+
+        NodeList<Type> types = new NodeList<>();
+        FieldAccessExpr pNameExpr = fieldAccessExprs.stream()
+                .filter(fae -> fae.getNameAsString().equals("name"))
+                .findFirst()
+                .orElseThrow();
+
+        Resolver.resolveFieldAccess(node, pNameExpr, types);
+
+        assertFalse(types.isEmpty());
+        assertTrue(types.get(0).isClassOrInterfaceType());
     }
 }

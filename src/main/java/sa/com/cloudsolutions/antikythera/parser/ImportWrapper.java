@@ -4,11 +4,10 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 public class ImportWrapper {
     ImportDeclaration imp;
-    boolean isExternal;
+    private Class<?> clazz;
     private TypeDeclaration<?> type;
     private FieldDeclaration fieldDeclaration;
     private MethodDeclaration methodDeclaration;
@@ -17,14 +16,13 @@ public class ImportWrapper {
      */
     private ImportDeclaration simplified;
 
-    public ImportWrapper(ImportDeclaration imp, boolean isExternal) {
+    public ImportWrapper(ImportDeclaration imp, Class<?> clazz) {
         this.imp = imp;
-        this.isExternal = isExternal;
+        this.clazz = clazz;
     }
 
     public ImportWrapper(ImportDeclaration imp) {
         this.imp = imp;
-        this.isExternal = AntikytheraRunTime.getCompilationUnit(imp.getNameAsString()) == null;
     }
 
     public ImportDeclaration getImport() {
@@ -32,11 +30,7 @@ public class ImportWrapper {
     }
 
     public boolean isExternal() {
-        return isExternal;
-    }
-
-    public void setExternal(boolean isExternal) {
-        this.isExternal = isExternal;
+        return clazz != null;
     }
 
     public String getNameAsString() {

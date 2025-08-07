@@ -116,17 +116,9 @@ public class Resolver {
                     }
                 }
             }
-            else {
-                return Resolver.resolveThisFieldAccess(node, value);
-            }
         }
-        else {
-            return Resolver.resolveThisFieldAccess(node, value);
-        }
-
-        return null;
+        return Resolver.resolveThisFieldAccess(node, value);
     }
-
 
     static void resolveArrayExpr(GraphNode node, Expression value) {
         ArrayInitializerExpr aie = value.asArrayInitializerExpr();
@@ -175,25 +167,22 @@ public class Resolver {
 
     static void resolveBinaryExpr(GraphNode node, Expression value) {
         Expression left = value.asBinaryExpr().getLeft();
-        if (left.isFieldAccessExpr()) {
-            Resolver.resolveField(node, left.asFieldAccessExpr());
-        }
-        else if (left.isNameExpr()) {
-            resolveNameExpression(node, left);
-        }
-        else if (left.isBinaryExpr()) {
-            resolveBinaryExpr(node, left);
-        }
-
         Expression right = value.asBinaryExpr().getRight();
-        if (right.isFieldAccessExpr()) {
-            Resolver.resolveField(node, right.asFieldAccessExpr());
+
+        resolveBinaryExpressionSide(node, left);
+        resolveBinaryExpressionSide(node, right);
+    }
+
+    private static void resolveBinaryExpressionSide(GraphNode node, Expression expr) {
+        processExpression(node, expr, new NodeList<>());
+        if (expr.isFieldAccessExpr()) {
+            Resolver.resolveField(node, expr.asFieldAccessExpr());
         }
-        else if(right.isNameExpr()) {
-            resolveNameExpression(node, right);
+        else if (expr.isNameExpr()) {
+            resolveNameExpression(node, expr);
         }
-        else if (right.isBinaryExpr()) {
-            resolveBinaryExpr(node, right);
+        else if (expr.isBinaryExpr()) {
+            resolveBinaryExpr(node, expr);
         }
     }
 
@@ -387,6 +376,7 @@ public class Resolver {
             if (fd.isPresent()) {
                 return findFieldNode(gn, fd.get());
             }
+
             gn = ImportUtils.addImport(gn, nameExpr);
         }
         else {
@@ -469,7 +459,7 @@ public class Resolver {
         }
     }
 
-    private static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
+    static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
         ArrayAccessExpr aae = expr.asArrayAccessExpr();
         if (aae.getName().isNameExpr()) {
             resolveNameExpr(node, aae.getName().asNameExpr(), types);
@@ -534,28 +524,25 @@ public class Resolver {
                         Type t = cd.asMethodDeclaration().getType();
                         types.add(t);
                         ImportUtils.addImport(node, t);
-
                     }
                     cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
                         ImportUtils.addImport(node, c.getNameAsString())
                     );
                 }
-            } else {
-                if (callExpression instanceof MethodCallExpr methodCallExpr) {
-                        Type t = lombokSolver(methodCallExpr, cid, gn);
-                        if (t != null) {
-                            types.add(t);
-                        }
+                return;
+            }
+            if (callExpression instanceof MethodCallExpr methodCallExpr) {
+                Type t = lombokSolver(methodCallExpr, cid, gn);
+                if (t != null) {
+                    types.add(t);
                 }
             }
         }
-
     }
 
     static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) {
-        if (argMethodCall.getNameAsString().startsWith("get") &&
-                cid.getAnnotationByName("Data").isPresent() ||
-                cid.getAnnotationByName("Getter").isPresent()
+        if ( (argMethodCall.getNameAsString().startsWith("get") || argMethodCall.getNameAsString().startsWith("set") &&
+                (cid.getAnnotationByName("Data").isPresent() || cid.getAnnotationByName("Getter").isPresent()))
         ) {
             String field = argMethodCall.getNameAsString().substring(3);
             if (!field.isEmpty()) {
@@ -601,13 +588,12 @@ public class Resolver {
             Type t = lombokSolver(mce, decl, node);
             if (t != null && t.isClassOrInterfaceType()) {
                 return ImportUtils.addImport(node, t);
-            } else {
-                ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
-                if (imp != null) {
-                    node.getDestination().addImport(imp.getImport());
-                    if (imp.getMethodDeclaration() != null) {
-                        Graph.createGraphNode(imp.getMethodDeclaration());
-                    }
+            }
+            ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), mce.getNameAsString());
+            if (imp != null) {
+                node.getDestination().addImport(imp.getImport());
+                if (imp.getMethodDeclaration() != null) {
+                    Graph.createGraphNode(imp.getMethodDeclaration());
                 }
             }
         }

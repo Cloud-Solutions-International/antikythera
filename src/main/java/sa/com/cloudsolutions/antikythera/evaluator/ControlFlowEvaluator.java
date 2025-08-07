@@ -5,6 +5,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -12,6 +13,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -31,10 +33,12 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
@@ -114,6 +118,12 @@ public class ControlFlowEvaluator extends Evaluator {
         } else if (entry.getValue() instanceof ClassOrInterfaceType cType) {
             Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
             valueExpressions = vx.getInitializer();
+        } else if (entry.getValue() instanceof EnumConstantDeclaration ec) {
+            valueExpressions = List.of(
+                    new NameExpr(ec.getNameAsString())
+            );
+        } else if (entry.getValue() instanceof FieldAccessExpr fae) {
+            valueExpressions = List.of(fae);
         } else {
             valueExpressions = setupConditionForNonPrimitive(entry, v);
         }
@@ -175,51 +185,83 @@ public class ControlFlowEvaluator extends Evaluator {
     }
     /**
      * Conditional statements may check for emptiness in a collection or map. Create suitable non-empty objects
-     * @param v represents the type of collection or map that we need
+     * @param collection represents the type of collection or map that we need
      * @param name the name of the variable
      * @return a list of expressions that can be used to set up the condition
      */
-    private List<Expression> setupNonEmptyCollections(Variable v, NameExpr name) {
+    private List<Expression> setupNonEmptyCollections(Variable collection, NameExpr name) {
 
         Optional<Parameter> paramByName = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString());
         if (paramByName.isPresent()) {
             Parameter param = paramByName.orElseThrow();
             Type type = param.getType();
-            NodeList<Type> typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
-            if (typeArgs.isEmpty()) {
-                typeArgs.add(new ClassOrInterfaceType().setName("Object"));
-            }
-
-            return setupNonEmptyCollection(typeArgs, v, name);
+            return setupNonEmptyCollection(type, collection, name);
         }
         return List.of();
     }
 
-    protected List<Expression> setupNonEmptyCollection(NodeList<Type> typeArgs, Variable wrappedCollection, NameExpr name) {
-        Type pimaryType = typeArgs.getFirst().orElseThrow();
-        VariableDeclarator vdecl = new VariableDeclarator(pimaryType, name.getNameAsString());
+    protected List<Expression> setupNonEmptyCollection(Type type, Variable wrappedCollection, NameExpr name) {
+        NodeList<Type> typeArgs = getTypeArgs(type);
+        Type primaryType = typeArgs.getFirst().orElseThrow();
+        VariableDeclarator vdecl = new VariableDeclarator(primaryType, name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
             if (member.getValue() == null
                     && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
                 member = Reflect.variableFactory(member.getType().asString());
             } else if (member.getValue() instanceof Evaluator eval) {
-                return createSingleItemCollectionWithInitializer(typeArgs, member, wrappedCollection, name, eval);
+                return createSingleItemCollectionWithInitializer(type, member, wrappedCollection, name, eval);
+            } else if (member.getValue() == null) {
+                member = recreateVariable(primaryType);
             }
-
-            return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
+            return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
 
         } catch (ReflectiveOperationException e) {
             throw new AntikytheraException(e);
         }
     }
 
-    private List<Expression> createSingleItemCollectionWithInitializer(NodeList<Type> typeArgs, Variable member,
+    private Variable recreateVariable(Type type) {
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
+        if (wrapper != null) {
+            if (wrapper.getType() != null) {
+               return DummyArgumentGenerator.createObjectWithSimplestConstructor(
+                       wrapper.getType().asClassOrInterfaceDeclaration(),  "nomatter");
+            }
+            else {
+                Constructor<?> constructor = DummyArgumentGenerator.findSimplestConstructor(wrapper.getClazz());
+                if (constructor != null) {
+                    try {
+                        return DummyArgumentGenerator.createObjectWithSimplestConstructor(constructor, type);
+                    } catch (ReflectiveOperationException e) {
+                        throw new AntikytheraException(e);
+                    }
+                }
+            }
+        }
+        throw new AntikytheraException("Could not find constructor for " + type);
+    }
+
+    private static NodeList<Type> getTypeArgs(Type type) {
+        NodeList<Type> typeArgs;
+        if (type.isClassOrInterfaceType()) {
+            typeArgs = type.asClassOrInterfaceType().getTypeArguments().orElse(new NodeList<>());
+        } else {
+            typeArgs = new NodeList<>();
+        }
+        if (typeArgs.isEmpty()) {
+            typeArgs.add(new ClassOrInterfaceType().setName("Object"));
+        }
+        return typeArgs;
+    }
+
+    private List<Expression> createSingleItemCollectionWithInitializer(Type type, Variable member,
                                                                        Variable wrappedCollection, NameExpr name, Evaluator eval) throws ReflectiveOperationException {
+        NodeList<Type> typeArgs = getTypeArgs(type);
         Type pimaryType = typeArgs.getFirst().orElseThrow();
         List<Expression> fieldIntializers = eval.getFieldInitializers();
         if (fieldIntializers.isEmpty()) {
-            return List.of(createSingleItemCollection(typeArgs, member, wrappedCollection, name));
+            return List.of(createSingleItemCollection(type, member, wrappedCollection, name));
         }
         else {
             List<Expression> mocks = new ArrayList<>();
@@ -236,8 +278,8 @@ public class ControlFlowEvaluator extends Evaluator {
                 mocks.add(e);
             }
 
-            if (wrappedCollection.getValue() instanceof List<?> list) {
-                addToList(member, list);
+            if (wrappedCollection.getValue() instanceof List<?>) {
+                addToList(member, wrappedCollection);
                 mocks.add(StaticJavaParser.parseExpression(String.format("List.of(%s)", instanceName)));
             }
             else if (wrappedCollection.getValue() instanceof Set<?> set) {
@@ -252,14 +294,15 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private Expression createSingleItemCollection(NodeList<Type> typeArgs, Variable member,
+    private Expression createSingleItemCollection(Type type, Variable member,
                                                   Variable wrappedCollection, NameExpr name) throws ReflectiveOperationException {
+        NodeList<Type> typeArgs = getTypeArgs(type);
         List<Expression> initializer = member.getInitializer();
         if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
             TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
         }
-        if (wrappedCollection.getValue() instanceof List<?> list) {
-            addToList(member, list);
+        if (wrappedCollection.getValue() instanceof List<?>) {
+            addToList(member, wrappedCollection);
             return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
         }
         if (wrappedCollection.getValue() instanceof Set<?> set) {
@@ -300,10 +343,19 @@ public class ControlFlowEvaluator extends Evaluator {
         TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
     }
 
-    private static void addToList(Variable member, List<?> list) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        Method m = List.class.getMethod("add", Object.class);
-        m.invoke(list, member.getValue());
-        TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+    private static void addToList(Variable member, Variable collection) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+        try {
+            List<?> list = (List<?>) collection.getValue();
+            Method m = List.class.getMethod("add", Object.class);
+            m.invoke(list, member.getValue());
+            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+        } catch (InvocationTargetException e) {
+            ArrayList<?> list = new ArrayList<>();
+            Method m = List.class.getMethod("add", Object.class);
+            m.invoke(list, member.getValue());
+            TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+            collection.setValue(list);
+        }
     }
 
     void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry) {
@@ -379,7 +431,12 @@ public class ControlFlowEvaluator extends Evaluator {
         } else {
             setter.setName("set" + name.substring(3));
         }
-        setter.setScope(scope);
+        if ( scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            setter.setScope(mce.getScope().orElseThrow().clone());
+        }
+        else {
+            setter.setScope(scope.clone());
+        }
 
         if (entry.getValue() == null) {
             setter.addArgument(new NullLiteralExpr());
@@ -409,7 +466,7 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
+    void createSetterFromGetterForBinaryExpr(MethodCallExpr setter, BinaryExpr binaryExpr, Expression key) {
         if (binaryExpr.getLeft().equals(key)) {
             processBinaryExpressionSide(setter, binaryExpr.getRight());
         } else if (binaryExpr.getRight().equals(key)) {
@@ -431,7 +488,7 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     @SuppressWarnings("java:S5411")
-    private void createSetterFromGetterForMCE(Map.Entry<Expression, Object> entry, MethodCallExpr setter, MethodCallExpr mce) {
+    void createSetterFromGetterForMCE(Map.Entry<Expression, Object> entry, MethodCallExpr setter, MethodCallExpr mce) {
         Expression argument = mce.getArgument(0);
         if (argument.isObjectCreationExpr()) {
             try {
@@ -682,7 +739,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return null;
     }
 
-    protected void parameterAssignment(AssignExpr assignExpr, Variable va) {
+    void parameterAssignment(AssignExpr assignExpr, Variable va) {
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> {
