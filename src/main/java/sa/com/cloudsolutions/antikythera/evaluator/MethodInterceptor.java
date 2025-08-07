@@ -16,7 +16,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-@SuppressWarnings("java:S3011")
+@SuppressWarnings({"java:S3011", "unused"})
 public class MethodInterceptor {
     private Evaluator evaluator;
     private Class<?> wrappedClass = Object.class;
@@ -49,15 +49,11 @@ public class MethodInterceptor {
     @RuntimeType
     public Object intercept(@This Object instance, Method method, Object[] args, MethodDeclaration methodDecl) throws ReflectiveOperationException {
         if (evaluator != null) {
-            // Push arguments onto stack in reverse order
             for (int i = args.length - 1; i >= 0; i--) {
                 AntikytheraRunTime.push(new Variable(args[i]));
             }
 
-            // Execute the method using source code evaluation
             Variable result = evaluator.executeMethod(methodDecl);
-
-            // Synchronize field changes from evaluator back to the instance
             synchronizeFieldsToInstance(instance);
 
             if (result != null) {
@@ -163,7 +159,6 @@ public class MethodInterceptor {
             this.sourceMethod = sourceMethod;
         }
 
-        @SuppressWarnings("java:S3011")
         @RuntimeType
         public Object intercept(@This Object instance, @Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
@@ -180,7 +175,6 @@ public class MethodInterceptor {
             this.sourceConstructor = sourceConstructor;
         }
 
-        @SuppressWarnings("java:S3011")
         @RuntimeType
         public Object intercept(@This Object instance, @Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);

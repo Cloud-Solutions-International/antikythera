@@ -75,11 +75,7 @@ public class AKBuddy {
         ByteBuddy byteBuddy = new ByteBuddy();
 
         Class<?> clazz = byteBuddy.subclass(wrappedClass)
-                .method(ElementMatchers.not(
-                        ElementMatchers.isDeclaredBy(Object.class)
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.core.ObjectCodec.class))
-                                .or(ElementMatchers.isDeclaredBy(com.fasterxml.jackson.databind.ObjectMapper.class))
-                ))
+                .method(ElementMatchers.any())
                 .intercept(MethodDelegation.withDefaultConfiguration()
                         .filter(ElementMatchers.named("intercept")
                                 .and(ElementMatchers.takesArguments(Method.class, Object[].class)))
