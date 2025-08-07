@@ -25,7 +25,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.HashMap;

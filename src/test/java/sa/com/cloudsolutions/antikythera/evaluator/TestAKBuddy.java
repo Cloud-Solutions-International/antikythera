@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.MavenHelper;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,9 +34,12 @@ class TestAKBuddy extends TestHelper {
     CompilationUnit cu;
 
     @BeforeAll
-    static void beforeClass() throws IOException {
+    static void beforeClass() throws IOException, XmlPullParserException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         MockingRegistry.reset();
+        MavenHelper mavenHelper = new MavenHelper();
+        mavenHelper.readPomFile();
+        mavenHelper.buildJarPaths();
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
@@ -126,11 +131,12 @@ class TestAKBuddy extends TestHelper {
         assertDoesNotThrow(instance::close);
     }
 
-    @Test
-    void testConvert() throws ReflectiveOperationException {
+    @ParameterizedTest
+    @CsvSource({"convert","map"})
+    void testConvert(String name) throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.ConvertValue", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("convert")).orElseThrow();
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(method);
         assertEquals("Name: Alice\nYears Old: 0\n", outContent.toString());
     }
