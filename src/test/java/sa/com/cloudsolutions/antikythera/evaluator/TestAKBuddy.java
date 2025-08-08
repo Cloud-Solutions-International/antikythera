@@ -132,7 +132,7 @@ class TestAKBuddy extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"convert","map"})
+    @CsvSource({"convert","map","mapPerson"})
     void testConvert(String name) throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.ConvertValue", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
